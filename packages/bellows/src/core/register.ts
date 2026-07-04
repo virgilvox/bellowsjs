@@ -27,6 +27,8 @@ import { plateDef } from '../fx/plate';
 import { compressorDef, limiterDef, gateDef, transientDef } from '../fx/dynamics';
 import { chorusDef, flangerDef, phaserDef, tremoloDef, autopanDef, ringmodDef } from '../fx/modfx';
 import { freqshiftDef } from '../fx/freqshift';
+import { eqDef } from '../fx/eq';
+import { saturatorDef } from '../fx/saturator';
 import { spectralEffects } from '../fx/spectral';
 
 let done = false;
@@ -75,6 +77,8 @@ export function registerBuiltins(): void {
     autopanDef,
     ringmodDef,
     freqshiftDef,
+    eqDef,
+    saturatorDef,
     ...spectralEffects,
   ]) {
     registerEffect(f);

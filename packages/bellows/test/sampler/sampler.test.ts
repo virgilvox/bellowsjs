@@ -269,8 +269,12 @@ describe('sampler engine envelope', () => {
     const { l } = render(def, { seconds: 0.6 });
     const during = peak(l, Math.round(0.08 * SR), Math.round(0.15 * SR));
     const after = peak(l, Math.round(0.35 * SR), Math.round(0.45 * SR));
-    /* Held at full level through 0.2 s, then decayed to sustain 0.1. */
-    expect(during).toBeGreaterThan(0.7);
+    /*
+     * Held at full level through 0.2 s, then decayed to sustain 0.1.
+     * The center pan law puts a mono zone at -3 dB per channel, so full
+     * level on the left is 0.8 * cos(pi/4) = 0.57.
+     */
+    expect(during).toBeGreaterThan(0.5);
     expect(after / during).toBeGreaterThan(0.05);
     expect(after / during).toBeLessThan(0.2);
   });

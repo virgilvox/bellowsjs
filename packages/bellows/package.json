@@ -12,7 +12,8 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/bellows.js",
       "default": "./dist/bellows.js"
-    }
+    },
+    "./worklet.js": "./dist/worklet.js"
   },
   "files": [
     "dist",
@@ -40,7 +41,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "node scripts/gen-worklet.mjs && vite build && tsc -p tsconfig.build.json",
+    "build": "node scripts/gen-worklet.mjs && vite build && tsc -p tsconfig.build.json && node scripts/postbuild.mjs",
     "typecheck": "tsc --noEmit",
     "gen:worklet": "node scripts/gen-worklet.mjs"
   },

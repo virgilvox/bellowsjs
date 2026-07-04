@@ -28,7 +28,7 @@ import { bankEngineResolver } from './render/banks';
 import { registerBuiltins } from './core/register';
 import { encodeWav } from './io/wav';
 import { SoundFont } from './io/sf2';
-import { sf2ZoneData } from './engines/soundfont';
+import { samplerBankFromSf2 } from './engines/soundfont';
 import { serializeDef } from './core/serialize';
 
 export interface BootOptions {
@@ -215,7 +215,7 @@ export class Bellows {
   /** Build a sampler instrument from a parsed or raw SF2 preset. */
   sf2Instrument(data: ArrayBuffer | SoundFont, bank: number, program: number): Instrument {
     const sf = data instanceof SoundFont ? data : SoundFont.parse(data);
-    const zones = sf2ZoneData(sf, bank, program);
+    const zones = samplerBankFromSf2(sf, bank, program).zones as SamplerZoneData[];
     return this.samplerInstrument(zones, 'sf2-' + bank + '-' + program + '-' + this.nextChannel);
   }
 

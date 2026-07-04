@@ -112,11 +112,27 @@ export function estimatePitch(
       bestLag = lag;
     }
   }
-  const y0 = bestLag > minLag ? scores[bestLag - 1] : bestR;
-  const y2 = bestLag < maxLag ? scores[bestLag + 1] : bestR;
-  const denom = y0 - 2 * bestR + y2;
+  /*
+   * A tone correlates at every multiple of its period, and an integer lag
+   * can land closer to a higher multiple than to the period itself (440 Hz
+   * at 44100: lag 401 is 0.09 off four periods, lag 100 is 0.23 off one).
+   * Take the first local maximum within tolerance of the global best so
+   * the fundamental beats its subharmonics.
+   */
+  let lag = bestLag;
+  const floor = bestR - 0.01;
+  for (let k = minLag + 1; k < maxLag; k++) {
+    if (scores[k] >= floor && scores[k] >= scores[k - 1] && scores[k] >= scores[k + 1]) {
+      lag = k;
+      break;
+    }
+  }
+  const yc = scores[lag];
+  const y0 = lag > minLag ? scores[lag - 1] : yc;
+  const y2 = lag < maxLag ? scores[lag + 1] : yc;
+  const denom = y0 - 2 * yc + y2;
   const d = denom !== 0 ? (0.5 * (y0 - y2)) / denom : 0;
-  return sampleRate / (bestLag + d);
+  return sampleRate / (lag + d);
 }
 
 export function rms(buf: Float32Array, from = 0, to = buf.length): number {
