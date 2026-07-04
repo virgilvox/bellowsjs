@@ -135,6 +135,12 @@ The DSP core has zero browser dependencies, which is why the library carries mor
 
 AudioWorklet is required (Chrome 66+, Firefox 76+, Safari 14.1+). Web MIDI is Chromium and Firefox only. WebCodecs Opus export is feature-detected with WAV as the universal fallback. See `docs/ENGINEERING.md` in the repository for the full capability matrix.
 
+## Repository layout
+
+- packages/bellows is the library published to npm as bellowsjs
+- apps/workbench is the Vue demo app: generative bench plus code mode
+- docs/ holds the PRD, the engineering brief, and prototype 0
+
 ## Development
 
 ```

@@ -1,0 +1,285 @@
+/*
+ * The forge design system, carried over from prototype 0. Char-black
+ * bench, phosphor amber lamps, hard offset shadows, uppercase letterspaced
+ * labels. Every component in the workbench builds from these tokens.
+ */
+
+:root {
+  --forge: #0b0a07;
+  --soot: #14110c;
+  --char: #1b1712;
+  --iron: #252017;
+  --seam: #38301f;
+  --bone: #e9e2d0;
+  --tick: #8f8571;
+  --faded: #57503d;
+  --phosphor: #ffb000;
+  --phosphor-hot: #ffd257;
+  --phosphor-dim: rgba(255, 176, 0, 0.13);
+  --phosphor-ghost: rgba(255, 176, 0, 0.05);
+  --slag: #ff5533;
+  --mono: 'JetBrains Mono', monospace;
+  --disp: 'Chakra Petch', sans-serif;
+  --shadow: 4px 4px 0 rgba(0, 0, 0, 0.55);
+  --shadow-sm: 3px 3px 0 rgba(0, 0, 0, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background: var(--forge);
+  color: var(--bone);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.45;
+  min-height: 100%;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.05;
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+::selection {
+  background: var(--phosphor);
+  color: var(--forge);
+}
+
+/* panels */
+.panel {
+  background: var(--soot);
+  border: 2px solid var(--seam);
+  box-shadow: var(--shadow);
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.panel-title {
+  font-family: var(--disp);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--tick);
+  text-transform: uppercase;
+  border-bottom: 1px dashed var(--seam);
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.panel-title em {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--faded);
+  letter-spacing: 0.1em;
+}
+
+/* controls */
+button {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: var(--char);
+  color: var(--bone);
+  border: 2px solid var(--seam);
+  padding: 7px 10px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.06s ease, box-shadow 0.06s ease, border-color 0.12s, color 0.12s, background 0.12s;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  border-color: var(--phosphor);
+  color: var(--phosphor-hot);
+}
+
+button:active {
+  transform: translateY(1px);
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+button.lit {
+  background: var(--phosphor);
+  color: var(--forge);
+  border-color: var(--phosphor);
+  font-weight: 700;
+}
+
+button.lit:hover {
+  color: var(--forge);
+}
+
+button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+
+input[type='text'],
+input[type='number'] {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--iron);
+  border: 2px solid var(--seam);
+  color: var(--phosphor-hot);
+  padding: 7px 8px;
+  letter-spacing: 0.06em;
+}
+
+input[type='text']:focus,
+input[type='number']:focus {
+  outline: none;
+  border-color: var(--phosphor);
+  box-shadow: 0 0 0 2px var(--phosphor-dim);
+}
+
+select {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--iron);
+  border: 2px solid var(--seam);
+  color: var(--bone);
+  padding: 6px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+select:focus {
+  outline: none;
+  border-color: var(--phosphor);
+}
+
+select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--iron);
+  border: 1px solid var(--seam);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 18px;
+  background: var(--phosphor);
+  margin-top: -8px;
+  border: none;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+input[type='range']::-moz-range-track {
+  height: 4px;
+  background: var(--iron);
+  border: 1px solid var(--seam);
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 18px;
+  background: var(--phosphor);
+  border: none;
+  border-radius: 0;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+.field {
+  margin-bottom: 10px;
+}
+
+.field label {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--tick);
+  margin-bottom: 4px;
+}
+
+.slider-row {
+  display: grid;
+  grid-template-columns: 1fr 46px;
+  gap: 8px;
+  align-items: center;
+}
+
+.slider-row output {
+  font-size: 10px;
+  color: var(--phosphor-hot);
+  text-align: right;
+  letter-spacing: 0.05em;
+}
+
+.duo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+kbd {
+  border: 1px solid var(--seam);
+  padding: 1px 5px;
+  font-size: 9px;
+  color: var(--tick);
+}
+
+/* lamps */
+.lamp {
+  height: 14px;
+  background: var(--iron);
+  border: 1px solid var(--seam);
+}
+
+.lamp.on {
+  background: var(--phosphor-dim);
+  border-color: rgba(255, 176, 0, 0.4);
+}
+
+.lamp.now {
+  background: var(--phosphor);
+  border-color: var(--phosphor);
+  box-shadow: 0 0 7px rgba(255, 176, 0, 0.7);
+}
+
+.lamp-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--faded);
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.lamp-dot.hot {
+  background: var(--phosphor);
+  box-shadow: 0 0 6px var(--phosphor);
+}
