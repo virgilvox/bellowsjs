@@ -1,4 +1,4 @@
-# bellowsjs 0.1.0 LLM reference
+# bellowsjs 0.1.1 LLM reference
 
 bellowsjs is a browser-native audio engine for synthesis, samples, sequencing,
 analysis, and I/O. One AudioWorklet kernel hosts every voice and effect; musical
@@ -8,7 +8,7 @@ in Node. Every stochastic decision flows from named, seeded PRNG streams.
 License Apache-2.0. Site: https://bellows.live  Repo: https://github.com/virgilvox/bellowsjs
 
 This file is generated from the library source and its type declarations.
-Everything in it is exact for version 0.1.0.
+Everything in it is exact for version 0.1.1.
 
 ## Install and import
 
