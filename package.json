@@ -1,0 +1,13 @@
+{
+  "name": "bellowsjs-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "npm run test -w packages/bellows",
+    "build": "npm run build -w packages/bellows",
+    "dev": "npm run dev -w apps/workbench"
+  }
+}

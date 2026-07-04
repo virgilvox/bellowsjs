@@ -1,0 +1,51 @@
+{
+  "name": "bellowsjs",
+  "version": "0.1.0",
+  "description": "A browser-native audio engine for synthesis, samples, sequencing, analysis, and I/O. One clock, one kernel, seeded everywhere.",
+  "license": "MPL-2.0",
+  "type": "module",
+  "main": "./dist/bellows.js",
+  "module": "./dist/bellows.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/bellows.js",
+      "default": "./dist/bellows.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "audio",
+    "synthesis",
+    "web-audio",
+    "audioworklet",
+    "sequencer",
+    "music-theory",
+    "generative",
+    "soundfont",
+    "dsp",
+    "fm-synthesis",
+    "granular"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ossuary-foundation/bellowsjs.git"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0",
+    "vitest": "^2.1.0"
+  }
+}
