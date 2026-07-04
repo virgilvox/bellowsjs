@@ -193,6 +193,40 @@ describe('instrument preset bank shape', () => {
   });
 });
 
+describe('strings family voicing', () => {
+  // The bowed-string realism upgrade (docs/BOWED-STRINGS.md) gives every
+  // violin-family preset a fixed body resonator and gives the bowed four
+  // rosin noise, attack bite, and vibrato. Pizzicato keeps the body but
+  // stays a plain pluck.
+  const bowed = ['violin', 'viola', 'cello', 'double-bass'];
+
+  it('bowed presets carry body, noise, bite, and vibrato settings', () => {
+    for (const id of bowed) {
+      const p = getPreset(id).params;
+      expect(p.bow, id).toBeGreaterThan(0);
+      expect(p.body, id).toBeGreaterThan(0);
+      expect(p.bowNoise, id).toBeGreaterThan(0);
+      expect(p.attackBite, id).toBeGreaterThan(0);
+      expect(p.vibDepth, id).toBeGreaterThan(0);
+      expect(p.vibOnset, id).toBeGreaterThanOrEqual(0.3);
+    }
+    // body size grows down the family
+    const sizes = bowed.map((id) => getPreset(id).params.bodySize);
+    expect(sizes).toEqual([...sizes].sort((a, b) => a - b));
+    expect(sizes[0]).toBe(0);
+    expect(sizes[3]).toBe(1);
+  });
+
+  it('pizzicato keeps the body but no bow, noise, or vibrato', () => {
+    const p = getPreset('pizzicato-strings').params;
+    expect(p.bow).toBe(0);
+    expect(p.body).toBeGreaterThan(0);
+    expect(p.bowNoise ?? 0).toBe(0);
+    expect(p.attackBite ?? 0).toBe(0);
+    expect(p.vibDepth ?? 0).toBe(0);
+  });
+});
+
 describe('every preset renders a clean, deterministic note', () => {
   for (const preset of INSTRUMENT_PRESETS) {
     const wantPitch = PITCHED_FAMILIES.has(preset.family) && !INHARMONIC.has(preset.id);

@@ -1,6 +1,6 @@
 {
   "name": "bellowsjs",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A browser-native audio engine for synthesis, samples, sequencing, analysis, and I/O. One clock, one kernel, seeded everywhere.",
   "license": "Apache-2.0",
   "type": "module",
