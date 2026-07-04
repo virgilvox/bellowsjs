@@ -3,19 +3,66 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BELLOWS // a browser-native audio engine</title>
-<meta name="description" content="bellowsjs: a browser-native audio engine for synthesis, samples, sequencing, analysis, and I/O. One clock, one kernel, seeded everywhere. Live workbench and runnable examples.">
+<title>BELLOWS // make music in your browser</title>
+<meta name="description" content="BELLOWS is a free, open source audio engine for the browser: synthesizers, drum machines, samplers, soundfonts, sequencing, effects, and a playable instrument with MIDI support. npm install bellowsjs.">
 <meta name="author" content="Moheeb Zara (@virgilvox) // hack.build">
-<meta property="og:title" content="BELLOWS // a browser-native audio engine">
-<meta property="og:description" content="18 synthesis engines, soundfonts, generative sequencing, spectral effects, analysis, and offline rendering that matches realtime. npm install bellowsjs">
-<meta property="og:url" content="https://bellows.live">
+<meta name="keywords" content="web audio, javascript audio library, browser synthesizer, audio engine, soundfont player, generative music, web midi, audioworklet, music theory library, bellowsjs">
+<link rel="canonical" href="https://bellows.live/">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="theme-color" content="#efe8d6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0a07" media="(prefers-color-scheme: dark)">
+
+<meta property="og:title" content="BELLOWS // make music in your browser">
+<meta property="og:description" content="Synthesizers, drum machines, samplers, sequencing, and effects in one free, open source audio engine. Play it live at bellows.live or npm install bellowsjs.">
+<meta property="og:url" content="https://bellows.live/">
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="BELLOWS">
+<meta property="og:image" content="https://bellows.live/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="BELLOWS: make music in your browser. npm install bellowsjs">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BELLOWS // make music in your browser">
+<meta name="twitter:description" content="A free, open source audio engine: synthesizers, samplers, sequencing, and effects, playable live in your browser.">
+<meta name="twitter:image" content="https://bellows.live/og.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "BELLOWS",
+  "alternateName": "bellowsjs",
+  "url": "https://bellows.live/",
+  "applicationCategory": "MultimediaApplication",
+  "operatingSystem": "Web browser",
+  "description": "A browser-native audio engine for synthesis, samples, sequencing, analysis, and I/O. One clock, one DSP kernel, seeded and reproducible everywhere.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "license": "https://www.apache.org/licenses/LICENSE-2.0",
+  "author": { "@type": "Person", "name": "Moheeb Zara", "url": "https://github.com/virgilvox" },
+  "downloadUrl": "https://www.npmjs.com/package/bellowsjs",
+  "codeRepository": "https://github.com/virgilvox/bellowsjs"
+}
+</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="app"></div>
+<noscript>
+  <div style="max-width:640px;margin:60px auto;font-family:monospace;padding:0 20px">
+    <h1>BELLOWS</h1>
+    <p>Make music in your browser. BELLOWS is a free, open source audio engine:
+    synthesizers, drum machines, samplers, soundfont support, sequencing, and effects
+    in one small JavaScript library. This site is an interactive instrument and
+    workbench, and it needs JavaScript to make sound.</p>
+    <p>Get the library: <a href="https://www.npmjs.com/package/bellowsjs">npm install bellowsjs</a>
+    or read the source at <a href="https://github.com/virgilvox/bellowsjs">github.com/virgilvox/bellowsjs</a>.</p>
+    <p>Built by Moheeb Zara (@virgilvox), hack.build. Apache-2.0.</p>
+  </div>
+</noscript>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
