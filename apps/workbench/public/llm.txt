@@ -1,4 +1,4 @@
-# bellowsjs 0.1.4 LLM reference
+# bellowsjs 0.1.5 LLM reference
 
 bellowsjs is a browser-native audio engine for synthesis, samples, sequencing,
 analysis, and I/O. One AudioWorklet kernel hosts every voice and effect; musical
@@ -8,7 +8,7 @@ in Node. Every stochastic decision flows from named, seeded PRNG streams.
 License Apache-2.0. Site: https://bellows.live  Repo: https://github.com/virgilvox/bellowsjs
 
 This file is generated from the library source and its type declarations.
-Everything in it is exact for version 0.1.4.
+Everything in it is exact for version 0.1.5.
 
 ## Install and import
 
@@ -502,12 +502,16 @@ default polyphony: 12
   bowPos: 0.06 to 0.2, default 0.11
   dynamics: 0 to 1, default 0
   polDetune: 0 to 5 cents, default 0
+  glide: 0 to 0.5 s, default 0.03
+  legatoScratch: 0 to 1, default 0.15
 
 ### tube (Waveguide Tube)
 default polyphony: 8
   breath: 0 to 1, default 0.85
   noise: 0 to 1, default 0.1
   level: 0 to 1, default 0.7
+  glide: 0 to 0.5 s, default 0.03
+  legatoScratch: 0 to 1, default 0.15
 
 ### modal (Modal)
 default polyphony: 16
