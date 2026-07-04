@@ -123,8 +123,12 @@ export class Oversampler {
   private readonly buf2: Float32Array;
   private readonly buf4: Float32Array | null;
   private readonly mid: Float32Array | null;
-  private upView: Float32Array;
-  private upViewLen: number;
+  /**
+   * Views of the full high-rate buffer keyed by view length. Distinct
+   * block lengths are bounded by event-boundary block splitting, so the
+   * map stays small and steady-state processing never allocates.
+   */
+  private readonly upViews = new Map<number, Float32Array>();
 
   constructor(factor: 2 | 4, maxBlock: number) {
     if (factor !== 2 && factor !== 4) {
@@ -147,9 +151,6 @@ export class Oversampler {
       this.mid = null;
       this.latency = 16;
     }
-    const full = factor === 4 ? this.buf4! : this.buf2;
-    this.upView = full;
-    this.upViewLen = full.length;
   }
 
   /**
@@ -168,13 +169,14 @@ export class Oversampler {
       full = this.buf2;
     }
     const len = n * this.factor;
-    if (this.upViewLen !== len || this.upView.buffer !== full.buffer) {
-      // View creation only happens when the block length changes,
-      // so steady-state processing stays allocation free.
-      this.upView = full.subarray(0, len);
-      this.upViewLen = len;
+    let view = this.upViews.get(len);
+    if (view === undefined) {
+      // View creation only happens the first time a length appears, so
+      // alternating block spans stay allocation free after warmup.
+      view = len === full.length ? full : full.subarray(0, len);
+      this.upViews.set(len, view);
     }
-    return this.upView;
+    return view;
   }
 
   /**

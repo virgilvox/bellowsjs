@@ -196,7 +196,10 @@ class PitchShiftFx extends SpectralEffect {
       const ratio = this.ratio;
       for (let pi = 0; pi < np; pi++) {
         const p = this.peaks[pi];
-        const lo = pi === 0 ? 0 : (this.peaks[pi - 1] + p + 1) >> 1;
+        // Regions partition the bins exactly: the boundary bin between two
+        // peaks belongs to the lower region, and the next region starts one
+        // bin above it. Sharing a bin would add its energy twice.
+        const lo = pi === 0 ? 0 : ((this.peaks[pi - 1] + p) >> 1) + 1;
         const hi = pi === np - 1 ? nb - 1 : (p + this.peaks[pi + 1]) >> 1;
         const omega = (TWO_PI * p) / n;
         const delta = princarg(pha[p] - prev[p] - omega * hop);

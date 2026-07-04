@@ -48,6 +48,21 @@ describe('Oversampler up', () => {
     expect(10 * Math.log10(ratio)).toBeLessThan(-70);
   });
 
+  it.each([2, 4] as const)('returns cached views for repeated block lengths at %ix', (factor) => {
+    // Alternating short and full blocks, as produced by event-boundary
+    // block splitting, must not allocate a fresh view per call.
+    const os = new Oversampler(factor, 128);
+    const input = new Float32Array(128);
+    const a96 = os.up(input, 0, 96);
+    const a128 = os.up(input, 0, 128);
+    const b96 = os.up(input, 0, 96);
+    const b128 = os.up(input, 0, 128);
+    expect(b96).toBe(a96);
+    expect(b128).toBe(a128);
+    expect(a96.length).toBe(96 * factor);
+    expect(a128.length).toBe(128 * factor);
+  });
+
   it('preserves the amplitude of a passband sine', () => {
     const os = new Oversampler(2, 128);
     const hi = upsampleSine(os, 2, 1000, 4096, 128);

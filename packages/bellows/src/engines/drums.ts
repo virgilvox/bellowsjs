@@ -335,6 +335,8 @@ class ClapVoice implements Voice {
   private readonly env: ExpDecay;
   private t = 0;
   private burst = 0;
+  /** Sample count at which the next burst retriggers. */
+  private nextBurst = 0;
   private base = 220;
   private vel = 1;
 
@@ -368,6 +370,11 @@ class ClapVoice implements Voice {
     this.env.setTime(CLAP_BURST_TIME);
     this.env.trigger();
     this.burst = 1;
+    this.nextBurst = this.spreadSamples();
+  }
+
+  private spreadSamples(): number {
+    return Math.max(1, Math.round(this.p.spread * this.sampleRate));
   }
 
   noteOff(): void {
@@ -376,13 +383,16 @@ class ClapVoice implements Voice {
 
   process(outL: Float32Array, outR: Float32Array, from: number, to: number): void {
     if (!this.active) return;
-    const spreadSamples = Math.max(1, Math.round(this.p.spread * this.sampleRate));
     for (let i = from; i < to; i++) {
-      if (this.burst > 0 && this.burst < 3 && this.t === this.burst * spreadSamples) {
+      // The burst time is latched at noteOn and advanced monotonically on
+      // each retrigger, so automating spread mid-burst can never move the
+      // target behind the counter and strand the voice active.
+      if (this.burst > 0 && this.burst < 3 && this.t >= this.nextBurst) {
         // retrigger; the third burst carries the long tail
         this.env.setTime(this.burst === 2 ? this.p.decay : CLAP_BURST_TIME);
         this.env.trigger();
         this.burst++;
+        this.nextBurst = this.t + this.spreadSamples();
       }
       this.t++;
       const y = this.bp.next(this.noise.next()) * this.env.next() * this.vel;

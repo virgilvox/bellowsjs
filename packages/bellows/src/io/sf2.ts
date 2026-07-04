@@ -264,7 +264,12 @@ function buildZones(
       throw new Error(`sf2: ${what} generator indices out of range`);
     }
     const m: GenMap = new Map();
-    for (let g = from; g < to; g++) m.set(gens[g].op, gens[g].amount);
+    for (let g = from; g < to; g++) {
+      m.set(gens[g].op, gens[g].amount);
+      // Generators after the terminal generator are ignored per SF2.04
+      // section 7.3/7.7: sampleID or instrument ends the zone's list.
+      if (gens[g].op === terminalOp) break;
+    }
     if (m.has(terminalOp)) {
       zones.push({ gens: m });
     } else if (z === bagFrom && zones.length === 0) {

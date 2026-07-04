@@ -123,6 +123,40 @@ describe('parseMidi', () => {
     expect(() => parseMidi(truncated.buffer)).toThrow();
   });
 
+  it('rejects channel messages with data bytes at or above 0x80', () => {
+    const smfWithTrack = (track: number[]): ArrayBuffer => {
+      const bytes = [
+        0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xe0,
+        0x4d, 0x54, 0x72, 0x6b,
+        (track.length >>> 24) & 0xff, (track.length >>> 16) & 0xff,
+        (track.length >>> 8) & 0xff, track.length & 0xff,
+        ...track,
+      ];
+      return new Uint8Array(bytes).buffer;
+    };
+    const eot = [0x00, 0xff, 0x2f, 0x00];
+
+    // note number 0x85
+    expect(() => parseMidi(smfWithTrack([0x00, 0x90, 0x85, 0x64, ...eot]))).toThrow(/data byte/);
+    // note-on velocity 0x80
+    expect(() => parseMidi(smfWithTrack([0x00, 0x90, 0x3c, 0x80, ...eot]))).toThrow(/data byte/);
+    // note-off velocity 0xff
+    expect(() => parseMidi(smfWithTrack([0x00, 0x80, 0x3c, 0xff, ...eot]))).toThrow(/data byte/);
+    // control change value 0x90
+    expect(() => parseMidi(smfWithTrack([0x00, 0xb0, 0x07, 0x90, ...eot]))).toThrow(/data byte/);
+    // pitch bend MSB 0xc0
+    expect(() => parseMidi(smfWithTrack([0x00, 0xe0, 0x00, 0xc0, ...eot]))).toThrow(/data byte/);
+
+    // the highest legal data byte still parses
+    const ok = parseMidi(smfWithTrack([0x00, 0x90, 0x7f, 0x7f, ...eot]));
+    expect(ok.tracks[0][0]).toEqual({
+      tick: 0,
+      type: 'noteOn',
+      channel: 0,
+      data: { note: 127, velocity: 127 },
+    });
+  });
+
   it('skips alien chunks between header and tracks', () => {
     const orig = new Uint8Array(fixtureSmf());
     const alien = [0x58, 0x46, 0x49, 0x48, 0, 0, 0, 2, 0xaa, 0xbb]; // 'XFIH' + 2 bytes

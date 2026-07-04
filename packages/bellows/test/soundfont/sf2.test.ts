@@ -16,6 +16,10 @@ import {
   list,
   chunk,
   phdrRec,
+  instRec,
+  bag,
+  gen,
+  modTerminal,
 } from './sf2fixture';
 
 describe('unit conversions', () => {
@@ -179,6 +183,59 @@ describe('zone resolution', () => {
   it('rejects a preset index out of range', () => {
     expect(() => sf.zonesFor(1, 60, 100)).toThrow(/preset index/);
     expect(() => sf.zonesFor(-1, 60, 100)).toThrow(/preset index/);
+  });
+});
+
+describe('generators after the terminal generator', () => {
+  /*
+   * One preset zone whose generator list continues past the instrument
+   * generator (fineTune 30 after instrument 0), and one instrument zone
+   * that continues past sampleID (coarseTune 5 after sampleID 0). SF2.04
+   * section 7 says everything after the terminal generator is ignored.
+   */
+  function buildTrailingGenSf2(): ArrayBuffer {
+    const phdr = [...phdrRec('P', 0, 0, 0), ...phdrRec('EOP', 0, 0, 1)];
+    const pbag = [...bag(0, 0), ...bag(2, 0)];
+    const pgen = [
+      ...gen(41, 0), // instrument 0 (zone terminator)
+      ...gen(52, 30), // fineTune after the terminator: must be ignored
+      ...gen(0, 0), // terminal record
+    ];
+    const inst = [...instRec('I', 0), ...instRec('EOI', 1)];
+    const ibag = [...bag(0, 0), ...bag(2, 0)];
+    const igen = [
+      ...gen(53, 0), // sampleID (zone terminator)
+      ...gen(51, 5), // coarseTune after the terminator: must be ignored
+      ...gen(0, 0), // terminal record
+    ];
+    const shdr = [
+      ...shdrRec('S', 0, 64, 8, 56, 44100, 60, 0, 0, 1),
+      ...shdrRec('EOS', 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    ];
+    return riff('sfbk', [
+      ...infoList('Trailing'),
+      ...list('sdta', chunk('smpl', samples16(sineSamples(64)))),
+      ...list('pdta', [
+        ...chunk('phdr', phdr),
+        ...chunk('pbag', pbag),
+        ...chunk('pmod', modTerminal()),
+        ...chunk('pgen', pgen),
+        ...chunk('inst', inst),
+        ...chunk('ibag', ibag),
+        ...chunk('imod', modTerminal()),
+        ...chunk('igen', igen),
+        ...chunk('shdr', shdr),
+      ]),
+    ]);
+  }
+
+  it('ignores generators that appear after sampleID or instrument', () => {
+    const sf = SoundFont.parse(buildTrailingGenSf2());
+    const zones = sf.zonesFor(0, 60, 100);
+    expect(zones).toHaveLength(1);
+    const z = zones[0];
+    expect(z.coarseTune).toBe(0);
+    expect(z.fineTune).toBe(0);
   });
 });
 

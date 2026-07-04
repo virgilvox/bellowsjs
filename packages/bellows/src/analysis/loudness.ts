@@ -170,8 +170,14 @@ export class LoudnessMeter {
   private readonly scratchL = new Float32Array(CHUNK);
   private readonly scratchR: Float32Array | null;
 
-  /** Per-segment sum of squares over all channels. */
-  private segSums: number[] = [];
+  /**
+   * Ring of the trailing SEGMENTS_SHORT per-segment sums of squares over
+   * all channels. Only the last 60 segments are ever read, so the buffer
+   * stays this size no matter how long the metering runs.
+   */
+  private readonly segRing = new Float64Array(SEGMENTS_SHORT);
+  /** Segments finished since construction or reset. */
+  private segCount = 0;
   /** 400 ms gating block powers (mean square, channel summed). */
   private blockPowers: number[] = [];
   /** Short-term powers on the 750 ms grid, for LRA. */
@@ -268,10 +274,11 @@ export class LoudnessMeter {
   }
 
   private finishSegment(): void {
-    this.segSums.push(this.segAccum);
+    this.segRing[this.segCount % SEGMENTS_SHORT] = this.segAccum;
+    this.segCount++;
     this.segAccum = 0;
     this.segRemaining = this.segLen;
-    const count = this.segSums.length;
+    const count = this.segCount;
     if (count >= SEGMENTS_MOMENTARY && count % BLOCK_HOP === 0) {
       this.blockPowers.push(this.trailingPower(SEGMENTS_MOMENTARY));
     }
@@ -282,21 +289,23 @@ export class LoudnessMeter {
 
   /** Mean square per channel-sum over the trailing `segments` segments. */
   private trailingPower(segments: number): number {
-    const sums = this.segSums;
+    const ring = this.segRing;
     let total = 0;
-    for (let i = sums.length - segments; i < sums.length; i++) total += sums[i];
+    for (let i = this.segCount - segments; i < this.segCount; i++) {
+      total += ring[i % SEGMENTS_SHORT];
+    }
     return total / (segments * this.segLen);
   }
 
   /** Loudness of the trailing 400 ms in LUFS, -Infinity until filled. */
   momentary(): number {
-    if (this.segSums.length < SEGMENTS_MOMENTARY) return -Infinity;
+    if (this.segCount < SEGMENTS_MOMENTARY) return -Infinity;
     return lufsOf(this.trailingPower(SEGMENTS_MOMENTARY));
   }
 
   /** Loudness of the trailing 3 s in LUFS, -Infinity until filled. */
   shortTerm(): number {
-    if (this.segSums.length < SEGMENTS_SHORT) return -Infinity;
+    if (this.segCount < SEGMENTS_SHORT) return -Infinity;
     return lufsOf(this.trailingPower(SEGMENTS_SHORT));
   }
 
@@ -346,7 +355,8 @@ export class LoudnessMeter {
   }
 
   reset(): void {
-    this.segSums = [];
+    this.segRing.fill(0);
+    this.segCount = 0;
     this.blockPowers = [];
     this.stPowers = [];
     this.segAccum = 0;

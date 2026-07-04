@@ -105,6 +105,8 @@ onUnmounted(stop);
   font-weight: 600;
   letter-spacing: 0.1em;
   color: var(--phosphor);
+  /* the panel title uppercases; chord quality case must survive (Fm vs FM) */
+  text-transform: none;
 }
 
 .bar-readout {

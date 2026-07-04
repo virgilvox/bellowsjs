@@ -106,6 +106,15 @@ class ByteReader {
     return this.b[this.pos];
   }
 
+  /** Channel-message data byte: the high bit must be clear. */
+  u7(): number {
+    const b = this.u8();
+    if (b > 0x7f) {
+      throw new Error(`midi: invalid data byte 0x${b.toString(16)} in channel message`);
+    }
+    return b;
+  }
+
   u16(): number {
     return (this.u8() << 8) | this.u8();
   }
@@ -183,26 +192,26 @@ function parseTrack(r: ByteReader, velocityZeroIsNoteOff: boolean): MidiFileEven
       running = status;
       const kind = status & 0xf0;
       const channel = status & 0x0f;
-      const d1 = r.u8();
+      const d1 = r.u7();
       if (kind === 0x90) {
-        const velocity = r.u8();
+        const velocity = r.u7();
         if (velocity === 0 && velocityZeroIsNoteOff) {
           events.push({ tick, type: 'noteOff', channel, data: { note: d1, velocity: 0 } });
         } else {
           events.push({ tick, type: 'noteOn', channel, data: { note: d1, velocity } });
         }
       } else if (kind === 0x80) {
-        events.push({ tick, type: 'noteOff', channel, data: { note: d1, velocity: r.u8() } });
+        events.push({ tick, type: 'noteOff', channel, data: { note: d1, velocity: r.u7() } });
       } else if (kind === 0xa0) {
-        events.push({ tick, type: 'keyPressure', channel, data: { note: d1, value: r.u8() } });
+        events.push({ tick, type: 'keyPressure', channel, data: { note: d1, value: r.u7() } });
       } else if (kind === 0xb0) {
-        events.push({ tick, type: 'controlChange', channel, data: { controller: d1, value: r.u8() } });
+        events.push({ tick, type: 'controlChange', channel, data: { controller: d1, value: r.u7() } });
       } else if (kind === 0xc0) {
         events.push({ tick, type: 'programChange', channel, data: { program: d1 } });
       } else if (kind === 0xd0) {
         events.push({ tick, type: 'channelPressure', channel, data: { value: d1 } });
       } else if (kind === 0xe0) {
-        events.push({ tick, type: 'pitchBend', channel, data: { value: d1 | (r.u8() << 7) } });
+        events.push({ tick, type: 'pitchBend', channel, data: { value: d1 | (r.u7() << 7) } });
       } else {
         throw new Error(`midi: unexpected status byte 0x${status.toString(16)}`);
       }
