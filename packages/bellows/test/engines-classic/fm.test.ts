@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fmEngine } from '../../src/engines/fm';
-import { rng } from '../../src/core/prng';
-import { SR, hasBadSamples, maxDiff, peak, render, tonePower } from './helpers';
+import { hasBadSamples, maxDiff, peak, render, renderPair, tonePower } from './helpers';
 
 const HOLD = { sustain: 1, mSustain: 1 };
 
@@ -112,22 +111,9 @@ describe('fm engine', () => {
   it('two voices sum into the same bus', () => {
     const a = render(fmEngine, { freq: 220, seed: 'p1' });
     const b = render(fmEngine, { freq: 277, seed: 'p2' });
-    const n = a.l.length;
-    const l = new Float32Array(n);
-    const r = new Float32Array(n);
-    const v1 = fmEngine.createVoice(SR, {}, rng('p1'));
-    const v2 = fmEngine.createVoice(SR, {}, rng('p2'));
-    v1.noteOn(220, 1);
-    v2.noteOn(277, 1);
-    const offAt = Math.round(0.3 * SR);
-    v1.process(l, r, 0, offAt);
-    v2.process(l, r, 0, offAt);
-    v1.noteOff();
-    v2.noteOff();
-    v1.process(l, r, offAt, n);
-    v2.process(l, r, offAt, n);
-    for (let i = 0; i < n; i += 997) {
-      expect(l[i]).toBeCloseTo(a.l[i] + b.l[i], 5);
+    const both = renderPair(fmEngine, 220, 277, 'p1', 'p2');
+    for (let i = 0; i < both.l.length; i += 997) {
+      expect(both.l[i]).toBeCloseTo(a.l[i] + b.l[i], 5);
     }
   });
 });

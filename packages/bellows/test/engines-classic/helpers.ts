@@ -50,6 +50,46 @@ export function render(def: EngineDef, opts: RenderOpts = {}): Rendered {
   return { l, r, voice };
 }
 
+/**
+ * Render two voices into one shared bus with the same block splits as
+ * render(), so the result is comparable sample by sample against the sum
+ * of two solo renders.
+ */
+export function renderPair(
+  def: EngineDef,
+  freq1: number,
+  freq2: number,
+  seed1: string,
+  seed2: string,
+  opts: RenderOpts = {},
+): { l: Float32Array; r: Float32Array } {
+  const seconds = opts.seconds ?? 0.5;
+  const n = Math.round(seconds * SR);
+  const l = new Float32Array(n);
+  const r = new Float32Array(n);
+  const v1 = def.createVoice(SR, opts.params ?? {}, rng(seed1));
+  const v2 = def.createVoice(SR, opts.params ?? {}, rng(seed2));
+  v1.noteOn(freq1, opts.vel ?? 1);
+  v2.noteOn(freq2, opts.vel ?? 1);
+  const offAt = Math.min(n, Math.round((opts.offAt ?? seconds * 0.6) * SR));
+  const block = opts.block ?? 128;
+  let i = 0;
+  let released = false;
+  while (i < n) {
+    let to = Math.min(i + block, n);
+    if (!released && i < offAt && offAt < to) to = offAt;
+    v1.process(l, r, i, to);
+    v2.process(l, r, i, to);
+    if (!released && to >= offAt) {
+      v1.noteOff();
+      v2.noteOff();
+      released = true;
+    }
+    i = to;
+  }
+  return { l, r };
+}
+
 export function peak(buf: Float32Array): number {
   let m = 0;
   for (let i = 0; i < buf.length; i++) {

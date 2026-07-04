@@ -19,8 +19,6 @@ import { DelayLine } from '../dsp/delayline';
 
 const MIN_FREQ = 20;
 const TWO_PI = Math.PI * 2;
-/** ln(1000): T60 decay constant. */
-const T60_LN = 6.907755278982137;
 /** Decay time cap applied at noteOff, seconds. */
 const RELEASE_T60 = 0.18;
 /** Amplitude tracker release time constant, seconds. */
@@ -69,7 +67,8 @@ class PluckVoice implements Voice {
     this.rng = rng;
     const maxSamples = Math.ceil(sampleRate / MIN_FREQ) + 4;
     this.delay = new DelayLine(maxSamples);
-    this.excite = new Float32Array(maxSamples);
+    // room for one period plus the pick position comb tail
+    this.excite = new Float32Array(2 * maxSamples);
     this.trackCoef = Math.exp(-1 / (TRACK_TAU * sampleRate));
     this.damp = p(params, 'damp', 0.35);
     this.pickPos = p(params, 'pickPos', 0.28);
@@ -96,13 +95,18 @@ class PluckVoice implements Voice {
       const imp = i === 0 ? 1 : i === 1 ? 0.4 : 0;
       this.excite[i] = ((1 - type) * noise + type * imp * 1.6) * amp;
     }
-    // Feed-forward comb at the pick position: zeros where a real pluck
-    // at that fraction of the string excites no energy.
+    // Feed-forward comb 1 - z^-D at the pick position: zeros where a
+    // pluck at that fraction of the string excites no energy. The full
+    // linear convolution runs combD past the burst, so the injection is
+    // extended rather than truncated (truncating breaks the notches).
     const combD = Math.round(clamp(this.pickPos, 0, 0.95) * n);
+    let total = len;
     if (combD >= 1) {
-      for (let i = len - 1; i >= combD; i--) this.excite[i] -= this.excite[i - combD];
+      total = len + combD;
+      for (let i = len; i < total; i++) this.excite[i] = 0;
+      for (let i = total - 1; i >= combD; i--) this.excite[i] -= this.excite[i - combD];
     }
-    this.exciteLen = len;
+    this.exciteLen = total;
     this.excitePos = 0;
     this.tracker = Math.max(amp, 0.01);
   }
@@ -124,7 +128,9 @@ class PluckVoice implements Voice {
     const t60 = this.gate
       ? clamp(this.decaySec, 0.05, 20)
       : Math.min(clamp(this.decaySec, 0.05, 20), RELEASE_T60);
-    this.gs = Math.pow(10, -3 / (t60 * this.sr));
+    // The circulating wave meets this gain once per period, so the loss
+    // per pass is set against the period count in t60 seconds.
+    this.gs = Math.pow(10, -3 / (t60 * this.freq));
   }
 
   process(outL: Float32Array, outR: Float32Array, from: number, to: number): void {

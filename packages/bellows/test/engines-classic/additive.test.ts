@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { additiveEngine } from '../../src/engines/additive';
-import { rng } from '../../src/core/prng';
-import { SR, hasBadSamples, maxDiff, peak, render, tonePower } from './helpers';
+import { SR, hasBadSamples, maxDiff, peak, render, renderPair, tonePower } from './helpers';
 
 /** Params that zero every partial in both frames. */
 function silentFrames(): Record<string, number> {
@@ -105,22 +104,9 @@ describe('additive engine', () => {
   it('two voices sum into the same bus', () => {
     const a = render(additiveEngine, { freq: 220, seed: 'a1' });
     const b = render(additiveEngine, { freq: 330, seed: 'a2' });
-    const n = a.l.length;
-    const l = new Float32Array(n);
-    const r = new Float32Array(n);
-    const v1 = additiveEngine.createVoice(SR, {}, rng('a1'));
-    const v2 = additiveEngine.createVoice(SR, {}, rng('a2'));
-    v1.noteOn(220, 1);
-    v2.noteOn(330, 1);
-    const offAt = Math.round(0.3 * SR);
-    v1.process(l, r, 0, offAt);
-    v2.process(l, r, 0, offAt);
-    v1.noteOff();
-    v2.noteOff();
-    v1.process(l, r, offAt, n);
-    v2.process(l, r, offAt, n);
-    for (let i = 0; i < n; i += 997) {
-      expect(l[i]).toBeCloseTo(a.l[i] + b.l[i], 5);
+    const both = renderPair(additiveEngine, 220, 330, 'a1', 'a2');
+    for (let i = 0; i < both.l.length; i += 997) {
+      expect(both.l[i]).toBeCloseTo(a.l[i] + b.l[i], 5);
     }
   });
 });

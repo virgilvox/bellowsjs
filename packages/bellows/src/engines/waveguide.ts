@@ -111,7 +111,11 @@ class StringVoice implements Voice {
     this.delay = new DelayLine(maxSamples);
     this.excite = new Float32Array(maxSamples);
     this.trackCoef = Math.exp(-1 / (TRACK_TAU * sampleRate));
-    this.dcR = clamp(1 - (0.005 * 44100) / sampleRate, 0.9, 0.99999);
+    // Gentle dc blocker: the pole hugs the zero so its phase delay at
+    // and above the fundamental stays small and nearly flat, keeping
+    // the loop close to harmonic. It only has to bleed off the dc the
+    // bow injects, which builds up slowly.
+    this.dcR = clamp(1 - (0.0005 * 44100) / sampleRate, 0.99, 0.999995);
     this.damp = p(params, 'damp', 0.35);
     this.sustain = p(params, 'sustain', 0.6);
     this.dispersion = p(params, 'dispersion', 0);
@@ -157,14 +161,29 @@ class StringVoice implements Voice {
     const a = 1 - Math.exp((-TWO_PI * fc) / this.sr);
     this.lpA = a;
     this.lpB = 1 - a;
-    this.apC = clamp(this.dispersion, 0, 1) * 0.45;
-    const pd =
+    // Dispersion allpasses need their pole near z = 1 (negative c) so
+    // the phase delay actually varies across the partials; a pole far
+    // from the circle is flat there and detunes nothing. The chain's
+    // bulk delay is compensated at the fundamental, so if it would eat
+    // the whole loop on a high note, the coefficient is relaxed until
+    // enough delay is left.
+    this.apC = -0.9 * Math.pow(clamp(this.dispersion, 0, 1), 0.3);
+    let pd =
       onePolePhaseDelay(a, w) +
       dcBlockerPhaseDelay(this.dcR, w) +
       DISPERSION_STAGES * allpassPhaseDelay(this.apC, w);
+    while (n - 1 - pd < 4 && this.apC < -1e-3) {
+      this.apC *= 0.7;
+      pd =
+        onePolePhaseDelay(a, w) +
+        dcBlockerPhaseDelay(this.dcR, w) +
+        DISPERSION_STAGES * allpassPhaseDelay(this.apC, w);
+    }
     this.readDelay = Math.max(1, n - 1 - pd);
     const t60 = this.gate ? 0.3 * Math.pow(40, clamp(this.sustain, 0, 1)) : RELEASE_T60;
-    this.gs = Math.pow(10, -3 / (t60 * this.sr));
+    // Loop loss is met once per period, so the per pass gain is set
+    // against the period count in t60 seconds.
+    this.gs = Math.pow(10, -3 / (t60 * this.freq));
   }
 
   process(outL: Float32Array, outR: Float32Array, from: number, to: number): void {

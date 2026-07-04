@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { vaEngine } from '../../src/engines/va';
-import { rng } from '../../src/core/prng';
-import { SR, bandPower, hasBadSamples, maxDiff, peak, render } from './helpers';
+import { SR, bandPower, hasBadSamples, maxDiff, peak, render, renderPair, tonePower } from './helpers';
 
 describe('va engine', () => {
   it('renders clean audio with sane peak', () => {
@@ -55,19 +54,34 @@ describe('va engine', () => {
   });
 
   it('filter envelope opens the filter while it is high', () => {
-    const params = {
+    // svf type: the ladder's tanh stages add distortion products that land
+    // on harmonics and would blur the comparison. Compare the same early
+    // window with the envelope on and off, at an exact harmonic (110 * 20),
+    // since short window leakage swamps late window measurements.
+    const base = {
+      filterType: 1,
       cutoff: 200,
-      envAmount: 5,
       fAttack: 0.001,
-      fDecay: 0.06,
+      fDecay: 0.15,
       fSustain: 0,
       sustain: 1,
       resonance: 0,
+      detune: 0,
     };
-    const { l } = render(vaEngine, { params, freq: 110, seconds: 0.5, offAt: 0.5 });
-    const early = bandPower(l, 1500, 6000, 0, Math.round(0.04 * SR));
-    const late = bandPower(l, 1500, 6000, Math.round(0.3 * SR), Math.round(0.34 * SR));
-    expect(early).toBeGreaterThan(late * 10);
+    const win = Math.round(0.04 * SR);
+    const swept = render(vaEngine, {
+      params: { ...base, envAmount: 6 },
+      freq: 110,
+      offAt: 1,
+    });
+    const still = render(vaEngine, {
+      params: { ...base, envAmount: 0 },
+      freq: 110,
+      offAt: 1,
+    });
+    expect(tonePower(swept.l, 2200, 0, win)).toBeGreaterThan(
+      tonePower(still.l, 2200, 0, win) * 10,
+    );
   });
 
   it('drift changes output against the drift free render', () => {
@@ -104,22 +118,9 @@ describe('va engine', () => {
   it('two voices sum into the same bus', () => {
     const a = render(vaEngine, { freq: 220, seed: 's1' });
     const b = render(vaEngine, { freq: 330, seed: 's2' });
-    const n = a.l.length;
-    const l = new Float32Array(n);
-    const r = new Float32Array(n);
-    const v1 = vaEngine.createVoice(SR, {}, rng('s1'));
-    const v2 = vaEngine.createVoice(SR, {}, rng('s2'));
-    v1.noteOn(220, 1);
-    v2.noteOn(330, 1);
-    const offAt = Math.round(0.3 * SR);
-    v1.process(l, r, 0, offAt);
-    v2.process(l, r, 0, offAt);
-    v1.noteOff();
-    v2.noteOff();
-    v1.process(l, r, offAt, n);
-    v2.process(l, r, offAt, n);
-    for (let i = 0; i < n; i += 997) {
-      expect(l[i]).toBeCloseTo(a.l[i] + b.l[i], 5);
+    const both = renderPair(vaEngine, 220, 330, 's1', 's2');
+    for (let i = 0; i < both.l.length; i += 997) {
+      expect(both.l[i]).toBeCloseTo(a.l[i] + b.l[i], 5);
     }
   });
 });

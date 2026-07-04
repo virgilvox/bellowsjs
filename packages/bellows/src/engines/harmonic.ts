@@ -129,9 +129,11 @@ export class HarmonicVoice implements Voice {
    *
    *   f0        fundamental in Hz
    *   loudness  linear amplitude 0..1, smoothed internally over 5 ms
-   *   harmonics optional linear amplitudes for partials 1..n (n <= 64);
-   *             when given they replace the parametric spectral
-   *             envelope until the next frame, copied, not retained
+   *   harmonics optional linear amplitudes for partials 1..n (n <= 64),
+   *             copied, not retained by reference; once given they
+   *             replace the parametric spectral envelope and stay in
+   *             force until the next frame that supplies harmonics or
+   *             the next noteOn
    *
    * The first call switches the voice into frame mode: the Adsr and
    * velocity are bypassed and loudness is the whole contour. noteOff

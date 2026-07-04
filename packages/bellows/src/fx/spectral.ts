@@ -399,9 +399,14 @@ class RobotFx extends SpectralEffect {
   }
 
   protected frame(re: Float32Array, im: Float32Array): void {
+    // Zero phase in a center-of-window sense: alternating signs are the
+    // linear phase that parks the pulse mid-frame, where the synthesis
+    // window has gain. Plain zero phase would put it at the frame edge
+    // and the hann window would erase it.
     const nb = this.bins;
     for (let k = 0; k < nb; k++) {
-      re[k] = Math.sqrt(re[k] * re[k] + im[k] * im[k]);
+      const m = Math.sqrt(re[k] * re[k] + im[k] * im[k]);
+      re[k] = (k & 1) === 0 ? m : -m;
       im[k] = 0;
     }
   }
@@ -467,11 +472,17 @@ const DENOISE_FLOOR = 0.02;
 const DENOISE_RISE_DB_PER_SEC = 1.5;
 /** One-pole magnitude smoothing time feeding the minimum tracker. */
 const DENOISE_SMOOTH_SEC = 0.05;
+/**
+ * Frames to wait before the floor starts capturing, covering the STFT
+ * ramp-in and the smoother's own convergence from zero.
+ */
+const DENOISE_WARMUP_FRAMES = 10;
 
 class DenoiseFx extends SpectralEffect {
   private amount = 1;
   private readonly rise: number;
   private readonly smoothCoeff: number;
+  private readonly warmup = [0, 0];
   private readonly smooth: [Float32Array, Float32Array];
   private readonly floor: [Float32Array, Float32Array];
 
@@ -489,6 +500,8 @@ class DenoiseFx extends SpectralEffect {
   }
 
   protected override clear(): void {
+    this.warmup[0] = 0;
+    this.warmup[1] = 0;
     this.smooth[0].fill(0);
     this.smooth[1].fill(0);
     this.floor[0].fill(Infinity);
@@ -502,6 +515,11 @@ class DenoiseFx extends SpectralEffect {
     const a = this.smoothCoeff;
     const rise = this.rise;
     const amount = this.amount;
+    // During warmup the frames are the zero-padded STFT ramp-in and the
+    // smoother is still converging from zero, so the floor must not
+    // capture yet or it would lock onto a near-zero estimate.
+    const capture = this.warmup[ch] >= DENOISE_WARMUP_FRAMES;
+    if (!capture) this.warmup[ch]++;
     for (let k = 0; k < nb; k++) {
       const m = Math.sqrt(re[k] * re[k] + im[k] * im[k]);
       // Smooth the magnitude, track its running minimum with a slow
@@ -509,8 +527,11 @@ class DenoiseFx extends SpectralEffect {
       const sm = smooth[k] + a * (m - smooth[k]);
       smooth[k] = sm;
       let f = floor[k];
-      f = sm < f ? sm : f * rise + 1e-9;
-      floor[k] = f;
+      if (capture) {
+        f = sm < f ? sm : f * rise + 1e-9;
+        floor[k] = f;
+      }
+      if (f === Infinity) continue; // warmup: pass the bin through
       let target = m - amount * f;
       const least = m * DENOISE_FLOOR;
       if (target < least) target = least;
