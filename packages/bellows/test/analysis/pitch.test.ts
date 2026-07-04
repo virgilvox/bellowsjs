@@ -39,10 +39,18 @@ describe('yin', () => {
 
   it('respects a custom threshold', () => {
     const buf = sine(440, SR, N, 0.8);
+    // At a normal threshold the true pitch wins.
+    const normal = yin(buf, SR, 0.01);
+    expect(normal).not.toBeNull();
+    expect(relError(normal!.freq, 440)).toBeLessThan(0.005);
+    // At an absurdly strict threshold the first crossing may only happen
+    // at an integer period multiple (a subharmonic), or not at all. Both
+    // are valid YIN outcomes; a non-integer ratio would be a bug.
     const strict = yin(buf, SR, 0.0001);
-    // A clean sine still dips essentially to zero, so even a very strict
-    // threshold finds it; the point is the parameter is honored without error.
-    expect(strict === null || relError(strict.freq, 440) < 0.005).toBe(true);
+    if (strict !== null) {
+      const ratio = 440 / strict.freq;
+      expect(Math.abs(ratio - Math.round(ratio))).toBeLessThan(0.01);
+    }
   });
 });
 
