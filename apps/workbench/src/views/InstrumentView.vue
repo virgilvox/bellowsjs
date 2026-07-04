@@ -6,14 +6,16 @@
  * shown (it lives under a KeepAlive) and never fights text inputs.
  */
 
-import { onActivated, onBeforeUnmount, onDeactivated, onMounted } from 'vue';
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted } from 'vue';
 import {
   boot,
   instState,
+  legatoCapable,
   noteOff,
   noteOn,
   panic,
   setGain,
+  setLegato,
   setOctave,
   setPan,
   setSustain,
@@ -48,6 +50,8 @@ const KB_BASE = 60; // C4 before octave shift
 
 const heldCodes = new Set<string>();
 let listening = false;
+
+const canLegato = computed(() => legatoCapable(instState.engineId));
 
 function inTextTarget(e: KeyboardEvent): boolean {
   const t = e.target as HTMLElement | null;
@@ -175,6 +179,22 @@ async function start(): Promise<void> {
             <label>sustain</label>
             <span class="lamp-dot" :class="{ hot: instState.sustain }"></span>
           </div>
+          <div class="field legato-field">
+            <label>legato</label>
+            <button
+              class="legato-btn"
+              :class="{ lit: instState.legato }"
+              :disabled="!canLegato"
+              :title="
+                canLegato
+                  ? 'one bow: overlapping notes glide instead of re-attacking'
+                  : 'legato needs a bowed string or blown tube engine'
+              "
+              @click="setLegato(!instState.legato)"
+            >
+              {{ instState.legato ? 'on' : 'off' }}
+            </button>
+          </div>
           <div class="field panic-field">
             <label>&nbsp;</label>
             <button class="panic" @click="panic">panic</button>
@@ -262,6 +282,11 @@ async function start(): Promise<void> {
 
 .sus .lamp-dot {
   margin: 6px 0 4px;
+}
+
+.legato-btn {
+  padding: 3px 12px;
+  box-shadow: none;
 }
 
 .panic {

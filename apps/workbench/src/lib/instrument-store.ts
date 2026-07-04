@@ -65,6 +65,9 @@ interface InstState {
   /** default velocity 0..1 for keyboard and MIDI-less presses */
   velocity: number;
   sustain: boolean;
+  /** monophonic true legato: overlapping presses glide the sounding
+   * voice instead of re-attacking; only string and tube engines can */
+  legato: boolean;
   /** live voice count from the kernel meter */
   voices: number;
 }
@@ -80,6 +83,7 @@ export const instState = reactive<InstState>({
   octave: 0,
   velocity: 0.8,
   sustain: false,
+  legato: false,
   voices: 0,
 });
 
@@ -134,6 +138,14 @@ export function resolveEngineId(engineId: string): string {
   return engineId.startsWith(PRESET_PREFIX) ? 'pluck' : engineId;
 }
 
+/** Engines whose voices honor setParam('freq') on a sounding note, the
+ * hook true legato needs. Written against resolveEngineId so preset ids
+ * inherit their engine's capability. */
+export function legatoCapable(engineId: string): boolean {
+  const resolved = resolveEngineId(engineId);
+  return resolved === 'string' || resolved === 'tube';
+}
+
 /** Specs always come from the underlying engine, so a preset's params
  * stay fully editable in the panel. */
 export function paramSpecsFor(engineId: string): ParamSpec[] {
@@ -185,6 +197,16 @@ const deferred = new Set<string>();
 /** How many ledger entries sound each midi number. */
 const soundingCount = new Map<number, number>();
 
+/* Legato bookkeeping. While legato is on, held keys stack in press
+ * order and the top of the stack is the pitch the one sounding voice
+ * plays. Every pressed key still gets a ledger entry (so noteOff and
+ * the sustain pedal find it), but only the FIRST press called
+ * voiceHandle.on: later entries carry noteId -1 and the real kernel
+ * note id lives in legatoNoteId, so it survives the first key leaving
+ * the stack early and is released only when the stack empties. */
+const legatoStack: Array<{ key: string; midi: number; vel: number }> = [];
+let legatoNoteId = -1;
+
 function applyMix(): void {
   if (!voiceHandle) return;
   voiceHandle.gain(instState.gain);
@@ -201,6 +223,8 @@ function clearLedger(): void {
   deferred.clear();
   soundingCount.clear();
   activeNotes.clear();
+  legatoStack.length = 0;
+  legatoNoteId = -1;
 }
 
 function makeVoice(): void {
@@ -264,6 +288,16 @@ export function setEngine(engineId: string): void {
     instState.gain = Math.max(0, Math.min(1.2, preset.gain ?? 0.8));
     setOctave(preset.octave ?? 0);
   }
+  // legato only makes sense on engines that can retune a sounding
+  // voice; the bowed and blown preset families default it on
+  if (!legatoCapable(engineId)) {
+    instState.legato = false;
+  } else if (
+    preset &&
+    (preset.family === 'strings' || preset.family === 'winds' || preset.family === 'brass')
+  ) {
+    instState.legato = true;
+  }
   if (!instState.ready) return;
   syncInstance();
   if (!b) return;
@@ -282,6 +316,11 @@ export function setEngine(engineId: string): void {
 /* ------------------------------------------------------------------ */
 
 function releaseEntry(key: string, entry: { noteId: number; sounding: number }): void {
+  const li = legatoStack.findIndex((e) => e.key === key);
+  if (li >= 0) {
+    releaseLegatoEntry(key, li);
+    return;
+  }
   voiceHandle?.off(entry.noteId);
   if (b) noteTap?.off(entry.sounding, b.now());
   ledger.delete(key);
@@ -295,6 +334,35 @@ function releaseEntry(key: string, entry: { noteId: number; sounding: number }):
   }
 }
 
+/** Release one key of the legato stack. Non-top keys leave silently
+ * (they were never the sounding pitch), the top glides back to the key
+ * under it, and the last key releases the one real note. */
+function releaseLegatoEntry(key: string, li: number): void {
+  const wasTop = li === legatoStack.length - 1;
+  const removed = legatoStack.splice(li, 1)[0];
+  ledger.delete(key);
+  deferred.delete(key);
+  if (legatoStack.length === 0) {
+    // last held key: the one real note finally gets its noteOff
+    if (legatoNoteId >= 0) voiceHandle?.off(legatoNoteId);
+    legatoNoteId = -1;
+    activeNotes.delete(removed.midi);
+    if (b) noteTap?.off(removed.midi, b.now());
+  } else if (wasTop) {
+    // top released with others held: glide back down to the new top
+    const next = legatoStack[legatoStack.length - 1];
+    if (b && voiceHandle) voiceHandle.param('freq', b.freqOf(next.midi));
+    activeNotes.delete(removed.midi);
+    activeNotes.add(next.midi);
+    // the looper tap records the return glide as adjacent note events
+    // too; see the comment in noteOn for the playback limitation
+    if (b) {
+      noteTap?.off(removed.midi, b.now());
+      noteTap?.on(next.midi, next.vel, b.now());
+    }
+  }
+}
+
 export function noteOn(midi: number, vel = instState.velocity, source: NoteSource = 'ptr'): void {
   syncInstance();
   if (!instState.ready || !voiceHandle) return;
@@ -304,10 +372,39 @@ export function noteOn(midi: number, vel = instState.velocity, source: NoteSourc
   const prev = ledger.get(key);
   if (prev) releaseEntry(key, prev);
   const clamped = Math.max(0, Math.min(1, vel));
+  if (instState.legato && legatoStack.length > 0) {
+    // Legato transition: no new voice, no new attack. The channel-wide
+    // 'freq' param glides the one sounding voice to the new pitch (the
+    // kernel broadcasts it to the pool; only the active voice reacts),
+    // resolved through the same tuning path notes use (b.freqOf).
+    const old = legatoStack[legatoStack.length - 1];
+    if (b) voiceHandle.param('freq', b.freqOf(sounding));
+    legatoStack.push({ key, midi: sounding, vel: clamped });
+    ledger.set(key, { noteId: -1, sounding });
+    // exactly one lit piano key in legato: the sounding pitch
+    activeNotes.delete(old.midi);
+    activeNotes.add(sounding);
+    // The looper tap has no glide vocabulary, so a transition records
+    // as adjacent off/on events at the instant it happens: the take
+    // keeps the melody's timing, but loop playback re-attacks each
+    // note instead of gliding. A known limitation.
+    if (b) {
+      noteTap?.off(old.midi, b.now());
+      noteTap?.on(sounding, clamped, b.now());
+    }
+    return;
+  }
   const noteId = voiceHandle.on(sounding, clamped);
   ledger.set(key, { noteId, sounding });
-  soundingCount.set(sounding, (soundingCount.get(sounding) ?? 0) + 1);
-  activeNotes.add(sounding);
+  if (instState.legato) {
+    // first key of a legato phrase: this press owns the real note
+    legatoStack.push({ key, midi: sounding, vel: clamped });
+    legatoNoteId = noteId;
+    activeNotes.add(sounding);
+  } else {
+    soundingCount.set(sounding, (soundingCount.get(sounding) ?? 0) + 1);
+    activeNotes.add(sounding);
+  }
   if (b) noteTap?.on(sounding, clamped, b.now());
 }
 
@@ -420,6 +517,20 @@ export function setOctave(shift: number): void {
 
 export function setVelocity(v: number): void {
   instState.velocity = Math.max(0.05, Math.min(1, Math.round(v * 20) / 20));
+}
+
+export function setLegato(on: boolean): void {
+  if (on && !legatoCapable(instState.engineId)) return;
+  if (instState.legato === on) return;
+  if (!on && legatoStack.length) {
+    // leave no note stranded: releasing bottom-up keeps the sounding
+    // top in place until the final entry sends the real noteOff
+    for (const e of [...legatoStack]) {
+      const entry = ledger.get(e.key);
+      if (entry) releaseEntry(e.key, entry);
+    }
+  }
+  instState.legato = on;
 }
 
 /* ------------------------------------------------------------------ */

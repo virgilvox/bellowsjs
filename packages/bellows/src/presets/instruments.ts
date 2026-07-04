@@ -192,7 +192,10 @@ export const INSTRUMENT_PRESETS: InstrumentPreset[] = [
     // vibrato that dips under the note, velocity into bow speed, a
     // second string polarization for the sustain undulation, and a
     // touch of plate so the instrument sits in a room (plate decay
-    // 0.42 measures about 1.4 s RT60)
+    // 0.42 measures about 1.4 s RT60). glide and legatoScratch feed
+    // the legato mode: slurred notes bend under one bow with a faint
+    // finger-change scratch, slower down the family as strings get
+    // longer and heavier.
     params: {
       damp: 0.18,
       sustain: 0.85,
@@ -210,6 +213,8 @@ export const INSTRUMENT_PRESETS: InstrumentPreset[] = [
       vibOnset: 0.3,
       dynamics: 0.7,
       polDetune: 2,
+      glide: 0.035,
+      legatoScratch: 0.2,
       level: 0.8,
     },
     fx: [{ effectId: 'plate', params: { decay: 0.42, predelay: 0.02, mix: 0.14 } }],
@@ -238,6 +243,8 @@ export const INSTRUMENT_PRESETS: InstrumentPreset[] = [
       vibOnset: 0.3,
       dynamics: 0.7,
       polDetune: 2,
+      glide: 0.04,
+      legatoScratch: 0.2,
       level: 0.8,
     },
     fx: [{ effectId: 'plate', params: { decay: 0.42, predelay: 0.02, mix: 0.14 } }],
@@ -266,6 +273,8 @@ export const INSTRUMENT_PRESETS: InstrumentPreset[] = [
       vibOnset: 0.35,
       dynamics: 0.7,
       polDetune: 1.8,
+      glide: 0.05,
+      legatoScratch: 0.2,
       level: 0.8,
     },
     fx: [{ effectId: 'plate', params: { decay: 0.42, predelay: 0.025, mix: 0.15 } }],
@@ -296,6 +305,8 @@ export const INSTRUMENT_PRESETS: InstrumentPreset[] = [
       vibOnset: 0.4,
       dynamics: 0.7,
       polDetune: 1.5,
+      glide: 0.06,
+      legatoScratch: 0.2,
       level: 0.85,
     },
     fx: [{ effectId: 'plate', params: { decay: 0.42, predelay: 0.025, mix: 0.12 } }],
@@ -338,14 +349,15 @@ export const INSTRUMENT_PRESETS: InstrumentPreset[] = [
     label: 'CLARINET',
     family: 'winds',
     engineId: 'tube',
-    params: { breath: 0.85, noise: 0.05, level: 0.8 },
+    // quick fingered legato, no scratch cue: keys, not fingers on wire
+    params: { breath: 0.85, noise: 0.05, glide: 0.02, legatoScratch: 0, level: 0.8 },
   },
   {
     id: 'recorder',
     label: 'RECORDER',
     family: 'winds',
     engineId: 'tube',
-    params: { breath: 0.7, noise: 0.12, level: 0.75 },
+    params: { breath: 0.7, noise: 0.12, glide: 0.02, legatoScratch: 0, level: 0.75 },
     octave: 1,
   },
   {

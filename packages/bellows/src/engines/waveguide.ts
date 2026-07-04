@@ -43,6 +43,13 @@
  * memoryless reed table clamp(0.7 - 0.3 * pressureDiff, -1, 1) driven
  * by breath pressure plus rng noise. Sounds while the gate is held and
  * releases on noteOff.
+ *
+ * True legato: setParam('freq', hz) on an active voice of either engine
+ * glides the sounding fundamental to hz over the 'glide' time, equal
+ * cents per second, retuning the loop compensation once per block. The
+ * attack machinery (bite, pitch settle, bow ramp, breath envelope)
+ * never retriggers; only a small 'legatoScratch' noise cue, scaled by
+ * the interval, marks the first 30 ms of the transition.
  */
 
 import type { EngineDef, NamedRng, ParamSpec, Voice } from '../types';
@@ -211,6 +218,14 @@ const NOISE_FORCE_GAIN = 3;
 const BITE_FORCE_GAIN = 20;
 const VIB_RAMP_SEC = 0.3;
 const CENTS_TO_RATIO = 5.78e-4;
+/* Legato transition cue: extra rosin noise during the first 30 ms of a
+ * glide, scaled by legatoScratch and by the interval in semitones
+ * (capped at LEGATO_SCRATCH_SEMIS). At the string preset values
+ * (legatoScratch 0.2) a 2 semitone change adds about half the sustain
+ * rosin floor for 30 ms: audible as a finger change, not an accent. */
+const LEGATO_SCRATCH_GAIN = 0.2;
+const LEGATO_SCRATCH_SEMIS = 5;
+const GLIDE_MAX_SEC = 0.5;
 
 /* ------------------------------------------------------------------ */
 /* String                                                              */
@@ -291,6 +306,16 @@ class StringVoice implements Voice {
   private polDcX1 = 0;
   private polDcY1 = 0;
 
+  // legato glide: block-rate retune toward glideTo, equal cents per
+  // second, plus a one shot scratch cue envelope. All scalars: no
+  // allocation, and nothing here consumes the rng streams.
+  private glideFrom = 440;
+  private glideTo = 440;
+  private glideDur = 1;
+  private glideLeft = 0;
+  private scratchEnv = 0;
+  private scratchLevel = 0;
+
   // vibrato state
   private vibPhase = 0;
   private driftState = 0;
@@ -327,6 +352,8 @@ class StringVoice implements Voice {
   private bowPos: number;
   private dynamics: number;
   private polDetune: number;
+  private glide: number;
+  private legatoScratch: number;
 
   constructor(sampleRate: number, params: Record<string, number>, rng: NamedRng) {
     this.sr = sampleRate;
@@ -388,6 +415,8 @@ class StringVoice implements Voice {
     this.bowPos = p(params, 'bowPos', 0.11);
     this.dynamics = p(params, 'dynamics', 0);
     this.polDetune = p(params, 'polDetune', 0);
+    this.glide = p(params, 'glide', 0.03);
+    this.legatoScratch = p(params, 'legatoScratch', 0.15);
   }
 
   /** Morph the body mode table at the current bodySize and derive RBJ
@@ -447,6 +476,9 @@ class StringVoice implements Voice {
     this.vibPhase = 0;
     this.driftState = 0;
     this.ageSec = 0;
+    // a fresh note owns its pitch: cancel any legato glide in flight
+    this.glideLeft = 0;
+    this.scratchEnv = 0;
     this.bodyZ1.fill(0);
     this.bodyZ2.fill(0);
     if (this.pol2) {
@@ -540,6 +572,21 @@ class StringVoice implements Voice {
       this.computeBody();
       this.bodyDirty = false;
     }
+    if (this.glideLeft > 0) {
+      // Legato retune at block rate: equal cents per second between
+      // glideFrom and glideTo. Recomputing the loop compensation per
+      // block (a few ms) is inaudible and keeps the loop allocation
+      // free; the attack machinery is untouched.
+      this.glideLeft -= to - from;
+      if (this.glideLeft <= 0) {
+        this.glideLeft = 0;
+        this.freq = this.glideTo;
+      } else {
+        const t = 1 - this.glideLeft / this.glideDur;
+        this.freq = this.glideFrom * Math.pow(this.glideTo / this.glideFrom, t);
+      }
+      this.updateLoop();
+    }
     const level = this.level;
     const bowAmt = clamp(this.bow, 0, 1);
     // Dynamics coupling: velocity swings bow speed across 0.35 to 0.8
@@ -561,6 +608,8 @@ class StringVoice implements Voice {
     const nSusAmt = clamp(this.bowNoise, 0, 1) * bowVel * (0.05 + 0.1 * (1 - pressure));
     // Break-away burst level, gated by the 30 ms bite envelope.
     const nAttAmt = bite * bowVel * (0.5 + pressure) * 0.3;
+    // Legato transition cue level, gated by the one shot scratch env.
+    const nScrAmt = clamp(this.legatoScratch, 0, 1) * this.scratchLevel * bowVel * LEGATO_SCRATCH_GAIN;
     const bodyMix = clamp(this.body, 0, 1);
     const useBody = bodyMix > 0;
     const depthCents = clamp(this.vibDepth, 0, 50);
@@ -633,7 +682,14 @@ class StringVoice implements Voice {
           // slope so the string breaks away late and scratches before
           // locking into Helmholtz motion.
           const slopeEff = slope * (1 - 0.35 * bite * this.biteEnv);
-          const noiseSus = nSusAmt * this.noiseLP;
+          let noiseSus = nSusAmt * this.noiseLP;
+          // Legato scratch rides the sustain rosin path (velocity and
+          // force side both) for its first 30 ms. The branch keeps a
+          // never-glided render bit identical to the pre-legato engine.
+          if (this.scratchEnv > 1e-4) {
+            this.scratchEnv *= this.biteCoef;
+            noiseSus += nScrAmt * this.scratchEnv * this.noiseLP;
+          }
           const noiseAtt = nAttAmt * this.biteEnv * this.noiseLP;
           const noise = noiseSus + noiseAtt;
           // Pre-Helmholtz jitter: the 30 to 80 Hz walk (fed by the
@@ -785,6 +841,36 @@ class StringVoice implements Voice {
         this.polDetune = value;
         if (this.live) this.updateLoop();
         break;
+      case 'glide':
+        this.glide = value;
+        break;
+      case 'legatoScratch':
+        this.legatoScratch = value;
+        break;
+      case 'freq':
+        // True legato: retarget the sounding fundamental. The glide
+        // runs at block rate in process(); nothing about the attack
+        // (bite, settle, bow ramp, excitation) retriggers. Ignored on
+        // an inactive voice: a silent voice has no note to bend.
+        if (!this.live) break;
+        {
+          const target = clamp(value, MIN_FREQ, this.sr / 10);
+          const semis = Math.abs(12 * Math.log2(target / this.freq));
+          this.scratchLevel = Math.min(semis, LEGATO_SCRATCH_SEMIS) / LEGATO_SCRATCH_SEMIS;
+          this.scratchEnv = 1;
+          const dur = Math.round(clamp(this.glide, 0, GLIDE_MAX_SEC) * this.sr);
+          if (dur < 1) {
+            this.glideLeft = 0;
+            this.freq = target;
+            this.updateLoop();
+          } else {
+            this.glideFrom = this.freq;
+            this.glideTo = target;
+            this.glideDur = dur;
+            this.glideLeft = dur;
+          }
+        }
+        break;
     }
   }
 
@@ -816,6 +902,10 @@ const stringParams: ParamSpec[] = [
   { name: 'bowPos', min: 0.06, max: 0.2, default: 0.11 },
   { name: 'dynamics', min: 0, max: 1, default: 0 },
   { name: 'polDetune', min: 0, max: 5, default: 0, unit: 'cents' },
+  // Legato params. The retarget itself uses the magic 'freq' param name
+  // (not listed here: it is a note event, not a voicing knob).
+  { name: 'glide', min: 0, max: 0.5, default: 0.03, unit: 's' },
+  { name: 'legatoScratch', min: 0, max: 1, default: 0.15 },
 ];
 
 export const stringEngine: EngineDef = {
@@ -838,14 +928,26 @@ class TubeVoice implements Voice {
 
   private readDelay = 2;
   private prZ = 0;
+  private freq = 200;
   private vel = 1;
   private live = false;
   private tracker = 0;
   private readonly trackCoef: number;
 
+  // legato glide, same block-rate scheme as the string
+  private glideFrom = 200;
+  private glideTo = 200;
+  private glideDur = 1;
+  private glideLeft = 0;
+  private scratchEnv = 0;
+  private scratchLevel = 0;
+  private readonly scratchCoef: number;
+
   private breath: number;
   private noiseAmt: number;
   private level: number;
+  private glide: number;
+  private legatoScratch: number;
 
   constructor(sampleRate: number, params: Record<string, number>, rng: NamedRng) {
     this.sr = sampleRate;
@@ -855,21 +957,33 @@ class TubeVoice implements Voice {
     this.env = new Adsr(sampleRate);
     this.env.set(0.02, 0.03, 1, 0.12);
     this.trackCoef = Math.exp(-1 / (TRACK_TAU * sampleRate));
+    // 30 ms one shot cue for the legato transition, like the string bite
+    this.scratchCoef = Math.exp(-1 / (0.03 * sampleRate));
     this.breath = p(params, 'breath', 0.85);
     this.noiseAmt = p(params, 'noise', 0.1);
     this.level = p(params, 'level', 0.7);
+    this.glide = p(params, 'glide', 0.03);
+    this.legatoScratch = p(params, 'legatoScratch', 0.15);
+  }
+
+  /** Half period bore minus one sample write-to-read latency and the
+   * half sample of the two point average reflection filter. */
+  private boreDelay(f: number): number {
+    return Math.max(1, this.sr / (2 * f) - 1.5);
   }
 
   noteOn(freq: number, vel: number): void {
     const f = clamp(freq, MIN_FREQ, this.sr / 12);
+    this.freq = f;
     this.vel = clamp(vel, 0, 1);
     this.delay.clear();
     this.prZ = 0;
     this.env.reset();
     this.env.trigger();
-    // Half period bore minus one sample write-to-read latency and the
-    // half sample of the two point average reflection filter.
-    this.readDelay = Math.max(1, this.sr / (2 * f) - 1.5);
+    this.readDelay = this.boreDelay(f);
+    // a fresh note owns its pitch: cancel any legato glide in flight
+    this.glideLeft = 0;
+    this.scratchEnv = 0;
     this.live = true;
     this.tracker = 0.01;
   }
@@ -880,16 +994,36 @@ class TubeVoice implements Voice {
 
   process(outL: Float32Array, outR: Float32Array, from: number, to: number): void {
     if (!this.live) return;
+    if (this.glideLeft > 0) {
+      // legato retune at block rate, equal cents per second; the breath
+      // envelope keeps running so the transition never re-attacks
+      this.glideLeft -= to - from;
+      if (this.glideLeft <= 0) {
+        this.glideLeft = 0;
+        this.freq = this.glideTo;
+      } else {
+        const t = 1 - this.glideLeft / this.glideDur;
+        this.freq = this.glideFrom * Math.pow(this.glideTo / this.glideFrom, t);
+      }
+      this.readDelay = this.boreDelay(this.freq);
+    }
     const level = this.level;
     const maxPressure = clamp(this.breath, 0, 1) * (0.6 + 0.4 * this.vel);
     const nAmt = clamp(this.noiseAmt, 0, 1) * 0.4;
+    // legato cue: extra breath noise share for the first 30 ms of a glide
+    const nScrAmt = clamp(this.legatoScratch, 0, 1) * this.scratchLevel * 0.3;
     for (let i = from; i < to; i++) {
       const pr = this.delay.readLinear(this.readDelay);
       // reflection filter: two point average, inverting open end
       const refl = -0.95 * 0.5 * (pr + this.prZ);
       this.prZ = pr;
       let breathP = this.env.next() * maxPressure;
-      breathP *= 1 + nAmt * this.noise.next();
+      let nEff = nAmt;
+      if (this.scratchEnv > 1e-4) {
+        this.scratchEnv *= this.scratchCoef;
+        nEff += nScrAmt * this.scratchEnv;
+      }
+      breathP *= 1 + nEff * this.noise.next();
       const pdiff = refl - breathP;
       const reed = clamp(0.7 - 0.3 * pdiff, -1, 1);
       const s = breathP + pdiff * reed;
@@ -914,6 +1048,34 @@ class TubeVoice implements Voice {
       case 'level':
         this.level = value;
         break;
+      case 'glide':
+        this.glide = value;
+        break;
+      case 'legatoScratch':
+        this.legatoScratch = value;
+        break;
+      case 'freq':
+        // true legato, same contract as the string: glide the sounding
+        // bore to the new pitch, ignored on an inactive voice
+        if (!this.live) break;
+        {
+          const target = clamp(value, MIN_FREQ, this.sr / 12);
+          const semis = Math.abs(12 * Math.log2(target / this.freq));
+          this.scratchLevel = Math.min(semis, LEGATO_SCRATCH_SEMIS) / LEGATO_SCRATCH_SEMIS;
+          this.scratchEnv = 1;
+          const dur = Math.round(clamp(this.glide, 0, GLIDE_MAX_SEC) * this.sr);
+          if (dur < 1) {
+            this.glideLeft = 0;
+            this.freq = target;
+            this.readDelay = this.boreDelay(target);
+          } else {
+            this.glideFrom = this.freq;
+            this.glideTo = target;
+            this.glideDur = dur;
+            this.glideLeft = dur;
+          }
+        }
+        break;
     }
   }
 
@@ -926,6 +1088,9 @@ const tubeParams: ParamSpec[] = [
   { name: 'breath', min: 0, max: 1, default: 0.85 },
   { name: 'noise', min: 0, max: 1, default: 0.1 },
   { name: 'level', min: 0, max: 1, default: 0.7 },
+  // legato params, same contract as the string engine
+  { name: 'glide', min: 0, max: 0.5, default: 0.03, unit: 's' },
+  { name: 'legatoScratch', min: 0, max: 1, default: 0.15 },
 ];
 
 export const tubeEngine: EngineDef = {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { stringEngine, tubeEngine } from '../../src/engines/waveguide';
 import { rng } from '../../src/core/prng';
+import type { EngineDef } from '../../src/types';
 import {
   bandEnergy,
   cents,
@@ -611,6 +612,167 @@ describe('round two: source spectrum and life', () => {
         expect(m[1000 + i]).toBeCloseTo(ref[i], 7);
       }
     });
+  });
+});
+
+describe('true legato glide', () => {
+  const bowBase = { bow: 0.8, bowPressure: 0.55, bowSpeed: 0.6, sustain: 0.85, damp: 0.18 };
+
+  /** Drive a voice like the kernel would, posting setParam('freq') at a
+   * block boundary mid-render: the legato path, no second noteOn. */
+  function renderGlide(
+    def: EngineDef,
+    overrides: Record<string, number>,
+    freqA: number,
+    freqB: number,
+    switchSec: number,
+    seconds: number,
+    seed = 'legato'
+  ) {
+    const params: Record<string, number> = {};
+    for (const spec of def.params) params[spec.name] = spec.default;
+    Object.assign(params, overrides);
+    const voice = def.createVoice(SR, params, rng(seed));
+    const n = Math.round(seconds * SR);
+    const l = new Float32Array(n);
+    const r = new Float32Array(n);
+    const switchAt = Math.round(switchSec * SR);
+    voice.noteOn(freqA, 1);
+    let switched = false;
+    for (let i = 0; i < n; i += 128) {
+      if (!switched && i >= switchAt) {
+        voice.setParam('freq', freqB);
+        switched = true;
+      }
+      voice.process(l, r, i, Math.min(i + 128, n));
+    }
+    return { m: mono(l, r), voice, l };
+  }
+
+  const A4 = 440;
+  const C5 = 523.251;
+
+  it('glides f0 from A4 to C5 smoothly over the configured time', () => {
+    // clean tracking render: no noise, bite, or vibrato in the way
+    const glideSec = 0.4;
+    const { m } = renderGlide(
+      stringEngine,
+      { ...bowBase, glide: glideSec, bowNoise: 0, attackBite: 0, vibDepth: 0 },
+      A4,
+      C5,
+      0.6,
+      1.6
+    );
+    // f0 in adjacent 20 ms windows across the glide
+    const hop = 0.02;
+    const track: number[] = [];
+    for (let t = 0.6; t + 0.021 <= 1.2; t += hop) {
+      const from = Math.round(t * SR);
+      track.push(cents(estimateFreq(m, SR, from, from + Math.round(0.02 * SR), 480).freq, A4));
+    }
+    const total = cents(C5, A4); // 310.3 cents
+    // before the glide the note sits on A4, after it locks on C5
+    const pre = cents(estimateFreq(m, SR, Math.round(0.45 * SR), Math.round(0.58 * SR), 440).freq, A4);
+    expect(Math.abs(pre)).toBeLessThan(5);
+    const post = cents(estimateFreq(m, SR, Math.round(1.1 * SR), Math.round(1.5 * SR), 523).freq, C5);
+    expect(Math.abs(post)).toBeLessThan(5);
+    // the glide takes the configured time: mid-glide sits mid-interval
+    const mid = cents(estimateFreq(m, SR, Math.round(0.79 * SR), Math.round(0.83 * SR), 480).freq, A4);
+    expect(mid).toBeGreaterThan(total * 0.3);
+    expect(mid).toBeLessThan(total * 0.7);
+    // monotonic and continuous: after the first window, each 20 ms step
+    // rises by no more than the ideal ramp step plus 5 cents and never
+    // falls by more than 5 (a jump retune would show a 300 cent step)
+    const idealStep = total * (hop / glideSec); // 15.5 cents per window
+    for (let i = 2; i < track.length; i++) {
+      const d = track[i] - track[i - 1];
+      expect(d, 'window ' + i + ' fell').toBeGreaterThan(-5);
+      expect(d, 'window ' + i + ' jumped').toBeLessThan(idealStep + 5);
+    }
+    // and the track really climbs the whole interval
+    expect(track[track.length - 1] - track[0]).toBeGreaterThan(total - 15);
+  });
+
+  it('transition stays inside 1.5x of the sustain HF fraction', () => {
+    // A fresh noteOn front-loads HF (the attack bite gate above proves
+    // that side); a legato transition must not. legatoScratch at the
+    // string preset level, a 4 semitone interval.
+    const size = 4096;
+    const hf = (m: Float32Array, from: number) => {
+      const mags = magSpectrum(m, from, size);
+      return bandEnergy(mags, SR, size, 3000, 10000) / bandEnergy(mags, SR, size, 60, 10000);
+    };
+    const { m } = renderGlide(
+      stringEngine,
+      { ...bowBase, bow: 1, bowNoise: 0.35, attackBite: 0.5, glide: 0.05, legatoScratch: 0.2, vibDepth: 0 },
+      A4,
+      C5,
+      0.8,
+      1.8,
+      'legato-hf'
+    );
+    const sustain = 0.5 * (hf(m, Math.round(0.5 * SR)) + hf(m, Math.round(1.4 * SR)));
+    const transition = hf(m, Math.round(0.8 * SR));
+    expect(transition).toBeLessThan(1.5 * sustain);
+    expect(transition).toBeGreaterThan(0);
+  });
+
+  it('setParam freq on an inactive voice is ignored', () => {
+    const params: Record<string, number> = {};
+    for (const spec of stringEngine.params) params[spec.name] = spec.default;
+    Object.assign(params, bowBase);
+    const voice = stringEngine.createVoice(SR, params, rng('legato-idle'));
+    voice.setParam('freq', C5);
+    const n = Math.round(0.2 * SR);
+    const l = new Float32Array(n);
+    const r = new Float32Array(n);
+    for (let i = 0; i < n; i += 128) voice.process(l, r, i, Math.min(i + 128, n));
+    expect(maxAbs(l)).toBe(0);
+    expect(voice.active).toBe(false);
+    // and the voice still plays normally afterwards
+    voice.noteOn(A4, 1);
+    for (let i = 0; i < n; i += 128) voice.process(l, r, i, Math.min(i + 128, n));
+    expect(rms(l)).toBeGreaterThan(0.01);
+  });
+
+  it('a glided render is deterministic per seed', () => {
+    const params = { ...bowBase, bowNoise: 0.35, attackBite: 0.5, glide: 0.05, legatoScratch: 0.2 };
+    const a = renderGlide(stringEngine, params, A4, C5, 0.4, 1, 'legato-det');
+    const b = renderGlide(stringEngine, params, A4, C5, 0.4, 1, 'legato-det');
+    expect(countDiffs(a.l, b.l)).toBe(0);
+  });
+
+  it('tube glides pitch under a running breath envelope', () => {
+    const { m } = renderGlide(
+      tubeEngine,
+      { breath: 0.9, noise: 0.05, glide: 0.06 },
+      233,
+      311.13,
+      0.7,
+      1.6,
+      'legato-tube'
+    );
+    const pre = estimateFreq(m, SR, Math.round(0.4 * SR), Math.round(0.65 * SR), 233).freq;
+    expect(Math.abs(cents(pre, 233))).toBeLessThan(60);
+    const post = estimateFreq(m, SR, Math.round(1.1 * SR), Math.round(1.5 * SR), 311.13).freq;
+    expect(Math.abs(cents(post, 311.13))).toBeLessThan(60);
+    // no re-attack: the level through the transition never collapses
+    const held = rms(m, Math.round(0.4 * SR), Math.round(0.6 * SR));
+    const across = rms(m, Math.round(0.68 * SR), Math.round(0.85 * SR));
+    expect(across).toBeGreaterThan(0.4 * held);
+  });
+
+  it('tube ignores freq while inactive', () => {
+    const params: Record<string, number> = {};
+    for (const spec of tubeEngine.params) params[spec.name] = spec.default;
+    const voice = tubeEngine.createVoice(SR, params, rng('legato-tube-idle'));
+    voice.setParam('freq', 311.13);
+    const n = Math.round(0.2 * SR);
+    const l = new Float32Array(n);
+    const r = new Float32Array(n);
+    for (let i = 0; i < n; i += 128) voice.process(l, r, i, Math.min(i + 128, n));
+    expect(maxAbs(l)).toBe(0);
+    expect(voice.active).toBe(false);
   });
 });
 
