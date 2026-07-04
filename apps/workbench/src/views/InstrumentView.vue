@@ -73,6 +73,9 @@ function onKeyDown(e: KeyboardEvent): void {
   if (e.code === 'KeyV') return setVelocity(instState.velocity + 0.1);
   const offset = KEY_OFFSETS[e.code];
   if (offset === undefined || heldCodes.has(e.code)) return;
+  // keep keystrokes inside the 88-key piano so sound and lit keys agree
+  const sounding = KB_BASE + offset + instState.octave * 12;
+  if (sounding < 21 || sounding > 108) return;
   heldCodes.add(e.code);
   noteOn(KB_BASE + offset, instState.velocity, 'kb');
 }

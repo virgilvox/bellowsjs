@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /*
- * Div-based piano. The full range is C2..C7; the visible window is 2, 3,
+ * Div-based piano. The full range is A0..C8, the 88 keys of a real piano,
+ * so every reachable octave shift stays visible; the window is 2, 3,
  * or 4 octaves depending on width and follows the octave shift, so the
  * keys you see are the notes you get: presses send absolute midi numbers.
  * Vertical click position sets velocity (top soft, bottom hard). Pointer
@@ -11,8 +12,8 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { activeNotes, instState, noteOff, noteOn } from '../../lib/instrument-store';
 
-const RANGE_LO = 36; // C2
-const RANGE_HI = 96; // C7
+const RANGE_LO = 21; // A0
+const RANGE_HI = 108; // C8
 const BLACK_PCS = new Set([1, 3, 6, 8, 10]);
 
 const rootEl = ref<HTMLElement | null>(null);
