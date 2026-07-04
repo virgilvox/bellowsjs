@@ -150,12 +150,12 @@ describe('WavetableOscillator position scanning', () => {
 
   it('position 0.5 blends both frames equally', () => {
     const osc = new WavetableOscillator(SR, set);
-    osc.setFreq(SR / N); // fundamental lands exactly on a DFT bin
+    osc.setFreq((SR * 16) / N); // fundamental lands exactly on DFT bin 16
     osc.setPosition(0.5);
     const mags = magnitudeSpectrum(render(osc));
-    // fundamental at bin 1 region and second harmonic at bin 2 region
-    const f0 = mags[1];
-    const f1 = mags[2];
+    // bins 16 and 32 are far enough apart that window mainlobes stay separate
+    const f0 = mags[16];
+    const f1 = mags[32];
     expect(f1 / f0).toBeGreaterThan(0.8);
     expect(f1 / f0).toBeLessThan(1.25);
   });

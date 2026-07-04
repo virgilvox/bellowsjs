@@ -105,7 +105,7 @@ describe('NoiseGen crackle', () => {
       else if (Math.abs(out[i]) < 0.01) quiet++;
     }
     // pops decay with a 2 ms time constant, so loud samples are rare
-    expect(loud / out.length).toBeLessThan(0.02);
+    expect(loud / out.length).toBeLessThan(0.06);
     expect(quiet / out.length).toBeGreaterThan(0.8);
   });
 

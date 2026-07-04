@@ -48,7 +48,7 @@ export class ChordWalker {
 
   /** Advance to the next degree and return it. */
   step(): number {
-    this.degree = this.rng.weighted(this.matrix[this.degree] as number[]);
+    this.degree = this.rng.weighted(this.matrix[this.degree]);
     return this.degree;
   }
 

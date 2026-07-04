@@ -16,8 +16,10 @@ describe('Lfo shapes', () => {
     const lfo = new Lfo(SR);
     lfo.setShape('sine');
     lfo.setFreq(2);
-    const out = render(lfo, SR); // one second, 2 Hz, 4 crossings
-    expect(zeroCrossings(out)).toBe(4);
+    const out = render(lfo, SR); // one second at 2 Hz
+    // starting exactly on a zero, so 3 or 4 sign changes depending on rounding
+    expect(zeroCrossings(out)).toBeGreaterThanOrEqual(3);
+    expect(zeroCrossings(out)).toBeLessThanOrEqual(4);
     for (const v of out) {
       expect(v).toBeGreaterThanOrEqual(-1);
       expect(v).toBeLessThanOrEqual(1);
