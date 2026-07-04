@@ -6,6 +6,7 @@ import TransportPanel from '../components/bench/TransportPanel.vue';
 import MoodPanel from '../components/bench/MoodPanel.vue';
 import TuningPanel from '../components/bench/TuningPanel.vue';
 import FxPanel from '../components/bench/FxPanel.vue';
+import SoundfontPanel from '../components/bench/SoundfontPanel.vue';
 import ExportPanel from '../components/bench/ExportPanel.vue';
 import TrackStrip from '../components/bench/TrackStrip.vue';
 import ScopePanel from '../components/bench/ScopePanel.vue';
@@ -52,6 +53,7 @@ onUnmounted(stop);
       <MoodPanel />
       <TuningPanel />
       <FxPanel />
+      <SoundfontPanel />
       <ExportPanel />
     </div>
 

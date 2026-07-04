@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { MELODIC_ENGINES, type MacroState, type TrackState } from '../../lib/composer';
+import { sampleEngineOptions } from '../../lib/soundfonts';
 import {
   bench,
   setPulses,
@@ -16,6 +18,9 @@ import {
 import StepperField from './StepperField.vue';
 
 const props = defineProps<{ track: TrackState }>();
+
+// reads reactive sfState.active underneath, so activations refresh the list
+const sampleOptions = computed(() => sampleEngineOptions());
 
 function onEngine(e: Event) {
   switchEngine(props.track, (e.target as HTMLSelectElement).value);
@@ -42,7 +47,12 @@ function macroDisplay(m: MacroState): string {
     <div class="strip-top">
       <span class="tname">{{ track.name }}</span>
       <select v-if="track.kind !== 'kit'" :value="track.engine" @change="onEngine">
-        <option v-for="[id, label] in MELODIC_ENGINES" :key="id" :value="id">{{ label }}</option>
+        <optgroup label="BUILT-IN">
+          <option v-for="[id, label] in MELODIC_ENGINES" :key="id" :value="id">{{ label }}</option>
+        </optgroup>
+        <optgroup v-if="sampleOptions.length" label="SAMPLES">
+          <option v-for="o in sampleOptions" :key="o.id" :value="o.id">{{ o.label }}</option>
+        </optgroup>
       </select>
       <select v-else disabled>
         <option>KICK+SNR+HAT</option>

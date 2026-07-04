@@ -11,6 +11,7 @@
 
 import type { Bellows, Instrument, BusHandle } from 'bellowsjs';
 import {
+  SAMPLER_PARAMS,
   Scale,
   buildProgression,
   buildStepwiseMatrix,
@@ -176,7 +177,29 @@ export const MELODIC_ENGINES: Array<[string, string]> = [
   ['granular', 'GRANULAR'],
 ];
 
+/*
+ * Every 'sampler:*' engine (activated soundfont preset or the user kit)
+ * shares one param surface, so the three macros come from SAMPLER_PARAMS
+ * instead of the per-engine table.
+ */
+const SAMPLER_MACRO_PICKS: Array<[string, string]> = [
+  ['attack', 'ATTACK'],
+  ['release', 'RELEASE'],
+  ['gain', 'GAIN'],
+];
+
+function samplerMacros(): MacroState[] {
+  const out: MacroState[] = [];
+  for (const [name, label] of SAMPLER_MACRO_PICKS) {
+    const spec = SAMPLER_PARAMS.find((p) => p.name === name);
+    if (!spec) continue;
+    out.push({ label, param: spec.name, min: spec.min, max: spec.max, value: spec.default });
+  }
+  return out;
+}
+
 export function macrosFor(engine: string): MacroState[] {
+  if (engine.startsWith('sampler:')) return samplerMacros();
   const src = engine === 'kit' ? KIT_MACROS : ENGINE_MACROS[engine] ?? [];
   return src.map((m) => ({ ...m }));
 }

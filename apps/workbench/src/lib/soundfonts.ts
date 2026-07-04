@@ -7,7 +7,7 @@
  * engine ids stay valid across reforges.
  */
 
-import { reactive } from 'vue';
+import { reactive, markRaw, type Raw } from 'vue';
 import {
   SoundFont,
   samplerBankFromSf2,
@@ -27,7 +27,8 @@ export interface PresetRef {
 
 export interface FontEntry {
   name: string;
-  sf: SoundFont;
+  /** markRaw: reactive proxying a parsed soundfont is pointless and breaks its class type. */
+  sf: Raw<SoundFont>;
   presets: PresetRef[];
 }
 
@@ -73,7 +74,7 @@ export async function addSf2(file: File): Promise<FontEntry> {
   const sf = SoundFont.parse(buf);
   const entry: FontEntry = {
     name: file.name.replace(/\.sf2$/i, ''),
-    sf,
+    sf: markRaw(sf),
     presets: sf.presets.map((p) => ({ bank: p.bank, program: p.program, name: p.name })),
   };
   sfState.fonts.push(entry);

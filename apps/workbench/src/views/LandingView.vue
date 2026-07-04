@@ -27,6 +27,10 @@ async function copy(text: string, flag: typeof copiedInstall) {
   }
 }
 
+// template refs auto-unwrap, so pass the Ref from script scope
+const copyInstall = () => copy('npm install bellowsjs', copiedInstall);
+const copyHtml = () => copy(HTML_EXAMPLE, copiedHtml);
+
 const SIMPLE = [
   {
     num: '01',
@@ -68,7 +72,7 @@ const SIMPLE = [
         </div>
       </div>
       <div class="hero-side">
-        <div class="install" @click="copy('npm install bellowsjs', copiedInstall)">
+        <div class="install" @click="copyInstall()">
           <span class="prompt">$</span> npm install bellowsjs
           <span class="copy-note">{{ copiedInstall ? 'COPIED' : 'CLICK TO COPY' }}</span>
         </div>
@@ -89,7 +93,7 @@ const SIMPLE = [
     <section class="panel htmlbox">
       <div class="panel-title">
         a whole instrument in one html file <em>05</em>
-        <button class="copy-btn" @click="copy(HTML_EXAMPLE, copiedHtml)">
+        <button class="copy-btn" @click="copyHtml()">
           {{ copiedHtml ? 'COPIED' : 'COPY' }}
         </button>
       </div>

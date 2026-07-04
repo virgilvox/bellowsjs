@@ -5,10 +5,11 @@
  * via ensureBellows().
  */
 
-import { reactive, shallowRef } from 'vue';
+import { reactive, ref, shallowRef, watch } from 'vue';
 import { euclid, Tuning, clamp } from 'bellowsjs';
 import type { Bellows } from 'bellowsjs';
 import { bellows, ensureBellows } from './audio';
+import { sfState, ensureRegistered } from './soundfonts';
 import {
   Composer,
   MOODS,
@@ -199,6 +200,10 @@ async function bootAndCompose(seed: string): Promise<void> {
     // always pass the seed so a stale instance is disposed and reforged
     const b = await ensureBellows(seed);
     bench.seed = seed;
+    // active soundfont banks must exist in the fresh kernel before the
+    // composer builds channels, and any strip whose bank vanished falls back
+    ensureRegistered(b);
+    reconcileSampleEngines();
     applyMood(b);
     composer.value = new Composer(b, bench);
     composedFor = b;
@@ -280,6 +285,49 @@ export function panic(): void {
     fail(err);
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* soundfont banks                                                     */
+/* ------------------------------------------------------------------ */
+
+/** Panel status: set when a strip loses its bank and falls back to pluck. */
+export const sfNotice = ref('');
+
+/**
+ * Any strip pointing at a sampler engine whose bank is no longer active
+ * falls back to pluck so the score keeps playing.
+ */
+function reconcileSampleEngines(): void {
+  const activeIds = new Set(sfState.active.map((a) => a.engineId));
+  const fell: string[] = [];
+  for (const tr of bench.tracks) {
+    if (tr.kind === 'kit') continue;
+    if (!tr.engine.startsWith('sampler:') || activeIds.has(tr.engine)) continue;
+    tr.engine = 'pluck';
+    tr.macros = macrosFor('pluck');
+    fell.push(tr.name);
+    try {
+      composer.value?.swapEngine(tr);
+    } catch (err) {
+      fail(err);
+    }
+  }
+  if (fell.length) sfNotice.value = fell.join(' + ') + ' lost its bank, fell back to PLUCK';
+}
+
+/*
+ * Banks activated (or the user kit regrown) while the engine is already
+ * running register into the live kernel immediately, so a strip can switch
+ * to them without recomposing. Deactivations trigger the pluck fallback.
+ */
+watch(
+  () => sfState.active.map((a) => a.bankId + ':' + a.zones.length).join('|'),
+  () => {
+    const b = bellows.value;
+    if (b) ensureRegistered(b);
+    reconcileSampleEngines();
+  },
+);
 
 /* ------------------------------------------------------------------ */
 /* tuning panel                                                        */
