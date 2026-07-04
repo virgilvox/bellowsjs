@@ -33,9 +33,9 @@ describe('Tuning.edo', () => {
     expect(t.freqOf(69)).toBeCloseTo(440, 9);
     expect(t.freqOf(69 - 31)).toBeCloseTo(220, 9);
     expect(t.freqOf(69 + 18) / 440).toBeCloseTo(Math.pow(2, 18 / 31), 12);
-    // 31-edo's 18th step approximates a just fifth to under a cent
-    const fifthCents = t.centsOf(69 + 18) - t.centsOf(69);
-    expect(Math.abs(fifthCents - 1200 * Math.log2(1.5))).toBeLessThan(1);
+    // 31-edo's 10th step approximates a just major third to under a cent
+    const thirdCents = t.centsOf(69 + 10) - t.centsOf(69);
+    expect(Math.abs(thirdCents - 1200 * Math.log2(5 / 4))).toBeLessThan(1);
   });
 
   it('honors custom reference frequency and index', () => {
