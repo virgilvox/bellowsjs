@@ -1,74 +1,54 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
-const emit = defineEmits<{ (e: 'go', mode: 'bench' | 'code'): void }>();
+const emit = defineEmits<{ (e: 'go', mode: 'bench' | 'code' | 'play'): void }>();
 
-const copied = ref(false);
+const copiedInstall = ref(false);
+const copiedHtml = ref(false);
 
-async function copyInstall() {
+const HTML_EXAMPLE = `<!DOCTYPE html>
+<html>
+<body>
+  <button id="go">play a note</button>
+  <script type="module">
+    import { play } from 'https://unpkg.com/bellowsjs/dist/bellows.js';
+    document.querySelector('#go').onclick = () => play('pluck', 'C4');
+  <\/script>
+</body>
+</html>`;
+
+async function copy(text: string, flag: typeof copiedInstall) {
   try {
-    await navigator.clipboard.writeText('npm install bellowsjs');
-    copied.value = true;
-    setTimeout(() => (copied.value = false), 1600);
+    await navigator.clipboard.writeText(text);
+    flag.value = true;
+    setTimeout(() => (flag.value = false), 1600);
   } catch {
     // clipboard may be unavailable; the text is right there anyway
   }
 }
 
-const FEATURES = [
+const SIMPLE = [
   {
     num: '01',
-    title: 'One clock, one kernel',
-    body: 'A single AudioWorklet hosts every voice and effect. Events queue sample-accurately on the audio thread, so a busy tab never smears your timing.',
+    title: 'Play instruments',
+    body: '18 built-in synthesizers: pianos that pluck, basses that growl, bells, drums, voices, textures. Try them on the Instrument page with your mouse, keyboard, or a MIDI controller.',
   },
   {
     num: '02',
-    title: '18 synthesis engines',
-    body: 'Virtual analog, FM, additive, wavetable, granular, Karplus-Strong, waveguides, modal banks, west coast, formant, drums, noise, harmonic-plus-noise. Swap engines mid-piece with one line.',
+    title: 'Make music that writes itself',
+    body: 'Turn a seed word into a whole piece: beats, basslines, melodies, and chords that follow real music theory. Same seed, same song, every time.',
   },
   {
     num: '03',
-    title: 'Seeded everywhere',
-    body: 'Every random decision flows from named, forkable PRNG streams. Same seed, same piece, forever. Nothing in the library calls Math.random.',
+    title: 'Bring your own sounds',
+    body: 'Load SoundFont files (the free instrument banks used by musicians everywhere) or drop in your own audio samples and play them across the keyboard.',
   },
   {
     num: '04',
-    title: 'Offline is realtime',
-    body: 'The same kernel renders live through the worklet and offline through a plain loop, driven by the same message stream. Render a piece 20x faster than realtime while it plays.',
-  },
-  {
-    num: '05',
-    title: 'Theory with any tuning',
-    body: 'Thirty plus scales, roman numerals, voice leading, negative harmony. Pitch flows through a tuning layer: any EDO, just intonation, Scala files. 12-EDO is a default, never an assumption.',
-  },
-  {
-    num: '06',
-    title: 'Generative to the core',
-    body: 'Euclidean rhythms, Markov chains with chord gravity, L-systems, cellular automata, arpeggiators, exact tempo curves, swing. Plus pitch tracking, onset detection, key estimation, and EBU R128 metering to hear what you made.',
+    title: 'Keep what you make',
+    body: 'Record any piece to a WAV file, right in the browser. No account, no upload, no build tools. It is a free, open source library you can use in your own pages too.',
   },
 ];
-
-const CODE_SAMPLE = `import { Bellows } from 'bellowsjs';
-
-const b = await Bellows.boot({ seed: 'forge-01' });
-
-const lead = b.voice('fm', { algorithm: 3, feedback: 0.4 });
-const verb = b.bus(['fdn'], { level: 0.4 });
-lead.fx('tapeDelay').send(verb, 0.5);
-
-const scale = b.scale('D dorian');
-const rhythm = b.euclid(16, 7, 2);
-
-b.clock.at('16n', (t, step) => {
-  if (rhythm[step % 16]) {
-    lead.note(scale.degreeToMidi(b.rng('mel').int(7), 4), { at: t, dur: '16n' });
-  }
-});
-
-b.start();
-
-// the same piece, rendered offline, identical output
-const wav = (await b.render({ bars: 8 })).wav(24);`;
 </script>
 
 <template>
@@ -76,111 +56,99 @@ const wav = (await b.render({ bars: 8 })).wav(24);`;
     <section class="hero panel">
       <div class="hero-main">
         <div class="wordmark">BELL<b>O</b>WS</div>
-        <p class="strap">
-          A browser-native audio engine for synthesis, samples, sequencing, analysis, and I/O.
-          One clock, one DSP kernel, seeded and reproducible everywhere.
+        <p class="strap">Make music in your browser.</p>
+        <p class="strap sub">
+          BELLOWS is a free, open source audio engine that runs entirely in a web page:
+          synthesizers, drum machines, samplers, effects, and a sequencer in one small library.
         </p>
-        <p class="strap dim">The name: a bellows is the air mover of the forge. Every forge needs one.</p>
         <div class="cta-row">
-          <button class="lit big" @click="emit('go', 'bench')">OPEN THE WORKBENCH</button>
-          <button class="big" @click="emit('go', 'code')">RUN THE EXAMPLES</button>
+          <button class="lit big" @click="emit('go', 'play')">PLAY THE INSTRUMENT</button>
+          <button class="big" @click="emit('go', 'bench')">OPEN THE WORKBENCH</button>
+          <button class="big" @click="emit('go', 'code')">SEE THE CODE</button>
         </div>
       </div>
       <div class="hero-side">
-        <div class="install" @click="copyInstall" :title="'copy'">
+        <div class="install" @click="copy('npm install bellowsjs', copiedInstall)">
           <span class="prompt">$</span> npm install bellowsjs
-          <span class="copy-note">{{ copied ? 'COPIED' : 'CLICK TO COPY' }}</span>
-        </div>
-        <div class="quick">
-          <div class="quick-line">// tier 1: immediate</div>
-          <div class="quick-code">import { play } from 'bellowsjs';<br />play('pluck', 'C4');</div>
+          <span class="copy-note">{{ copiedInstall ? 'COPIED' : 'CLICK TO COPY' }}</span>
         </div>
         <div class="linkrow">
           <a href="https://www.npmjs.com/package/bellowsjs" target="_blank" rel="noopener">NPM</a>
           <a href="https://github.com/virgilvox/bellowsjs" target="_blank" rel="noopener">GITHUB</a>
-          <a href="https://github.com/virgilvox/bellowsjs/blob/main/docs/PRD.md" target="_blank" rel="noopener">PRD</a>
         </div>
       </div>
     </section>
 
     <section class="features">
-      <div v-for="f in FEATURES" :key="f.num" class="panel feature">
+      <div v-for="f in SIMPLE" :key="f.num" class="panel feature">
         <div class="panel-title">{{ f.title }} <em>{{ f.num }}</em></div>
         <p>{{ f.body }}</p>
       </div>
     </section>
 
+    <section class="panel htmlbox">
+      <div class="panel-title">
+        a whole instrument in one html file <em>05</em>
+        <button class="copy-btn" @click="copy(HTML_EXAMPLE, copiedHtml)">
+          {{ copiedHtml ? 'COPIED' : 'COPY' }}
+        </button>
+      </div>
+      <p class="lead">
+        Save this as a .html file, open it, click the button. That is the whole setup:
+        the library loads from a CDN, no install, no build step.
+      </p>
+      <pre><code>{{ HTML_EXAMPLE }}</code></pre>
+    </section>
+
     <section class="panel usage">
-      <div class="panel-title">use it anywhere <em>07</em></div>
+      <div class="panel-title">use it your way <em>06</em></div>
       <div class="usage-cols">
         <div>
-          <h3>Webpage, no build step</h3>
-          <p class="usage-note">One script tag from a CDN. The ESM build loads straight into a module script; the worklet is inlined, so there is no second file.</p>
-          <pre><code>&lt;script type="module"&gt;
-import { play } from
-  'https://unpkg.com/bellowsjs/dist/bellows.js';
-document.querySelector('#go').onclick =
-  () =&gt; play('pluck', 'C4');
-&lt;/script&gt;</code></pre>
+          <h3>In a web page</h3>
+          <p class="usage-note">One script tag from a CDN, like the example above. unpkg and jsdelivr both serve it.</p>
+          <pre><code>import { play } from
+'https://unpkg.com/bellowsjs/dist/bellows.js';</code></pre>
         </div>
         <div>
-          <h3>Bundler (Vite, esbuild, webpack)</h3>
-          <p class="usage-note">npm install bellowsjs, import what you need. Named exports tree-shake: a theory-only import costs a few KB.</p>
+          <h3>In an app (Vite, webpack)</h3>
+          <p class="usage-note">Install from npm and import what you need. Unused parts stay out of your bundle.</p>
           <pre><code>npm install bellowsjs
 
-import { Bellows, Scale, euclid }
-  from 'bellowsjs';
+import { Bellows } from 'bellowsjs';
 const b = await Bellows.boot();</code></pre>
         </div>
         <div>
-          <h3>Node (offline, no audio device)</h3>
-          <p class="usage-note">The DSP core has zero browser dependencies. Render pieces, run analysis, or write WAVs in scripts, CI, or a server.</p>
+          <h3>In Node (no browser)</h3>
+          <p class="usage-note">The sound engine also runs offline: render songs to WAV files in scripts or on a server.</p>
           <pre><code>import { registerBuiltins, renderOffline,
-  encodeWav } from 'bellowsjs';
-registerBuiltins();
-const out = renderOffline(setup,
-  { seconds: 8 });
-writeFileSync('out.wav', Buffer.from(
-  encodeWav([out.left, out.right], 44100)));</code></pre>
+  encodeWav } from 'bellowsjs';</code></pre>
         </div>
       </div>
     </section>
 
-    <section class="panel sample">
-      <div class="panel-title">the workbench tier <em>08</em></div>
-      <pre><code>{{ CODE_SAMPLE }}</code></pre>
-      <div class="sample-foot">
-        Three tiers share one set of types: <span class="hot">play('pluck', 'C4')</span> up top,
-        this workbench API in the middle, and raw sample-loop DSP contracts underneath.
-        Custom engines and effects register by id and run in realtime and offline both.
+    <details class="panel deep">
+      <summary class="panel-title deep-title">under the hood, for the curious <em>07</em></summary>
+      <div class="deep-body">
+        <ul>
+          <li>One clock, one DSP kernel in an AudioWorklet. Events land sample-accurately on the audio thread, so timing survives a busy tab.</li>
+          <li>Every random decision flows from named, seeded streams. A seed fully determines a piece, forever.</li>
+          <li>Offline rendering runs the same kernel as live playback and produces identical output, which is also the test strategy: over a thousand behavioral tests run in plain Node, including golden-render diffs.</li>
+          <li>Synthesis: virtual analog (about -90 dB worst alias), FM with DX-style algorithms, additive, wavetable, granular, physical models, west coast, formant, drums, harmonic-plus-noise.</li>
+          <li>Samples: SF2 with real generator resolution, the SFZ subset free libraries use, velocity layers, round robins.</li>
+          <li>Theory with any tuning: 30 plus scales, roman numerals, voice leading, negative harmony, any EDO, just intonation, Scala files.</li>
+          <li>Effects and analysis: tape delay, FDN and plate reverbs, compressor, limiter, EQ, spectral suite; pitch tracking, onset detection, key estimation, EBU R128 loudness.</li>
+        </ul>
+        <pre><code>const b = await Bellows.boot({ seed: 'forge-01' });
+const lead = b.voice('fm', { algorithm: 3 });
+lead.fx('tapeDelay');
+const rhythm = b.euclid(16, 7, 2);
+b.clock.at('16n', (t, step) => {
+  if (rhythm[step % 16]) lead.note('D4', { at: t, dur: '16n' });
+});
+b.start();
+const wav = (await b.render({ bars: 8 })).wav(24); // same piece, offline</code></pre>
       </div>
-    </section>
-
-    <section class="panel ship">
-      <div class="panel-title">what ships <em>09</em></div>
-      <div class="ship-cols">
-        <div>
-          <h3>Synthesis</h3>
-          <p>PolyBLEP-class oscillators measured at -90 dB worst alias, ladder and SVF filters, FM algorithm routing, granular clouds, physical models, vactrol low-pass gates, vowel morphing.</p>
-        </div>
-        <div>
-          <h3>Samples</h3>
-          <p>SF2 with real generator resolution, the SFZ subset free libraries use, velocity layers, round robins, loop-seam crossfades.</p>
-        </div>
-        <div>
-          <h3>Effects</h3>
-          <p>Tape delay, FDN and Dattorro plate reverbs, lookahead compressor, true-peak limiter, parametric EQ, oversampled saturation, Hilbert frequency shifter, a full phase-vocoder spectral suite.</p>
-        </div>
-        <div>
-          <h3>Analysis and I/O</h3>
-          <p>YIN and MPM pitch, onset and tempo, chroma and key, EBU R128 loudness. WAV and MIDI files, Web MIDI with MPE, WebCodecs Opus export where available.</p>
-        </div>
-      </div>
-      <div class="ship-foot">
-        Over a thousand behavioral tests run in plain Node: filters by measured response, reverbs by decay
-        time, whole pieces by golden-render diff. Apache-2.0.
-      </div>
-    </section>
+    </details>
   </div>
 </template>
 
@@ -192,7 +160,7 @@ writeFileSync('out.wav', Buffer.from(
 
 .hero {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns: 1.5fr 1fr;
   gap: 28px;
   padding: 34px 30px;
   align-items: center;
@@ -219,15 +187,20 @@ writeFileSync('out.wav', Buffer.from(
 
 .strap {
   margin-top: 16px;
-  max-width: 560px;
-  font-size: 14px;
-  line-height: 1.6;
+  font-family: var(--disp);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--bone);
 }
 
-.strap.dim {
+.strap.sub {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 400;
   color: var(--tick);
-  font-size: 12px;
-  margin-top: 8px;
+  max-width: 540px;
+  line-height: 1.6;
+  margin-top: 10px;
 }
 
 .cta-row {
@@ -279,23 +252,6 @@ writeFileSync('out.wav', Buffer.from(
   color: var(--faded);
 }
 
-.quick {
-  border: 1px dashed var(--seam);
-  padding: 10px 12px;
-}
-
-.quick-line {
-  font-size: 10px;
-  color: var(--faded);
-  margin-bottom: 4px;
-}
-
-.quick-code {
-  font-size: 12px;
-  color: var(--phosphor-hot);
-  line-height: 1.6;
-}
-
 .linkrow {
   display: flex;
   gap: 8px;
@@ -320,20 +276,45 @@ writeFileSync('out.wav', Buffer.from(
 
 .features {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 760px) {
   .features {
     grid-template-columns: 1fr;
   }
 }
 
 .feature p {
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 12.5px;
+  line-height: 1.65;
   color: var(--bone);
+}
+
+.htmlbox .lead {
+  font-size: 12px;
+  color: var(--tick);
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.htmlbox pre,
+.usage-cols pre,
+.deep-body pre {
+  background: var(--iron);
+  border: 1px solid var(--seam);
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--bone);
+}
+
+.copy-btn {
+  box-shadow: none;
+  padding: 3px 10px;
+  font-size: 9.5px;
 }
 
 .usage-cols {
@@ -359,87 +340,58 @@ writeFileSync('out.wav', Buffer.from(
 }
 
 .usage-note {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--tick);
   line-height: 1.55;
   margin-bottom: 8px;
-  min-height: 3.2em;
+  min-height: 2.6em;
 }
 
 .usage-cols pre {
-  background: var(--iron);
-  border: 1px solid var(--seam);
-  padding: 10px 12px;
-  overflow-x: auto;
   font-size: 10.5px;
-  line-height: 1.6;
-  color: var(--bone);
 }
 
-.sample pre {
-  background: var(--iron);
-  border: 1px solid var(--seam);
-  padding: 16px;
-  overflow-x: auto;
-  font-size: 12px;
-  line-height: 1.65;
-  color: var(--bone);
+.deep summary {
+  cursor: pointer;
+  list-style: none;
 }
 
-.sample code {
-  font-family: var(--mono);
+.deep summary::-webkit-details-marker {
+  display: none;
 }
 
-.sample-foot {
+.deep-title::after {
+  content: '+ EXPAND';
+  font-size: 9.5px;
+  color: var(--faded);
+  letter-spacing: 0.18em;
+}
+
+.deep[open] .deep-title::after {
+  content: '- COLLAPSE';
+}
+
+.deep-body {
   margin-top: 10px;
-  font-size: 11px;
-  color: var(--tick);
-  line-height: 1.6;
 }
 
-.sample-foot .hot {
-  color: var(--phosphor);
+.deep-body ul {
+  list-style: none;
+  margin-bottom: 12px;
 }
 
-.ship-cols {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 18px;
-}
-
-@media (max-width: 980px) {
-  .ship-cols {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (max-width: 620px) {
-  .ship-cols {
-    grid-template-columns: 1fr;
-  }
-}
-
-.ship-cols h3 {
-  font-family: var(--disp);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--phosphor);
-  margin-bottom: 6px;
-}
-
-.ship-cols p {
-  font-size: 11px;
-  line-height: 1.6;
+.deep-body li {
+  font-size: 11.5px;
+  line-height: 1.7;
   color: var(--bone);
+  padding-left: 14px;
+  position: relative;
 }
 
-.ship-foot {
-  margin-top: 16px;
-  border-top: 1px dashed var(--seam);
-  padding-top: 10px;
-  font-size: 11px;
-  color: var(--tick);
+.deep-body li::before {
+  content: '//';
+  position: absolute;
+  left: 0;
+  color: var(--phosphor);
 }
 </style>
