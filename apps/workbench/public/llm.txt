@@ -1,0 +1,990 @@
+# bellowsjs 0.1.0 LLM reference
+
+bellowsjs is a browser-native audio engine for synthesis, samples, sequencing,
+analysis, and I/O. One AudioWorklet kernel hosts every voice and effect; musical
+logic runs on the main thread and compiles to sample-accurate events. The DSP
+core has zero browser dependencies, so offline rendering and analysis also run
+in Node. Every stochastic decision flows from named, seeded PRNG streams.
+License Apache-2.0. Site: https://bellows.live  Repo: https://github.com/virgilvox/bellowsjs
+
+This file is generated from the library source and its type declarations.
+Everything in it is exact for version 0.1.0.
+
+## Install and import
+
+npm:            npm install bellowsjs
+webpage (CDN):  import { play } from 'https://unpkg.com/bellowsjs/dist/bellows.js'
+Node (offline): import { registerBuiltins, renderOffline, encodeWav } from 'bellowsjs'
+
+In the browser, the AudioContext needs a user gesture: call Bellows.boot() or
+play() from a click handler. In Node there is no audio device: use
+registerBuiltins() once, then renderOffline() (see Offline rendering).
+
+## Tier 1: immediate sound
+
+import { play, instrument } from 'bellowsjs';
+play('pluck', 'C4');                                   // engine id, note
+play('kick', 'C2', { vel: 1 });
+const piano = await instrument('sf2:./gm.sf2#0:0');    // url#bank:program
+piano.note('E3', { dur: '8n', vel: 0.7 });
+
+## Tier 2: the Bellows facade
+
+const b = await Bellows.boot({ seed: 'forge-01' });
+
+Notes on the model:
+- b.voice(engineId, params?) creates an instrument channel in the kernel and
+  returns an Instrument handle. Engine ids are listed under Engines below.
+- Instrument.note(note, { at, dur, vel }) plays one note. NoteValue accepts a
+  midi number, a name like 'C#4', { hz: 440 }, or { degree, octave } resolved
+  through the active scale and tuning. 'at' is absolute context time in
+  seconds (pass the clock callback's t). 'dur' is musical time ('8n', '3/8',
+  2 meaning two beats) or { seconds }.
+- Instrument.on(note, vel?, at?) returns a note id for indefinite holds;
+  Instrument.off(id, at?) releases it.
+- b.clock.at('16n', (t, step) => ...) fires ahead of every subdivision tick;
+  schedule with the provided t and placement is sample accurate even under
+  main-thread load or background-tab timer throttling.
+- b.bus([fx...], { level }) makes a send bus; instrument.send(bus, amount)
+  routes to it. instrument.fx('tapeDelay', ['eq', { }]) replaces the insert
+  chain. b.masterFx(...) sets the master chain.
+- Musical time strings: '1n' whole, '2n', '4n' (one beat), '8n', '16n', '32n',
+  dotted '4n.' or '4nd', triplet '8t', measures '2m', fractions of a whole
+  note '3/8', bar:beat:sixteenth positions '2:1:2', or plain numbers (beats).
+- b.transport is the Transport (see Sequencing); b.bpm(v), b.rampBpm(v, '8m'),
+  b.swing(amount, '8n'), b.start(), b.stop(), b.pause(), b.resume().
+- b.rng(label) returns a named seeded stream (NamedRng below); same boot seed
+  and label always yields the same sequence.
+- b.render({ bars | beats | seconds, sampleRate? }) re-runs the recorded
+  setup and clock callbacks offline and returns { left, right, sampleRate,
+  wav(bitDepth?) }. Renders equal a fresh page load of the same seed as long
+  as randomness flows through b.rng().
+- b.tuning is settable: Tuning.edo(19), Tuning.ji([...ratios]), or
+  tuningFromScala(parseScl(text)). All note resolution flows through it.
+- b.defEngine(def) / b.defEffect(def) register custom DSP (tier 3): the def
+  must be self-contained (no imports, no closures) because it is serialized
+  into the worklet realm.
+
+Facade declaration (exact, from dist/bellows.d.ts):
+
+import type { EngineDef, EffectDef, NamedRng, TimeValue } from './types';
+import { mtof } from './types';
+import { type TickCallback } from './core/scheduler';
+import { Transport } from './seq/transport';
+import { type Meter } from './seq/time';
+import { Scale } from './theory/scales';
+import { Tuning } from './theory/tuning';
+import type { FxSpec, KernelMessage, MeterFrame, SamplerZoneData } from './kernel/messages';
+import { type RenderedAudio } from './render/offline';
+import { SoundFont } from './io/sf2';
+export interface BootOptions {
+    seed?: string;
+    context?: AudioContext;
+    workletUrl?: string;
+    masterGain?: number;
+    bpm?: number;
+    meter?: Meter;
+}
+export interface NoteOptions {
+    /** Absolute context time in seconds. Defaults to a few ms from now. */
+    at?: number;
+    /** Duration as beats, notation ('8n', '3/8'), or { seconds }. Default '8n'. */
+    dur?: TimeValue | {
+        seconds: number;
+    };
+    /** Velocity 0..1. Default 0.8. */
+    vel?: number;
+}
+export type NoteValue = number | string | {
+    hz: number;
+} | {
+    degree: number;
+    octave?: number;
+};
+export type FxInput = string | [string, Record<string, number>] | FxSpec;
+export declare class Bellows {
+    readonly ctx: AudioContext;
+    readonly seed: string;
+    readonly transport: Transport;
+    readonly analyser: AnalyserNode;
+    private kernel;
+    private scheduler;
+    private setup;
+    private transportOps;
+    private subs;
+    private liveRng;
+    private renderCtx;
+    private timer;
+    private nextChannel;
+    private nextBus;
+    private nextNote;
+    private internedParams;
+    private localDefs;
+    private lastMeter;
+    private disposed;
+    /** last kernel error messages, newest last */
+    readonly kernelErrors: string[];
+    /** when set, receives kernel errors instead of console.error */
+    onError: ((message: string) => void) | null;
+    private initialBpm;
+    private initialMeter;
+    tuning: Tuning;
+    private constructor();
+    static boot(opts?: BootOptions): Promise<Bellows>;
+    /** Post a structural message: applied live and recorded for offline replay. */
+    private post;
+    private postEvents;
+    private activeTransport;
+    /** Current engine time in seconds. */
+    now(): number;
+    /** A named random stream forked off the piece seed. Deterministic per seed. */
+    rng(label: string): NamedRng;
+    /** Create an instrument channel running the given engine. */
+    voice(engineId: string, params?: Record<string, number>, opts?: {
+        polyphony?: number;
+    }): Instrument;
+    /**
+     * Load an instrument by URI. Supported: 'sf2:<url>#<bank>:<program>'.
+     * Plain engine ids also work: instrument('fm') equals voice('fm').
+     */
+    instrument(uri: string): Promise<Instrument>;
+    /** Build a sampler instrument from a parsed or raw SF2 preset. */
+    sf2Instrument(data: ArrayBuffer | SoundFont, bank: number, program: number): Instrument;
+    /** Build a sampler instrument from raw zone data. */
+    samplerInstrument(zones: SamplerZoneData[], bankId?: string): Instrument;
+    /** Build a granular instrument over an audio buffer. */
+    granular(data: Float32Array, sampleRate: number, params?: Record<string, number>): Instrument;
+    /** Register a custom engine (tier 3). The def must be self-contained. */
+    defEngine(def: EngineDef): void;
+    /** Register a custom effect (tier 3). The def must be self-contained. */
+    defEffect(def: EffectDef): void;
+    /** Create a send bus with an fx chain. */
+    bus(fx: FxInput[], opts?: {
+        level?: number;
+    }): BusHandle;
+    /** Replace the master fx chain. */
+    masterFx(...fx: FxInput[]): void;
+    masterGain(gain: number): void;
+    /** Hard stop: silence all voices and drop queued events. */
+    panic(): void;
+    get meter(): MeterFrame | null;
+    readonly clock: {
+        /**
+         * Fire cb ahead of every subdivision tick. cb receives the exact tick
+         * time in seconds: pass it straight to note({ at }).
+         */
+        at: (subdivision: TimeValue, cb: TickCallback) => (() => void);
+    };
+    start(): void;
+    stop(): void;
+    bpm(value: number): void;
+    /** Ramp the tempo linearly over a span of beats (TimeValue accepted). */
+    rampBpm(value: number, over: TimeValue): void;
+    /** Freeze the transport, drop queued events, silence held voices. */
+    pause(): void;
+    /** Continue from the paused position; delivery re-aims at the paused beat. */
+    resume(): void;
+    swing(amount: number, subdivision?: TimeValue): void;
+    /** 'D dorian' or (root, name). */
+    scale(spec: string): Scale;
+    scale(root: string | number, name: string): Scale;
+    euclid(steps: number, pulses: number, rotation?: number): number[];
+    /** Resolve a NoteValue to a frequency through the active tuning. */
+    freqOf(note: NoteValue, scale?: Scale): number;
+    /** Duration in seconds for a TimeValue starting at an absolute time. */
+    durationSeconds(dur: TimeValue | {
+        seconds: number;
+    }, atSeconds: number): number;
+    noteEvents(channel: number, note: NoteValue, opts: NoteOptions, scale?: Scale): void;
+    noteOnEvent(channel: number, note: NoteValue, vel: number, at?: number): number;
+    noteOffEvent(channel: number, noteId: number, at?: number): void;
+    paramEvent(channel: number, name: string, value: number, at?: number): void;
+    structural(msg: KernelMessage): void;
+    postAllOff(channel: number): void;
+    /**
+     * Render the piece offline through a fresh kernel: same setup messages,
+     * same clock callbacks, fresh seeded rng streams (a render equals what a
+     * fresh page load would play, as long as randomness flows through
+     * b.rng()). Returns audio plus a wav() encoder.
+     */
+    render(opts: {
+        bars?: number;
+        beats?: number;
+        seconds?: number;
+        sampleRate?: number;
+    }): Promise<RenderedAudio & {
+        wav(bitDepth?: 16 | 24 | 32): ArrayBuffer;
+    }>;
+    dispose(): void;
+}
+export declare class Instrument {
+    private b;
+    readonly channel: number;
+    constructor(b: Bellows, channel: number);
+    /** Play a note. NoteValue: midi number, 'C#4', { hz }, or { degree, octave }. */
+    note(note: NoteValue, opts?: NoteOptions, scale?: Scale): this;
+    chord(notes: NoteValue[], opts?: NoteOptions): this;
+    /** Sustain a note; returns an id for off(). */
+    on(note: NoteValue, vel?: number, at?: number): number;
+    off(noteId: number, at?: number): this;
+    /** Set an engine parameter, immediately or at a scheduled time. */
+    param(name: string, value: number, at?: number): this;
+    /** Replace this instrument's insert chain. */
+    fx(...fx: FxInput[]): this;
+    fxParam(fxIndex: number, name: string, value: number): this;
+    send(bus: BusHandle, level: number): this;
+    gain(value: number): this;
+    pan(value: number): this;
+    allOff(): this;
+}
+export declare class BusHandle {
+    private b;
+    readonly id: number;
+    constructor(b: Bellows, id: number);
+    fxParam(fxIndex: number, name: string, value: number): this;
+}
+/** Frequency helper reexport so engines and users share one 12-EDO mtof. */
+export { mtof };
+
+## Engines
+
+Create with b.voice(id, params?). All params are numbers, settable at creation
+and live via instrument.param(name, value, at?). Ranges below are exact.
+
+### va (Virtual Analog)
+default polyphony: 8
+  shape: 0 to 3, default 0
+  detune: 0 to 100 cents, default 7
+  sub: 0 to 1, default 0
+  cutoff: 20 to 20000 Hz, default 9000 curve=exp
+  resonance: 0 to 1, default 0.2
+  filterType: 0 to 1, default 0
+  envAmount: -6 to 6 oct, default 0
+  attack: 0 to 10 s, default 0.005 curve=exp
+  decay: 0 to 10 s, default 0.1 curve=exp
+  sustain: 0 to 1, default 0.8
+  release: 0 to 10 s, default 0.2 curve=exp
+  fAttack: 0 to 10 s, default 0.003 curve=exp
+  fDecay: 0 to 10 s, default 0.15 curve=exp
+  fSustain: 0 to 1, default 0.5
+  fRelease: 0 to 10 s, default 0.2 curve=exp
+  drift: 0 to 1, default 0
+  pan: -1 to 1, default 0
+  velLevel: 0 to 1, default 0.5
+  velFilter: 0 to 4 oct, default 0
+
+### fm (FM)
+default polyphony: 8
+  ops: 2 to 6, default 4
+  algorithm: 1 to 8, default 1
+  feedback: 0 to 1, default 0
+  brightness: 0 to 2, default 0.5
+  attack: 0 to 10 s, default 0.003 curve=exp
+  decay: 0 to 10 s, default 0.3 curve=exp
+  sustain: 0 to 1, default 0.7
+  release: 0 to 10 s, default 0.3 curve=exp
+  mAttack: 0 to 10 s, default 0.002 curve=exp
+  mDecay: 0 to 10 s, default 0.4 curve=exp
+  mSustain: 0 to 1, default 0.5
+  mRelease: 0 to 10 s, default 0.2 curve=exp
+  ratio1: 0 to 16, default 1
+  level1: 0 to 1, default 1
+  fixed1: 0 to 10000 Hz, default 0
+  ratio2: 0 to 16, default 1
+  level2: 0 to 1, default 0.6
+  fixed2: 0 to 10000 Hz, default 0
+  ratio3: 0 to 16, default 1
+  level3: 0 to 1, default 0.5
+  fixed3: 0 to 10000 Hz, default 0
+  ratio4: 0 to 16, default 1
+  level4: 0 to 1, default 0.4
+  fixed4: 0 to 10000 Hz, default 0
+  ratio5: 0 to 16, default 1
+  level5: 0 to 1, default 0.4
+  fixed5: 0 to 10000 Hz, default 0
+  ratio6: 0 to 16, default 1
+  level6: 0 to 1, default 0.3
+  fixed6: 0 to 10000 Hz, default 0
+
+### additive (Additive)
+default polyphony: 8
+  morph: 0 to 1, default 0
+  inharm: 0 to 0.02, default 0
+  decay: 0.01 to 20 s, default 2 curve=exp
+  rolloff: 0.3 to 1, default 0.8
+  attack: 0 to 10 s, default 0.002 curve=exp
+  release: 0 to 10 s, default 0.3 curve=exp
+  gain: 0 to 2, default 1
+  partial1: 0 to 1, default 1
+  target1: 0 to 1, default 1
+  detune1: -100 to 100 cents, default 0
+  partial2: 0 to 1, default 0.5
+  target2: 0 to 1, default 0
+  detune2: -100 to 100 cents, default 0
+  partial3: 0 to 1, default 0.3333333333333333
+  target3: 0 to 1, default 0
+  detune3: -100 to 100 cents, default 0
+  partial4: 0 to 1, default 0.25
+  target4: 0 to 1, default 0
+  detune4: -100 to 100 cents, default 0
+  partial5: 0 to 1, default 0.2
+  target5: 0 to 1, default 0
+  detune5: -100 to 100 cents, default 0
+  partial6: 0 to 1, default 0.16666666666666666
+  target6: 0 to 1, default 0
+  detune6: -100 to 100 cents, default 0
+  partial7: 0 to 1, default 0.14285714285714285
+  target7: 0 to 1, default 0
+  detune7: -100 to 100 cents, default 0
+  partial8: 0 to 1, default 0.125
+  target8: 0 to 1, default 0
+  detune8: -100 to 100 cents, default 0
+  partial9: 0 to 1, default 0.1111111111111111
+  target9: 0 to 1, default 0
+  detune9: -100 to 100 cents, default 0
+  partial10: 0 to 1, default 0.1
+  target10: 0 to 1, default 0
+  detune10: -100 to 100 cents, default 0
+  partial11: 0 to 1, default 0.09090909090909091
+  target11: 0 to 1, default 0
+  detune11: -100 to 100 cents, default 0
+  partial12: 0 to 1, default 0.08333333333333333
+  target12: 0 to 1, default 0
+  detune12: -100 to 100 cents, default 0
+  partial13: 0 to 1, default 0.07692307692307693
+  target13: 0 to 1, default 0
+  detune13: -100 to 100 cents, default 0
+  partial14: 0 to 1, default 0.07142857142857142
+  target14: 0 to 1, default 0
+  detune14: -100 to 100 cents, default 0
+  partial15: 0 to 1, default 0.06666666666666667
+  target15: 0 to 1, default 0
+  detune15: -100 to 100 cents, default 0
+  partial16: 0 to 1, default 0.0625
+  target16: 0 to 1, default 0
+  detune16: -100 to 100 cents, default 0
+  partial17: 0 to 1, default 0.058823529411764705
+  target17: 0 to 1, default 0
+  detune17: -100 to 100 cents, default 0
+  partial18: 0 to 1, default 0.05555555555555555
+  target18: 0 to 1, default 0
+  detune18: -100 to 100 cents, default 0
+  partial19: 0 to 1, default 0.05263157894736842
+  target19: 0 to 1, default 0
+  detune19: -100 to 100 cents, default 0
+  partial20: 0 to 1, default 0.05
+  target20: 0 to 1, default 0
+  detune20: -100 to 100 cents, default 0
+  partial21: 0 to 1, default 0.047619047619047616
+  target21: 0 to 1, default 0
+  detune21: -100 to 100 cents, default 0
+  partial22: 0 to 1, default 0.045454545454545456
+  target22: 0 to 1, default 0
+  detune22: -100 to 100 cents, default 0
+  partial23: 0 to 1, default 0.043478260869565216
+  target23: 0 to 1, default 0
+  detune23: -100 to 100 cents, default 0
+  partial24: 0 to 1, default 0.041666666666666664
+  target24: 0 to 1, default 0
+  detune24: -100 to 100 cents, default 0
+  partial25: 0 to 1, default 0.04
+  target25: 0 to 1, default 0
+  detune25: -100 to 100 cents, default 0
+  partial26: 0 to 1, default 0.038461538461538464
+  target26: 0 to 1, default 0
+  detune26: -100 to 100 cents, default 0
+  partial27: 0 to 1, default 0.037037037037037035
+  target27: 0 to 1, default 0
+  detune27: -100 to 100 cents, default 0
+  partial28: 0 to 1, default 0.03571428571428571
+  target28: 0 to 1, default 0
+  detune28: -100 to 100 cents, default 0
+  partial29: 0 to 1, default 0.034482758620689655
+  target29: 0 to 1, default 0
+  detune29: -100 to 100 cents, default 0
+  partial30: 0 to 1, default 0.03333333333333333
+  target30: 0 to 1, default 0
+  detune30: -100 to 100 cents, default 0
+  partial31: 0 to 1, default 0.03225806451612903
+  target31: 0 to 1, default 0
+  detune31: -100 to 100 cents, default 0
+  partial32: 0 to 1, default 0.03125
+  target32: 0 to 1, default 0
+  detune32: -100 to 100 cents, default 0
+
+### wavetable (Wavetable)
+default polyphony: 8
+  position: 0 to 1, default 0
+  scanRate: 0 to 20 Hz, default 0.5 curve=exp
+  scanDepth: 0 to 1, default 0
+  envToPosition: -1 to 1, default 0
+  attack: 0 to 10 s, default 0.005 curve=exp
+  decay: 0 to 10 s, default 0.1 curve=exp
+  sustain: 0 to 1, default 0.8
+  release: 0 to 10 s, default 0.2 curve=exp
+  filter: 0 to 1, default 0
+  cutoff: 20 to 20000 Hz, default 8000 curve=exp
+  resonance: 0 to 1, default 0.1
+  pan: -1 to 1, default 0
+
+### kick (Kick)
+default polyphony: 4
+  clickTune: 1 to 16, default 6
+  pitchDecay: 0.005 to 0.5 s, default 0.05 curve=exp
+  decay: 0.05 to 2 s, default 0.4 curve=exp
+  drive: 0 to 10, default 2
+
+### snare (Snare)
+default polyphony: 4
+  tone: 0 to 1, default 0.5
+  decay: 0.05 to 1 s, default 0.18 curve=exp
+  snap: 0.02 to 1 s, default 0.15 curve=exp
+
+### hat (Hat)
+default polyphony: 4
+  decay: 0.02 to 2 s, default 0.08 curve=exp
+  tone: 0.2 to 2, default 1
+
+### clap (Clap)
+default polyphony: 4
+  decay: 0.05 to 2 s, default 0.25 curve=exp
+  spread: 0.005 to 0.05 s, default 0.012 curve=exp
+  tone: 400 to 4000 Hz, default 1200 curve=exp
+
+### tom (Tom)
+default polyphony: 4
+  decay: 0.05 to 2 s, default 0.35 curve=exp
+  sweep: 0.01 to 0.5 s, default 0.08 curve=exp
+  noise: 0 to 1, default 0.15
+
+### noise (Noise Synth)
+default polyphony: 8
+  color: 0 to 4, default 0
+  filterMode: 0 to 2, default 0
+  cutoff: 20 to 20000 Hz, default 2000 curve=exp
+  resonance: 0 to 1, default 0.1
+  envAmount: -6 to 6 oct, default 0
+  keyTrack: 0 to 1, default 0
+  attack: 0 to 10 s, default 0.002 curve=exp
+  decay: 0 to 10 s, default 0.15 curve=exp
+  sustain: 0 to 1, default 0.3
+  release: 0 to 10 s, default 0.1 curve=exp
+  fAttack: 0 to 10 s, default 0.001 curve=exp
+  fDecay: 0 to 10 s, default 0.12 curve=exp
+  fSustain: 0 to 1, default 0
+  fRelease: 0 to 10 s, default 0.1 curve=exp
+  pan: -1 to 1, default 0
+
+### pluck (Pluck)
+default polyphony: 16
+  damp: 0 to 1, default 0.35
+  pickPos: 0 to 0.95, default 0.28
+  exciteType: 0 to 1, default 0
+  decay: 0.05 to 20 s, default 2.5 curve=exp
+  level: 0 to 1, default 0.9
+
+### string (Waveguide String)
+default polyphony: 12
+  damp: 0 to 1, default 0.35
+  sustain: 0 to 1, default 0.6
+  dispersion: 0 to 1, default 0
+  bow: 0 to 1, default 0
+  bowPressure: 0 to 1, default 0.5
+  bowSpeed: 0 to 1, default 0.5
+  level: 0 to 1, default 0.9
+
+### tube (Waveguide Tube)
+default polyphony: 8
+  breath: 0 to 1, default 0.85
+  noise: 0 to 1, default 0.1
+  level: 0 to 1, default 0.7
+
+### modal (Modal)
+default polyphony: 16
+  material: 0 to 4, default 0
+  decay: 0.05 to 30 s, default 2 curve=exp
+  brightness: 0 to 1, default 0.5
+  strikeHardness: 0 to 1, default 0.6
+  level: 0 to 1, default 0.6
+
+### westcoast (West Coast)
+default polyphony: 8
+  foldAmount: 0 to 1, default 0.35
+  foldStages: 1 to 6, default 2
+  foldEnv: 0 to 1, default 0.5
+  lpgColor: 0 to 1, default 0.7
+  lpgDecay: 0.02 to 5 s, default 0.5 curve=exp
+  level: 0 to 1, default 0.8
+
+### formant (Formant)
+default polyphony: 8
+  vowel: 0 to 4, default 0
+  breath: 0 to 1, default 0.1
+  vibratoRate: 0 to 12 Hz, default 5
+  vibratoDepth: 0 to 2 st, default 0.25
+  shape: 0 to 1, default 0
+  level: 0 to 2, default 1
+
+### granular (Granular)
+default polyphony: 8
+  grainSize: 10 to 500 ms, default 80 curve=exp
+  density: 0.5 to 400 Hz, default 20 curve=exp
+  position: 0 to 1, default 0.25
+  spray: 0 to 1, default 0.05
+  pitch: 0.25 to 4, default 1 curve=exp
+  pitchJitter: 0 to 12 st, default 0
+  spread: 0 to 1, default 0.5
+  reverse: 0 to 1, default 0
+  baseNote: 24 to 96, default 69
+  level: 0 to 1, default 0.9
+
+### harmonic (Harmonic plus Noise)
+default polyphony: 8
+  brightness: 0 to 1, default 0.5
+  evenOdd: 0 to 1, default 0.5
+  formantShift: 0.25 to 4, default 1 curve=exp
+  noiseMix: 0 to 1, default 0.1
+  noiseColor: 0.25 to 16, default 2 curve=exp
+  portamento: 0 to 4 s, default 0
+  attack: 0.001 to 4 s, default 0.01 curve=exp
+  release: 0.01 to 8 s, default 0.3 curve=exp
+  level: 0 to 1, default 0.8
+
+
+Sample-backed engines: register zone data with the kernel, then use the id
+'sampler:<bankId>'. From an SF2: SoundFont.parse(arrayBuffer), then
+samplerBankFromSf2(sf, bank, program).zones, then b.samplerInstrument(zones)
+or b.sf2Instrument(buffer, bank, program) or await b.instrument('sf2:url#0:0').
+Sampler engines expose SAMPLER_PARAMS:
+  attack: 0 to 10 s, default 0.002 curve=exp
+  decay: 0 to 10 s, default 0.1 curve=exp
+  sustain: 0 to 1, default 1
+  release: 0 to 10 s, default 0.25 curve=exp
+  loopXfade: 0 to 100 ms, default 8
+  veltrack: 0 to 100 %, default 100
+  gain: -60 to 24 dB, default 0 curve=db
+  pan: -1 to 1, default 0
+
+Granular over your own buffer: b.granular(float32Data, sampleRate, params?).
+
+## Effects
+
+Use in instrument.fx(...), b.bus([...]), or b.masterFx(...). A chain entry is
+an effect id string, [id, { param: value }], or { effectId, params }.
+
+### delay (Stereo Delay)
+  timeL: 0.001 to 4 s, default 0.35 curve=exp
+  timeR: 0.001 to 4 s, default 0.5 curve=exp
+  feedback: 0 to 0.99, default 0.4
+  crossFeedback: 0 to 1, default 0
+  damping: 200 to 20000 Hz, default 8000 curve=exp
+  mix: 0 to 1, default 0.35
+
+### tapeDelay (Tape Delay)
+  time: 0.005 to 2 s, default 0.35 curve=exp
+  feedback: 0 to 1.1, default 0.45
+  wow: 0 to 1, default 0.3
+  flutter: 0 to 1, default 0.15
+  saturation: 0 to 1, default 0.4
+  tone: 500 to 15000 Hz, default 4500 curve=exp
+  hiss: 0 to 1, default 0
+  mix: 0 to 1, default 0.35
+
+### multitap (Multitap Delay)
+  time1: 0.001 to 2 s, default 0.125 curve=exp
+  time2: 0.001 to 2 s, default 0.25 curve=exp
+  time3: 0.001 to 2 s, default 0.375 curve=exp
+  time4: 0.001 to 2 s, default 0.5 curve=exp
+  level1: 0 to 1, default 1
+  level2: 0 to 1, default 0.8
+  level3: 0 to 1, default 0.6
+  level4: 0 to 1, default 0.45
+  diffusion: 0 to 1, default 0.4
+  mix: 0 to 1, default 0.5
+
+### fdn (FDN Reverb)
+  size: 0.25 to 3, default 1
+  decay: 0.1 to 20 s, default 2 curve=exp
+  damp: 500 to 20000 Hz, default 6000 curve=exp
+  chorus: 0 to 1, default 0.3
+  predelay: 0 to 0.25 s, default 0.01
+  mix: 0 to 1, default 0.35
+
+### plate (Plate Reverb)
+  decay: 0 to 0.98, default 0.5
+  damping: 0 to 0.99, default 0.3
+  bandwidth: 0 to 1, default 0.9995
+  predelay: 0 to 0.25 s, default 0
+  modDepth: 0 to 2, default 1
+  mix: 0 to 1, default 0.35
+
+### compressor (Compressor)
+  threshold: -60 to 0 dB, default -18 curve=db
+  ratio: 1 to 20, default 4
+  knee: 0 to 24 dB, default 6
+  attack: 0.0001 to 0.5 s, default 0.01 curve=exp
+  release: 0.01 to 2 s, default 0.2 curve=exp
+  makeup: -1 to 24 dB, default 0
+  lookahead: 0 to 0.01 s, default 0
+  mix: 0 to 1, default 1
+
+### limiter (Limiter)
+  ceiling: -24 to 0 dB, default -0.3
+  release: 0.001 to 1 s, default 0.05 curve=exp
+  truePeak: 0 to 1, default 0
+
+### gate (Gate)
+  threshold: -80 to 0 dB, default -40 curve=db
+  attack: 0.0001 to 0.1 s, default 0.001 curve=exp
+  hold: 0 to 1 s, default 0.05
+  release: 0.001 to 2 s, default 0.1 curve=exp
+  range: -80 to 0 dB, default -60
+
+### transient (Transient Shaper)
+  attack: -1 to 1, default 0
+  sustain: -1 to 1, default 0
+
+### chorus (Chorus)
+  rate: 0.01 to 10 Hz, default 0.5 curve=exp
+  depth: 0 to 1, default 0.5
+  mix: 0 to 1, default 0.5
+  feedback: 0 to 0.5, default 0
+
+### flanger (Flanger)
+  rate: 0.01 to 10 Hz, default 0.25 curve=exp
+  depth: 0 to 1, default 0.7
+  manual: 0 to 1, default 0.25
+  feedback: 0 to 0.9, default 0.4
+  mix: 0 to 1, default 0.5
+  invert: 0 to 1, default 0
+
+### phaser (Phaser)
+  rate: 0.01 to 10 Hz, default 0.3 curve=exp
+  freqlo: 40 to 2000 Hz, default 300 curve=exp
+  freqhi: 200 to 12000 Hz, default 3000 curve=exp
+  feedback: 0 to 0.9, default 0.3
+  stages: 4 to 8, default 6
+  spread: 0 to 1, default 0.25
+  mix: 0 to 1, default 0.5
+
+### tremolo (Tremolo)
+  rate: 0.05 to 40 Hz, default 4 curve=exp
+  depth: 0 to 1, default 0.8
+  shape: 0 to 4, default 0
+  phase: 0 to 1, default 0
+
+### autopan (Autopan)
+  rate: 0.05 to 20 Hz, default 1 curve=exp
+  depth: 0 to 1, default 1
+  shape: 0 to 4, default 0
+
+### ringmod (Ring Mod)
+  freq: 1 to 8000 Hz, default 440 curve=exp
+  mix: 0 to 1, default 1
+
+### freqshift (Frequency Shifter)
+  shift: -2000 to 2000 Hz, default 0
+  mix: 0 to 1, default 1
+
+### eq (Parametric EQ)
+  b0freq: 20 to 20000 Hz, default 80 curve=exp
+  b0gain: -24 to 24 dB, default 0
+  b0q: 0.1 to 12, default 0.707
+  b0enabled: 0 to 1, default 1
+  b1freq: 20 to 20000 Hz, default 250 curve=exp
+  b1gain: -24 to 24 dB, default 0
+  b1q: 0.1 to 12, default 1
+  b1enabled: 0 to 1, default 1
+  b2freq: 20 to 20000 Hz, default 800 curve=exp
+  b2gain: -24 to 24 dB, default 0
+  b2q: 0.1 to 12, default 1
+  b2enabled: 0 to 1, default 1
+  b3freq: 20 to 20000 Hz, default 2500 curve=exp
+  b3gain: -24 to 24 dB, default 0
+  b3q: 0.1 to 12, default 1
+  b3enabled: 0 to 1, default 1
+  b4freq: 20 to 20000 Hz, default 6000 curve=exp
+  b4gain: -24 to 24 dB, default 0
+  b4q: 0.1 to 12, default 1
+  b4enabled: 0 to 1, default 1
+  b5freq: 20 to 20000 Hz, default 12000 curve=exp
+  b5gain: -24 to 24 dB, default 0
+  b5q: 0.1 to 12, default 0.707
+  b5enabled: 0 to 1, default 1
+
+### saturator (Saturator)
+  drive: 0.1 to 20, default 2 curve=exp
+  curve: 0 to 3, default 0
+  tone: -1 to 1, default 0
+  output: -24 to 24 dB, default 0
+  mix: 0 to 1, default 1
+
+### pitchshift (Pitch Shift)
+  semitones: -24 to 24 st, default 0
+  mix: 0 to 1, default 1
+
+### freeze (Spectral Freeze)
+  freeze: 0 to 1, default 0
+  mix: 0 to 1, default 1
+
+### blur (Spectral Blur)
+  amount: 0 to 1, default 0.5
+  mix: 0 to 1, default 1
+  seed: 0 to 1000000000, default 1
+
+### robot (Robotize)
+  mix: 0 to 1, default 1
+
+### whisper (Whisper)
+  mix: 0 to 1, default 1
+  seed: 0 to 1000000000, default 1
+
+### denoise (Spectral Denoise)
+  amount: 0 to 4, default 1
+  mix: 0 to 1, default 1
+
+
+## Theory
+
+Scale: new Scale(root, name) where root is 'D', 'F#', a pitch class number, or
+a note like 'D3'; name is one of: major, ionian, dorian, phrygian, lydian, mixolydian, minor, aeolian, locrian, harmonic minor, phrygian dominant, ukrainian dorian, melodic minor, lydian dominant, altered, major pentatonic, minor pentatonic, blues, bebop dominant, bebop major, whole tone, octatonic half-whole, octatonic whole-half, chromatic, hirajoshi, in-sen, iwato, kumoi, double harmonic, hungarian minor, neapolitan major, neapolitan minor, prometheus, enigmatic.
+Methods: degreeToMidi(degree, octave?) (wraps octaves, negatives fine),
+quantize(midi), contains(midi), degrees(octaves, baseOctave?), intervals.
+
+Chords: CHORD_TYPES keys: 6, 7, 9, 11, 13, maj, min, maj7, m7, dim, aug, sus2, sus4, dim7, m7b5, mMaj7, m6, add9, maj9, m9, 7b9, 7#9, 7#11, aug7.
+parseChord('F#m7b5'), detectChord(pitchClasses), diatonicTriads(scale),
+diatonicSevenths(scale), romanToChord('viio7', scale), chordToRoman(chord, scale).
+
+Voice leading: voiceLead(prevVoicing, candidateChordMidis, options?) picks the
+minimal-motion voicing. negativeHarmony(midi, keyRoot) reflects around the
+root-fifth axis. invert(chordMidis, inversion).
+
+Progressions: buildProgression(rng, bars, { cadence? }) returns scale degrees
+0..6 with functional-harmony weighting and cadence bias.
+
+Notes: parseNote('C#4') -> midi (C4 = 60), noteName(midi, preferFlats?),
+pitchClass, octaveOf, mtof(midi), ftom(freq).
+
+Tuning: Tuning.edo(n, refFreq?, refIndex?), Tuning.ji(ratios, baseFreq?,
+baseIndex?), Tuning.fromCents(cents, period?, refFreq?, refIndex?),
+tuning.freqOf(index), Tuning.default12. Scala: parseScl(text), parseKbm(text),
+tuningFromScala(scl, kbm?).
+
+## Sequencing
+
+Transport: new Transport({ bpm, meter }) with exact closed-form tempo
+integration. beatAt(seconds), secondsAt(beat), setBpm(bpm, atSeconds?),
+rampBpm(bpm, overBeats, atSeconds?), setSwing(amount, subdivision),
+setMeter(bar, { num, den }), position(seconds) -> { bar, beat, phase },
+scheduleHorizon(fromSec, toSec, subdivision) yields { beat, seconds, step }.
+TempoMap (transport.tempo): setBpm(beat, bpm), rampTo(beat, bpm), bpmAt(beat),
+beatToSeconds(beat), secondsToBeat(sec).
+
+Generators (all deterministic given a NamedRng):
+- euclid(pulses, steps, rotation?) -> 0/1 array (true Bjorklund; E(3,8) = [1,0,0,1,0,0,1,0])
+- Markov<T>(order): train(seq), addTransition(from[], to, weight), seed(ctx),
+  next(rng), steps(rng, n). Helpers buildStepwiseMatrix, weightedWalk (chord
+  gravity).
+- lsystem(axiom, rules, generations, rng?) with stochastic rule support;
+  mapToDegrees(str, mapping).
+- ElementaryCA(rule, width, init?): step(), row (Uint8Array), generation.
+- Arpeggiator({ mode: 'up'|'down'|'updown'|'downup'|'random'|'order', octaves }):
+  setNotes(midis), next(rng?), reset().
+- Pattern combinators (step-indexed): seq(...), stack(...), fromArray, gates,
+  every(n, fn, p), sometimes(prob, fn, p, rng), fast(n, p), slow(n, p),
+  rev(p), rotate(p, n). Patterns implement at(step) and length.
+
+PRNG: rng(label) -> NamedRng: call for [0,1); .fork(label), .int(n),
+.pick(arr), .range(lo, hi), .chance(p), .shuffle(arr), .gauss(), .weighted(w).
+
+## Analysis
+
+yin(buffer, sampleRate, threshold?) -> { freq, probability } | null.
+mpm(buffer, sampleRate) -> { freq, clarity } | null.
+detectOnsets(buffer, sampleRate) -> seconds[]. estimateTempo(onsetsOrBuffer)
+-> { bpm, confidence } (may fold to half or double tempo).
+chroma + keyEstimate(chroma) -> { key 0..11, mode, confidence }.
+spectralCentroid, spectralFlatness, spectralRolloff, spectralSpread, rms, zcr,
+mfcc(buffer, sampleRate, opts?).
+LoudnessMeter(sampleRate, channels): push audio, then momentary(), shortTerm(),
+integrated(), range(), truePeak(); BS.1770-4 K-weighting derived per rate.
+Streaming classes YinDetector and OnsetDetector take push(mono, from, to).
+
+## I/O and rendering
+
+encodeWav(channels, sampleRate, { bitDepth: 16|24|32 }) -> ArrayBuffer.
+decodeWav(buf) -> { channels, sampleRate } (PCM 8/16/24/32 and float).
+parseMidi(buf) / writeMidi(tracks, tpq) / toScore(parsed) for standard MIDI
+files. MidiInput / MidiOutput wrap Web MIDI (Chromium and Firefox only;
+feature-detect); parseMidiMessage(bytes) is pure. SoundFont.parse(buf) reads
+SF2 (presets, generator resolution, 24-bit, stereo links); parseSfz(text,
+resolver) reads the SFZ subset. encodeAudio for WebCodecs Opus where present.
+
+Offline rendering without a browser:
+
+import { registerBuiltins, renderOffline, encodeWav, EventKind } from 'bellowsjs';
+registerBuiltins();
+const setup = [
+  { type: 'createChannel', id: 0, engineId: 'pluck', params: {}, seed: 's' },
+  { type: 'masterGain', gain: 0.9 },
+  { type: 'events', events: [
+    { time: 0.02, kind: EventKind.NoteOn, target: 0, a: 1, b: 220, c: 0.9 },
+    { time: 0.5, kind: EventKind.NoteOff, target: 0, a: 1, b: 0, c: 0 },
+  ] },
+];
+const out = renderOffline(setup, { seconds: 2, sampleRate: 44100 });
+// out.left, out.right are Float32Array; identical output on every run
+
+Event fields: time (engine seconds), kind (EventKind.NoteOn/NoteOff/Param/
+AllNotesOff), target (channel id), a (note id or interned param index),
+b (frequency Hz or param value), c (velocity 0..1).
+
+## Tier 3 contracts (exact, from dist/types.d.ts)
+
+/** A pseudorandom stream. Every stochastic decision in the library draws from one. */
+export interface Rng {
+    /** Uniform float in [0, 1). */
+    (): number;
+}
+export interface NamedRng extends Rng {
+    /** Derive an independent, reproducible child stream. */
+    fork(label: string): NamedRng;
+    /** Uniform integer in [0, n). */
+    int(n: number): number;
+    /** Pick one element. */
+    pick<T>(arr: readonly T[]): T;
+    /** Uniform float in [lo, hi). */
+    range(lo: number, hi: number): number;
+    /** True with probability p. */
+    chance(p: number): boolean;
+    /** Fisher-Yates shuffle, returns a new array. */
+    shuffle<T>(arr: readonly T[]): T[];
+    /** Approximately normal (Irwin-Hall of 4), mean 0, roughly unit variance. */
+    gauss(): number;
+    /** Weighted index pick. */
+    weighted(weights: ArrayLike<number>): number;
+    readonly label: string;
+}
+/** Parameter metadata used by UIs and by the kernel param registry. */
+export interface ParamSpec {
+    name: string;
+    min: number;
+    max: number;
+    default: number;
+    /** 'lin' | 'exp' | 'db' hint for UI mapping. */
+    curve?: 'lin' | 'exp' | 'db';
+    unit?: string;
+}
+/**
+ * A playing voice. Created by an EngineDef factory, owned by a voice pool.
+ * Voices are reused: noteOn must fully reset internal state.
+ */
+export interface Voice {
+    /** Begin a note. freq is the already-tuned frequency in Hz. vel in [0, 1]. */
+    noteOn(freq: number, vel: number): void;
+    /** Enter release. The voice stays active until its tail decays. */
+    noteOff(): void;
+    /** Add samples into outL/outR over [from, to). */
+    process(outL: Float32Array, outR: Float32Array, from: number, to: number): void;
+    /** Update a parameter by name. Unknown names are ignored. */
+    setParam(name: string, value: number): void;
+    /** False once the voice has fully decayed and can be reclaimed. */
+    readonly active: boolean;
+}
+/**
+ * An instrument engine: a named voice factory plus its parameter surface.
+ * Engines are interchangeable: a score never knows which engine renders it.
+ */
+export interface EngineDef {
+    id: string;
+    label: string;
+    params: ParamSpec[];
+    /** Max simultaneous voices a pool should preallocate by default. */
+    polyphony?: number;
+    createVoice(sampleRate: number, params: Record<string, number>, rng: NamedRng): Voice;
+}
+/** A stereo in-place effect. */
+export interface Effect {
+    process(l: Float32Array, r: Float32Array, from: number, to: number): void;
+    setParam(name: string, value: number): void;
+    reset(): void;
+}
+export interface EffectDef {
+    id: string;
+    label: string;
+    params: ParamSpec[];
+    create(sampleRate: number, params: Record<string, number>): Effect;
+}
+/** A mono analysis tap fed post-mix. */
+export interface Analyzer {
+    /** Consume samples; may produce results via poll methods on the concrete type. */
+    push(mono: Float32Array, from: number, to: number): void;
+    reset(): void;
+}
+/**
+ * Musical durations and positions accepted across the API:
+ *  - beat count as number (1 = one quarter note at the transport meter)
+ *  - notation strings: '4n', '8n', '8t' (triplet), '4n.' or legacy '4nd' (dotted),
+ *    '3/8' (fraction of a whole note), '2m' (measures), '16n'
+ *  - 'bar:beat:sixteenth' position strings where a position is expected
+ */
+export type TimeValue = number | string;
+/** A tempo automation point. Interpolation from the previous point is linear in bpm. */
+export interface TempoPoint {
+    /** Position in beats. */
+    beat: number;
+    bpm: number;
+}
+export declare const enum EventKind {
+    NoteOn = 0,
+    NoteOff = 1,
+    Param = 2,
+    ParamRamp = 3,
+    AllNotesOff = 4
+}
+/**
+ * A timestamped kernel event. `time` is engine time in seconds
+ * (kernel converts to a frame index). `target` addresses a channel
+ * (instrument slot) in the kernel.
+ */
+export interface KernelEvent {
+    time: number;
+    kind: EventKind;
+    target: number;
+    /** NoteOn/NoteOff: note id. Param: param index. */
+    a: number;
+    /** NoteOn: frequency Hz. Param: value. */
+    b: number;
+    /** NoteOn: velocity. ParamRamp: ramp seconds. */
+    c: number;
+}
+/**
+ * A pattern is a pull-based generator of events per step or per query span.
+ * Generators (euclid, markov, lsystem, ca) implement this so schedulers can
+ * treat them uniformly.
+ */
+export interface StepPattern<T = number> {
+    /** Value at step i (patterns may be infinite; finite ones wrap). */
+    at(step: number): T;
+    readonly length: number;
+}
+/** Convert a MIDI-style note number to Hz at A4 = 440 in 12-EDO. Tunings override this. */
+export declare function mtof(midi: number): number;
+export declare function ftom(freq: number): number;
+export declare function clamp(v: number, lo: number, hi: number): number;
+export declare function dbToGain(db: number): number;
+export declare function gainToDb(g: number): number;
+
+## Rules an integration must follow
+
+- Boot from a user gesture or the context stays suspended and silent.
+- In Node, call registerBuiltins() before renderOffline or engine lookups.
+- Voices ADD into output buffers over (from, to); effects process IN PLACE.
+  Custom defs must not allocate inside process() at steady state.
+- defEngine/defEffect defs are serialized with toString() into the worklet:
+  self-contained functions only, numeric params only. Hosts with a CSP that
+  blocks blob: or eval need { workletUrl } pointing at bellowsjs/worklet.js.
+- For reproducible renders, route every random choice through b.rng(label)
+  and create generators fresh inside setup, not across renders.
+- Web MIDI does not exist in Safari. WebCodecs Opus export is feature-detected;
+  WAV export always works.

@@ -7,13 +7,15 @@ import LandingView from './views/LandingView.vue';
 const WorkbenchView = defineAsyncComponent(() => import('./views/WorkbenchView.vue'));
 const CodeView = defineAsyncComponent(() => import('./views/CodeView.vue'));
 const InstrumentView = defineAsyncComponent(() => import('./views/InstrumentView.vue'));
+const RefView = defineAsyncComponent(() => import('./views/RefView.vue'));
 
-type Mode = 'home' | 'bench' | 'code' | 'play';
+type Mode = 'home' | 'bench' | 'code' | 'play' | 'ref';
 
 function modeFromHash(): Mode {
   if (location.hash.startsWith('#code')) return 'code';
   if (location.hash.startsWith('#bench')) return 'bench';
   if (location.hash.startsWith('#play')) return 'play';
+  if (location.hash.startsWith('#ref')) return 'ref';
   return 'home';
 }
 
@@ -57,6 +59,7 @@ window.addEventListener('hashchange', () => {
     <KeepAlive v-else>
       <WorkbenchView v-if="mode === 'bench'" />
       <InstrumentView v-else-if="mode === 'play'" />
+      <RefView v-else-if="mode === 'ref'" />
       <CodeView v-else />
     </KeepAlive>
 
@@ -69,6 +72,7 @@ window.addEventListener('hashchange', () => {
       <span>
         <a href="https://www.npmjs.com/package/bellowsjs" target="_blank" rel="noopener">npm</a>
         // <a href="https://github.com/virgilvox/bellowsjs" target="_blank" rel="noopener">github</a>
+        // <a href="#ref" @click.prevent="setMode('ref')">llm ref</a>
         // apache-2.0
       </span>
       <span class="badges"><span>ONE CLOCK</span><span>ONE KERNEL</span><span>SEEDED</span></span>
