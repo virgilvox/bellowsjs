@@ -45,6 +45,16 @@ Phase 2 targets from `docs/PRD.md` section 6, roughly in value order:
 9. Docs site: the workbench code mode is the seed; a static docs-as-instruments site is the PRD's end state.
 10. CI: golden renders and the suite run locally; there is no GitHub Actions workflow yet. Add node 22 matrix, `npm test`, `typecheck`, both app builds, publint.
 
+## Deployment (bellows.live)
+
+The site is a DigitalOcean App Platform static site, the cheapest App Platform footprint (no services or workers; $0 while a free static-site slot is open on the account, otherwise $3 per month).
+
+- App id `88dc2901-3334-47d9-9cb5-8b2f1105294d`, name `bellows-live`, default ingress `bellows-live-ivsci.ondigitalocean.app`, custom domains `bellows.live` (primary) and `www.bellows.live` on the DO-managed zone.
+- Spec lives at `.do/app.yaml`. It pulls the PUBLIC git repo directly (`git.repo_clone_url`), so there is no GitHub integration and no deploy-on-push: pushing to main does NOT redeploy. To ship site changes: push to main, then `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`.
+- Spec changes: edit `.do/app.yaml`, then `doctl apps update 88dc2901-3334-47d9-9cb5-8b2f1105294d --spec .do/app.yaml`.
+- The build runs `npm install && npm run build -w apps/workbench` against the monorepo, so the site always ships the library source at that commit, which is also what `npm install bellowsjs` serves as long as releases stay in step.
+- The app shell: light theme is default (`:root` tokens in `apps/workbench/src/styles/forge.css`), dark under `data-theme='dark'`, toggled via `src/lib/theme.ts` (localStorage `bellows-theme`). Canvas drawing and CodeMirror read theme through that module; never hardcode palette hex in components.
+
 ## Release ritual
 
 1. `npm test` and `npx tsc --noEmit` in `packages/bellows`.
