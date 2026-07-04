@@ -6,12 +6,14 @@ import LandingView from './views/LandingView.vue';
 
 const WorkbenchView = defineAsyncComponent(() => import('./views/WorkbenchView.vue'));
 const CodeView = defineAsyncComponent(() => import('./views/CodeView.vue'));
+const InstrumentView = defineAsyncComponent(() => import('./views/InstrumentView.vue'));
 
-type Mode = 'home' | 'bench' | 'code';
+type Mode = 'home' | 'bench' | 'code' | 'play';
 
 function modeFromHash(): Mode {
   if (location.hash.startsWith('#code')) return 'code';
   if (location.hash.startsWith('#bench')) return 'bench';
+  if (location.hash.startsWith('#play')) return 'play';
   return 'home';
 }
 
@@ -39,6 +41,7 @@ window.addEventListener('hashchange', () => {
       </div>
       <nav class="modes">
         <button :class="{ lit: mode === 'bench' }" @click="setMode('bench')">WORKBENCH</button>
+        <button :class="{ lit: mode === 'play' }" @click="setMode('play')">INSTRUMENT</button>
         <button :class="{ lit: mode === 'code' }" @click="setMode('code')">CODE</button>
         <button class="theme-btn" @click="toggleTheme()" :title="theme === 'light' ? 'switch to night forge' : 'switch to daylight'">
           {{ theme === 'light' ? 'NIGHT' : 'DAY' }}
@@ -53,6 +56,7 @@ window.addEventListener('hashchange', () => {
     <LandingView v-if="mode === 'home'" @go="setMode" />
     <KeepAlive v-else>
       <WorkbenchView v-if="mode === 'bench'" />
+      <InstrumentView v-else-if="mode === 'play'" />
       <CodeView v-else />
     </KeepAlive>
 

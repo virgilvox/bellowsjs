@@ -110,8 +110,44 @@ const wav = (await b.render({ bars: 8 })).wav(24);`;
       </div>
     </section>
 
+    <section class="panel usage">
+      <div class="panel-title">use it anywhere <em>07</em></div>
+      <div class="usage-cols">
+        <div>
+          <h3>Webpage, no build step</h3>
+          <p class="usage-note">One script tag from a CDN. The ESM build loads straight into a module script; the worklet is inlined, so there is no second file.</p>
+          <pre><code>&lt;script type="module"&gt;
+import { play } from
+  'https://unpkg.com/bellowsjs/dist/bellows.js';
+document.querySelector('#go').onclick =
+  () =&gt; play('pluck', 'C4');
+&lt;/script&gt;</code></pre>
+        </div>
+        <div>
+          <h3>Bundler (Vite, esbuild, webpack)</h3>
+          <p class="usage-note">npm install bellowsjs, import what you need. Named exports tree-shake: a theory-only import costs a few KB.</p>
+          <pre><code>npm install bellowsjs
+
+import { Bellows, Scale, euclid }
+  from 'bellowsjs';
+const b = await Bellows.boot();</code></pre>
+        </div>
+        <div>
+          <h3>Node (offline, no audio device)</h3>
+          <p class="usage-note">The DSP core has zero browser dependencies. Render pieces, run analysis, or write WAVs in scripts, CI, or a server.</p>
+          <pre><code>import { registerBuiltins, renderOffline,
+  encodeWav } from 'bellowsjs';
+registerBuiltins();
+const out = renderOffline(setup,
+  { seconds: 8 });
+writeFileSync('out.wav', Buffer.from(
+  encodeWav([out.left, out.right], 44100)));</code></pre>
+        </div>
+      </div>
+    </section>
+
     <section class="panel sample">
-      <div class="panel-title">the workbench tier <em>07</em></div>
+      <div class="panel-title">the workbench tier <em>08</em></div>
       <pre><code>{{ CODE_SAMPLE }}</code></pre>
       <div class="sample-foot">
         Three tiers share one set of types: <span class="hot">play('pluck', 'C4')</span> up top,
@@ -121,7 +157,7 @@ const wav = (await b.render({ bars: 8 })).wav(24);`;
     </section>
 
     <section class="panel ship">
-      <div class="panel-title">what ships <em>08</em></div>
+      <div class="panel-title">what ships <em>09</em></div>
       <div class="ship-cols">
         <div>
           <h3>Synthesis</h3>
@@ -296,6 +332,46 @@ const wav = (await b.render({ bars: 8 })).wav(24);`;
 
 .feature p {
   font-size: 12px;
+  line-height: 1.6;
+  color: var(--bone);
+}
+
+.usage-cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+@media (max-width: 980px) {
+  .usage-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+.usage-cols h3 {
+  font-family: var(--disp);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--phosphor);
+  margin-bottom: 6px;
+}
+
+.usage-note {
+  font-size: 11px;
+  color: var(--tick);
+  line-height: 1.55;
+  margin-bottom: 8px;
+  min-height: 3.2em;
+}
+
+.usage-cols pre {
+  background: var(--iron);
+  border: 1px solid var(--seam);
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-size: 10.5px;
   line-height: 1.6;
   color: var(--bone);
 }

@@ -244,7 +244,8 @@ class Layer {
 const MAX_LAYERS = 8;
 const HALF_PI = Math.PI / 2;
 
-const PARAMS: ParamSpec[] = [
+/** The sampler parameter surface, exported so hosts can build editors for bank-backed engines. */
+export const SAMPLER_PARAMS: ParamSpec[] = [
   { name: 'attack', min: 0, max: 10, default: 0.002, curve: 'exp', unit: 's' },
   { name: 'decay', min: 0, max: 10, default: 0.1, curve: 'exp', unit: 's' },
   { name: 'sustain', min: 0, max: 1, default: 1 },
@@ -257,7 +258,7 @@ const PARAMS: ParamSpec[] = [
 
 function fillDefaults(given: Record<string, number>): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const s of PARAMS) out[s.name] = given[s.name] !== undefined ? given[s.name] : s.default;
+  for (const s of SAMPLER_PARAMS) out[s.name] = given[s.name] !== undefined ? given[s.name] : s.default;
   return out;
 }
 
@@ -429,7 +430,7 @@ export function makeSamplerEngine(bank: SamplerBank, id = 'sampler'): EngineDef 
   return {
     id,
     label: 'Sampler',
-    params: PARAMS.map((p) => ({ ...p })),
+    params: SAMPLER_PARAMS.map((p) => ({ ...p })),
     polyphony: 16,
     createVoice: (sampleRate, params) => new SamplerVoice(sampleRate, params, bank, rr),
   };

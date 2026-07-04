@@ -85,7 +85,7 @@ export { westcoastEngine } from './engines/westcoast';
 export { formantEngine } from './engines/formant';
 export { granularEngine, makeGranularEngine } from './engines/granular';
 export { harmonicEngine } from './engines/harmonic';
-export { SamplerBank, makeSamplerEngine, type SampleZone, type SampleZoneEnv } from './engines/sampler';
+export { SamplerBank, makeSamplerEngine, SAMPLER_PARAMS, type SampleZone, type SampleZoneEnv } from './engines/sampler';
 export * from './engines/soundfont';
 
 /* effects */
