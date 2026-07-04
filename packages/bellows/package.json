@@ -2,7 +2,7 @@
   "name": "bellowsjs",
   "version": "0.1.0",
   "description": "A browser-native audio engine for synthesis, samples, sequencing, analysis, and I/O. One clock, one kernel, seeded everywhere.",
-  "license": "MPL-2.0",
+  "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/bellows.js",
   "module": "./dist/bellows.js",

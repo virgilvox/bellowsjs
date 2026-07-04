@@ -17,6 +17,9 @@ A browser-native audio engine for synthesis, samples, sequencing, analysis, and 
 
 ## Engineering rules
 
+- Strong separation of concerns. One concept per file, small focused modules, no god classes. Domains only touch each other through the contracts in `src/types.ts` and their public module exports: `dsp` knows nothing about music, `theory` and `seq` know nothing about audio buffers, `engines` and `fx` consume `dsp`, the kernel consumes registries, `io` consumes plain arrays. UI code never reaches into library internals.
+- Dependency direction is one way: `types` and `core` at the bottom, then `dsp`, then `engines`/`fx`/`analysis`, then `kernel`/`io`, then the facade. Never import upward.
+
 - The DSP core stays free of browser globals so it runs and tests in Node. Every DSP unit takes its sample rate at construction and processes Float32Array blocks.
 - Test driven: every DSP unit, theory function, generator, and parser gets vitest coverage before or alongside implementation. Run `npm test` from the repo root, or `npx vitest run <path>` for one file.
 - Voices add into output buffers; effects process in place. Both use `(l, r, from, to)` index ranges so the kernel can split blocks at event boundaries for sample accuracy.
