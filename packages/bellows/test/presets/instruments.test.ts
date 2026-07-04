@@ -225,6 +225,35 @@ describe('strings family voicing', () => {
     expect(p.attackBite ?? 0).toBe(0);
     expect(p.vibDepth ?? 0).toBe(0);
   });
+
+  it('bowed presets carry the round-two life params', () => {
+    // Round two (docs/BOWED-STRINGS.md): bow position inside the
+    // playable range, velocity-to-bow-speed dynamics, and a detuned
+    // second polarization for the sustain undulation.
+    for (const id of bowed) {
+      const p = getPreset(id).params;
+      expect(p.bowPos, id).toBeGreaterThanOrEqual(0.06);
+      expect(p.bowPos, id).toBeLessThanOrEqual(0.2);
+      expect(p.dynamics, id).toBeGreaterThan(0);
+      expect(p.polDetune, id).toBeGreaterThanOrEqual(1.5);
+      expect(p.polDetune, id).toBeLessThanOrEqual(2.5);
+    }
+  });
+
+  it('bowed presets carry a subtle plate room', () => {
+    for (const id of bowed) {
+      const preset = getPreset(id);
+      const plate = (preset.fx ?? []).find((f) => f.effectId === 'plate');
+      expect(plate, id + ' has no plate fx').toBeDefined();
+      const mix = plate!.params?.mix ?? 0;
+      expect(mix, id).toBeGreaterThanOrEqual(0.12);
+      expect(mix, id).toBeLessThanOrEqual(0.16);
+      // decay 0.42 measures about 1.4 s RT60 on the Dattorro tank
+      expect(plate!.params?.decay, id).toBeGreaterThan(0.3);
+      expect(plate!.params?.decay, id).toBeLessThan(0.6);
+      expect(plate!.params?.predelay ?? 0, id).toBeLessThanOrEqual(0.03);
+    }
+  });
 });
 
 describe('every preset renders a clean, deterministic note', () => {

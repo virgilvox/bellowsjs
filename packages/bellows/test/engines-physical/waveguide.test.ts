@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { stringEngine, tubeEngine } from '../../src/engines/waveguide';
+import { rng } from '../../src/core/prng';
 import {
   bandEnergy,
   cents,
@@ -13,6 +14,7 @@ import {
   peakFreq,
   renderVoice,
   rms,
+  spectralCentroid,
 } from './helpers';
 
 const SR = 44100;
@@ -217,8 +219,16 @@ describe('bowed string realism', () => {
       // for window smearing and the intentional depth drift
       expect(p2p(late)).toBeGreaterThan(14);
       expect(p2p(late)).toBeLessThan(56);
-      // no vibrato inside the attack: pre-onset windows stay flat
-      expect(p2p(track(m, 0.1, 0.27))).toBeLessThan(5);
+      // No vibrato inside the attack: before the onset the pitch track
+      // must match a vibrato-free render of the same seed. The track is
+      // not flat there anymore (the round-two pitch settle glides the
+      // first ~120 ms by design), but vibrato must contribute nothing.
+      const ref = renderMono({ ...bowBase, vibDepth: 0, vibRate: 6, vibOnset: 0.3 }, 440, 1.6);
+      const pre = track(m, 0.1, 0.28);
+      const preRef = track(ref, 0.1, 0.28);
+      for (let i = 0; i < pre.length; i++) {
+        expect(Math.abs(pre[i] - preRef[i])).toBeLessThan(1);
+      }
     });
 
     it('modulation rate matches vibRate', () => {
@@ -366,6 +376,240 @@ describe('bowed string realism', () => {
       expect(rms(m, Math.round(0.4 * SR), Math.round(0.7 * SR))).toBeGreaterThan(0.05);
       expect(rms(m, Math.round(2 * SR), Math.round(2.2 * SR))).toBeLessThan(1e-3);
       expect(voice.active).toBe(false);
+    });
+  });
+});
+
+describe('round two: source spectrum and life', () => {
+  // The item-1 acceptance render: violin register bow stroke, body off.
+  const bowBase = { bow: 0.8, bowPressure: 0.55, bowSpeed: 0.6, sustain: 0.85, damp: 0.18 };
+
+  function renderMono(
+    params: Record<string, number>,
+    freq: number,
+    seconds = 2,
+    seed = 'round2',
+    vel = 1
+  ): Float32Array {
+    const { l, r } = renderVoice(stringEngine, {
+      freq,
+      seconds,
+      gate: seconds,
+      params,
+      seed,
+      vel,
+    });
+    return mono(l, r);
+  }
+
+  /** Harmonic levels in dB relative to h1, measured by Goertzel at
+   * multiples of the tracked fundamental over a sustain window. */
+  function harmonicTable(
+    m: Float32Array,
+    fNominal: number,
+    count: number,
+    from: number,
+    to: number
+  ): number[] {
+    const f = estimateFreq(m, SR, from, to, fNominal).freq;
+    const h1 = goertzel(m, SR, f, from, to);
+    const out: number[] = [0];
+    for (let h = 2; h <= count; h++) {
+      out.push(20 * Math.log10(goertzel(m, SR, h * f, from, to) / h1));
+    }
+    return out;
+  }
+
+  describe('bowed source tilt (item 1)', () => {
+    // Measured on 0.1.3 with this exact render: h7 +12.6 dB, h8 +6.5 dB
+    // above the fundamental, rms -9.1 dBFS. A violin bridge force is a
+    // minus 6 dB per octave sawtooth: upper harmonics must sit well
+    // below h1, and the level must stay within 6 dB of the old engine.
+    it('body-off A4 spectrum tilts like a Helmholtz sawtooth', () => {
+      const m = renderMono({ ...bowBase, body: 0 }, 440, 2, 'tilt');
+      const from = Math.round(0.5 * SR);
+      const to = Math.round(1.9 * SR);
+      const est = estimateFreq(m, SR, from, to, 440);
+      expect(Math.abs(cents(est.freq, 440))).toBeLessThan(10);
+      const table = harmonicTable(m, 440, 16, from, to);
+      for (let h = 2; h <= 16; h++) {
+        expect(table[h - 1], 'h' + h + ' above h1').toBeLessThanOrEqual(0);
+      }
+      expect(table[7], 'h8').toBeLessThanOrEqual(-12);
+      expect(table[11], 'h12').toBeLessThanOrEqual(-16);
+      // rms within 6 dB of the 0.1.3 level (0.3497 at this render)
+      const level = rms(m, from, to);
+      expect(level).toBeGreaterThan(0.3497 / 2);
+      expect(level).toBeLessThan(0.3497 * 2);
+    });
+  });
+
+  describe('bow position comb (item 1)', () => {
+    it('notches the harmonic nearest 1/bowPos', () => {
+      // bowPos 0.11 puts the first coupling null at harmonic 9.09, so
+      // h9 must dip at least 6 dB below the mean of its neighbors.
+      // Measured at 220 Hz, where h8 to h10 (1.8 to 2.2 kHz) sit below
+      // the bowed loop damping cap and the notch is resolvable; at A4
+      // the whole region is already 30 dB down the Helmholtz slope.
+      const m = renderMono({ ...bowBase, body: 0, bowPos: 0.11 }, 220, 2, 'comb');
+      const from = Math.round(0.5 * SR);
+      const to = Math.round(1.9 * SR);
+      const table = harmonicTable(m, 220, 12, from, to);
+      const neighbors = (table[7] + table[9]) / 2;
+      expect(table[8], 'h9 dip').toBeLessThanOrEqual(neighbors - 6);
+    });
+  });
+
+  describe('attack irregularity and settle (item 3)', () => {
+    // f0 track over short autocorrelation windows: about 10 ms hops.
+    function trackCents(m: Float32Array, t0: number, t1: number, f: number): number[] {
+      const out: number[] = [];
+      for (let t = t0; t + 0.025 <= t1; t += 0.01) {
+        const from = Math.round(t * SR);
+        out.push(cents(estimateFreq(m, SR, from, from + Math.round(0.025 * SR), f).freq, f));
+      }
+      return out;
+    }
+    const std = (xs: number[]) => {
+      const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+      return Math.sqrt(xs.reduce((a, b) => a + (b - mean) * (b - mean), 0) / xs.length);
+    };
+
+    it('f0 wanders in the first 120 ms, then locks', () => {
+      const m = renderMono({ ...bowBase, body: 0, attackBite: 0.5 }, 440, 1.6, 'settle');
+      const attack = std(trackCents(m, 0.005, 0.125, 440));
+      const sustain = std(trackCents(m, 0.8, 1.4, 440));
+      expect(attack).toBeGreaterThanOrEqual(2 * sustain);
+    });
+
+    it('attacks differ note to note under one seed', () => {
+      // Two consecutive notes on the same voice draw fresh per-note
+      // jitter and settle values from the forked note stream.
+      const voiceParams: Record<string, number> = {};
+      for (const spec of stringEngine.params) voiceParams[spec.name] = spec.default;
+      Object.assign(voiceParams, { ...bowBase, body: 0, attackBite: 0.5 });
+      const voice = stringEngine.createVoice(SR, voiceParams, rng('two-notes'));
+      const n = Math.round(0.4 * SR);
+      const render = () => {
+        const l = new Float32Array(n);
+        const r = new Float32Array(n);
+        voice.noteOn(440, 1);
+        for (let i = 0; i < n; i += 128) voice.process(l, r, i, Math.min(i + 128, n));
+        voice.noteOff();
+        return l;
+      };
+      const first = render();
+      const second = render();
+      expect(countDiffs(first, second)).toBeGreaterThan(0);
+    });
+  });
+
+  describe('vibrato asymmetry (item 4)', () => {
+    it('mean f0 during vibrato sits below the no-vibrato mean', () => {
+      const withVib = renderMono({ ...bowBase, body: 0, vibDepth: 22, vibOnset: 0.2 }, 440, 2, 'asym');
+      const noVib = renderMono({ ...bowBase, body: 0, vibDepth: 0 }, 440, 2, 'asym');
+      const from = Math.round(0.8 * SR);
+      const to = Math.round(1.9 * SR);
+      const track = (m: Float32Array) => {
+        const out: number[] = [];
+        for (let t = 0.8; t + 0.035 <= 1.9; t += 0.02) {
+          const f = Math.round(t * SR);
+          out.push(cents(estimateFreq(m, SR, f, f + 1500, 440).freq, 440));
+        }
+        return out;
+      };
+      const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+      expect(estimateFreq(noVib, SR, from, to, 440).peak).toBeGreaterThan(0.8);
+      expect(mean(track(withVib))).toBeLessThan(mean(track(noVib)) - 2);
+    });
+  });
+
+  describe('dynamics coupling (item 5)', () => {
+    it('velocity brightens and loudens with dynamics up, not with it off', () => {
+      const size = 16384;
+      const centroid = (m: Float32Array) =>
+        spectralCentroid(magSpectrum(m, Math.round(0.6 * SR), size), SR, size);
+      const loud = renderMono({ ...bowBase, body: 0, dynamics: 0.7 }, 440, 1.4, 'dyn', 1);
+      const soft = renderMono({ ...bowBase, body: 0, dynamics: 0.7 }, 440, 1.4, 'dyn', 0.25);
+      const from = Math.round(0.5 * SR);
+      const to = Math.round(1.3 * SR);
+      expect(rms(loud, from, to)).toBeGreaterThan(1.15 * rms(soft, from, to));
+      expect(centroid(loud)).toBeGreaterThan(centroid(soft));
+      // with dynamics off, velocity barely moves the sustained level
+      const loud0 = renderMono({ ...bowBase, body: 0, dynamics: 0 }, 440, 1.4, 'dyn', 1);
+      const soft0 = renderMono({ ...bowBase, body: 0, dynamics: 0 }, 440, 1.4, 'dyn', 0.25);
+      const ratio0 = rms(loud0, from, to) / rms(soft0, from, to);
+      expect(ratio0).toBeLessThan(1.1);
+      expect(ratio0).toBeGreaterThan(0.9);
+    });
+  });
+
+  describe('dual polarization (item 6)', () => {
+    // Envelope undulation: rms per 20 ms hop over the sustain, mean
+    // removed, then Goertzel amplitude in the beat band relative to
+    // the envelope mean. The band is 0.2 to 1 Hz: polDetune 1.5 to 2.5
+    // cents beats at 0.38 to 0.64 Hz at A4, while above 1 Hz the rosin
+    // noise raises the envelope floor of the pol-off render too (its
+    // measured peak sits near 2 Hz in both), which would only blur the
+    // gate.
+    function undulation(polDetune: number, seed: string): number {
+      const m = renderMono({ ...bowBase, body: 0, polDetune }, 440, 4, seed);
+      const hop = Math.round(0.02 * SR);
+      const t0 = Math.round(0.5 * SR);
+      const env: number[] = [];
+      for (let i = t0; i + hop <= m.length; i += hop) env.push(rms(m, i, i + hop));
+      const mean = env.reduce((a, b) => a + b, 0) / env.length;
+      const envArr = new Float32Array(env.length);
+      for (let i = 0; i < env.length; i++) envArr[i] = env[i] - mean;
+      const envSr = SR / hop;
+      let band = 0;
+      let count = 0;
+      for (let f = 0.2; f <= 1; f += 0.1) {
+        band += goertzel(envArr, envSr, f, 0, envArr.length) ** 2;
+        count++;
+      }
+      return Math.sqrt(band / count) / mean;
+    }
+
+    it('polDetune > 0 undulates the sustain envelope, 0 does not', () => {
+      const withPol = undulation(2, 'pol');
+      const without = undulation(0, 'pol');
+      expect(withPol).toBeGreaterThan(2 * without);
+      expect(withPol).toBeGreaterThan(0.01);
+    });
+
+    it('polDetune 0 is bit-identical to a render without the param wired', () => {
+      const a = renderMono({ ...bowBase, body: 0, polDetune: 0 }, 220, 0.5, 'polid');
+      const b = renderMono({ ...bowBase, body: 0 }, 220, 0.5, 'polid');
+      expect(countDiffs(a, b)).toBe(0);
+    });
+  });
+
+  describe('non-bowed back-compat (items 1, 3, 6)', () => {
+    it('a default pluck render matches the 0.1.3 engine bit for bit', () => {
+      // Reference captured from the shipped 0.1.3 engine before the
+      // round-two change: seed 'pluck-ref', 220 Hz, engine defaults
+      // (bow 0, body 0), 0.6 s held. The new params must leave this
+      // path untouched.
+      const { l, r } = renderVoice(stringEngine, {
+        freq: 220,
+        seconds: 0.6,
+        gate: 0.6,
+        seed: 'pluck-ref',
+      });
+      const m = mono(l, r);
+      const buf = new Uint32Array(m.buffer, 0, m.length);
+      let hash = 0;
+      for (let i = 0; i < buf.length; i++) hash = (Math.imul(hash, 31) + buf[i]) >>> 0;
+      expect(hash).toBe(1908149794);
+      expect(rms(m)).toBeCloseTo(0.05224297, 7);
+      const ref = [
+        -2.35543284e-3, -3.15646417e-2, -5.82306599e-3, 1.99813042e-2, 5.59339346e-3,
+        -5.06306477e-2, -1.23216301e-1, -1.65193021e-1,
+      ];
+      for (let i = 0; i < ref.length; i++) {
+        expect(m[1000 + i]).toBeCloseTo(ref[i], 7);
+      }
     });
   });
 });

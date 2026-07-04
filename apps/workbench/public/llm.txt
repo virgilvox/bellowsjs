@@ -1,4 +1,4 @@
-# bellowsjs 0.1.3 LLM reference
+# bellowsjs 0.1.4 LLM reference
 
 bellowsjs is a browser-native audio engine for synthesis, samples, sequencing,
 analysis, and I/O. One AudioWorklet kernel hosts every voice and effect; musical
@@ -8,7 +8,7 @@ in Node. Every stochastic decision flows from named, seeded PRNG streams.
 License Apache-2.0. Site: https://bellows.live  Repo: https://github.com/virgilvox/bellowsjs
 
 This file is generated from the library source and its type declarations.
-Everything in it is exact for version 0.1.3.
+Everything in it is exact for version 0.1.4.
 
 ## Install and import
 
@@ -499,6 +499,9 @@ default polyphony: 12
   vibRate: 3 to 9 Hz, default 6.1
   vibDepth: 0 to 50 cents, default 0
   vibOnset: 0 to 1 s, default 0.3
+  bowPos: 0.06 to 0.2, default 0.11
+  dynamics: 0 to 1, default 0
+  polDetune: 0 to 5 cents, default 0
 
 ### tube (Waveguide Tube)
 default polyphony: 8
@@ -598,10 +601,10 @@ preset:<id>.
 - clavinet (CLAVINET): engine pluck
 
 ### strings
-- violin (VIOLIN): engine string
-- viola (VIOLA): engine string
-- cello (CELLO): engine string, octave -1
-- double-bass (DOUBLE BASS): engine string, octave -2
+- violin (VIOLIN): engine string, fx: plate
+- viola (VIOLA): engine string, fx: plate
+- cello (CELLO): engine string, fx: plate, octave -1
+- double-bass (DOUBLE BASS): engine string, fx: plate, octave -2
 - pizzicato-strings (PIZZICATO STRINGS): engine string
 
 ### winds

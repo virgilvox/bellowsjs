@@ -18,6 +18,26 @@
  * vibrato as delay line length modulation so the fixed body turns the
  * FM into per partial AM on its own.
  *
+ * Round two, source spectrum and life: the injected bow force passes a
+ * one pole bow hair lowpass and a feedforward bow position comb whose
+ * delay is 2 * bowPos periods, matching the sin(pi n bowPos) coupling
+ * envelope of a bow at bowPos of the string length, and the loop
+ * damping cutoff is capped while bowed, so the sustained spectrum
+ * tilts toward the minus 6 dB per octave Helmholtz sawtooth instead of
+ * peaking at h9 to h11. A fixed forest of 17 extra body modes, seeded
+ * once at module load with alternating gain signs, joins the 7 anchor
+ * modes and carves notches as well as peaks. Attacks draw per note
+ * jitter and a pitch settle (starts a few cents off, locks over about
+ * 120 ms) from a forked note rng stream so no two attacks match while
+ * renders stay deterministic per seed. Vibrato dips under the note
+ * (center offset below nominal) and its rate ramps in over the first
+ * second. dynamics maps noteOn velocity into bow speed and pressure so
+ * loud is brighter, not merely louder. polDetune adds a second string
+ * polarization a couple cents sharp, weakly coupled from the bow
+ * force, whose beating gives the slow sustain undulation of a real
+ * string; its delay line exists only when the param is present at
+ * construction.
+ *
  * The tube is a cylindrical bore after the STK clarinet: half period
  * delay, two point average reflection filter with gain -0.95, and a
  * memoryless reed table clamp(0.7 - 0.3 * pressureDiff, -1, 1) driven
@@ -30,6 +50,7 @@ import { clamp } from '../types';
 import { DelayLine } from '../dsp/delayline';
 import { NoiseGen } from '../dsp/noise';
 import { Adsr } from '../dsp/envelopes';
+import { rng as makeRng } from '../core/prng';
 
 const MIN_FREQ = 20;
 const TWO_PI = Math.PI * 2;
@@ -106,17 +127,88 @@ const BODY_ANCHOR_G = [
   [0.85, 0.3, 1.0, 0.9, 0.5, 0.7, 0.45],
   [0.8, 0.3, 1.0, 0.9, 0.6, 0.6, 0.35],
 ];
+/* Body forest: 17 extra modes on top of the 7 anchors, pseudo log
+ * spaced 800 Hz to 8 kHz with random offsets, Q 8 to 25, gains 0.15 to
+ * 0.4 with alternating signs so neighboring modes interfere and carve
+ * notches as well as peaks. Seeded once from a module constant, never
+ * from the voice rng, so every voice and every render agree. The
+ * forest frequencies follow bodySize through the same geometric
+ * interpolation as the anchors, referenced to the bridge hill mode. */
+const FOREST_MODES = 17;
+const TOTAL_MODES = BODY_MODES + FOREST_MODES;
+const FOREST_F = new Float64Array(FOREST_MODES);
+const FOREST_Q = new Float64Array(FOREST_MODES);
+const FOREST_G = new Float64Array(FOREST_MODES);
+{
+  const fr = makeRng('string-body-forest');
+  for (let k = 0; k < FOREST_MODES; k++) {
+    const center = 800 * Math.pow(10, k / (FOREST_MODES - 1));
+    FOREST_F[k] = center * (1 + (2 * fr() - 1) * 0.12);
+    FOREST_Q[k] = 8 + 17 * fr();
+    FOREST_G[k] = (0.15 + 0.25 * fr()) * (k % 2 === 0 ? 1 : -1);
+  }
+}
 /* Dry bleed inside the wet path (prevents the hollow talking-through-a-
  * tube artifact) and makeup gain on the resonator sum. */
 const BODY_DRY = 0.35;
 const BODY_MAKEUP = 0.8;
 const BOW_JUNCTION_GAIN = 1.1;
+/* Round two source spectrum shaping, iterated against the tilt gate in
+ * waveguide.test.ts (body off, A4, pressure 0.55, speed 0.6: h8 at or
+ * below -12 dB, h12 at or below -16 dB relative to h1, no harmonic
+ * above h1). The bow hair lowpass models hair compliance on the
+ * injected force only, never the recirculating wave; the comb models
+ * the reflection from the bridge side of the bow contact point; the
+ * loop cutoff cap while bowed stands in for the heavier internal
+ * damping a bowed string shows against a plucked one. */
+const BOW_HAIR_FC = 3500;
+const COMB_DEPTH = 0.9;
+const COMB_MAKEUP = 1.3;
+const COMB_NORM = (1 / (1 + COMB_DEPTH)) * COMB_MAKEUP;
+const BOW_LOOP_FC_CAP = 4200;
+/* Normal force scaling of the friction force (mu times N): the table
+ * is mu(dv), pressure is N. Without it a feather bow rides the comb's
+ * inter-null bands and comes out as loud as a firm one. */
+const BOW_NFORCE_LO = 0.3;
+const BOW_NFORCE_SPAN = 1.4;
+/* Attack life: pitch settle time constant and the bow velocity jitter
+ * walk band (roughly 30 to 80 Hz), scaled per note from the forked
+ * note rng stream. */
+const SETTLE_TAU = 0.12;
+const JITTER_AMT = 0.5;
+const JITTER_LO = 30;
+const JITTER_HI = 80;
+/* Vibrato center sits this fraction of the depth below nominal: real
+ * vibrato dips under the note. */
+const VIB_ASYM = 0.3;
+/* Dual polarization: coupling from the main loop bow force into the
+ * detuned second loop, the excitation kick share, and its output mix
+ * (about 6 dB down). The second loop keeps its own gentle lowpass
+ * (POL_LP_FC): the bow only damps the polarization it touches, and a
+ * heavier filter would kill the free ring (and with it the beat)
+ * within a second. */
+const POL_COUPLE = 0.12;
+const POL_MIX = 0.5;
+const POL_KICK = 2;
+/* The pol loop is linear, so whatever the bow force drives directly
+ * stays phase locked to the main loop and cannot beat. The beat comes
+ * from stored energy re-circulating at the pol loop's own detuned
+ * period: POL_ATT couples the attack (gated by the settle envelope)
+ * hard into the line to store that energy, and POL_KICK adds the seed
+ * burst share. */
+const POL_ATT = 2;
+const POL_LP_FC = 16000;
 /* Force-side coupling for the junction noise. The velocity-side
  * perturbation alone is almost entirely cancelled by the stick phase,
  * which servos the string back to the bow velocity within a sample or
  * two, so the audible rosin floor comes from the same noise leaking
  * through the friction contact as force, gated by the stick state. */
 const NOISE_FORCE_GAIN = 3;
+/* The attack bite share of the junction noise carries its own, larger
+ * force gain: the bow hair lowpass and the comb normalization smooth
+ * the tonal scratch the bite relied on before round two, so the
+ * break-away burst has to supply the attack's high band itself. */
+const BITE_FORCE_GAIN = 20;
 const VIB_RAMP_SEC = 0.3;
 const CENTS_TO_RATIO = 5.78e-4;
 
@@ -163,6 +255,42 @@ class StringVoice implements Voice {
   private readonly biteCoef: number;
   private readonly noiseA: number;
 
+  // bow force shaping: hair compliance lowpass and bow position comb
+  private bowLp = 0;
+  private readonly bowLpA: number;
+  private readonly forceDelay: DelayLine;
+  private periodN = 4;
+
+  // per note attack jitter and pitch settle, drawn from the forked
+  // note rng stream so the main stream (and every pluck render) is
+  // untouched
+  private readonly noteRng: NamedRng;
+  private jitScale = 1;
+  private jitEnv = 0;
+  private jitCoef = 0;
+  private jitLpF = 0;
+  private jitLpS = 0;
+  private readonly jitAF: number;
+  private readonly jitAS: number;
+  private readonly jitNorm: number;
+  private settleCents = 0;
+  private settleEnv = 0;
+  private readonly settleCoef: number;
+
+  // dual polarization: the second delay loop exists only when the
+  // polDetune param was present in the construction params. On a
+  // pooled voice, setting polDetune nonzero later reuses this
+  // preallocated line; if the key was absent at construction the
+  // second polarization stays silent (no allocation on the audio
+  // path).
+  private readonly pol2: DelayLine | null;
+  private pol2Read = 2;
+  private polLp = 0;
+  private polLpA = 1;
+  private polLpB = 0;
+  private polDcX1 = 0;
+  private polDcY1 = 0;
+
   // vibrato state
   private vibPhase = 0;
   private driftState = 0;
@@ -171,14 +299,15 @@ class StringVoice implements Voice {
   private readonly driftA: number;
   private readonly driftScale: number;
 
-  // body resonator bank: coefficients recomputed at block rate when
-  // bodySize changes, never per sample
-  private readonly bodyB0 = new Float64Array(BODY_MODES);
-  private readonly bodyA1 = new Float64Array(BODY_MODES);
-  private readonly bodyA2 = new Float64Array(BODY_MODES);
-  private readonly bodyGain = new Float64Array(BODY_MODES);
-  private readonly bodyZ1 = new Float64Array(BODY_MODES);
-  private readonly bodyZ2 = new Float64Array(BODY_MODES);
+  // body resonator bank (7 anchors plus the 17 mode forest):
+  // coefficients recomputed at block rate when bodySize changes, never
+  // per sample
+  private readonly bodyB0 = new Float64Array(TOTAL_MODES);
+  private readonly bodyA1 = new Float64Array(TOTAL_MODES);
+  private readonly bodyA2 = new Float64Array(TOTAL_MODES);
+  private readonly bodyGain = new Float64Array(TOTAL_MODES);
+  private readonly bodyZ1 = new Float64Array(TOTAL_MODES);
+  private readonly bodyZ2 = new Float64Array(TOTAL_MODES);
   private bodyDirty = true;
 
   private damp: number;
@@ -195,6 +324,9 @@ class StringVoice implements Voice {
   private vibRate: number;
   private vibDepth: number;
   private vibOnset: number;
+  private bowPos: number;
+  private dynamics: number;
+  private polDetune: number;
 
   constructor(sampleRate: number, params: Record<string, number>, rng: NamedRng) {
     this.sr = sampleRate;
@@ -215,6 +347,24 @@ class StringVoice implements Voice {
     this.biteCoef = Math.exp(-1 / (0.03 * sampleRate));
     // one pole lowpass near 6 kHz shapes the rosin noise band
     this.noiseA = 1 - Math.exp((-TWO_PI * Math.min(6000, sampleRate * 0.45)) / sampleRate);
+    // bow hair compliance lowpass on the injected force
+    this.bowLpA = 1 - Math.exp((-TWO_PI * Math.min(BOW_HAIR_FC, sampleRate * 0.45)) / sampleRate);
+    // bow position comb delay tops out at 2 * 0.45 periods of MIN_FREQ
+    this.forceDelay = new DelayLine(Math.ceil(0.9 * (sampleRate / MIN_FREQ)) + 8);
+    // per note draws come from a forked stream so consuming them never
+    // shifts the main stream a pluck render depends on
+    this.noteRng = rng.fork('note');
+    // attack jitter walk: white through a 30 to 80 Hz one pole band,
+    // normalized to roughly unit standard deviation
+    this.jitAF = 1 - Math.exp((-TWO_PI * JITTER_HI) / sampleRate);
+    this.jitAS = 1 - Math.exp((-TWO_PI * JITTER_LO) / sampleRate);
+    const bandVar =
+      (1 / 3) * (this.jitAF / (2 - this.jitAF) - this.jitAS / (2 - this.jitAS));
+    this.jitNorm = bandVar > 0 ? 1 / Math.sqrt(bandVar) : 0;
+    this.settleCoef = Math.exp(-1 / (SETTLE_TAU * sampleRate));
+    // the second polarization line exists only when the param key was
+    // present at construction (see the field comment)
+    this.pol2 = 'polDetune' in params ? new DelayLine(maxSamples) : null;
     this.ageStep = 1 / sampleRate;
     // Vibrato drift: white noise through a one pole lowpass near 0.5 Hz
     // wobbles rate and depth so the LFO does not read as synthetic. The
@@ -235,6 +385,9 @@ class StringVoice implements Voice {
     this.vibRate = p(params, 'vibRate', 6.1);
     this.vibDepth = p(params, 'vibDepth', 0);
     this.vibOnset = p(params, 'vibOnset', 0.3);
+    this.bowPos = p(params, 'bowPos', 0.11);
+    this.dynamics = p(params, 'dynamics', 0);
+    this.polDetune = p(params, 'polDetune', 0);
   }
 
   /** Morph the body mode table at the current bodySize and derive RBJ
@@ -257,6 +410,22 @@ class StringVoice implements Voice {
       this.bodyA2[k] = (1 - alpha) / a0;
       this.bodyGain[k] = g;
     }
+    // Forest modes ride the same geometric interpolation, referenced
+    // to the bridge hill anchor (mode 5): the whole forest slides down
+    // as the body grows.
+    const hill = BODY_ANCHOR_F[lo][5] * Math.pow(BODY_ANCHOR_F[hi][5] / BODY_ANCHOR_F[lo][5], t);
+    const scale = hill / BODY_ANCHOR_F[0][5];
+    for (let j = 0; j < FOREST_MODES; j++) {
+      const k = BODY_MODES + j;
+      const f = FOREST_F[j] * scale;
+      const w = Math.min((TWO_PI * f) / this.sr, Math.PI * 0.95);
+      const alpha = Math.sin(w) / (2 * FOREST_Q[j]);
+      const a0 = 1 + alpha;
+      this.bodyB0[k] = alpha / a0;
+      this.bodyA1[k] = (-2 * Math.cos(w)) / a0;
+      this.bodyA2[k] = (1 - alpha) / a0;
+      this.bodyGain[k] = FOREST_G[j];
+    }
   }
 
   noteOn(freq: number, vel: number): void {
@@ -273,11 +442,32 @@ class StringVoice implements Voice {
     this.bowEnv = 0;
     this.biteEnv = 1;
     this.noiseLP = 0;
+    this.bowLp = 0;
+    this.forceDelay.clear();
     this.vibPhase = 0;
     this.driftState = 0;
     this.ageSec = 0;
     this.bodyZ1.fill(0);
     this.bodyZ2.fill(0);
+    if (this.pol2) {
+      this.pol2.clear();
+      this.polLp = 0;
+      this.polDcX1 = 0;
+      this.polDcY1 = 0;
+    }
+    // Per note life draws, in a fixed order so the note stream stays
+    // aligned whatever the params: jitter scale (0.6 to 1.4), jitter
+    // decay (30 to 50 ms, so the walk audibly rides the first 90 to
+    // 150 ms), settle magnitude (8 to 15 cents) and its sign (mostly
+    // sharp, occasionally flat).
+    this.jitScale = 0.6 + 0.8 * this.noteRng();
+    this.jitCoef = Math.exp(-1 / ((0.03 + 0.02 * this.noteRng()) * this.sr));
+    const settleMag = 8 + 7 * this.noteRng();
+    this.settleCents = this.noteRng() < 0.25 ? -settleMag : settleMag;
+    this.jitEnv = 1;
+    this.jitLpF = 0;
+    this.jitLpS = 0;
+    this.settleEnv = 1;
     this.updateLoop();
 
     // Noise burst excitation, one period. A bowed note still gets a
@@ -298,8 +488,14 @@ class StringVoice implements Voice {
 
   private updateLoop(): void {
     const n = this.sr / this.freq;
+    this.periodN = n;
     const w = (TWO_PI * this.freq) / this.sr;
-    const fc = Math.min(15000 * Math.pow(1200 / 15000, clamp(this.damp, 0, 1)), this.sr * 0.45);
+    let fc = Math.min(15000 * Math.pow(1200 / 15000, clamp(this.damp, 0, 1)), this.sr * 0.45);
+    // A bowed string loses more to internal friction than a plucked
+    // one, and the source spectrum gate needs the loop itself to tilt:
+    // cap the loop cutoff while bowed. The phase compensation below
+    // absorbs the cap, so pitch is unaffected.
+    if (this.bow > 0) fc = Math.min(fc, BOW_LOOP_FC_CAP);
     const a = 1 - Math.exp((-TWO_PI * fc) / this.sr);
     this.lpA = a;
     this.lpB = 1 - a;
@@ -322,6 +518,16 @@ class StringVoice implements Voice {
         DISPERSION_STAGES * allpassPhaseDelay(this.apC, w);
     }
     this.readDelay = Math.max(1, n - 1 - pd);
+    if (this.pol2) {
+      // Second polarization: one pole damping and dc blocker, no
+      // dispersion chain, detuned sharp by polDetune cents.
+      const a2 = 1 - Math.exp((-TWO_PI * Math.min(POL_LP_FC, this.sr * 0.45)) / this.sr);
+      this.polLpA = a2;
+      this.polLpB = 1 - a2;
+      const pd2 = onePolePhaseDelay(a2, w) + dcBlockerPhaseDelay(this.dcR, w);
+      const det = Math.pow(2, clamp(this.polDetune, 0, 50) / 1200);
+      this.pol2Read = Math.max(1, n / det - 1 - pd2);
+    }
     const t60 = this.gate ? 0.3 * Math.pow(40, clamp(this.sustain, 0, 1)) : RELEASE_T60;
     // Loop loss is met once per period, so the per pass gain is set
     // against the period count in t60 seconds.
@@ -336,11 +542,20 @@ class StringVoice implements Voice {
     }
     const level = this.level;
     const bowAmt = clamp(this.bow, 0, 1);
-    const bowVel = 0.05 + 0.25 * clamp(this.bowSpeed, 0, 1);
-    const pressure = clamp(this.bowPressure, 0, 1);
+    // Dynamics coupling: velocity swings bow speed across 0.35 to 0.8
+    // and nudges pressure, so loud notes are brighter, not just louder.
+    const dyn = clamp(this.dynamics, 0, 1);
+    const speedEff =
+      clamp(this.bowSpeed, 0, 1) * (1 - dyn) + (0.35 + 0.45 * this.vel) * dyn;
+    const bowVel = 0.05 + 0.25 * clamp(speedEff, 0, 1);
+    const pressure = clamp(clamp(this.bowPressure, 0, 1) + dyn * 0.15 * (this.vel - 0.5), 0, 1);
     // STK pressure to friction slope mapping: firm bow, low slope
     const slope = 5 - 4 * pressure;
     const bite = clamp(this.attackBite, 0, 1);
+    // bow position comb: the injected force cancels itself one round
+    // trip to the near bridge later (2 * bowPos periods)
+    const combDelay = 2 * clamp(this.bowPos, 0.02, 0.45) * this.periodN;
+    const usePol = this.pol2 !== null && this.polDetune > 0;
     // Rosin noise level: proportional to bow speed, relatively more
     // prominent under a light bow.
     const nSusAmt = clamp(this.bowNoise, 0, 1) * bowVel * (0.05 + 0.1 * (1 - pressure));
@@ -362,13 +577,25 @@ class StringVoice implements Voice {
       if (useVib) {
         this.driftState += this.driftA * (white - this.driftState);
         const drift = clamp(this.driftState * this.driftScale, -1, 1);
-        this.vibPhase += vibInc * (1 + 0.08 * drift);
+        // the rate ramps from 0.9x to 1.05x over the first second: a
+        // player's vibrato widens into the note
+        const rateRamp = 0.9 + 0.15 * Math.min(this.ageSec, 1);
+        this.vibPhase += vibInc * rateRamp * (1 + 0.08 * drift);
         if (this.vibPhase > TWO_PI) this.vibPhase -= TWO_PI;
         // raised cosine onset ramp: no vibrato inside the attack
         const tt = this.ageSec - onsetT;
         const onset = tt <= 0 ? 0 : tt >= VIB_RAMP_SEC ? 1 : 0.5 * (1 - Math.cos((Math.PI * tt) / VIB_RAMP_SEC));
         const d = depthCents * (1 + 0.2 * drift) * onset;
-        delta = this.readDelay * d * CENTS_TO_RATIO * Math.sin(this.vibPhase);
+        // VIB_ASYM shifts the modulation center below the note: the
+        // positive delay offset reads the loop long, so the mean pitch
+        // dips under nominal by 0.3 of the depth
+        delta = this.readDelay * d * CENTS_TO_RATIO * (Math.sin(this.vibPhase) + VIB_ASYM);
+      }
+      if (bowAmt > 0 && this.settleEnv > 1e-4) {
+        // pitch settle: the note starts settleCents off (usually
+        // sharp) and locks exponentially over about 120 ms
+        this.settleEnv *= this.settleCoef;
+        delta -= this.readDelay * this.settleCents * CENTS_TO_RATIO * this.settleEnv;
       }
       const y = this.delay.readCubic(this.readDelay + delta);
       // loop damping
@@ -385,7 +612,12 @@ class StringVoice implements Voice {
         f = yy;
       }
       let sIn = f * this.gs;
-      if (this.excitePos < this.exciteLen) sIn += this.excite[this.excitePos++];
+      let ex = 0;
+      if (this.excitePos < this.exciteLen) {
+        ex = this.excite[this.excitePos++];
+        sIn += ex;
+      }
+      let inj = 0;
       if (bowAmt > 0) {
         if (this.gate) {
           this.bowEnv += this.bowUpStep;
@@ -401,30 +633,85 @@ class StringVoice implements Voice {
           // slope so the string breaks away late and scratches before
           // locking into Helmholtz motion.
           const slopeEff = slope * (1 - 0.35 * bite * this.biteEnv);
-          const noise = (nSusAmt + nAttAmt * this.biteEnv) * this.noiseLP;
-          const bowVelInst = bowVel * this.bowEnv + noise;
+          const noiseSus = nSusAmt * this.noiseLP;
+          const noiseAtt = nAttAmt * this.biteEnv * this.noiseLP;
+          const noise = noiseSus + noiseAtt;
+          // Pre-Helmholtz jitter: the 30 to 80 Hz walk (fed by the
+          // same white sample) wobbles the bow velocity through the
+          // attack, scaled by attackBite and the per note draw.
+          this.jitEnv *= this.jitCoef;
+          this.jitLpF += this.jitAF * (white - this.jitLpF);
+          this.jitLpS += this.jitAS * (white - this.jitLpS);
+          const walk = clamp((this.jitLpF - this.jitLpS) * this.jitNorm, -1.5, 1.5);
+          const jit = 1 + JITTER_AMT * bite * this.jitScale * this.jitEnv * walk;
+          const bowVelInst = bowVel * this.bowEnv * jit + noise;
           const dv = bowVelInst - y;
           const t = bowTable(dv, slopeEff);
+          // Friction force is mu(dv) times the normal force: pressure
+          // scales the transmissible force as well as the table slope,
+          // so a feather bow genuinely starves the string.
+          const nForce = BOW_NFORCE_LO + BOW_NFORCE_SPAN * pressure;
           // tanh bounds only the injected term, not the recirculating
           // wave, as a cheap torsional loss surrogate. The second term
           // is the force-side share of the junction noise: the table
           // value gates it by stick state so it pulses with the slip
           // cycle instead of overlaying the output as plain hiss.
-          sIn += Math.tanh(dv * t * BOW_JUNCTION_GAIN) * bowAmt;
-          sIn += noise * t * NOISE_FORCE_GAIN * this.bowEnv * bowAmt;
+          const force = Math.tanh(dv * t * nForce * BOW_JUNCTION_GAIN) * bowAmt;
+          // bow hair compliance: lowpass the injected friction force
+          // only, never the recirculating wave. The junction noise
+          // share keeps its own 6 kHz band (rosin hiss and attack
+          // scratch live above the hair rolloff).
+          this.bowLp += this.bowLpA * (force - this.bowLp);
+          // Bow position comb: the near bridge reflection of the
+          // injected force returns inverted one bridge round trip
+          // (2 * bowPos periods) later and cancels the harmonics near
+          // 1 / bowPos. Normalized by 1 / (1 + depth) so the comb only
+          // carves nulls and never boosts the in-phase bands (an
+          // unnormalized comb doubles the mid harmonics, which feeds
+          // the raucous low pressure regime and destabilizes the
+          // period); COMB_MAKEUP restores the injection level. The
+          // junction noise share skips the comb: it is broadband, and
+          // combing it would only dull the rosin floor and the bite.
+          inj =
+            (this.bowLp - COMB_DEPTH * this.forceDelay.readCubic(combDelay)) * COMB_NORM +
+            (noiseSus * NOISE_FORCE_GAIN + noiseAtt * BITE_FORCE_GAIN) *
+              t *
+              this.bowEnv *
+              bowAmt;
+          this.forceDelay.write(this.bowLp);
+          sIn += inj;
         }
       }
       this.delay.write(sIn);
       let o = sIn;
+      if (usePol) {
+        // Second polarization: a plain damped loop a hair sharp,
+        // kicked by the same excitation burst as the main loop and fed
+        // a sliver of the bow force, mixed about 6 dB down. The
+        // friction locks the main loop to one period; this loop is not
+        // under the bow's servo, so the burst keeps ringing at its own
+        // detuned frequency, and the beat against the locked tone is
+        // the slow sustain undulation of a real string.
+        const y2 = this.pol2!.readCubic(this.pol2Read);
+        this.polLp = this.polLpA * y2 + this.polLpB * this.polLp;
+        const f2 = this.polLp - this.polDcX1 + this.dcR * this.polDcY1;
+        this.polDcX1 = this.polLp;
+        this.polDcY1 = f2;
+        const s2 =
+          f2 * this.gs + (POL_COUPLE + POL_ATT * this.settleEnv) * inj + POL_KICK * ex;
+        this.pol2!.write(s2);
+        o += POL_MIX * s2;
+      }
       if (useBody) {
+        const x = o;
         let wet = 0;
-        for (let k = 0; k < BODY_MODES; k++) {
-          const yk = this.bodyB0[k] * sIn + this.bodyZ1[k];
+        for (let k = 0; k < TOTAL_MODES; k++) {
+          const yk = this.bodyB0[k] * x + this.bodyZ1[k];
           this.bodyZ1[k] = this.bodyZ2[k] - this.bodyA1[k] * yk;
-          this.bodyZ2[k] = -this.bodyB0[k] * sIn - this.bodyA2[k] * yk;
+          this.bodyZ2[k] = -this.bodyB0[k] * x - this.bodyA2[k] * yk;
           wet += this.bodyGain[k] * yk;
         }
-        o = (1 - bodyMix) * sIn + bodyMix * (BODY_DRY * sIn + BODY_MAKEUP * wet);
+        o = (1 - bodyMix) * x + bodyMix * (BODY_DRY * x + BODY_MAKEUP * wet);
       }
       o *= level;
       outL[i] += o;
@@ -451,7 +738,9 @@ class StringVoice implements Voice {
         if (this.live) this.updateLoop();
         break;
       case 'bow':
+        // the bowed loop cutoff cap depends on whether the bow is on
         this.bow = value;
+        if (this.live) this.updateLoop();
         break;
       case 'bowPressure':
         this.bowPressure = value;
@@ -484,6 +773,18 @@ class StringVoice implements Voice {
       case 'vibOnset':
         this.vibOnset = value;
         break;
+      case 'bowPos':
+        this.bowPos = value;
+        break;
+      case 'dynamics':
+        this.dynamics = value;
+        break;
+      case 'polDetune':
+        // reuses the line preallocated at construction; if the key was
+        // absent then, the second polarization stays silent
+        this.polDetune = value;
+        if (this.live) this.updateLoop();
+        break;
     }
   }
 
@@ -509,6 +810,12 @@ const stringParams: ParamSpec[] = [
   { name: 'vibRate', min: 3, max: 9, default: 6.1, unit: 'Hz' },
   { name: 'vibDepth', min: 0, max: 50, default: 0, unit: 'cents' },
   { name: 'vibOnset', min: 0, max: 1, default: 0.3, unit: 's' },
+  // Round two params. bowPos shapes only the bowed injection (0.06 is
+  // ponticello glass, 0.2 is tasto flute); dynamics and polDetune
+  // default to neutral so non-bowed behavior is untouched.
+  { name: 'bowPos', min: 0.06, max: 0.2, default: 0.11 },
+  { name: 'dynamics', min: 0, max: 1, default: 0 },
+  { name: 'polDetune', min: 0, max: 5, default: 0, unit: 'cents' },
 ];
 
 export const stringEngine: EngineDef = {
