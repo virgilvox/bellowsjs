@@ -1,4 +1,4 @@
-# bellowsjs 0.1.1 LLM reference
+# bellowsjs 0.1.2 LLM reference
 
 bellowsjs is a browser-native audio engine for synthesis, samples, sequencing,
 analysis, and I/O. One AudioWorklet kernel hosts every voice and effect; musical
@@ -8,7 +8,7 @@ in Node. Every stochastic decision flows from named, seeded PRNG streams.
 License Apache-2.0. Site: https://bellows.live  Repo: https://github.com/virgilvox/bellowsjs
 
 This file is generated from the library source and its type declarations.
-Everything in it is exact for version 0.1.1.
+Everything in it is exact for version 0.1.2.
 
 ## Install and import
 
@@ -566,6 +566,83 @@ Sampler engines expose SAMPLER_PARAMS:
   pan: -1 to 1, default 0
 
 Granular over your own buffer: b.granular(float32Data, sampleRate, params?).
+
+## Instrument presets
+
+Named playable instruments: each pins an engine plus curated params, optional
+insert fx, a gain trim, and a suggested keyboard octave. getPreset(id) returns
+the full InstrumentPreset (INSTRUMENT_PRESETS is the whole bank,
+presetsByFamily() groups it); create the sound with b.voice(preset.engineId,
+preset.params) plus instrument.fx(...preset.fx) and instrument.gain(preset.gain).
+The bellows.live instrument page selects these with engine ids of the form
+preset:<id>.
+
+### guitars
+- nylon-guitar (NYLON GUITAR): engine pluck
+- steel-guitar (STEEL GUITAR): engine pluck
+- twelve-string (TWELVE STRING): engine pluck, fx: chorus
+- muted-electric (MUTED ELECTRIC): engine pluck
+- clean-electric (CLEAN ELECTRIC): engine pluck, fx: tapeDelay
+- bass-guitar (BASS GUITAR): engine pluck, octave -2
+- banjo (BANJO): engine pluck
+- sitar-drone (SITAR DRONE): engine pluck
+- koto (KOTO): engine pluck
+- harp (HARP): engine pluck
+- clavinet (CLAVINET): engine pluck
+
+### strings
+- violin (VIOLIN): engine string
+- viola (VIOLA): engine string
+- cello (CELLO): engine string, octave -1
+- double-bass (DOUBLE BASS): engine string, octave -2
+- pizzicato-strings (PIZZICATO STRINGS): engine string
+
+### winds
+- concert-flute (CONCERT FLUTE): engine harmonic, octave +1
+- pan-flute (PAN FLUTE): engine harmonic, octave +1
+- clarinet (CLARINET): engine tube
+- recorder (RECORDER): engine tube, octave +1
+- ocarina (OCARINA): engine harmonic, octave +1
+- shakuhachi (SHAKUHACHI): engine harmonic
+
+### brass
+- trumpet (TRUMPET): engine harmonic
+- trombone (TROMBONE): engine harmonic, octave -1
+- brass-section (BRASS SECTION): engine harmonic, fx: chorus
+- fm-horn (FM HORN): engine fm
+
+### keys
+- dx-epiano (DX E-PIANO): engine fm, fx: chorus
+- drawbar-organ (DRAWBAR ORGAN): engine additive
+- church-organ (CHURCH ORGAN): engine additive
+- harpsichord (HARPSICHORD): engine pluck
+- celesta (CELESTA): engine additive, octave +1
+- music-box (MUSIC BOX): engine additive, octave +2
+
+### mallets
+- marimba (MARIMBA): engine modal
+- vibraphone (VIBRAPHONE): engine modal, fx: tremolo
+- glockenspiel (GLOCKENSPIEL): engine modal, octave +2
+- tubular-bells (TUBULAR BELLS): engine modal
+- kalimba (KALIMBA): engine modal
+- steel-drum (STEEL DRUM): engine modal
+- woodblock (WOODBLOCK): engine modal
+- timpani (TIMPANI): engine modal, octave -2
+
+### voices
+- choir-aah (CHOIR AAH): engine formant, fx: chorus
+- voice-ooh (VOICE OOH): engine formant
+- whistle (WHISTLE): engine additive, octave +2
+
+### synth
+- analog-lead (ANALOG LEAD): engine va
+- fat-saw-pad (FAT SAW PAD): engine va
+- acid-bass (ACID BASS): engine va, octave -1
+- sub-bass (SUB BASS): engine va, octave -2
+- west-coast-pluck (WEST COAST PLUCK): engine westcoast
+- motion-pad (MOTION PAD): engine wavetable
+- fm-bell-lead (FM BELL LEAD): engine fm
+
 
 ## Effects
 

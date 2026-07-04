@@ -16,7 +16,7 @@
 import { markRaw, reactive, type Raw } from 'vue';
 import { Scheduler, Transport, type Bellows, type Instrument } from 'bellowsjs';
 import { bellows as bellowsRef, ensureBellows } from './audio';
-import { boot, engineLabel, instState, setNoteTap, setPanicHook } from './instrument-store';
+import { boot, engineLabel, instState, resolveEngineId, setNoteTap, setPanicHook } from './instrument-store';
 
 const SIXTEENTH = 0.25;
 /** metronome quarter click, loop-top accent, and count-in pitches (drum
@@ -409,7 +409,8 @@ function finalizeTake(): void {
   looperState.recState = 'idle';
   looperState.countBeat = 0;
   if (!b) return;
-  const channel = markRaw(b.voice(instState.engineId, { ...instState.params }));
+  // preset ids resolve to their underlying engine, same as the live channel
+  const channel = markRaw(b.voice(resolveEngineId(instState.engineId), { ...instState.params }));
   channel.gain(instState.gain);
   const name =
     engineLabel(instState.engineId).toUpperCase() + ' ' + String(takeNumber++).padStart(2, '0');

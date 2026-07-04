@@ -11,9 +11,11 @@ import {
   listEngines,
   listEffects,
   registerBuiltins,
+  getPreset,
   SAMPLER_PARAMS,
   type Bellows,
   type Instrument,
+  type InstrumentPreset,
   type ParamSpec,
 } from 'bellowsjs';
 import { bellows as bellowsRef, ensureBellows } from './audio';
@@ -109,12 +111,40 @@ export function setPanicHook(hook: (() => void) | null): void {
 /* specs and lookups                                                    */
 /* ------------------------------------------------------------------ */
 
+const PRESET_PREFIX = 'preset:';
+
+/** The preset behind a 'preset:<id>' engine id, null for anything else
+ * (including a preset id that no longer exists). */
+export function presetFor(engineId: string): InstrumentPreset | null {
+  if (!engineId.startsWith(PRESET_PREFIX)) return null;
+  try {
+    return getPreset(engineId.slice(PRESET_PREFIX.length));
+  } catch {
+    return null;
+  }
+}
+
+/** Resolve a possibly preset-prefixed engine id to the concrete engine
+ * id the kernel knows. Everything that hands an engine id to b.voice
+ * (the instrument channel here, layer channels in the looper) goes
+ * through this one function. */
+export function resolveEngineId(engineId: string): string {
+  const preset = presetFor(engineId);
+  if (preset) return preset.engineId;
+  return engineId.startsWith(PRESET_PREFIX) ? 'pluck' : engineId;
+}
+
+/** Specs always come from the underlying engine, so a preset's params
+ * stay fully editable in the panel. */
 export function paramSpecsFor(engineId: string): ParamSpec[] {
-  if (engineId.startsWith('sampler:')) return SAMPLER_PARAMS;
-  return listEngines().find((e) => e.id === engineId)?.params ?? [];
+  const resolved = resolveEngineId(engineId);
+  if (resolved.startsWith('sampler:')) return SAMPLER_PARAMS;
+  return listEngines().find((e) => e.id === resolved)?.params ?? [];
 }
 
 export function engineLabel(engineId: string): string {
+  const preset = presetFor(engineId);
+  if (preset) return preset.label;
   if (engineId.startsWith('sampler:')) {
     return sfState.active.find((a) => a.engineId === engineId)?.label ?? engineId;
   }
@@ -129,7 +159,16 @@ function defaultsFor(specs: ParamSpec[]): Record<string, number> {
   return out;
 }
 
-instState.params = defaultsFor(paramSpecsFor(instState.engineId));
+/** The full param set an engine id starts from: engine defaults, with
+ * the preset's curated values layered over them for preset ids. */
+function voicingFor(engineId: string): Record<string, number> {
+  const out = defaultsFor(paramSpecsFor(engineId));
+  const preset = presetFor(engineId);
+  if (preset) Object.assign(out, preset.params);
+  return out;
+}
+
+instState.params = voicingFor(instState.engineId);
 
 /* ------------------------------------------------------------------ */
 /* engine channel                                                       */
@@ -176,7 +215,7 @@ function makeVoice(): void {
     instState.engineId = 'pluck';
     instState.params = defaultsFor(paramSpecsFor('pluck'));
   }
-  voiceHandle = b.voice(instState.engineId, { ...instState.params });
+  voiceHandle = b.voice(resolveEngineId(instState.engineId), { ...instState.params });
   applyMix();
   postFxChain();
 }
@@ -213,7 +252,18 @@ export async function boot(): Promise<void> {
 export function setEngine(engineId: string): void {
   if (engineId === instState.engineId) return;
   instState.engineId = engineId;
-  instState.params = defaultsFor(paramSpecsFor(engineId));
+  instState.params = voicingFor(engineId);
+  const preset = presetFor(engineId);
+  if (preset) {
+    // a preset carries its whole playable setup: insert chain, gain
+    // trim, and a sensible keyboard octave
+    instState.fx = (preset.fx ?? []).map((f) => {
+      const def = listEffects().find((e) => e.id === f.effectId);
+      return { effectId: f.effectId, params: { ...defaultsFor(def?.params ?? []), ...(f.params ?? {}) } };
+    });
+    instState.gain = Math.max(0, Math.min(1.2, preset.gain ?? 0.8));
+    setOctave(preset.octave ?? 0);
+  }
   if (!instState.ready) return;
   syncInstance();
   if (!b) return;
@@ -320,7 +370,8 @@ export function setParam(name: string, value: number): void {
 }
 
 export function resetParams(): void {
-  const defaults = defaultsFor(paramSpecsFor(instState.engineId));
+  // for a preset, reset means back to the preset's voicing
+  const defaults = voicingFor(instState.engineId);
   for (const [name, value] of Object.entries(defaults)) setParam(name, value);
 }
 

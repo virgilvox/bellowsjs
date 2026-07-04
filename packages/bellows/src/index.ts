@@ -114,6 +114,9 @@ export * from './io/encode';
 export { SoundFont } from './io/sf2';
 export * from './io/sfz';
 
+/* presets */
+export { INSTRUMENT_PRESETS, getPreset, presetsByFamily, type InstrumentPreset, type InstrumentFamily } from './presets/instruments';
+
 /* render */
 export { renderOffline, type OfflineRenderOptions, type RenderedAudio } from './render/offline';
 export { bankEngineResolver } from './render/banks';

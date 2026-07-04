@@ -49,6 +49,17 @@ for (const f of lib.listEffects()) {
   effects += `### ${f.id} (${f.label})\n` + paramTable(f.params) + '\n';
 }
 
+let presets = '';
+for (const [family, list] of lib.presetsByFamily()) {
+  presets += `### ${family}\n`;
+  for (const p of list) {
+    const fx = p.fx && p.fx.length ? ', fx: ' + p.fx.map((f) => f.effectId).join(' + ') : '';
+    const oct = p.octave ? `, octave ${p.octave > 0 ? '+' : ''}${p.octave}` : '';
+    presets += `- ${p.id} (${p.label}): engine ${p.engineId}${fx}${oct}\n`;
+  }
+  presets += '\n';
+}
+
 const scaleNames = Object.keys(lib.SCALES).join(', ');
 const chordNames = Object.keys(lib.CHORD_TYPES).join(', ');
 
@@ -137,6 +148,17 @@ Sampler engines expose SAMPLER_PARAMS:
 ${paramTable(lib.SAMPLER_PARAMS)}
 Granular over your own buffer: b.granular(float32Data, sampleRate, params?).
 
+## Instrument presets
+
+Named playable instruments: each pins an engine plus curated params, optional
+insert fx, a gain trim, and a suggested keyboard octave. getPreset(id) returns
+the full InstrumentPreset (INSTRUMENT_PRESETS is the whole bank,
+presetsByFamily() groups it); create the sound with b.voice(preset.engineId,
+preset.params) plus instrument.fx(...preset.fx) and instrument.gain(preset.gain).
+The bellows.live instrument page selects these with engine ids of the form
+preset:<id>.
+
+${presets}
 ## Effects
 
 Use in instrument.fx(...), b.bus([...]), or b.masterFx(...). A chain entry is
