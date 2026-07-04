@@ -4,7 +4,7 @@ State of the project as of 2026-07-04, after the 0.1.1 release and the instrumen
 
 ## Where things stand
 
-- `bellowsjs@0.1.0` is published on npm (0.0.1 was a name claim). Tag `v0.1.0` pushed to github.com/virgilvox/bellowsjs, main is current.
+- `bellowsjs@0.1.1` is published on npm (0.1.0 first release, 0.0.1 name claim). Tags through `v0.1.1` pushed to github.com/virgilvox/bellowsjs, main is current.
 - Library test suite: 76 files, 1017 tests, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`, `vue-tsc`) and was verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples (hello-note, cellular automata drums, pitch tracker all exercised end to end).
