@@ -1,0 +1,22 @@
+# DigitalOcean App Platform spec for bellows.live.
+# Static site (free tier). Deploy or update with:
+#   doctl apps create --spec .do/app.yaml
+#   doctl apps update <app-id> --spec .do/app.yaml
+name: bellows-live
+region: nyc
+static_sites:
+  - name: workbench
+    git:
+      repo_clone_url: https://github.com/virgilvox/bellowsjs.git
+      branch: main
+    build_command: npm install && npm run build -w apps/workbench
+    output_dir: /apps/workbench/dist
+    environment_slug: node-js
+    catchall_document: index.html
+domains:
+  - domain: bellows.live
+    type: PRIMARY
+    zone: bellows.live
+  - domain: www.bellows.live
+    type: ALIAS
+    zone: bellows.live

@@ -4,6 +4,7 @@
  */
 
 import type { Example } from './types';
+import { basicsExamples } from './basics';
 import { firstSounds } from './firstsounds';
 import { engineExamples } from './engines';
 import { sequencingExamples } from './sequencing';
@@ -21,6 +22,7 @@ export interface ExampleCategory {
 
 export const categories: ExampleCategory[] = [
   { name: 'FIRST SOUNDS', examples: firstSounds },
+  { name: 'BASICS', examples: basicsExamples },
   { name: 'ENGINES', examples: engineExamples },
   { name: 'SEQUENCING', examples: sequencingExamples },
   { name: 'THEORY + TUNING', examples: theoryExamples },

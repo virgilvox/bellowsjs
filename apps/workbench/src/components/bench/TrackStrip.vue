@@ -182,7 +182,7 @@ function macroDisplay(m: MacroState): string {
 .mute-btn.lit {
   background: var(--slag);
   border-color: var(--slag);
-  color: var(--forge);
+  color: var(--lit-text);
 }
 
 .lamps {
@@ -207,7 +207,7 @@ function macroDisplay(m: MacroState): string {
 
 .lvl-wrap label,
 .aux label {
-  font-size: 8px;
+  font-size: 9.5px;
   letter-spacing: 0.18em;
   color: var(--faded);
   text-transform: uppercase;

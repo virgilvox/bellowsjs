@@ -2,10 +2,18 @@
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue';
 import { bellows } from '../../lib/audio';
 import { bench } from '../../lib/bench-store';
+import { onThemeChange, tokens } from '../../lib/theme';
 
 const canvas = ref<HTMLCanvasElement | null>(null);
 let raf = 0;
 let fd: Uint8Array<ArrayBuffer> | null = null;
+
+/* cached token values for canvas paint, refreshed on theme toggle */
+type Tk = ReturnType<typeof tokens>;
+let tk: Tk | null = null;
+const offTheme = onThemeChange(() => {
+  tk = tokens();
+});
 
 const statusLine = computed(() => {
   if (!bench.ready) return 'standby // press play to light the forge';
@@ -19,14 +27,14 @@ const statusLine = computed(() => {
   );
 });
 
-function drawMeterBar(g: CanvasRenderingContext2D, x: number, y: number, w: number, rms: number, peak: number) {
-  g.fillStyle = '#252017';
+function drawMeterBar(g: CanvasRenderingContext2D, c: Tk, x: number, y: number, w: number, rms: number, peak: number) {
+  g.fillStyle = c.iron;
   g.fillRect(x, y, w, 5);
   const r = Math.min(1, Math.max(0, rms));
   const p = Math.min(1, Math.max(0, peak));
-  g.fillStyle = '#ffb000';
+  g.fillStyle = c.phosphor;
   g.fillRect(x, y, r * w, 5);
-  g.fillStyle = p > 0.95 ? '#ff5533' : '#ffd257';
+  g.fillStyle = p > 0.95 ? c.slag : c.phosphorHot;
   g.fillRect(x + p * w - 2, y, 2, 5);
 }
 
@@ -40,7 +48,10 @@ function draw() {
   const H = cv.height;
   const specH = H - 22;
 
-  g.fillStyle = '#14110c';
+  if (!tk) tk = tokens();
+  const c = tk;
+
+  g.fillStyle = c.soot;
   g.fillRect(0, 0, W, H);
 
   const b = bellows.value;
@@ -53,7 +64,7 @@ function draw() {
     an.getByteFrequencyData(fd);
     const bars = 96;
     const bw = W / bars;
-    g.fillStyle = '#ffb000';
+    g.fillStyle = c.phosphor;
     for (let i = 0; i < bars; i++) {
       const idx = Math.floor(Math.pow(i / bars, 1.8) * n * 0.7);
       const v = fd[idx] / 255;
@@ -65,12 +76,12 @@ function draw() {
 
     // stereo meter strip along the bottom, fed from the kernel meter
     const m = bench.meterInfo;
-    g.fillStyle = '#8f8571';
+    g.fillStyle = c.tick;
     g.font = '8px monospace';
     g.fillText('L', 4, specH + 10);
     g.fillText('R', 4, specH + 18);
-    drawMeterBar(g, 16, specH + 4, W - 24, m.rmsL, m.peakL);
-    drawMeterBar(g, 16, specH + 12, W - 24, m.rmsR, m.peakR);
+    drawMeterBar(g, c, 16, specH + 4, W - 24, m.rmsL, m.peakL);
+    drawMeterBar(g, c, 16, specH + 12, W - 24, m.rmsR, m.peakR);
   } catch {
     // analyser can vanish mid-frame during a reforge
   }
@@ -88,7 +99,10 @@ function stop() {
 onMounted(start);
 onActivated(start);
 onDeactivated(stop);
-onUnmounted(stop);
+onUnmounted(() => {
+  stop();
+  offTheme();
+});
 </script>
 
 <template>
@@ -119,7 +133,7 @@ canvas {
 
 .status-line {
   padding: 6px 12px 8px;
-  font-size: 9px;
+  font-size: 10px;
   color: var(--tick);
   letter-spacing: 0.14em;
   text-transform: uppercase;

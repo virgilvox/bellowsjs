@@ -69,10 +69,10 @@ function num(i: number): string {
 .entry.lit {
   background: var(--phosphor);
   border-color: var(--phosphor);
-  color: var(--forge);
+  color: var(--lit-text);
 }
 
 .entry.lit:hover {
-  color: var(--forge);
+  color: var(--lit-text);
 }
 </style>

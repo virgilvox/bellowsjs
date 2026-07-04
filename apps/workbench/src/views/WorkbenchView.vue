@@ -110,7 +110,7 @@ onUnmounted(stop);
 }
 
 .bar-readout {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--faded);
   letter-spacing: 0.16em;
 }
@@ -120,7 +120,7 @@ onUnmounted(stop);
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  font-size: 9px;
+  font-size: 10px;
   color: var(--faded);
   letter-spacing: 0.14em;
   text-transform: uppercase;

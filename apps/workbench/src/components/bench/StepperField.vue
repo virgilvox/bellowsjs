@@ -64,7 +64,7 @@ function bump(dir: number) {
 }
 
 .stp-lbl {
-  font-size: 8px;
+  font-size: 9.5px;
   letter-spacing: 0.18em;
   color: var(--faded);
   text-transform: uppercase;

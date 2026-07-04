@@ -54,7 +54,7 @@ function onSeedEnter(e: KeyboardEvent) {
 
 .err {
   margin-top: 10px;
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--slag);

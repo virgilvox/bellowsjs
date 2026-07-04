@@ -35,7 +35,7 @@ import { bench, renderEight } from '../../lib/bench-store';
 
 .render-note {
   margin-top: 8px;
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.1em;
   color: var(--faded);
   text-transform: uppercase;
