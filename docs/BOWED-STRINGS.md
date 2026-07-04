@@ -190,3 +190,79 @@ Preset-record notes: cello keeps `octave: -1`, double-bass keeps `octave: -2` bu
 7. **Pressure→slope behavior.** At `bowPressure=0.05` (minimum-force violation) the sustain should show weak/multi-slip character (lower periodicity or lower fundamental energy) than at `bowPressure=0.55`; at `bowPressure=1.0` output remains bounded and periodic-ish (no NaN, |sample| ≤ 1): regression guard for removing `tanh`.
 8. **Backward compatibility.** Render every legacy preset params record (no new keys) and assert output RMS within ±1 dB of pre-change renders and identical f0; all new params at defaults must produce no body coloration (wet path bit-silent), no noise, no vibrato.
 9. **Lifecycle/stability.** noteOff during vibrato/noise decays below SILENCE and frees the voice; no denormal stalls; bowVel ramp at noteOff produces no click (max inter-sample step below threshold in the last 20 ms).
+
+---
+
+# Round two: source spectrum correction and life
+
+Measured evidence (0.1.3, body off, bow 1, pressure 0.55, speed 0.6, A4): harmonic
+levels relative to h1: h2 -12.5, h4 -4.2, h8 -3.3, h9 +5.5, h10 +7.6, h11 +10.4 dB.
+A Helmholtz sawtooth sits at h2 -6, h4 -12, h8 -18, h12 -21.6. The source is the
+problem: upper harmonics dominate the fundamental. Fixes in priority order.
+
+## 1. Source spectrum toward Helmholtz
+
+- Bow position comb: the bow couples in at beta of the string length. Filter the
+  injected junction force with a feedforward comb whose delay is 2 * beta * period
+  samples (fractional, reuse the loop's interpolated read), gain -1 scaled by comb
+  depth. New param bowPos, range 0.06 to 0.2, default 0.11. Suppresses harmonics
+  around 1/beta and shapes the register correctly (toward 0.06 is ponticello glass,
+  toward 0.2 is tasto flute).
+- Bow hair compliance: one-pole lowpass at about 3.5 kHz on the injected force
+  only (not the recirculating wave).
+- Verify with the probe: sustained bowed spectrum, body off, must tilt roughly
+  minus 6 to 9 dB per octave: gate h8 at or below -12 dB and h12 at or below
+  -16 dB relative to h1, and no harmonic above h1.
+
+## 2. Body forest
+
+Keep the 7 documented anchor modes. Add 17 forest modes per instrument, seeded
+fixed (not per voice), pseudo-log-spaced 800 Hz to 8 kHz with random offsets,
+Q 8 to 25, gains 0.15 to 0.4 with ALTERNATING SIGNS so neighbors interfere and
+carve notches as well as peaks. Total 24 biquads per voice, still trivial. The
+forest frequencies scale with the same bodySize geometric interpolation.
+
+## 3. Attack irregularity and settle
+
+- Pre-Helmholtz jitter: a random walk band-limited to roughly 30 to 80 Hz
+  modulates bow velocity during the first 90 to 150 ms, level scaled by
+  attackBite and by a per-note rng draw (0.6 to 1.4) so no two attacks match.
+- Pitch settle: the note starts 8 to 15 cents sharp (per-note rng sign flip
+  allowed) and settles exponentially over about 120 ms, implemented on the
+  delay length alongside vibrato.
+
+## 4. Vibrato shape
+
+Deeper and asymmetric: violin default depth about 22 cents with the modulation
+center offset 0.3 of depth BELOW nominal (vibrato dips under the note), rate
+ramping from about 0.9x to 1.05x of vibRate over the first second.
+
+## 5. Dynamics coupling
+
+New param dynamics (0 to 1, default 0): noteOn velocity maps into bow speed
+(0.35 to 0.8 span) and a small pressure rise so loud is brighter, not merely
+louder. Presets enable around 0.7.
+
+## 6. Dual polarization
+
+A second delay loop, detuned +1.5 to +2.5 cents, fed by weak coupling (about
+0.12) from the main loop force, mixed in about 6 dB down. Gives the slow
+sustain undulation of real strings. Param polDetune cents, 0 disables and
+skips the second loop entirely.
+
+## 7. Preset room
+
+The bowed presets carry fx: plate with mix 0.12 to 0.16, decay about 1.4 s,
+predelay small. Violin family without any air reads as synthetic to every
+listener; this is baked-in believability, kept subtle.
+
+## 8. Test gates
+
+Bowed source tilt (body off): h8 <= -12 dB, h12 <= -16 dB rel h1, no harmonic
+louder than h1. Comb: with bowPos 0.11 a dip of at least 6 dB at the harmonic
+nearest 1/0.11 relative to its neighbors' mean. Attack: f0 standard deviation
+over the first 120 ms at least 2x the sustain window's. Vibrato asymmetry:
+mean f0 during vibrato sits below the no-vibrato mean. Dual polarization:
+envelope undulation in sustain (peak in the 0.2 to 3 Hz envelope spectrum)
+present when polDetune > 0, absent at 0. All existing gates stay green,
+goldens untouched.
