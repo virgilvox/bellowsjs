@@ -279,3 +279,16 @@ describe('Transport determinism', () => {
     }
   });
 });
+
+describe('rampBpm anchoring (review regression)', () => {
+  it('does not rewrite played tempo history or jump the beat position', () => {
+    const tr = new Transport({ bpm: 120 });
+    tr.start(0);
+    const beatBefore = tr.beatAt(4); // beat 8 at constant 120
+    expect(beatBefore).toBeCloseTo(8, 9);
+    tr.rampBpm(180, 4, 4); // ramp to 180 over 4 beats, anchored at now
+    expect(tr.beatAt(4)).toBeCloseTo(8, 6); // continuous at the call instant
+    expect(tr.tempo.bpmAt(4)).toBeCloseTo(120, 6); // history intact
+    expect(tr.tempo.bpmAt(12)).toBeCloseTo(180, 6); // target reached
+  });
+});

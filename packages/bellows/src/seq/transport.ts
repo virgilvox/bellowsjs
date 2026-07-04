@@ -113,6 +113,25 @@ export class Transport {
     }
   }
 
+  /**
+   * Ramp the tempo linearly over `overBeats`. While running, pass the
+   * current absolute time: the ramp anchors at the current beat (a step
+   * point pinning the current instantaneous bpm, so already-played tempo
+   * history is untouched) and the origin re-anchors for continuity, the
+   * same guarantees setBpm gives. Otherwise the ramp starts at beat 0.
+   */
+  rampBpm(bpm: number, overBeats: number, atSeconds?: number): void {
+    if (!(overBeats > 0)) throw new Error(`invalid ramp span: ${overBeats}`);
+    let beat = 0;
+    if (this._state === 'running' && atSeconds !== undefined) {
+      beat = this.beatAt(atSeconds);
+      this.tempo.setBpm(beat, this.tempo.bpmAt(beat));
+      this.originBeat = beat;
+      this.originSeconds = atSeconds;
+    }
+    this.tempo.rampTo(beat + overBeats, bpm);
+  }
+
   /** Beat position at an absolute time. Paused transports report the frozen beat. */
   beatAt(seconds: number): number {
     if (this._state === 'paused') return this.pausedBeat;

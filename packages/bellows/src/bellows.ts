@@ -58,6 +58,8 @@ interface TransportOp {
   atBeat: number;
   a: number;
   b: number;
+  /** ramp: the anchored instantaneous bpm at atBeat, replayed before the ramp */
+  c?: number;
   meter?: Meter;
 }
 
@@ -65,6 +67,8 @@ interface RenderContext {
   events: KernelEvent[];
   transport: Transport;
   rngCache: Map<string, NamedRng>;
+  /** the tick time of the callback currently re-running, default for untimed calls */
+  now: number;
 }
 
 function normalizeFx(fx: FxInput[]): FxSpec[] {
@@ -98,6 +102,10 @@ export class Bellows {
   private localDefs: Array<{ kind: 'engine' | 'effect'; code: string }> = [];
   private lastMeter: MeterFrame | null = null;
   private disposed = false;
+  /** last kernel error messages, newest last */
+  readonly kernelErrors: string[] = [];
+  /** when set, receives kernel errors instead of console.error */
+  onError: ((message: string) => void) | null = null;
   private initialBpm: number;
   private initialMeter: Meter;
 
@@ -118,6 +126,12 @@ export class Bellows {
     this.analyser.connect(ctx.destination);
     kernel.onReply((reply) => {
       if (reply.type === 'meter') this.lastMeter = reply;
+      else if (reply.type === 'error') {
+        this.kernelErrors.push(reply.message);
+        if (this.kernelErrors.length > 20) this.kernelErrors.shift();
+        if (this.onError) this.onError(reply.message);
+        else console.error('bellows kernel:', reply.message);
+      }
     });
     if (opts.masterGain !== undefined) this.post({ type: 'masterGain', gain: opts.masterGain });
     this.timer = setInterval(() => {
@@ -318,9 +332,26 @@ export class Bellows {
   /** Ramp the tempo linearly over a span of beats (TimeValue accepted). */
   rampBpm(value: number, over: TimeValue): void {
     const beats = parseTime(over);
-    const beat = this.transport.state === 'running' ? this.transport.beatAt(this.ctx.currentTime) : 0;
-    this.transportOps.push({ kind: 'ramp', atBeat: beat, a: value, b: beats });
-    this.transport.tempo.rampTo(beat + beats, value);
+    const now = this.ctx.currentTime;
+    const running = this.transport.state === 'running';
+    const beat = running ? this.transport.beatAt(now) : 0;
+    const anchor = this.transport.tempo.bpmAt(beat);
+    this.transportOps.push({ kind: 'ramp', atBeat: beat, a: value, b: beats, c: anchor });
+    this.transport.rampBpm(value, beats, running ? now : undefined);
+  }
+
+  /** Freeze the transport, drop queued events, silence held voices. */
+  pause(): void {
+    this.transport.pause(this.ctx.currentTime);
+    this.panic();
+  }
+
+  /** Continue from the paused position; delivery re-aims at the paused beat. */
+  resume(): void {
+    const now = this.ctx.currentTime + 0.05;
+    const beat = this.transport.beatAt(now);
+    this.transport.resume(now);
+    this.scheduler.resyncTo(beat);
   }
 
   swing(amount: number, subdivision: TimeValue = '8n'): void {
@@ -363,7 +394,8 @@ export class Bellows {
     if (typeof dur === 'object') return dur.seconds;
     const beats = parseTime(dur);
     const tr = this.activeTransport();
-    if (tr.state !== 'running') return (beats * 60) / this.initialBpm;
+    // stopped transports still honor the tempo map, matching offline replay
+    if (tr.state !== 'running') return tr.tempo.beatToSeconds(beats);
     const startBeat = tr.beatAt(atSeconds);
     return tr.secondsAt(startBeat + beats) - atSeconds;
   }
@@ -373,7 +405,7 @@ export class Bellows {
   /* ------------------------------------------------------------ */
 
   noteEvents(channel: number, note: NoteValue, opts: NoteOptions, scale?: Scale): void {
-    const at = opts.at ?? (this.renderCtx ? 0 : this.ctx.currentTime + 0.005);
+    const at = opts.at ?? (this.renderCtx ? this.renderCtx.now : this.ctx.currentTime + 0.005);
     const dur = this.durationSeconds(opts.dur ?? '8n', at);
     const vel = clamp(opts.vel ?? 0.8, 0, 1);
     const freq = this.freqOf(note, scale);
@@ -385,7 +417,7 @@ export class Bellows {
   }
 
   noteOnEvent(channel: number, note: NoteValue, vel: number, at?: number): number {
-    const t = at ?? (this.renderCtx ? 0 : this.ctx.currentTime + 0.005);
+    const t = at ?? (this.renderCtx ? this.renderCtx.now : this.ctx.currentTime + 0.005);
     const id = this.nextNote++;
     this.postEvents([
       { time: t, kind: EventKind.NoteOn, target: channel, a: id, b: this.freqOf(note), c: clamp(vel, 0, 1) },
@@ -394,7 +426,7 @@ export class Bellows {
   }
 
   noteOffEvent(channel: number, noteId: number, at?: number): void {
-    const t = at ?? (this.renderCtx ? 0 : this.ctx.currentTime + 0.005);
+    const t = at ?? (this.renderCtx ? this.renderCtx.now : this.ctx.currentTime + 0.005);
     this.postEvents([{ time: t, kind: EventKind.NoteOff, target: channel, a: noteId, b: 0, c: 0 }]);
   }
 
@@ -409,7 +441,9 @@ export class Bellows {
       this.post({ type: 'channelParam', id: channel, name, value });
       return;
     }
-    const t = at ?? 0;
+    // in a render, an untimed param lands at the tick being replayed, which
+    // is when the live call would have taken effect
+    const t = at ?? (this.renderCtx ? this.renderCtx.now : 0);
     this.postEvents([{ time: t, kind: EventKind.Param, target: channel, a: idx, b: value, c: 0 }]);
   }
 
@@ -418,7 +452,7 @@ export class Bellows {
   }
 
   postAllOff(channel: number): void {
-    const t = this.renderCtx ? 0 : this.ctx.currentTime;
+    const t = this.renderCtx ? this.renderCtx.now : this.ctx.currentTime;
     this.postEvents([{ time: t, kind: EventKind.AllNotesOff, target: channel, a: 0, b: 0, c: 0 }]);
   }
 
@@ -444,8 +478,11 @@ export class Bellows {
     const offTransport = new Transport({ bpm: this.initialBpm, meter: this.initialMeter });
     for (const op of this.transportOps) {
       if (op.kind === 'bpm') op.atBeat === 0 ? offTransport.setBpm(op.a) : offTransport.tempo.setBpm(op.atBeat, op.a);
-      else if (op.kind === 'ramp') offTransport.tempo.rampTo(op.atBeat + op.b, op.a);
-      else if (op.kind === 'swing') offTransport.setSwing(op.a, op.b);
+      else if (op.kind === 'ramp') {
+        // replay the anchor first so the ramp starts where live playback did
+        if (op.c !== undefined && op.atBeat > 0) offTransport.tempo.setBpm(op.atBeat, op.c);
+        offTransport.tempo.rampTo(op.atBeat + op.b, op.a);
+      } else if (op.kind === 'swing') offTransport.setSwing(op.a, op.b);
     }
     offTransport.start(0);
 
@@ -457,7 +494,7 @@ export class Bellows {
     }
 
     // rerun the clock callbacks against the offline transport
-    this.renderCtx = { events: [], transport: offTransport, rngCache: new Map() };
+    this.renderCtx = { events: [], transport: offTransport, rngCache: new Map(), now: 0 };
     try {
       const ticks: Array<{ t: number; step: number; cb: TickCallback }> = [];
       for (const sub of this.subs) {
@@ -466,7 +503,10 @@ export class Bellows {
         }
       }
       ticks.sort((a, b) => a.t - b.t);
-      for (const tick of ticks) tick.cb(tick.t, tick.step);
+      for (const tick of ticks) {
+        this.renderCtx.now = tick.t;
+        tick.cb(tick.t, tick.step);
+      }
 
       const events = this.renderCtx.events;
       const setup = this.setup.filter((m) => m.type !== 'events');

@@ -11,6 +11,7 @@ import type { KernelMessage } from './messages';
 
 /* AudioWorkletGlobalScope ambients */
 declare const sampleRate: number;
+declare const currentFrame: number;
 declare function registerProcessor(
   name: string,
   ctor: new () => unknown,
@@ -44,6 +45,9 @@ class BellowsKernelProcessor extends AudioWorkletProcessor {
     if (!out || out.length === 0) return true;
     const l = out[0];
     const r = out[1] ?? out[0];
+    // lock engine time to context time so event timestamps mean what the
+    // facade thinks they mean, even on an old or reused AudioContext
+    this.engine.setFrame(currentFrame);
     this.engine.process(l, r);
     if (++this.blockCount % METER_EVERY_BLOCKS === 0) {
       this.port.postMessage({

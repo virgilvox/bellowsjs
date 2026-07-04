@@ -70,6 +70,27 @@ describe('pitchshift', () => {
     expect(rms(l, 8192, l.length)).toBeGreaterThan(0.3);
   });
 
+  it('assigns each bin to exactly one peak region (no boundary double-add)', () => {
+    // Two peaks at bins 4 and 8 put a region boundary at bin 6. On the
+    // first frame with all-zero phases every region rotation is zero, so
+    // the frame must return its input unchanged; a bin shared by both
+    // regions would come back with doubled energy.
+    const fx = pitchshiftDef.create(SR, { semitones: 0, mix: 1 }) as unknown as {
+      bins: number;
+      frame(re: Float32Array, im: Float32Array, ch: number): void;
+    };
+    const nb = fx.bins;
+    const re = new Float32Array(nb);
+    const im = new Float32Array(nb);
+    re[4] = 1;
+    re[8] = 1;
+    re[6] = 0.5;
+    fx.frame(re, im, 0);
+    expect(re[4]).toBeCloseTo(1, 6);
+    expect(re[8]).toBeCloseTo(1, 6);
+    expect(re[6]).toBeCloseTo(0.5, 6);
+  });
+
   it('mix 0 returns the dry signal delayed by the processor latency', () => {
     const fx = pitchshiftDef.create(SR, { semitones: 12, mix: 0 });
     const input = sine(440, SR, SR / 2, 0.8);

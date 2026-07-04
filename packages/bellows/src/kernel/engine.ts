@@ -131,6 +131,7 @@ export class KernelEngine {
   private frame = 0;
   private mixL: Float32Array;
   private mixR: Float32Array;
+  private hasProcessed = false;
   private banks = new Map<string, EngineDef>();
   private localEngines = new Map<string, EngineDef>();
   private localEffects = new Map<string, { id: string; create(sampleRate: number, params: Record<string, number>): Effect }>();
@@ -152,6 +153,17 @@ export class KernelEngine {
 
   get currentFrame(): number {
     return this.frame;
+  }
+
+  /**
+   * Locks the kernel clock to the host clock. The worklet calls this at the
+   * top of every process() with AudioWorkletGlobalScope.currentFrame, so
+   * engine time equals context time and events stamped with
+   * ctx.currentTime land where they were aimed. Offline rendering never
+   * calls it: both clocks already start at zero there.
+   */
+  setFrame(frame: number): void {
+    this.frame = frame;
   }
 
   get currentTime(): number {
@@ -278,9 +290,9 @@ export class KernelEngine {
     }
   }
 
-  /** Before the first rendered frame, level changes snap: initial setup is not automation. */
+  /** Before the first rendered block, level changes snap: initial setup is not automation. */
   private setLevel(ramp: Ramp, v: number): void {
-    if (this.frame === 0) ramp.snap(v);
+    if (!this.hasProcessed) ramp.snap(v);
     else ramp.set(v);
   }
 
@@ -346,6 +358,7 @@ export class KernelEngine {
    * Render exactly blockSize frames into outL/outR (overwrites).
    */
   process(outL: Float32Array, outR: Float32Array): void {
+    this.hasProcessed = true;
     const N = this.blockSize;
     const blockStart = this.frame;
     const blockEndTime = (blockStart + N) / this.sampleRate;

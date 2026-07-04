@@ -61,3 +61,48 @@ describe('lookahead scheduler', () => {
     expect(n).toBe(before);
   });
 });
+
+describe('scheduler resilience (review regressions)', () => {
+  it('replays recently missed ticks after a late wakeup instead of dropping them', () => {
+    const tr = new Transport({ bpm: 120 });
+    tr.start(0);
+    const sched = new Scheduler(tr, { horizon: 0.12 });
+    const steps: number[] = [];
+    sched.at(0.25, (t, step) => steps.push(step));
+    sched.tick(0);
+    sched.tick(0.3); // stalled past the horizon; ticks in the gap must still fire
+    for (let i = 0; i < steps.length - 1; i++) expect(steps[i + 1]).toBe(steps[i] + 1);
+    expect(Math.max(...steps)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('stretches the lookahead to survive background-tab throttling', () => {
+    const tr = new Transport({ bpm: 120 });
+    tr.start(0);
+    const sched = new Scheduler(tr, { horizon: 0.12 });
+    const steps: number[] = [];
+    sched.at(0.25, (t, step) => steps.push(step));
+    // 1 Hz wakeups, like a throttled background tab
+    for (let now = 0; now <= 5; now += 1) sched.tick(now);
+    for (let i = 0; i < steps.length - 1; i++) expect(steps[i + 1]).toBe(steps[i] + 1);
+    // 5 seconds at 8 steps per second, allow the tail window
+    expect(steps.length).toBeGreaterThanOrEqual(38);
+  });
+
+  it('resyncTo re-aims delivery at a beat for pause and resume', () => {
+    const tr = new Transport({ bpm: 120 });
+    tr.start(0);
+    const sched = new Scheduler(tr, { horizon: 0.2 });
+    const steps: number[] = [];
+    sched.at(0.25, (t, step) => steps.push(step));
+    sched.tick(0); // delivers a lookahead window
+    const delivered = steps.length;
+    tr.pause(0.1);
+    tr.resume(1.0);
+    sched.resyncTo(tr.beatAt(1.0));
+    sched.tick(1.0);
+    // the first post-resume step continues from the paused beat, no gap, no repeat beyond the re-aim
+    expect(steps.length).toBeGreaterThan(delivered);
+    const post = steps.slice(delivered);
+    for (let i = 0; i < post.length - 1; i++) expect(post[i + 1]).toBe(post[i] + 1);
+  });
+});

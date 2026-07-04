@@ -10,7 +10,9 @@ const mode = ref<'bench' | 'code'>(
 );
 
 function setMode(m: 'bench' | 'code') {
+  if (mode.value === m) return;
   mode.value = m;
+  // CodeView restores its own #code/example-id deep link on activation
   history.replaceState(null, '', m === 'code' ? '#code' : '#bench');
 }
 </script>

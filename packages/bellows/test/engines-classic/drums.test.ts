@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { clapEngine, hatEngine, kickEngine, snareEngine, tomEngine } from '../../src/engines/drums';
+import { rng } from '../../src/core/prng';
 import {
   SR,
   bandPower,
@@ -137,6 +138,23 @@ describe('clap', () => {
     const dip2 = rms(l, dip2End - Math.round(0.003 * SR), dip2End);
     const burst3 = rms(l, dip2End, dip2End + Math.round(0.003 * SR));
     expect(burst3).toBeGreaterThan(dip2 * 2);
+  });
+
+  it('goes inactive after spread is automated downward mid-burst', () => {
+    // With spread 0.03 the second burst is due at sample 1323. Render past
+    // sample 221 (the trigger point for spread 0.005), then drop spread so
+    // the new target lies behind the counter. The voice must still fire
+    // its remaining bursts and decay to inactive.
+    const voice = clapEngine.createVoice(SR, { spread: 0.03 }, rng('clap/automate'));
+    voice.noteOn(220, 1);
+    const n = 3 * SR;
+    const l = new Float32Array(n);
+    const r = new Float32Array(n);
+    voice.process(l, r, 0, 1024);
+    voice.setParam('spread', 0.005);
+    for (let i = 1024; i < n; i += 128) voice.process(l, r, i, Math.min(i + 128, n));
+    expect(voice.active).toBe(false);
+    expect(hasBadSamples(l)).toBe(false);
   });
 
   it('keeps a longer tail after the last burst', () => {

@@ -180,6 +180,22 @@ describe('LoudnessMeter truePeak', () => {
   });
 });
 
+describe('LoudnessMeter memory', () => {
+  it('keeps the segment buffer bounded over minutes of audio', () => {
+    const m = new LoudnessMeter(SR, 1);
+    const buf = sine(997, SR, SR, 0.5);
+    // Four minutes of audio, 20 segments per second.
+    for (let i = 0; i < 240; i++) m.push(buf, null, 0, buf.length);
+    const internals = m as unknown as { segRing: Float64Array; segCount: number };
+    expect(internals.segRing.length).toBe(60);
+    expect(internals.segCount).toBe(240 * 20);
+    // The measurements still read correctly from the bounded buffer.
+    expect(m.integrated()).toBeCloseTo(-9.03, 1);
+    expect(Math.abs(m.shortTerm() - m.integrated())).toBeLessThan(0.2);
+    expect(Math.abs(m.momentary() - m.integrated())).toBeLessThan(0.2);
+  });
+});
+
 describe('LoudnessMeter reset', () => {
   it('clears all state', () => {
     const m = meterFor(sine(997, SR, 2 * SR, 0.5));
