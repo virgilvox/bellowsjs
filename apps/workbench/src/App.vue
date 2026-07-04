@@ -8,10 +8,13 @@ const WorkbenchView = defineAsyncComponent(() => import('./views/WorkbenchView.v
 const CodeView = defineAsyncComponent(() => import('./views/CodeView.vue'));
 const InstrumentView = defineAsyncComponent(() => import('./views/InstrumentView.vue'));
 const RefView = defineAsyncComponent(() => import('./views/RefView.vue'));
+const DocsView = defineAsyncComponent(() => import('./views/DocsView.vue'));
 
-type Mode = 'home' | 'bench' | 'code' | 'play' | 'ref';
+type Mode = 'home' | 'bench' | 'code' | 'play' | 'ref' | 'docs';
 
 function modeFromHash(): Mode {
+  // docs live on real paths so pages are linkable and crawlable
+  if (location.pathname.startsWith('/docs')) return 'docs';
   if (location.hash.startsWith('#code')) return 'code';
   if (location.hash.startsWith('#bench')) return 'bench';
   if (location.hash.startsWith('#play')) return 'play';
@@ -24,9 +27,20 @@ const mode = ref<Mode>(modeFromHash());
 function setMode(m: Mode) {
   if (mode.value === m) return;
   mode.value = m;
+  if (m === 'docs') {
+    if (!location.pathname.startsWith('/docs')) history.pushState(null, '', '/docs');
+    return;
+  }
+  // leaving docs must drop the /docs path or the hash routes fight it
+  const base = location.pathname.startsWith('/docs') ? '/' : location.pathname;
   // CodeView restores its own #code/example-id deep link on activation
-  history.replaceState(null, '', m === 'home' ? '#' : '#' + m);
+  history.replaceState(null, '', base + (m === 'home' ? '#' : '#' + m));
 }
+
+window.addEventListener('popstate', () => {
+  const m = modeFromHash();
+  if (m !== mode.value) mode.value = m;
+});
 
 window.addEventListener('hashchange', () => {
   const m = modeFromHash();
@@ -45,6 +59,7 @@ window.addEventListener('hashchange', () => {
         <button :class="{ lit: mode === 'bench' }" @click="setMode('bench')">WORKBENCH</button>
         <button :class="{ lit: mode === 'play' }" @click="setMode('play')">INSTRUMENT</button>
         <button :class="{ lit: mode === 'code' }" @click="setMode('code')">CODE</button>
+        <button :class="{ lit: mode === 'docs' }" @click="setMode('docs')">DOCS</button>
         <button :class="{ lit: mode === 'ref' }" @click="setMode('ref')">LLM REF</button>
         <button class="theme-btn" @click="toggleTheme()" :title="theme === 'light' ? 'switch to night forge' : 'switch to daylight'">
           {{ theme === 'light' ? 'NIGHT' : 'DAY' }}
@@ -69,6 +84,7 @@ window.addEventListener('hashchange', () => {
       <WorkbenchView v-if="mode === 'bench'" />
       <InstrumentView v-else-if="mode === 'play'" />
       <RefView v-else-if="mode === 'ref'" />
+      <DocsView v-else-if="mode === 'docs'" />
       <CodeView v-else />
     </KeepAlive>
 
