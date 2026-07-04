@@ -51,8 +51,11 @@ window.addEventListener('hashchange', () => {
         </button>
       </nav>
       <div class="serial">
-        <span class="lamp-dot" :class="{ hot: booted }"></span>BLW-01 REV B // BELLOWSJS 0.1<br />
-        <span>bellows.live // library live</span>
+        <span class="lamp-dot" :class="{ hot: booted }"></span>made by Moheeb Zara<br />
+        <span>
+          <a href="https://github.com/virgilvox" target="_blank" rel="noopener">@virgilvox</a>
+          // <a href="https://hack.build" target="_blank" rel="noopener">hack.build</a>
+        </span>
       </div>
     </header>
 
@@ -148,6 +151,17 @@ h1 b {
   color: var(--faded);
   letter-spacing: 0.14em;
   text-align: right;
+  margin-left: auto;
+}
+
+.serial a {
+  color: var(--tick);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--seam);
+}
+
+.serial a:hover {
+  color: var(--phosphor);
 }
 
 footer {
