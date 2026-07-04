@@ -95,7 +95,8 @@ export function activatePreset(fontIndex: number, bank: number, program: number)
     engineId: 'sampler:' + bankId,
     bankId,
     label: (preset?.name ?? 'preset').trim().toUpperCase(),
-    zones,
+    // markRaw: proxied Float32Arrays do not survive postMessage
+    zones: markRaw(zones),
   };
   sfState.active.push(entry);
   return entry;
@@ -146,8 +147,10 @@ export async function addUserSample(file: File, ctx?: AudioContext): Promise<Use
     name: file.name.replace(/\.[a-z0-9]+$/i, ''),
     rootKey,
     detected,
-    data,
-    dataR,
+    // raw arrays: proxied Float32Arrays do not survive postMessage,
+    // while rootKey stays reactive for the panel readout
+    data: markRaw(data),
+    dataR: dataR ? markRaw(dataR) : undefined,
     sampleRate,
   };
   sfState.userSamples.push(sample);
@@ -201,7 +204,7 @@ function rebuildUserKit(): void {
     engineId: USER_KIT_ENGINE_ID,
     bankId: USER_KIT_BANK_ID,
     label: 'USER KIT (' + sorted.length + ')',
-    zones,
+    zones: markRaw(zones),
   });
 }
 

@@ -21,6 +21,7 @@
   --phosphor-dim: rgba(156, 93, 0, 0.14);
   --phosphor-ghost: rgba(156, 93, 0, 0.06);
   --phosphor-glow: rgba(156, 93, 0, 0.45);
+  --slag-glow: rgba(178, 52, 21, 0.4);
   --lit-text: #f7f2e4;
   --slag: #b23415;
   --slag-glow: rgba(178, 52, 21, 0.4);
@@ -45,6 +46,7 @@
   --phosphor-dim: rgba(255, 176, 0, 0.13);
   --phosphor-ghost: rgba(255, 176, 0, 0.05);
   --phosphor-glow: rgba(255, 176, 0, 0.7);
+  --slag-glow: rgba(255, 85, 51, 0.6);
   --lit-text: #0b0a07;
   --slag: #ff5533;
   --slag-glow: rgba(255, 85, 51, 0.5);

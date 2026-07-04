@@ -84,6 +84,27 @@ export const instState = reactive<InstState>({
 /** Sounding midi numbers, for lighting piano keys. */
 export const activeNotes = reactive(new Set<number>());
 
+/** A listener on actually-sounding notes, for the looper. Ons fire after
+ * the ledger resolves them (octave shift applied); offs fire when they
+ * really sound, so a sustain-deferred off records once, at pedal release.
+ * Times are b.now() seconds. */
+export interface NoteTap {
+  on(midi: number, vel: number, timeSec: number): void;
+  off(midi: number, timeSec: number): void;
+}
+
+let noteTap: NoteTap | null = null;
+let panicHook: (() => void) | null = null;
+
+export function setNoteTap(tap: NoteTap | null): void {
+  noteTap = tap;
+}
+
+/** Extra silencer run by panic(), so the looper can hush its layers. */
+export function setPanicHook(hook: (() => void) | null): void {
+  panicHook = hook;
+}
+
 /* ------------------------------------------------------------------ */
 /* specs and lookups                                                    */
 /* ------------------------------------------------------------------ */
@@ -212,6 +233,7 @@ export function setEngine(engineId: string): void {
 
 function releaseEntry(key: string, entry: { noteId: number; sounding: number }): void {
   voiceHandle?.off(entry.noteId);
+  if (b) noteTap?.off(entry.sounding, b.now());
   ledger.delete(key);
   deferred.delete(key);
   const left = (soundingCount.get(entry.sounding) ?? 1) - 1;
@@ -231,10 +253,12 @@ export function noteOn(midi: number, vel = instState.velocity, source: NoteSourc
   const key = source + ':' + midi;
   const prev = ledger.get(key);
   if (prev) releaseEntry(key, prev);
-  const noteId = voiceHandle.on(sounding, Math.max(0, Math.min(1, vel)));
+  const clamped = Math.max(0, Math.min(1, vel));
+  const noteId = voiceHandle.on(sounding, clamped);
   ledger.set(key, { noteId, sounding });
   soundingCount.set(sounding, (soundingCount.get(sounding) ?? 0) + 1);
   activeNotes.add(sounding);
+  if (b) noteTap?.on(sounding, clamped, b.now());
 }
 
 export function noteOff(midi: number, source: NoteSource = 'ptr'): void {
@@ -262,6 +286,7 @@ export function setSustain(on: boolean): void {
 
 export function panic(): void {
   clearLedger();
+  panicHook?.();
   b?.panic();
 }
 

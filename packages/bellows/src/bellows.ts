@@ -143,8 +143,11 @@ export class Bellows {
     registerBuiltins();
     const ctx = opts.context ?? new AudioContext({ latencyHint: 'interactive' });
     if (ctx.state === 'suspended') {
+      // resume() never settles when there is no user activation; racing a
+      // short timeout keeps boot() from hanging, and the context resumes on
+      // the first real gesture anyway
       try {
-        await ctx.resume();
+        await Promise.race([ctx.resume(), new Promise((r) => setTimeout(r, 300))]);
       } catch {
         // resumes on the first user gesture; boot() from a click handler to avoid this
       }

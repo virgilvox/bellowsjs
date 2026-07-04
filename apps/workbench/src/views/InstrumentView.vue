@@ -20,6 +20,7 @@ import {
   setVelocity,
 } from '../lib/instrument-store';
 import PianoKeyboard from '../components/instrument/PianoKeyboard.vue';
+import LooperPanel from '../components/instrument/LooperPanel.vue';
 import EnginePicker from '../components/instrument/EnginePicker.vue';
 import ParamPanel from '../components/instrument/ParamPanel.vue';
 import FxRack from '../components/instrument/FxRack.vue';
@@ -188,6 +189,8 @@ async function start(): Promise<void> {
         <p>click to power the instrument</p>
       </div>
     </div>
+
+    <LooperPanel />
 
     <div class="grid3">
       <ParamPanel />
