@@ -45,6 +45,7 @@ window.addEventListener('hashchange', () => {
         <button :class="{ lit: mode === 'bench' }" @click="setMode('bench')">WORKBENCH</button>
         <button :class="{ lit: mode === 'play' }" @click="setMode('play')">INSTRUMENT</button>
         <button :class="{ lit: mode === 'code' }" @click="setMode('code')">CODE</button>
+        <button :class="{ lit: mode === 'ref' }" @click="setMode('ref')">LLM REF</button>
         <button class="theme-btn" @click="toggleTheme()" :title="theme === 'light' ? 'switch to night forge' : 'switch to daylight'">
           {{ theme === 'light' ? 'NIGHT' : 'DAY' }}
         </button>
@@ -72,7 +73,6 @@ window.addEventListener('hashchange', () => {
       <span>
         <a href="https://www.npmjs.com/package/bellowsjs" target="_blank" rel="noopener">npm</a>
         // <a href="https://github.com/virgilvox/bellowsjs" target="_blank" rel="noopener">github</a>
-        // <a href="#ref" @click.prevent="setMode('ref')">llm ref</a>
         // apache-2.0
       </span>
       <span class="badges"><span>ONE CLOCK</span><span>ONE KERNEL</span><span>SEEDED</span></span>
