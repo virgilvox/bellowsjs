@@ -222,12 +222,12 @@ interface AudioDataCtor {
 }
 
 function getAudioEncoder(): AudioEncoderCtor | null {
-  const g = globalThis as { AudioEncoder?: AudioEncoderCtor };
+  const g = globalThis as unknown as { AudioEncoder?: AudioEncoderCtor };
   return typeof g.AudioEncoder === 'function' ? g.AudioEncoder : null;
 }
 
 function getAudioData(): AudioDataCtor | null {
-  const g = globalThis as { AudioData?: AudioDataCtor };
+  const g = globalThis as unknown as { AudioData?: AudioDataCtor };
   return typeof g.AudioData === 'function' ? g.AudioData : null;
 }
 

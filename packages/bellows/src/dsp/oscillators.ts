@@ -8,9 +8,11 @@
  * phase and each nearby discontinuity, so the oscillator has no latency
  * and no per sample allocation. A two sample polynomial residual only
  * attenuates components that fold from just above Nyquist by about 9 dB,
- * which fails the 40 dB alias budget, so the residual here is tabulated
- * from the integral of a Kaiser windowed sinc spanning 32 samples. The
- * table is built once per module and shared by every instance.
+ * and the four point polyBLEP (the integrated cubic B spline) still tops
+ * out near 18 dB there, both short of the 40 dB alias budget at high
+ * fundamentals, so the residual here is tabulated from the integral of a
+ * Kaiser windowed sinc spanning 32 samples. The table is built once per
+ * module and shared by every instance.
  *
  * SineOscillator is a plain phase accumulator with a phase modulation
  * input in radians for FM engines.
@@ -127,6 +129,14 @@ function blampResidual(d: number): number {
 /* ------------------------------------------------------------------ */
 
 export class BlepOscillator {
+  /**
+   * Output delay in samples. The residual sum looks at edges on both
+   * sides of the current phase instead of buffering output, so the
+   * delay is zero. Consumers should read this rather than assume it,
+   * since a future kernel change may introduce a short pipeline.
+   */
+  readonly latency = 0;
+
   private readonly sampleRate: number;
   private shape: BlepShape = 'saw';
   private phase = 0;

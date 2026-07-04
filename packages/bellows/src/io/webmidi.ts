@@ -249,8 +249,10 @@ interface MidiAccessLike {
 let accessPromise: Promise<MidiAccessLike> | null = null;
 
 function requestAccess(): Promise<MidiAccessLike> {
+  // Structural cast: keeps this file independent of DOM lib versions and
+  // safe in Node. Runtime MIDIInputMap/MIDIOutputMap are maplike objects.
   const nav = (
-    globalThis as {
+    globalThis as unknown as {
       navigator?: { requestMIDIAccess?: (opts?: { sysex?: boolean }) => Promise<MidiAccessLike> };
     }
   ).navigator;

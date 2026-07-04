@@ -16,10 +16,12 @@ describe('Lfo shapes', () => {
     const lfo = new Lfo(SR);
     lfo.setShape('sine');
     lfo.setFreq(2);
-    const out = render(lfo, SR); // one second at 2 Hz
-    // starting exactly on a zero, so 3 or 4 sign changes depending on rounding
-    expect(zeroCrossings(out)).toBeGreaterThanOrEqual(3);
-    expect(zeroCrossings(out)).toBeLessThanOrEqual(4);
+    const out = render(lfo, SR); // exactly one second at 2 Hz
+    // the sine starts exactly on the zero at phase 0, so of the four
+    // zeros per second the first is the ignored start sample and the
+    // wrap back to zero lands on the first sample of the next second:
+    // exactly three sign changes inside the rendered second
+    expect(zeroCrossings(out)).toBe(3);
     for (const v of out) {
       expect(v).toBeGreaterThanOrEqual(-1);
       expect(v).toBeLessThanOrEqual(1);

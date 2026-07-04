@@ -1,6 +1,6 @@
 {
   "name": "bellowsjs",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "A browser-native audio engine for synthesis, samples, sequencing, analysis, and I/O. One clock, one kernel, seeded everywhere.",
   "license": "Apache-2.0",
   "type": "module",
@@ -35,7 +35,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ossuary-foundation/bellowsjs.git"
+    "url": "git+https://github.com/virgilvox/bellowsjs.git"
   },
   "scripts": {
     "test": "vitest run",
@@ -49,5 +49,9 @@
     "vite": "^6.0.0",
     "vitest": "^2.1.0",
     "esbuild": "^0.25.0"
+  },
+  "homepage": "https://github.com/virgilvox/bellowsjs#readme",
+  "bugs": {
+    "url": "https://github.com/virgilvox/bellowsjs/issues"
   }
 }

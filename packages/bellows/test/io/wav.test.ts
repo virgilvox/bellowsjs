@@ -70,9 +70,11 @@ describe('encodeWav', () => {
 });
 
 describe('roundtrip', () => {
+  // Encoding scales by 2^(bits-1) - 1, decoding divides by 2^(bits-1)
+  // (the usual convention), so worst case error is 1.5 / 2^(bits-1).
   const cases: { bitDepth: 16 | 24 | 32; tol: number }[] = [
-    { bitDepth: 16, tol: 1 / 32767 + 1e-7 },
-    { bitDepth: 24, tol: 1 / 8388607 + 1e-9 },
+    { bitDepth: 16, tol: 1.5 / 32768 },
+    { bitDepth: 24, tol: 1.5 / 8388608 },
     { bitDepth: 32, tol: 0 },
   ];
 

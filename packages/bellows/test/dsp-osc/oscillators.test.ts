@@ -11,11 +11,12 @@ function render(osc: BlepOscillator, n = N): Float32Array {
   return out;
 }
 
-function naiveSaw(freq: number, n = N): Float32Array {
+/** Ideal saw, optionally delayed to line up with the oscillator latency. */
+function naiveSaw(freq: number, n = N, delay = 0): Float32Array {
   const out = new Float32Array(n);
   const dt = freq / SR;
   let t = 0;
-  for (let i = 0; i < n; i++) {
+  for (let i = delay; i < n; i++) {
     out[i] = 2 * t - 1;
     t += dt;
     if (t >= 1) t -= 1;
@@ -57,7 +58,7 @@ describe('BlepOscillator antialiasing', () => {
     osc.setFreq(2637);
     const rep = measureAliasing(render(osc), SR, 2637);
     // triangle harmonics fall at 1/k^2 so residual aliasing is tiny
-    expect(rep.worstAliasRelDb).toBeLessThan(-55);
+    expect(rep.worstAliasRelDb).toBeLessThan(-60);
   });
 });
 
@@ -67,10 +68,11 @@ describe('BlepOscillator shapes', () => {
     osc.setShape('saw');
     osc.setFreq(110);
     const got = render(osc, 8192);
-    const want = naiveSaw(110, 8192);
-    // the bandlimited saw only differs near the wrap, where the BLEP
-    // smears the step across the kernel span
-    expect(correlation(got, want)).toBeGreaterThan(0.98);
+    // reference shifted by the documented oscillator latency; the only
+    // remaining mismatch is the bandlimiting smear around each wrap,
+    // which costs about 0.002 of correlation for the 32 sample kernel
+    const want = naiveSaw(110, 8192, osc.latency);
+    expect(correlation(got, want)).toBeGreaterThan(0.997);
   });
 
   it('matches the ideal triangle at low frequency', () => {
@@ -81,7 +83,7 @@ describe('BlepOscillator shapes', () => {
     const want = new Float32Array(8192);
     let t = 0;
     const dt = 110 / SR;
-    for (let i = 0; i < want.length; i++) {
+    for (let i = osc.latency; i < want.length; i++) {
       want[i] = t < 0.5 ? 4 * t - 1 : 3 - 4 * t;
       t += dt;
       if (t >= 1) t -= 1;
@@ -136,8 +138,16 @@ describe('BlepOscillator shapes', () => {
     osc.setShape('saw');
     osc.setFreq(100);
     osc.reset(0.5);
+    // skip any documented pipeline delay before sampling the value
+    for (let i = 0; i < osc.latency; i++) osc.next();
     // naive saw value at phase 0.5 is 0, far from any discontinuity
     expect(osc.next()).toBeCloseTo(0, 5);
+  });
+
+  it('documents a non negative integer latency', () => {
+    const osc = new BlepOscillator(SR);
+    expect(Number.isInteger(osc.latency)).toBe(true);
+    expect(osc.latency).toBeGreaterThanOrEqual(0);
   });
 
   it('process only writes inside [from, to)', () => {

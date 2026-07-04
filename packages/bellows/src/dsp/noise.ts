@@ -14,7 +14,7 @@ import type { Rng } from '../types';
 export type NoiseColor = 'white' | 'pink' | 'brown' | 'velvet' | 'crackle';
 
 const VELVET_DENSITY = 2000; // impulses per second
-const CRACKLE_RATE = 20; // pops per second
+const CRACKLE_RATE = 8; // pops per second, sparse enough to stay mostly silent
 const CRACKLE_TAU = 0.002; // pop decay time constant, seconds
 
 export class NoiseGen {

@@ -104,8 +104,10 @@ describe('NoiseGen crackle', () => {
       if (Math.abs(out[i]) > 0.3) loud++;
       else if (Math.abs(out[i]) < 0.01) quiet++;
     }
-    // pops decay with a 2 ms time constant, so loud samples are rare
-    expect(loud / out.length).toBeLessThan(0.06);
+    // 8 pops per second decaying with a 2 ms time constant leaves the
+    // loud fraction near 0.014, comfortably under the gate, while the
+    // quiet floor check keeps the pops from vanishing entirely
+    expect(loud / out.length).toBeLessThan(0.02);
     expect(quiet / out.length).toBeGreaterThan(0.8);
   });
 
@@ -131,10 +133,13 @@ describe('NoiseGen determinism', () => {
   const colors: NoiseColor[] = ['white', 'pink', 'brown', 'velvet', 'crackle'];
   for (const color of colors) {
     it(`${color} reproduces exactly from the same rng label`, () => {
-      const a = render(color, 4096, 'seed-a');
-      const b = render(color, 4096, 'seed-a');
+      // long enough that even sparse colors (crackle fires about 8 pops
+      // per second) land events that distinguish the two seeds
+      const n = SR;
+      const a = render(color, n, 'seed-a');
+      const b = render(color, n, 'seed-a');
       expect(Array.from(b)).toEqual(Array.from(a));
-      const c = render(color, 4096, 'seed-b');
+      const c = render(color, n, 'seed-b');
       let same = true;
       for (let i = 0; i < c.length; i++) {
         if (c[i] !== a[i]) {
