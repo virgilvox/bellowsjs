@@ -78,3 +78,30 @@ jobs:
           for h in $(cd src && find bellows -name '*.h' | sort); do
             ./tools/check-header.sh "$h"
           done
+
+  parity:
+    name: C++ against TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: fastmath accuracy gates
+        working-directory: packages/bellows-embedded
+        # BELLOWS_FAST_MATH swaps libm for polynomials. A wrong polynomial
+        # still compiles, still runs fast, and still makes sound, so the only
+        # way to know it is right is to measure it. An early Log2 here was out
+        # by 213 cents and nothing caught it.
+        run: |
+          mkdir -p test/parity/build
+          npm run --silent fastmath
+      - name: parity gates
+        working-directory: packages/bellows-embedded
+        # Renders the same note from both implementations and diffs them. The
+        # PRNG gate is exact; the rest are tolerance based, because the JS
+        # computes in double and the C++ in float. This is the thing that
+        # catches a port drifting away from the source of truth.
+        run: npm run parity:check

@@ -1,17 +1,19 @@
 # HANDOFF
 
-State of the project as of 2026-07-04, after the 0.1.1 release and the instrument update. Read this first when picking the work back up. Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `CLAUDE.md` (house rules), `docs/prototype-0.html` (the original design probe).
+State of the project as of 2026-08-04, after the audit pass and the embedded port. Read this first when picking the work back up. Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` (findings and their evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `CLAUDE.md` (house rules), `docs/prototype-0.html` (the original design probe).
 
 ## Where things stand
 
-- `bellowsjs@0.1.1` is published on npm (0.1.0 first release, 0.0.1 name claim). Tags through `v0.1.1` pushed to github.com/virgilvox/bellowsjs, main is current.
-- Library test suite: 76 files, 1017 tests, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- `bellowsjs@0.1.5` is published on npm. Tags pushed to github.com/virgilvox/bellowsjs, main is current. `packages/bellows-embedded` is at 0.1.0 and is not published anywhere yet.
+- Library test suite: 80 files, 1146 tests, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- Embedded: 43 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash, so it fits in the Daisy Seed's 128 KB of internal flash with no bootloader. Parity against the TypeScript passes with the PRNG bit exact.
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`, `vue-tsc`) and was verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples (hello-note, cellular automata drums, pitch tracker all exercised end to end).
 
 ## Layout
 
 - `packages/bellows` is the library. Dependency direction, enforced by review not tooling: `types` and `core` at the bottom, then `dsp`, then `engines`/`fx`/`analysis`, then `kernel`/`io`/`render`, then the `bellows.ts` facade. `theory` and `seq` are audio-free.
+- `packages/bellows-embedded` is the header-only C++17 port for microcontrollers. Not on npm; it is an Arduino library folder and a PlatformIO library at the same time. `packages/bellows` stays the source of truth for the DSP and the embedded tree is a transcription, checked by `npm run parity`.
 - `apps/workbench` is the demo app. `src/lib/audio.ts` owns the single Bellows instance (one AudioContext kept for the page's life, reused across reboots). `src/lib/composer.ts` is the generative brain, `src/examples/` the code-mode registry (one file per category, `index.ts` aggregates).
 - Everything the kernel can host is registered in `src/core/register.ts`. New engines and effects must be added there and the worklet regenerated, or they exist on the main thread only.
 
@@ -25,8 +27,14 @@ State of the project as of 2026-07-04, after the 0.1.1 release and the instrumen
 6. `defEngine`/`defEffect` serialize defs with `serializeDef` (functions via toString, rehydrated with `new Function` in the worklet). Defs must be self-contained: no imports, no captured closures. CSP that blocks eval breaks tier 3 in realtime; offline still works.
 7. Voices ADD into `(outL, outR, from, to)`; effects process IN PLACE; nothing allocates on the audio path at steady state. The review's allocation audit and the oversampler view cache exist because of this rule.
 
+8. `Bellows.setup` is a `SetupLog` (`src/kernel/setuplog.ts`), not an array. Idempotent setters collapse last-write-wins by identity key, updated in place so the ordering of everything non-idempotent survives. Anything you add to `KernelMessage` needs a decision in `collapseKey`: append (creation, registration, definitions, events) or collapse (state setters). Getting it wrong silently changes what `render()` replays.
+9. `Instrument.dispose()` exists and is the only way `removeChannel` is ever posted. It also prunes the channel from the setup log. Without it every channel leaks its whole voice pool, which is what the workbench engine swap used to do at about 400 KB a time.
+10. The embedded library must never grow a global registry. Measured: playing one kick through a string-keyed registry of five engines costs 30264 bytes of flash and 37580 of RAM against 3760 and 1100 direct, because a registry names every engine so the linker keeps every engine. `bellows/bank.h` gives runtime index dispatch at byte-identical cost. This is the single load-bearing design rule of that package.
+11. `BELLOWS_FAST_MATH=1` swaps libm for polynomials in `bellows/core/fastmath.h` and takes the kick from 3760 to 1448 bytes. It is also the most dangerous flag in the tree: the first draft of `fm::Log2` was wrong by 213 cents and, through `Pow`, moved a formant by 6.5 percent, and nothing caught it because a wrong polynomial still compiles and still makes sound. `test/parity/fastmath_test.cpp` measures every function against libm and runs in CI. Run it after touching any approximation.
+
 ## Recent history worth knowing
 
+- A full-repository audit (2026-08-04) fixed five findings and produced two more of its own. Read `docs/AUDIT.md` first, then the commits. The two the fixes themselves produced are the interesting ones: no fix agent regenerated the worklet bundle, so realtime playback would have shipped without ParamRamp or the fx capacity options while the whole suite stayed green (tests exercise `renderOffline`, which imports source directly); and the first draft of `SetupLog` sat in `src/core/` while importing from `src/kernel/`, the only upward import anywhere in the lower half of the tree. CI now enforces both.
 - A 22-agent review confirmed and fixed 17 findings (commits `5baef09`, `74e4cbe`). The fixes carry regression tests; read those two commits before touching kernel timing, the scheduler, dynamics, spectral, loudness, sf2, or midifile parsing.
 - The oscillator antialiasing gate is enforced by spectrum-measuring tests in `test/dsp-osc`. The 4-point polyBLEP was tried and measured insufficient (about -37 dB); the shipping implementation is a tabulated Kaiser-sinc BLEP at about -90 dB. Do not "simplify" it back.
 
@@ -43,7 +51,10 @@ Phase 2 targets from `docs/PRD.md` section 6, roughly in value order:
 7. Rust WASM SIMD twins for the hot ops (research brief says simd128 baseline, relaxed SIMD dual-binary; TS implementations stay the oracle).
 8. Neural pack over the harmonic engine (onnxruntime-web, frame-driven `setControlFrame` already exposed).
 9. Docs site: the workbench code mode is the seed; a static docs-as-instruments site is the PRD's end state.
-10. CI: golden renders and the suite run locally; there is no GitHub Actions workflow yet. Add node 22 matrix, `npm test`, `typecheck`, both app builds, publint.
+10. CI: DONE. `.github/workflows/ci.yml` runs node 20 and 22, typecheck, the suite, the build, both app builds, the embedded size report and per-header compile on two ARM targets, the fastmath accuracy gate and the C++ against TypeScript parity gate. It also fails if the worklet bundle has drifted from source or if a golden fixture was regenerated. `publint` is still not wired up.
+11. Embedded, next steps in value order: the waveguide string voice (24 body-mode biquads, deferred deliberately); the wavetable engine, which needs its 320 KB mipmap generated into flash by a build step; FFT and the spectral family behind CMSIS-DSP; the sampler with caller-supplied banks. Then the hybrid: stream `KernelEvent` from bellows.live to a board over USB serial.
+12. Publishing the embedded library. It is a valid Arduino library folder, but the Arduino Library Manager indexes repositories rather than subdirectories, so listing there needs a mirror repo or a release-zip submission. PlatformIO can consume the subdirectory directly. Undecided.
+13. The BLEP oscillator costs 14 times more at 7 kHz than at 55 Hz, because the residual sum loops over every edge within the kernel half-width and that window grows with frequency. Any fixed polyphony budget sized at A440 will drop out on a high lead. A frequency-dependent kernel cap should be decided before a board bring-up, and it has to be measured against the existing spectrum gates in `test/dsp-osc` rather than by ear.
 
 ## Deployment (bellows.live)
 
@@ -82,3 +93,9 @@ The site is a DigitalOcean App Platform static site, the cheapest App Platform f
 5. Regenerate the LLM reference: `node apps/workbench/scripts/gen-llm-ref.mjs` (reads the fresh dist), commit `apps/workbench/public/llm.txt`.
 6. Redeploy the site (pushes do not auto-deploy): `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`.
 7. No Claude attribution in commits, no emojis, no em dashes, per `CLAUDE.md`.
+
+For a change that touches DSP shared with the embedded port, add before step 4:
+- `npm run parity -w packages/bellows-embedded` and confirm every gate passes. The PRNG row must be exactly zero; if it is not, nothing below it means anything.
+- `npm run size -w packages/bellows-embedded` and sanity check the numbers against `docs/HARDWARE.md`.
+- `npm run fastmath -w packages/bellows-embedded` if you touched `core/fastmath.h`.
+- Regenerate `bellows/params.gen.h` with `node tools/gen-tables.mjs` if any `ParamSpec` changed, which is how a param added in TypeScript and forgotten in C++ becomes visible.
