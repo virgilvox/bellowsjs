@@ -81,6 +81,15 @@ export class VoicePool {
     for (const s of this.slots) s.voice.setParam(name, value);
   }
 
+  /**
+   * Current value of a pool parameter, or undefined if the pool was never
+   * given one. The kernel reads this to find where a parameter ramp should
+   * start; the pool itself has no opinion about automation.
+   */
+  getParam(name: string): number | undefined {
+    return this.params[name];
+  }
+
   process(outL: Float32Array, outR: Float32Array, from: number, to: number): void {
     for (const s of this.slots) {
       if (s.voice.active) s.voice.process(outL, outR, from, to);

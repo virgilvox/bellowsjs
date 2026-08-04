@@ -123,5 +123,6 @@ export { bankEngineResolver } from './render/banks';
 
 /* kernel */
 export { KernelEngine, internParam } from './kernel/engine';
+export { SetupLog } from './kernel/setuplog';
 export { createKernelNode, KERNEL_PROCESSOR_NAME } from './kernel/node';
 export type { KernelMessage, KernelReply, FxSpec, MeterFrame, SamplerZoneData } from './kernel/messages';
