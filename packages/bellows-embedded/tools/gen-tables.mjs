@@ -189,10 +189,24 @@ function generateBlepHeader() {
  * is supposed to catch. The only hand-maintained entries are class names
  * that deliberately do not match their id.
  */
+/*
+ * C++ class name to TypeScript id, where they differ.
+ *
+ * Eq6 is the faithful port of eqDef, which is six bands. Eq3 is a
+ * deliberate three band reduction with different default frequencies and
+ * no TypeScript counterpart, so it maps to nothing on purpose: listing it
+ * here would assert a parity it does not claim. Anything unmapped is
+ * reported as an orphan in the generated header, which is how this file
+ * noticed Eq6 the moment it appeared.
+ */
 const CLASS_ALIASES = {
   StereoDelayExt: 'delay',
-  Eq3: 'eq',
+  Eq6: 'eq',
 };
+
+/* Classes that intentionally have no TypeScript counterpart, so the
+ * orphan report stays a signal rather than a standing complaint. */
+const UNPORTED_BY_DESIGN = new Set(['Eq3']);
 
 const PORT_DIRS = [
   ['engines', 'bellows/engines'],
@@ -302,6 +316,7 @@ async function discoverPorts() {
       const header = `${rel}/${name}`;
       const src = await readFile(join(dir, name), 'utf8');
       for (const hit of findPortedClasses(src)) {
+        if (UNPORTED_BY_DESIGN.has(hit.cls)) continue;
         const id = classToId(hit.cls);
         found[kind].set(id, { ...hit, header, id });
         orphans.push({ kind, id, cls: hit.cls, header });

@@ -163,14 +163,23 @@ split is deliberate and documented in `docs/HARDWARE.md`.
 implementations and diffing them:
 
 ```
-voice      rel rms   max abs     gate  result
-prng       0.00e+0   0.00e+0        0  pass  must be bit exact
-kick       9.79e-5   7.90e-5    0.001  pass
-hat        2.47e-4   2.32e-5    0.002  pass
-va         2.11e-3   4.88e-3     0.01  pass
-pluck      5.29e-6   1.91e-6   0.0001  pass
-theory     9.42e-8   7.32e-4    1e-06  pass  12/19/24/31/53-EDO and 5-limit JI
+module        rel rms   max abs     gate  result
+prng          0.00e+0   0.00e+0        0  pass  must be bit exact
+kick          9.79e-5   7.90e-5    0.001  pass
+va            2.19e-3   6.30e-3     0.01  pass
+pluck         4.96e-6   1.94e-6  0.00005  pass
+theory        9.42e-8   7.32e-4 0.000001  pass  12/19/24/31/53-EDO and 5-limit JI
+fm            5.25e-4   9.84e-4    0.005  pass
+modal         1.23e-4   9.42e-5    0.001  pass
+formant       7.85e-4   3.74e-4    0.005  pass
+eq            2.93e-7   1.79e-7 0.000003  pass
+delay         7.78e-8   2.98e-8 0.000001  pass
+plate         2.44e-3   1.91e-3    0.005  pass
 ```
+
+Nineteen modules in all, plus `npm run tables`, which compares the parts that make no sound
+(scales, chords, euclid, arp, cellular automata, the tempo map, MIDI parsing) exactly rather
+than by tolerance: 317 rows, 0 mismatched.
 
 The theory row covers pitch rather than audio, because a wrong tuning table is silent and no
 test that listens to a buffer can catch it.

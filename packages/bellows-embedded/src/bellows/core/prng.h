@@ -1,5 +1,31 @@
 /* Direct transcription of src/core/prng.ts. All uint32 ops, so streams
- * are bit-identical to the JS for the same seed. */
+ * are bit-identical to the JS for the same seed.
+ *
+ * FORKING, and how to match a browser stream exactly.
+ *
+ * The TypeScript derives child streams by label:
+ *
+ *   rng(label).fork(child)  ===  rng(label + '::' + child)
+ *
+ * It is literal string concatenation, nothing more, so there is no fork
+ * method here and none is needed. Write the full path and you land on the
+ * same stream the browser is on:
+ *
+ *   JS   b.rng('piece').fork('ch0').fork('snare/noise')
+ *   C++  rng.Init("piece::ch0::snare/noise")
+ *
+ * That is deliberate: storing a label per Rng so Fork() could concatenate
+ * would cost a char buffer per voice, and the caller already knows the
+ * path at the point of construction.
+ *
+ * Which labels the engines use is a property of the TypeScript, not of
+ * this library. As of the port: snare forks 'snare/noise', clap forks
+ * 'clap/noise', tom forks 'tom/noise', va forks 'va', formant forks
+ * 'vibrato' for its LFO only, and pluck, modal and tube take the parent
+ * stream directly. The C++ voices take one Rng and use it the way the JS
+ * uses its own, so passing the correctly labelled stream is what makes
+ * the noise match. Nothing enforces this: if you pass an unlabelled Rng
+ * you get perfectly good noise that is simply not the browser's noise. */
 #pragma once
 #include <stdint.h>
 

@@ -22,11 +22,24 @@ class StereoDelayExt {
     float mix = 0.35f;
   };
 
-  /* bufL and bufR must each be power-of-two sized. */
+  /*
+   * bufL and bufR must each be power-of-two sized. max_sec is the longest
+   * delay the caller asked for; pass 0 to use whatever the buffer holds.
+   *
+   * Why the requested maximum and not the buffer's: DelayLine rounds
+   * capacity up to a power of two, so a 250 ms request at 44100 gets a
+   * 16384 sample ring, which is 371 ms. Clamping at the ring would hand
+   * back 50 percent more delay than was asked for, and would disagree with
+   * the TypeScript, which clamps at exactly its maxSeconds. Surprising the
+   * caller and diverging from the source of truth is worse than leaving
+   * some ring unused, and the tail is wanted anyway: the cubic read needs
+   * samples past the tap.
+   */
   void Init(float sample_rate, float* buf_l, float* buf_r, uint32_t cap,
-            const Params& p) {
+            const Params& p, float max_sec = 0.0f) {
     sr_ = sample_rate;
-    max_sec_ = static_cast<float>(cap - 4) / sample_rate;
+    const float ring_sec = static_cast<float>(cap - 4) / sample_rate;
+    max_sec_ = (max_sec > 0.0f && max_sec < ring_sec) ? max_sec : ring_sec;
     line_l_.Init(buf_l, cap);
     line_r_.Init(buf_r, cap);
     damp_l_.Init(sample_rate);
@@ -94,7 +107,9 @@ class StereoDelay : public StereoDelayExt {
     Init(sample_rate, p);
   }
   void Init(float sample_rate, const Params& p) {
-    StereoDelayExt::Init(sample_rate, l_, r_, kCap, p);
+    /* Clamp at the kMaxMs that was asked for, not at the power-of-two ring
+     * that ended up backing it. See the note on StereoDelayExt::Init. */
+    StereoDelayExt::Init(sample_rate, l_, r_, kCap, p, kMaxMs * 0.001f);
   }
 
  private:

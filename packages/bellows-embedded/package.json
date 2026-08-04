@@ -8,6 +8,8 @@
     "size": "./tools/size-report.sh",
     "parity": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/parity.mjs",
     "parity:check": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/parity.mjs --check",
-    "fastmath": "c++ -std=c++17 -O2 -Wall -Wextra -DBELLOWS_FAST_MATH=1 -I src test/parity/fastmath_test.cpp -o test/parity/build/fastmath && test/parity/build/fastmath"
+    "fastmath": "c++ -std=c++17 -O2 -Wall -Wextra -DBELLOWS_FAST_MATH=1 -I src test/parity/fastmath_test.cpp -o test/parity/build/fastmath && test/parity/build/fastmath",
+    "tables": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/tables.mjs",
+    "tables:check": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/tables.mjs --check"
   }
 }

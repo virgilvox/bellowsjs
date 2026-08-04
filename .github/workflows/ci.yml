@@ -98,6 +98,18 @@ jobs:
         run: |
           mkdir -p test/parity/build
           npm run --silent fastmath
+      - name: value parity for the modules that make no sound
+        working-directory: packages/bellows-embedded
+        # Scales, chords, euclid, arp, CA, tempo map and MIDI parsing. A wrong
+        # table here plays a confident, plausible, wrong note and no audio
+        # test can hear it, so these compare exactly.
+        run: |
+          mkdir -p test/parity/build
+          c++ -std=c++17 -O2 -Wall -Wextra -I src test/parity/tables.cpp -o test/parity/build/tables
+          npm run tables:check
+      - name: generated headers are in sync with the TypeScript
+        working-directory: packages/bellows-embedded
+        run: node tools/gen-tables.mjs --check
       - name: parity gates
         working-directory: packages/bellows-embedded
         # Renders the same note from both implementations and diffs them. The

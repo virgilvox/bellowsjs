@@ -241,6 +241,96 @@ invert the dependency: it now lives at `src/kernel/setuplog.ts`.
 The layering rule is enforced by review rather than tooling, and review caught this one. A lint
 rule would be cheaper than the next reviewer being tired.
 
+## Second pass: auditing the port itself
+
+The first pass audited the TypeScript. This one audited the C++ port and the harnesses that
+were supposed to be checking it, on the principle that roughly thirty of those headers had only
+ever been compiled, and compiling is not sounding right.
+
+### 13. Coverage was the real hole
+
+Audio parity covered four engines out of fourteen ported units. Everything else had passed a
+compile check and nothing more. Extending it to all nineteen modules immediately found two real
+bugs, which is the expected yield when you point a measurement at unmeasured code.
+
+### 14. `fx/eq.h` was not a port
+
+It carried the comment "from src/fx/eq.ts" and was a three band design. The TypeScript is six
+bands: a low shelf, four bells, a high shelf, at different default frequencies. Nobody had
+diffed them because no test compared them.
+
+Fixed: `Eq6` is the faithful port, verified at 2.9e-7. `Eq3` survives as a deliberate reduction
+with a comment that says so plainly, and `tools/gen-tables.mjs` now records it as unported by
+design so the orphan report stays a signal.
+
+### 15. `StereoDelay<kMaxMs>` gave more delay than it was asked for
+
+`DelayLine` rounds capacity up to a power of two, and the effect clamped at the resulting ring
+rather than at the requested maximum. `StereoDelay<250>` at 44100 silently allowed 371 ms, while
+the TypeScript clamps at exactly its `maxSeconds`. Relative error against the JS was 0.317.
+
+Fixed: it clamps at the requested maximum. Error is now 7.8e-8.
+
+### 16. Gates with 25000x headroom are not tests
+
+A deliberate 0.01 percent mutation of the `Svf` integrator passed every gate. Measuring the
+headroom explained why: `saturator` sat at 25000x its measured drift, `delay` at 12853x, `eq` at
+3413x, `compressor` at 2222x, `snare` at 158x. They were round numbers, not measurements.
+
+Fixed: every gate is now set from its measured value at roughly ten times. The same mutation is
+now caught by two of them. Both the value gate and the audio gate were then mutation tested to
+prove they can fail, because a gate nobody has seen fail is a gate nobody should trust.
+
+### 17. The harness itself had a bug that produced three wrong verdicts
+
+`parity.mjs` faked `NamedRng.fork()` as a wrapper over one shared generator. The real one
+returns an independent stream. Because `Lfo` draws a value in its constructor to seed its
+sample-and-hold, the fake fork let one component steal a draw from its sibling's noise stream.
+
+That single mistake made `formant` look broken when it was not, and made `snare` and `va` look
+correct when they were only accidentally aligned. Three verdicts, all wrong, from one line.
+
+The fix also produced something useful: the JS derives child streams by literal string
+concatenation, `rng(label).fork(child) === rng(label + '::' + child)`, so a C++ caller can land
+on any browser stream by writing the full label path with no per-object storage. That is now
+documented in `core/prng.h`, and it is what makes browser-identical noise achievable on device.
+
+### 18. Two modules diverge for reasons that are not defects
+
+`chorus` at 4e-2 and `tube` at a 1e-2 peak both looked like failures. Neither is.
+
+The chorus is bit-identical with modulation off (6.3e-6) and its error scales exactly with
+depth (0.1 gives 8e-3, 0.5 gives 4e-2). The cause is LFO phase accumulating in float here and
+double there: a fractional-sample shift of a white noise read is a large sample difference for
+an identical sound. Sample-wise RMS is simply the wrong instrument for a time-modulating effect,
+so the harness now gates the unmodulated path tightly, which is what would actually catch a
+broken chorus, and the modulated path loosely with the reason written down.
+
+The tube's exceeding samples are 0.4 percent of the total, spaced twice per period at 220 Hz,
+which places them on the waveform's steep edges where sub-sample timing reads as amplitude.
+
+Worth doing later: accumulate LFO phase in a uint32 fixed-point counter. It never drifts, it is
+cheaper than float, and it would close most of the chorus gap.
+
+### 19. What was verified and found clean
+
+- No heap, no exceptions, no STL containers, no static constructors, no uninitialised members
+  anywhere in the library. The only `virtual` is the `AudioStream::update()` the Teensy Audio
+  Library requires, and it is documented as such.
+- All 43 headers compile standalone with `-Wall -Wextra`, and all of them together in one
+  translation unit, on Cortex-M7 and Cortex-M4.
+- Every symbol the example sketches reference resolves.
+- 317 value rows across euclid, scales, chords, note parsing, cellular automata, arp, the tempo
+  map and MIDI parsing match the TypeScript exactly.
+- Commit history carries no AI attribution, no emoji and no em dashes, and neither do the files.
+
+### 20. A slow test run that was not a regression
+
+The suite took 87 seconds against 7.4 earlier, with two tests at 67 and 71 seconds. It was
+machine contention: `user` time was identical at 7.66 against 7.84 seconds while wall time
+doubled, and the box was at load average 7.5. Worth recording only because "the tests got slow"
+is the kind of observation that sends someone hunting a phantom.
+
 ## Still open after this pass
 
 - `SamplerBank.zonesFor` allocates at note-on rate on the audio thread (finding 7).

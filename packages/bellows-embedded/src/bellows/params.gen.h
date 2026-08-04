@@ -348,7 +348,7 @@ inline constexpr float kEffectRingmodDefaults[kEffectRingmodParamCount] = {
 };
 
 /* eq: Parametric EQ
- * bellows/fx/eq.h class Eq3, 24 params.
+ * bellows/fx/eq.h class Eq6, 24 params.
  *   name       min  max    default  c++ field  unit
  *   b0freq     20   20000  80       -          Hz
  *   b0gain     -24  24     0        -          dB
@@ -376,7 +376,7 @@ inline constexpr float kEffectRingmodDefaults[kEffectRingmodParamCount] = {
  *   b5enabled  0    1      1        -
  *
  * No C++ field of that name: b0freq, b0gain, b0q, b0enabled, b1freq, b1gain, b1q, b1enabled, b2freq, b2gain, b2q, b2enabled, b3freq, b3gain, b3q, b3enabled, b4freq, b4gain, b4q, b4enabled, b5freq, b5gain, b5q, b5enabled
- * C++ fields with no ParamSpec: low_freq, low_gain, mid_freq, mid_gain, mid_q, high_freq, high_gain
+ * C++ fields with no ParamSpec: band
  */
 inline constexpr int kEffectEqParamCount = 24;
 inline constexpr float kEffectEqDefaults[kEffectEqParamCount] = {

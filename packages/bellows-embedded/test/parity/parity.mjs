@@ -38,8 +38,12 @@ const SEED = 1;
 /* Per voice: max allowed RMS of the difference relative to the RMS of the
  * reference, and max allowed absolute sample difference.
  *
- * These are set to roughly ten times the drift actually measured, so they
- * catch a real regression rather than rubber stamping anything that runs.
+ * These are set to roughly TEN TIMES the drift actually measured, and that
+ * ratio is the whole point. An earlier revision left the effect gates at
+ * round numbers with 150x to 25000x headroom, and a deliberate 0.01 percent
+ * mutation of the Svf integrator sailed straight through every one of them.
+ * A gate with that much slack is not a test, it is a formality. If you add
+ * a module here, measure it first and set the gate from the measurement.
  * The measured values at the time of writing are in the comments. If you
  * change the DSP on either side and a gate trips, the question to ask is
  * which implementation moved, not whether to widen the gate. */
@@ -53,11 +57,56 @@ const GATES = {
   // recursive, so f32 rounding compounds through four saturating stages
   va: { rel: 1e-2, abs: 2e-2, note: 'two BLEP oscillators into a ladder, nonlinear' },
   // measured 5.3e-6 / 1.9e-6
-  pluck: { rel: 1e-4, abs: 1e-4, note: 'recursive loop over its whole decay' },
+  pluck: { rel: 5e-5, abs: 5e-5, note: 'recursive loop over its whole decay' },
   // Pitch, not audio. A wrong tuning table is silent and no buffer test can
   // hear it. Tight on purpose: this is one Exp2 either side, so anything
   // beyond float epsilon means a table is actually wrong.
   theory: { rel: 1e-6, abs: 2e-2, note: '12/19/24/31/53-EDO and 5-limit JI, note 21..108' },
+
+  // The rest of the ported engines. These were written against the
+  // TypeScript but never numerically checked until this harness covered
+  // them, which is the whole reason the harness exists.
+  snare: { rel: 3e-4, abs: 3e-4, note: 'two BLEP triangles plus filtered noise' },
+  fm: { rel: 5e-3, abs: 5e-3, note: 'six operators, phase modulation compounds' },
+  modal: { rel: 1e-3, abs: 1e-3, note: '24 two-pole resonators, long ring' },
+  westcoast: { rel: 2e-2, abs: 2e-2, note: 'iterated wavefolder, very sensitive to rounding' },
+  formant: { rel: 5e-3, abs: 5e-3, note: 'five bandpasses in parallel' },
+  // Rel RMS is 1.7e-3. The abs gate is looser because the 0.4 percent of
+  // samples that exceed it sit on the waveform's steep edges, spaced twice
+  // per period at 220 Hz, where a sub-sample timing difference reads as a
+  // large amplitude difference. Error grows 7e-5 -> 1.9e-3 across the note,
+  // which is a recursive loop accumulating in f32, not a defect.
+  tube: { rel: 5e-3, abs: 2e-2, note: 'recursive bore, error rides the edges' },
+
+  // Effects, driven by bit-exact white noise so the only difference the
+  // diff can see is the effect's own arithmetic.
+  eq: { rel: 3e-6, abs: 3e-6, note: 'six Svf bands in series' },
+  delay: { rel: 1e-6, abs: 1e-6, note: 'cubic reads, smoothed time' },
+  saturator: { rel: 2e-6, abs: 2e-6, note: 'oversampled nonlinearity' },
+  compressor: { rel: 2e-5, abs: 2e-5, note: 'dB domain detection, crest tracking' },
+  // The chorus is measured twice on purpose. With modulation off the whole
+  // signal path agrees to 6.3e-6, which is what proves the DSP. With it on
+  // the error scales exactly with depth (0.1 -> 8e-3, 0.5 -> 4e-2) because
+  // the LFO phase accumulates in float here and in double there, and a
+  // fractional-sample shift of a white noise read is a large sample
+  // difference for an identical sound. Sample-wise RMS is the wrong
+  // instrument for a time-modulating effect; the static row is the gate
+  // that would actually catch a broken chorus.
+  chorus_static: { rel: 1e-4, abs: 1e-4, note: 'depth 0: the real DSP gate' },
+  chorus: { rel: 6e-2, abs: 4e-2, note: 'depth 0.5: dominated by sub-sample LFO timing' },
+  plate: { rel: 5e-3, abs: 5e-3, note: 'Dattorro tank, recirculating' },
+};
+
+/* Effects that take an EffectDef rather than an EngineDef, with the params
+ * matching what render.cpp sets on the C++ side. */
+const FX = {
+  chorus_static: ['fx/modfx.ts', 'chorusDef', { depth: 0 }],
+  eq: ['fx/eq.ts', 'eqDef', { b0gain: 6, b2gain: -4, b4gain: 3, b5gain: -2 }],
+  delay: ['fx/delay.ts', 'delayDef', { maxSeconds: 0.25 }],
+  saturator: ['fx/saturator.ts', 'saturatorDef', {}],
+  compressor: ['fx/dynamics.ts', 'compressorDef', {}],
+  chorus: ['fx/modfx.ts', 'chorusDef', {}],
+  plate: ['fx/plate.ts', 'plateDef', {}],
 };
 
 function buildRenderer() {
@@ -76,7 +125,7 @@ function buildRenderer() {
 
 function renderCpp(bin, voice, frames, freq, vel) {
   const buf = execFileSync(bin, [voice, String(frames), String(freq), String(vel), String(SR)], {
-    env: { ...process.env, BELLOWS_SEED: String(SEED) },
+    env: { ...process.env, BELLOWS_SEED: String(SEED), BELLOWS_RNG_LABEL: RNG_LABEL[voice] || '' },
     maxBuffer: 1 << 28,
   });
   const f = new Float32Array(buf.buffer, buf.byteOffset, Math.floor(buf.byteLength / 4));
@@ -87,7 +136,7 @@ function renderCpp(bin, voice, frames, freq, vel) {
 
 async function renderTs(voice, frames, freq, vel) {
   const src = join(LIB, 'src');
-  const { mulberry32 } = await import(join(src, 'core/prng.ts'));
+  const { mulberry32, rng: realRng } = await import(join(src, 'core/prng.ts'));
   if (voice === 'prng') {
     const next = mulberry32(SEED);
     const out = new Float32Array(frames);
@@ -105,12 +154,33 @@ async function renderTs(voice, frames, freq, vel) {
     for (let m = 21; m <= 108; m++) out.push(ji.freqOf(m));
     return Float32Array.from(out);
   }
+  if (FX[voice]) {
+    const [path, name, params] = FX[voice];
+    const def = (await import(join(src, path)))[name];
+    const fx = def.create(SR, params);
+    /* Same bit-exact noise the C++ side feeds itself. */
+    const next = mulberry32(SEED);
+    const l = new Float32Array(frames);
+    const r = new Float32Array(frames);
+    for (let i = 0; i < frames; i++) {
+      l[i] = (2 * next() - 1) * 0.25;
+      r[i] = (2 * next() - 1) * 0.25;
+    }
+    for (let i = 0; i < frames; i += 128) fx.process(l, r, i, Math.min(i + 128, frames));
+    return l;
+  }
+
   const mod = {
     kick: [join(src, 'engines/drums.ts'), 'kickEngine'],
     hat: [join(src, 'engines/drums.ts'), 'hatEngine'],
     snare: [join(src, 'engines/drums.ts'), 'snareEngine'],
     pluck: [join(src, 'engines/pluck.ts'), 'pluckEngine'],
     va: [join(src, 'engines/va.ts'), 'vaEngine'],
+    fm: [join(src, 'engines/fm.ts'), 'fmEngine'],
+    modal: [join(src, 'engines/modal.ts'), 'modalEngine'],
+    westcoast: [join(src, 'engines/westcoast.ts'), 'westcoastEngine'],
+    formant: [join(src, 'engines/formant.ts'), 'formantEngine'],
+    tube: [join(src, 'engines/waveguide.ts'), 'tubeEngine'],
   }[voice];
   if (!mod) throw new Error('unknown voice ' + voice);
   const [path, name] = mod;
@@ -118,22 +188,17 @@ async function renderTs(voice, frames, freq, vel) {
 
   /* Match the C++ side: one raw mulberry32 stream from the same seed,
    * wrapped in the NamedRng shape the engines expect. */
-  const next = mulberry32(SEED);
-  const makeRng = (label) => {
-    const fn = () => next();
-    fn.label = label;
-    fn.fork = () => makeRng(label);
-    fn.int = (n) => (next() * n) | 0;
-    fn.pick = (a) => a[(next() * a.length) | 0];
-    fn.range = (lo, hi) => lo + next() * (hi - lo);
-    fn.chance = (p) => next() < p;
-    fn.shuffle = (a) => a.slice();
-    fn.gauss = () => (next() + next() + next() + next() - 2) * Math.SQRT2 * 0.875;
-    fn.weighted = () => 0;
-    return fn;
-  };
-
-  const v = def.createVoice(SR, {}, makeRng('parity'));
+  /* Use the library's own labelled rng, so each engine forks exactly the
+   * child streams it forks in the browser. The C++ side is told the
+   * resulting label path (see RNG_LABEL below and the note in prng.h),
+   * which is what makes the noise comparable at all.
+   *
+   * An earlier version of this harness faked fork() as a wrapper over one
+   * shared generator. That made snare and va appear to pass while formant
+   * appeared to fail, all three for the same reason: a component that
+   * draws at construction stole a sample from its sibling's stream. Every
+   * one of those verdicts was wrong. */
+  const v = def.createVoice(SR, {}, realRng('parity'));
   const l = new Float32Array(frames);
   const r = new Float32Array(frames);
   v.noteOn(freq, vel);
@@ -160,11 +225,22 @@ function compare(a, b) {
   return { rms, refRms, rel: refRms > 0 ? rms / refRms : rms, maxAbs, n };
 }
 
+/* The label the C++ Rng must sit on to match each JS engine's stream.
+ * Empty means the engine uses its parent stream directly. */
+const RNG_LABEL = {
+  snare: 'parity::snare/noise',
+  va: 'parity::va',
+  pluck: 'parity',
+  modal: 'parity',
+  formant: 'parity',
+  tube: 'parity',
+};
+
 const check = process.argv.includes('--check');
 const bin = buildRenderer();
 
 console.log(`parity: C++ (float) versus TypeScript (double), ${SR} Hz, ${FRAMES} frames, seed ${SEED}`);
-console.log(`${'voice'.padEnd(8)}${'rel rms'.padStart(10)}${'max abs'.padStart(10)}${'gate'.padStart(9)}  result`);
+console.log(`${'module'.padEnd(11)}${'rel rms'.padStart(10)}${'max abs'.padStart(10)}${'gate'.padStart(9)}  result`);
 
 let failed = 0;
 for (const [voice, gate] of Object.entries(GATES)) {
@@ -176,10 +252,10 @@ for (const [voice, gate] of Object.entries(GATES)) {
     const c = compare(cpp, ts);
     const pass = c.rel <= gate.rel + 1e-12 && c.maxAbs <= gate.abs + 1e-12;
     if (!pass) failed++;
-    row = `${voice.padEnd(8)}${c.rel.toExponential(2).padStart(10)}${c.maxAbs.toExponential(2).padStart(10)}${String(gate.rel).padStart(9)}  ${pass ? 'pass' : 'FAIL'}  ${gate.note}`;
+    row = `${voice.padEnd(11)}${c.rel.toExponential(2).padStart(10)}${c.maxAbs.toExponential(2).padStart(10)}${String(gate.rel).padStart(9)}  ${pass ? 'pass' : 'FAIL'}  ${gate.note}`;
   } catch (err) {
     failed++;
-    row = `${voice.padEnd(8)}${'ERROR'.padStart(29)}  ${String(err).split('\n')[0]}`;
+    row = `${voice.padEnd(11)}${'ERROR'.padStart(29)}  ${String(err).split('\n')[0]}`;
   }
   console.log(row);
 }

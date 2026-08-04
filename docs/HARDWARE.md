@@ -282,16 +282,48 @@ in CI. The gates sit at roughly ten times the drift actually measured, so they c
 rather than rubber stamping anything that runs.
 
 ```
-voice      rel rms   max abs     gate  result
-prng       0.00e+0   0.00e+0        0  pass  must be bit exact
-kick       9.79e-5   7.90e-5    0.001  pass
-hat        2.47e-4   2.32e-5    0.002  pass
-va         2.11e-3   4.88e-3     0.01  pass  ladder is nonlinear, largest drift
-pluck      5.29e-6   1.91e-6   0.0001  pass
-theory     9.42e-8   7.32e-4    1e-06  pass  12/19/24/31/53-EDO and 5-limit JI
+module        rel rms   max abs     gate  result
+prng          0.00e+0   0.00e+0        0  pass  must be bit exact
+kick          9.79e-5   7.90e-5    0.001  pass
+hat           2.47e-4   2.32e-5    0.002  pass
+va            2.19e-3   6.30e-3     0.01  pass  ladder is nonlinear
+pluck         4.96e-6   1.94e-6  0.00005  pass
+theory        9.42e-8   7.32e-4 0.000001  pass  12/19/24/31/53-EDO and 5-limit JI
+snare         3.17e-5   1.32e-5   0.0003  pass
+fm            5.25e-4   9.84e-4    0.005  pass
+modal         1.23e-4   9.42e-5    0.001  pass
+westcoast     2.77e-3   2.20e-3     0.02  pass  iterated wavefolder
+formant       7.85e-4   3.74e-4    0.005  pass
+tube          1.70e-3   1.09e-2    0.005  pass  error rides the waveform edges
+eq            2.93e-7   1.79e-7 0.000003  pass
+delay         7.78e-8   2.98e-8 0.000001  pass
+saturator     2.00e-7   1.49e-7 0.000002  pass
+compressor    2.25e-6   1.16e-6  0.00002  pass
+chorus_static 6.31e-6   1.26e-6   0.0001  pass  depth 0: the real DSP gate
+chorus        3.97e-2   2.08e-2     0.06  pass  depth 0.5: sub-sample LFO timing
+plate         2.44e-3   1.91e-3    0.005  pass
 ```
 
-Two rows carry most of the meaning.
+Gates are set from the measured value at roughly ten times, and that ratio is the point. An
+earlier revision used round numbers that left `saturator` with 25000x headroom and `delay` with
+12853x, and a deliberate 0.01 percent mutation of the `Svf` integrator passed every one of them.
+Both this harness and the value harness below have since been mutation tested to prove they can
+fail.
+
+`npm run tables` covers what makes no sound, and compares EXACTLY rather than by tolerance,
+because integers have no rounding excuse:
+
+```
+group         rows   bad  result        group         rows   bad  result
+euclid         152     0  pass          ca              32     0  pass
+euclidrot        7     0  pass          arp              5     0  pass
+scale           34     0  pass          tempo           17     0  pass
+chord           24     0  pass          tempoinv         9     0  pass
+parsenote        8     0  pass          midi            10     0  pass
+notename        19     0  pass
+```
+
+Two rows in the audio table carry most of the meaning.
 
 The PRNG gate is exact and passes, which is what makes the split determinism promise real:
 event-level reproducibility crosses the language boundary because both sides run the same xmur3
@@ -304,8 +336,17 @@ plausible, wrong notes, and no test that listens to a buffer can hear it. Checki
 non-12 cases survived the port, and 12-EDO being a default and never an assumption is a house
 rule this is enforcing.
 
-The `va` row is the largest drift and it should be: a ladder filter is nonlinear and recursive,
-so f32 rounding compounds through four saturating stages. 2e-3 relative is about -54 dB.
+The `va` row is among the largest drifts and it should be: a ladder filter is nonlinear and
+recursive, so f32 rounding compounds through four saturating stages. 2e-3 relative is about
+-54 dB.
+
+Two rows are measured differently on purpose. The chorus is bit-identical with modulation off
+and its error scales exactly with depth, because the LFO phase accumulates in float here and in
+double there, and a fractional-sample shift of a white noise read is a large sample difference
+for an identical sound. Sample-wise RMS is the wrong instrument for a time-modulating effect, so
+`chorus_static` is the gate that would actually catch a broken chorus. The tube's few exceeding
+samples sit on the waveform's steep edges, spaced twice per period, where sub-sample timing
+reads as amplitude.
 
 ## The strategic fork
 
