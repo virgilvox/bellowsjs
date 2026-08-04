@@ -4,3 +4,5 @@ coverage/
 *.log
 .DS_Store
 .vite/
+packages/bellows-embedded/test/build/
+packages/bellows-embedded/test/parity/build/
