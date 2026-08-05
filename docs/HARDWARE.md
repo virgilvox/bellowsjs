@@ -175,16 +175,16 @@ it, so these are real costs and not a floor. Reproduce with `./tools/size-report
 | --- | --- | --- | --- |
 | `theory/` (scales, chords, tuning, notes) | 2616 B | 116 B | the differentiator, and it is nearly free |
 | `fx/dynamics` | 4048 B | 10336 B | compressor, limiter lookahead line |
-| `fx/modfx` | 4936 B | 26056 B | chorus, flanger, tremolo, autopan, ringmod |
+| `fx/modfx` | 5144 B | 26056 B | chorus, flanger, tremolo, autopan, ringmod |
 | `engines/tube` | 5136 B | 3272 B | `Tube<80>` bore |
 | `seq/` (euclid, arp, CA, lsystem, tempomap) | 5296 B | 900 B | fixed capacity, no allocation |
 | `engines/fm` | 5384 B | 1536 B | SineOsc only, so no BLEP tables |
 | `fx/saturator` | 5536 B | 10136 B | with the oversampler |
-| `fx/plate` | 5712 B | 222684 B | Dattorro tank, the RAM is the tank |
+| `fx/plate` | 5736 B | 222684 B | Dattorro tank, the RAM is the tank |
 | `engines/modal` | 5944 B | 1584 B | five material tables in flash |
 | `kernel` | 6208 B | 2492 B | event queue plus block splitting |
 | `engines/westcoast` | 27064 B | 1200 B | BLEP tables dominate |
-| `engines/formant` | 28296 B | 1496 B | BLEP tables dominate |
+| `engines/formant` | 28360 B | 1496 B | BLEP tables dominate |
 
 The BLEP tables are 16 KB and shared, so the first module that needs them pays and every later
 one is nearly free. `fm`, `modal`, `tube` and `pluck` do not need them at all, which is why an
@@ -211,7 +211,7 @@ so they cannot drift from the code:
 | --- | --- | --- |
 | `01_OneKick` | 3776 B | 1100 B |
 | `02_DrumMachine` (bank plus euclid) | 29696 B | 1588 B |
-| `03_PolySynth` (`VoicePool<Va, 8>`) | 30304 B | 3776 B |
+| `03_PolySynth` (`VoicePool<Va, 8>`) | 30384 B | 3776 B |
 | `04_ScalesAndTuning` | 8080 B | 36928 B |
 | `05_MidiInstrument` | 30296 B | 3792 B |
 
@@ -257,10 +257,42 @@ silently ignored by the PlatformIO teensy platform, so `05_MidiInstrument` needs
 defaults to `gnu++14` on some releases, so `build_unflags` has to remove it rather than just
 setting `-std=gnu++17`. `examples/platformio.ini` carries both.
 
-WHAT HAS NOT BEEN DONE: none of this has been flashed to a board and listened to. Everything is
-compile-verified and numerically verified against the TypeScript, which is a strong position and
-is not the same as having heard it. The Daisy adapter has not been built end to end at all,
-because libDaisy is not an Arduino framework and the toolchain was not set up here.
+### Daisy
+
+The Daisy path has now been built end to end against the real SDK: libDaisy 8.1.0 (commit
+`c02245d`), Cortex-M7 with `-mfpu=fpv5-d16 -mfloat-abi=hard`, `arm-none-eabi-g++` 9.2.1.
+`examples/daisy_onekick` links as a complete Daisy Seed firmware image, and all five example
+render classes compile through `DaisyAudio` for the STM32H750.
+
+| Program | FLASH | of 128 KB | SRAM | of 512 KB |
+| --- | --- | --- | --- | --- |
+| `daisy_onekick` | 75784 B | 57.8 % | 13956 B | 2.7 % |
+| the same firmware with bellows removed | 71712 B | 54.7 % | 13796 B | 2.6 % |
+
+Subtracting the two, bellows is 3916 B of flash and 160 B of RAM on top of libDaisy, and 100 of
+those 160 bytes are newlib's `impure_data`, pulled in the first time anything calls libm rather
+than being bellows state. The prediction in the table above was that the ported engine set fits
+in internal flash with room to spare; a one-voice program leaves 54 KB free with the entire HAL,
+codec driver, SAI, DMA and USB stack already paid for, so the prediction holds and no bootloader
+is needed.
+
+Compiling the adapter against the real headers rather than off-target found no API drift. The
+callback signature, the `AudioHandle::InputBuffer` and `OutputBuffer` types, the non-interleaved
+`out[0]` and `out[1]` layout, the `size_t` block size and `DSY_SDRAM_BSS` were all as written.
+Two things it did find. libDaisy's `core/Makefile` sets `CPP_STANDARD ?= -std=gnu++14`, and
+bellows headers use inline constexpr variables, which GCC accepts under `gnu++14` only as a
+warned extension, so a Daisy project has to assign `CPP_STANDARD` before including that Makefile.
+This is the exact twin of the `build_unflags` finding on Teensy, which makes it a property of the
+library rather than of either SDK. And libDaisy builds the non-interleaved output buffer as an
+uninitialized stack array in `hid/audio.cpp`, so the adapter's habit of zeroing the block before
+the render is load-bearing, not defensive: bellows voices add into the range, and without the
+clear the codec would receive stack garbage.
+
+WHAT HAS NOT BEEN DONE: none of this has been flashed to a board and listened to, on either
+platform. Everything is compile-verified, link-verified and numerically verified against the
+TypeScript, which is a strong position and is not the same as having heard it. On Daisy, only
+`01_OneKick` has been linked to an image; the other four are compile-verified through the
+adapter.
 
 ## Board tiers
 
@@ -324,15 +356,15 @@ snare         3.17e-5   1.32e-5   0.0003  pass
 fm            5.25e-4   9.84e-4    0.005  pass
 modal         1.23e-4   9.42e-5    0.001  pass
 westcoast     2.77e-3   2.20e-3     0.02  pass  iterated wavefolder
-formant       7.85e-4   3.74e-4    0.005  pass
+formant       1.39e-5   1.37e-5  0.00015  pass
 tube          1.70e-3   1.09e-2    0.005  pass  error rides the waveform edges
 eq            2.93e-7   1.79e-7 0.000003  pass
 delay         7.78e-8   2.98e-8 0.000001  pass
 saturator     2.00e-7   1.49e-7 0.000002  pass
 compressor    2.25e-6   1.16e-6  0.00002  pass
 chorus_static 6.31e-6   1.26e-6   0.0001  pass  depth 0: the real DSP gate
-chorus        3.97e-2   2.08e-2     0.06  pass  depth 0.5: sub-sample LFO timing
-plate         2.44e-3   1.91e-3    0.005  pass
+chorus        2.02e-4   8.87e-5    0.002  pass  depth 0.5: sub-sample read position
+plate         1.34e-5   1.00e-5  0.00015  pass
 ```
 
 Gates are set from the measured value at roughly ten times, and that ratio is the point. An
@@ -371,13 +403,35 @@ The `va` row is among the largest drifts and it should be: a ladder filter is no
 recursive, so f32 rounding compounds through four saturating stages. 2e-3 relative is about
 -54 dB.
 
-Two rows are measured differently on purpose. The chorus is bit-identical with modulation off
-and its error scales exactly with depth, because the LFO phase accumulates in float here and in
-double there, and a fractional-sample shift of a white noise read is a large sample difference
-for an identical sound. Sample-wise RMS is the wrong instrument for a time-modulating effect, so
-`chorus_static` is the gate that would actually catch a broken chorus. The tube's few exceeding
-samples sit on the waveform's steep edges, spaced twice per period, where sub-sample timing
-reads as amplitude.
+Two rows are measured differently on purpose. The chorus is bit-identical with modulation off,
+and the modulated row used to sit four orders of magnitude away from it, at 4e-2. Sample-wise RMS
+is the wrong instrument for a time-modulating effect, so `chorus_static` is still the gate that
+would actually catch a broken chorus. The tube's few exceeding samples sit on the waveform's
+steep edges, spaced twice per period, where sub-sample timing reads as amplitude.
+
+The chorus gap turned out to be worth chasing rather than explaining away, and it was not only
+the chorus. Accumulating a cycle position in `float` loses part of every increment to rounding as
+the accumulator approaches 1.0, and the loss is systematic rather than random, so it grows with
+the length of the note instead of averaging out. The TypeScript accumulates in `double`, where
+the same rounding is about 2^29 times smaller. Moving the C++ to a `uint32` counter over one
+cycle (`PhaseIncrement` in `config.h`, used by `dsp/lfo.h` and the `SineCarrier` in `fx/modfx.h`)
+moved three rows at once:
+
+| row | before | after |
+| --- | --- | --- |
+| `chorus` | 3.97e-2 | 2.02e-4 |
+| `plate` | 2.44e-3 | 1.34e-5 |
+| `formant` | 7.85e-4 | 1.39e-5 |
+
+The wrap is the natural unsigned overflow, so it costs neither a compare nor a branch, and the
+whole change is 208 bytes of flash on the modfx sketch, 64 on formant, 24 on plate, 80 on the
+poly synth example, and no RAM anywhere. All three gates were then reset from the new
+measurements and watched failing, on a mutation that put the add back in `float` and reproduced
+the old numbers to two significant figures. Leaving a gate at 0.06 while the thing it measures
+sits at 2.0e-4 would have been finding 16 made again.
+
+What remains in the modulated chorus row is the read position itself, still computed in float
+here and in double there, which is the residual the fixed point phase cannot reach.
 
 ## The strategic fork
 
@@ -400,10 +454,46 @@ needs. At sixteenths and 120 bpm that is eight events per second.
 
 A and C are not exclusive. The library built here is what C runs on the device.
 
-## Known risk
+## Known risk: the pitch-dependent BLEP cost
 
-The pitch-dependent BLEP cost documented in `docs/AUDIT.md` (14x from 55 Hz to 7 kHz on saw)
-interacts badly with fixed polyphony on hardware. Sizing a voice budget at A440 and shipping it
-will produce dropouts on high leads. The frequency-dependent kernel cap should be decided before
-the first board bring-up, not after, and it has to be measured against the existing spectrum
-gates in `test/dsp-osc` rather than by ear.
+Measured and mostly closed, with the last piece deliberately left for the board.
+
+The residual sum walks every edge within the kernel half width, and that window holds
+`2 * KERNEL_HALF * dt + 1` edges, so oscillator cost climbs with pitch. Two corrections to how
+this has been written down so far. The 14x in `docs/AUDIT.md` is 55 Hz against 7 kHz, and 55 Hz
+is an unusually cheap reference: against A440, which is what a polyphony budget is actually sized
+at, it is about 4.4x. And the growth is bounded, not open ended, because `setFreq` clamps dt at
+0.49, so the sum never spans more than about 17 edges and the worst case sits near six times the
+A440 cost. That bound is a fixed, computable number, and it is the one a voice budget has to be
+sized against. Measured in Node, saw, 44100 Hz: 5.7 ns per sample at A440, 25 ns at 7040 Hz,
+36 ns at the clamp.
+
+The obvious fix does not work. A frequency-dependent kernel cap gives up alias rejection exactly
+where it starts to save anything, because truncating the residual at a nonzero value leaves a
+step: at 7040 Hz a four-edge cap saves about a fifth of the cost and costs 39 dB, and tapering
+the truncated kernel recovers only about 13 dB of that.
+
+What does work is the other option, a cheaper form above a threshold. A band-limited saw at
+7040 Hz has two harmonics under the kernel's 0.42 cutoff, so summing them directly is exact.
+BLEP cost rises with dt while the harmonic sum falls as 1/dt, so the two cross near dt 0.16 and
+above the crossover the harmonic sum wins on both axes at once:
+
+| saw, 44100 Hz | BLEP ns | additive ns | BLEP dB | additive dB |
+| --- | --- | --- | --- | --- |
+| 5000 Hz | 21.2 | 33.1 | -87.3 | -94.8 |
+| 7040 Hz | 25.5 | 23.3 | -86.6 | -94.0 |
+| 9000 Hz | 30.8 | 21.5 | -81.0 | -96.1 |
+| 11000 Hz | 36.3 | 10.6 | -89.8 | -97.0 |
+
+That is implemented in the TypeScript as an opt-in (`boundedHighFreq` in an engine's
+construction params), gated by `test/dsp-osc/blep-frequency.test.ts`, and off by default so
+rendered output and the golden render are unchanged.
+
+**It is deliberately not ported to C++ yet, and this is a bring-up measurement.** The entire cost
+argument rests on a sine being cheap, which it is in a browser. On Cortex-M7 with newlib it is
+not: `sinf` drags in `__kernel_rem_pio2f`, which is 1624 bytes of the VA sketch's flash on its
+own, and costs far more than a table lookup and a lerp. So the crossover on the target is not the
+crossover measured above and at `BELLOWS_FAST_MATH=0` it may not exist at all. Measure `fm::Sin`
+against the residual sum on real hardware before porting it, in both fast-math settings. Until
+that measurement exists the C++ keeps the BLEP path at every pitch, which is also why parity is
+unaffected by any of this.

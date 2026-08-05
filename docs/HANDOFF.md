@@ -5,7 +5,7 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 ## Where things stand
 
 - `bellowsjs@0.1.5` is published on npm. Tags pushed to github.com/virgilvox/bellowsjs, main is current. `packages/bellows-embedded` is at 0.1.0 and is not published anywhere yet.
-- Library test suite: 80 files, 1146 tests, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- Library test suite: 81 files, 1163 tests, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`, `vue-tsc`) and was verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples.
 - Embedded: 43 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All five examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library.
@@ -28,7 +28,7 @@ Run all of them from `packages/bellows-embedded` unless noted.
 
 | Command | What it proves | What it caught |
 | --- | --- | --- |
-| `npm test` (in `packages/bellows`) | the TypeScript, including the golden render | the regression fixture is the only whole-piece guard |
+| `npm test` (in `packages/bellows`) | the TypeScript, including the golden render and the oscillator band sweep | the regression fixture is the only whole-piece guard; `test/dsp-osc/blep-frequency.test.ts` is the only thing that can see alias rejection collapse above 2637 Hz |
 | `npm run parity` | 19 C++ modules match the TypeScript numerically | the `eq.h` three-band-mislabelled-as-port, the `StereoDelay` clamp bug |
 | `npm run tables` | euclid, scales, chords, notes, CA, arp, tempo map, MIDI compared EXACTLY | nothing yet, but it is the only thing that can see a wrong scale table |
 | `npm run fastmath` | every polynomial in `core/fastmath.h` against libm | `fm::Log2` wrong by 213 cents, inherited by every `Pow` |
@@ -42,7 +42,8 @@ Rules learned the hard way about these:
 2. **Mutation test a gate before you trust it.** Both harnesses have been shown to fail on a deliberate break and pass on its revert. A gate nobody has watched fail is a gate nobody should trust.
 3. **The PRNG row must be exactly zero.** If it is not, nothing below it means anything and the DSP is not the thing to look at.
 4. **`check-header.sh` proves less than it looks.** It generates its own `main()` and instantiates nothing, so templates are dead-stripped. To exercise template bodies you need a translation unit that constructs and drives the classes; the size sketches in `test/sketches/` do that.
-5. **Sample-wise RMS is the wrong instrument for a time-modulating effect.** The chorus is bit-identical with modulation off and drifts in proportion to depth, because LFO phase accumulates in float here and double there. `chorus_static` is the row that would actually catch a broken chorus.
+5. **Sample-wise RMS is the wrong instrument for a time-modulating effect.** The chorus is bit-identical with modulation off, and the modulated row used to drift in proportion to depth. That cause is now fixed (the fixed point phase in Milestone 2 took it from 4e-2 to 2.0e-4), but the principle stands and `chorus_static` is still the row that would actually catch a broken chorus. What remains in the modulated row is the read position, computed in float here and double there.
+6. **A gate that only looks at one frequency is not a gate on an oscillator.** `test/dsp-osc/oscillators.test.ts` measured alias rejection at 2637 Hz only. A four-edge kernel cap passes all seventeen of its tests while costing 39 dB at 7040 Hz. `test/dsp-osc/blep-frequency.test.ts` sweeps the band with per-frequency floors set from measurement, and that mutation is exactly what it was watched failing on.
 
 ## Things that are not obvious from the code
 
@@ -84,10 +85,17 @@ The unvalidated assumption. Everything else is built on the belief that this wor
 
 ### Milestone 2: close the two known DSP risks
 
-Both are identified, measured, and deliberately deferred. Do them before building more on top.
+Both are now done in the TypeScript and the C++ respectively, with one part deliberately left for the board. What follows is what the measurements actually said, because in both cases they changed the answer.
 
-- **BLEP pitch cost.** The residual sum loops over every edge within the kernel half-width, and that window grows with frequency: saw costs 14x more at 7 kHz than at 55 Hz. Any fixed polyphony budget sized at A440 will drop out on a high lead. Decide a frequency-dependent kernel cap, or a cheaper fallback above a threshold. It must be measured against the existing spectrum gates in `test/dsp-osc`, not judged by ear. Do this in the TypeScript first, then let parity carry it to the C++.
-- **LFO phase in fixed point.** Accumulate phase as a `uint32` counter instead of a float. It never drifts, it is cheaper than float, and it would close most of the chorus parity gap (currently 4e-2, versus 6.3e-6 with modulation off). Touches `bellows/fx/modfx.h` and `bellows/dsp/lfo.h`. Re-run `npm run parity` after.
+- **BLEP pitch cost: DONE in the TypeScript, and the expected fix was the wrong one.** Measured properly, a saw costs about 5.7 ns per sample at A440 and 25 ns at 7040 Hz. The often-quoted 14x is against 55 Hz, which is an unusually cheap reference; against A440 it is about 4.4x, and because `setFreq` clamps dt at 0.49 the sum never spans more than about 17 edges, so the growth is bounded at roughly 6x rather than open ended. That bound is the number a polyphony budget has to be sized against, and it is a fixed, computable number.
+
+  A frequency-dependent kernel cap turned out to be a bad instrument: rejection falls off a cliff exactly where the cap starts to bind. At 7040 Hz a four-edge cap saves about a fifth of the cost and gives up 39 dB, and tapering the truncated kernel buys back only about 13 dB of that. What works instead is the other option: above the crossover the surviving harmonics can simply be summed, and because BLEP cost rises with dt while the harmonic sum falls as 1/dt, the two cross near dt 0.16 and above it the harmonic sum is **both cheaper and cleaner**. Measured on saw: at 9000 Hz, 30.8 ns and -81.0 dB against 21.5 ns and -96.1 dB.
+
+  It ships as an opt-in (`boundedHighFreq: 1` in an engine's construction params, `highFreq` on `BlepOscillator` directly) because turning it on changes rendered output above the crossover and this library promises a seed reproduces a render. The default path is untouched, so the golden render is byte-identical. Reachable on `va`, `westcoast`, `formant`, `snare` and `hat`.
+
+  NOT ported to C++ on purpose, and this is the part that needs the board. The whole cost argument rests on a sine being cheap. In the browser it is. On a Cortex-M7 with newlib, `sinf` drags in `__kernel_rem_pio2f` and is far more expensive than a table lookup, so the crossover on the target is probably not the crossover measured here and may not exist at all at `BELLOWS_FAST_MATH=0`. Measure `fm::Sin` against the residual sum on real hardware before porting it. Until then the C++ keeps the BLEP path at every pitch, which is why parity is unaffected.
+
+- **LFO phase in fixed point: DONE, and it was worth more than expected.** Phase now accumulates as a `uint32` counter in `bellows/config.h` (`PhaseIncrement`, `PhaseFromCycles`, `kPhaseToUnit`), used by `dsp/lfo.h` and by the `SineCarrier` in `fx/modfx.h`. The wrap is the natural unsigned overflow, so it costs neither a compare nor a branch. It moved three parity rows, not one: chorus 3.97e-2 to 2.02e-4, plate 2.44e-3 to 1.34e-5, formant 7.85e-4 to 1.39e-5. All three gates were retightened from the new measurements, and all three were watched failing on a mutation that put the add back in float, which reproduced the old numbers to two significant figures. Cost: 208 bytes of flash on the modfx sketch, 64 on formant, 24 on plate, no RAM.
 
 ### Milestone 3: finish the layers that are nearly free
 
