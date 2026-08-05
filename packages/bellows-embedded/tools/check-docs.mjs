@@ -74,6 +74,8 @@ import { fileURLToPath } from 'node:url';
  * sketches by 26 KB, 152 KB, hundreds of bytes and 2.7x, not by eight.
  */
 const HOST_DRIFT_BYTES = 16;
+/* Relative allowance for a measured figure, see agrees(). */
+const HOST_DRIFT_RELATIVE = 0.1;
 const ALLOW_HOST_DRIFT = process.argv.includes('--allow-host-drift');
 let driftAllowed = 0;
 
@@ -903,6 +905,34 @@ function agrees(text, actual) {
       driftAllowed++;
       console.log(`  host drift allowed in prose: doc ${text} against ${actual}, delta ${delta}`);
       return true;
+    }
+  }
+  /*
+   * Measured parity figures move between hosts too, for the same reason the
+   * byte figures do: the C++ side calls libm, and glibc and macOS disagree in
+   * the last few bits of sin, exp and their neighbours, which reaches the
+   * third significant figure of a difference this small. Measured on the first
+   * runs: formant 1.39e-5 against 1.47e-5, 5.8 percent, and saturator 1.92e-7
+   * against 1.94e-7, 1.0 percent.
+   *
+   * HOST_DRIFT_RELATIVE is the allowance for a documented measurement, not for
+   * the gate. The gates in parity.mjs sit at roughly ten times their
+   * measurement and are unaffected by this: they passed on both hosts
+   * throughout. So this is about a hundred times tighter than the thing that
+   * actually decides whether the port still matches.
+   */
+  if (ALLOW_HOST_DRIFT && Number.isFinite(actual) && Number.isFinite(Number(text))) {
+    const want = Number(text);
+    if (want !== 0) {
+      const rel = Math.abs(actual - want) / Math.abs(want);
+      if (rel <= HOST_DRIFT_RELATIVE) {
+        driftAllowed++;
+        console.log(
+          `  host drift allowed, measured: doc ${text} against ${actual}, ` +
+            `${(rel * 100).toFixed(1)} percent`,
+        );
+        return true;
+      }
     }
   }
   return false;
