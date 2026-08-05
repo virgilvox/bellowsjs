@@ -17,6 +17,17 @@ class BlepOsc {
   void SetFreq(float hz) {
     float d = hz / sr_;
     dt_ = d < 0.0f ? 0.0f : (d > 0.49f ? 0.49f : d);
+    /* The residual sum needs (x - m) / dt once per EDGE, and dt does not
+     * change inside that loop, so the reciprocal is taken here instead.
+     * Without -ffast-math the compiler will not do this for you: it is not
+     * an IEEE-preserving transform. Compiled for Cortex-M7 at -Os it
+     * removes the one vdiv.f32 from the loop and puts a vmul in its place,
+     * and vdiv is roughly fourteen cycles and unpipelined against one to
+     * three for vmul. The instruction count does not move, so the win is
+     * latency rather than size, and it is NOT measured: nothing here has
+     * run on a board. The bring-up sketch's per-stage CPU readout is where
+     * it gets confirmed or dropped. */
+    inv_dt_ = dt_ > 0.0f ? 1.0f / dt_ : 0.0f;
   }
   void SetPulseWidth(float pw) { pw_ = pw < 0.01f ? 0.01f : (pw > 0.99f ? 0.99f : pw); }
   void Reset(float phase = 0.0f) { phase_ = phase - floorf(phase); }
@@ -117,7 +128,7 @@ class BlepOsc {
     int lo = static_cast<int>(ceilf(x - w));
     int hi = static_cast<int>(floorf(x + w));
     float y = 0.0f;
-    for (int m = lo; m <= hi; ++m) y += height * BlepResidual((x - static_cast<float>(m)) / dt);
+    for (int m = lo; m <= hi; ++m) y += height * BlepResidual((x - static_cast<float>(m)) * inv_dt_);
     return y;
   }
 
@@ -127,11 +138,11 @@ class BlepOsc {
     int lo = static_cast<int>(ceilf(x - w));
     int hi = static_cast<int>(floorf(x + w));
     float y = 0.0f;
-    for (int m = lo; m <= hi; ++m) y += mu * BlampResidual((x - static_cast<float>(m)) / dt);
+    for (int m = lo; m <= hi; ++m) y += mu * BlampResidual((x - static_cast<float>(m)) * inv_dt_);
     return y;
   }
 
-  float sr_ = 48000.0f, phase_ = 0.0f, dt_ = 0.0f, pw_ = 0.5f;
+  float sr_ = 48000.0f, phase_ = 0.0f, dt_ = 0.0f, inv_dt_ = 0.0f, pw_ = 0.5f;
   BlepShape shape_ = BlepShape::kSaw;
 };
 

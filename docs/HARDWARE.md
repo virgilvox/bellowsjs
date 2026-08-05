@@ -51,7 +51,7 @@ These are measured decisions, not style preferences.
    | --- | --- | --- |
    | `Kick` used directly | 3760 B | 1100 B |
    | through `Bank<Kick>` with a runtime index | 3760 B | 1104 B |
-   | through a string-keyed registry of five engines | 30448 B | 30828 B |
+   | through a string-keyed registry of five engines | 30488 B | 30872 B |
 
    Eight times the flash and twenty-eight times the RAM for the same sound. A registry names
    every engine, so the linker must keep every engine, every constant table and every delay
@@ -116,12 +116,12 @@ it. Measured, Cortex-M7:
 | `s1_kick` | 3760 B | 924 B | 75 % |
 | `s3_pluck` | 6552 B | 2276 B | 65 % |
 | `s9g_tube` | 5000 B | 3020 B | 39 % |
-| `p1_drums` | 20832 B | 12816 B | 38 % |
-| `s9e_westcoast` | 16768 B | 11184 B | 33 % |
-| `s4_va` | 28528 B | 20628 B | 27 % |
-| `p2_poly8` | 30936 B | 22616 B | 26 % |
-| `s9f_formant` | 28280 B | 20968 B | 25 % |
-| `s5_all` | 35056 B | 26064 B | 25 % |
+| `p1_drums` | 20856 B | 12908 B | 38 % |
+| `s9e_westcoast` | 16784 B | 11204 B | 33 % |
+| `s4_va` | 28576 B | 20664 B | 27 % |
+| `p2_poly8` | 30984 B | 22652 B | 26 % |
+| `s9f_formant` | 28344 B | 21028 B | 25 % |
+| `s5_all` | 35104 B | 26112 B | 25 % |
 | `s9m_seq` | 5296 B | 5296 B | 0 % |
 
 The sequencing row is 0 percent and should be: it is integer and small-float work over const
@@ -234,8 +234,8 @@ it, so these are real costs and not a floor. Reproduce with `./tools/size-report
 | `fx/plate` | 5664 B | 156728 B | Dattorro tank, the RAM is the tank |
 | `engines/modal` | 5944 B | 1584 B | five material tables in flash |
 | `kernel` | 6208 B | 2492 B | event queue plus block splitting |
-| `engines/westcoast` | 16768 B | 1200 B | BLEP tables dominate |
-| `engines/formant` | 28280 B | 1496 B | BLEP tables dominate |
+| `engines/westcoast` | 16784 B | 1204 B | BLEP tables dominate |
+| `engines/formant` | 28344 B | 1500 B | BLEP tables dominate |
 
 The BLEP tables are 16 KB and shared, so the first module that needs them pays and every later
 one is nearly free. `fm`, `modal`, `tube` and `pluck` do not need them at all, which is why an
@@ -257,7 +257,7 @@ rodata, because `nm -S` will otherwise hand you the delay buffer and drown every
 | --- | --- | --- |
 | `kBlepStep` and `kBlepRamp` residual tables | 16392 | 47 % |
 | newlib libm | 8828 | 25 % |
-| every line of bellows DSP | 5664 | 16 % |
+| every line of bellows DSP | 5704 | 16 % |
 | the sketch's own harness and startup | 3670 | 10 % |
 
 An earlier revision of this table said 18 percent libm and 35 percent DSP. Those were estimated
@@ -287,10 +287,10 @@ even in a program that only ever plays a saw. `ProcessSaw()`, `ProcessSquare()`,
 
 | call | sketch | flash | tables kept |
 | --- | --- | --- | --- |
-| `Process()` | `s10a_osc_runtime` | 18944 B | both |
-| `ProcessSaw()` | `s10b_osc_saw` | 8540 B | step only |
-| `ProcessTriangle()` | `s10c_osc_tri` | 8608 B | ramp only |
-| `ProcessSine()` | `s10d_osc_sine` | 1960 B | neither |
+| `Process()` | `s10a_osc_runtime` | 18968 B | both |
+| `ProcessSaw()` | `s10b_osc_saw` | 8552 B | step only |
+| `ProcessTriangle()` | `s10c_osc_tri` | 8616 B | ramp only |
+| `ProcessSine()` | `s10d_osc_sine` | 1968 B | neither |
 
 Those four are sketches in `test/sketches/`, so the size report prints them like every other
 number here. The runtime one holds its shape in `volatile` storage on purpose: given a constant
@@ -358,14 +358,32 @@ Q15 version on M7, because the FPU is quick and the fixed-point path has to carr
 and post-shifting. Fixed point is not a free win above the M4 line. It is a win where there is
 no FPU at all.
 
-### The one gap that looked real and is not
+### The gap that was not there, and the one that was
 
 The Teensy design note argues that block processing beats per-sample work, and every bellows
-engine calls its oscillator once per sample, which looks like the same mistake. It is not.
-Compiled for Cortex-M7 at `-Os`, the innermost loop of a saw render is five instructions and
-reloads neither `dt_` nor `phase_`: GCC has already hoisted everything a hand-written block API
-would hoist by hand. The Teensy lesson is about DMA and interrupt overhead at the driver level,
-which this library does not own.
+engine calls its oscillator once per sample, which looks like the same mistake.
+
+An earlier revision of this section said the innermost loop of a saw render was five
+instructions, and concluded from that that GCC had already hoisted everything a block API would.
+That was wrong, and wrong in a way worth recording: the script that produced it treated any
+backward branch as a loop, and the five-instruction "loop" it found was a forward branch
+rejoining after `BlepResidual`'s out-of-range early return. A backward branch is not a loop.
+
+Disassembled properly, a saw render for Cortex-M7 at `-Os` is 73 instructions with two real
+nested loops: a 28-instruction edge loop inside a 63-instruction per-sample loop. The
+conclusion about block processing does survive, for the original reason: the Teensy lesson is
+about DMA and interrupt overhead at the driver level, and `BellowsAudioStream` sits on top of
+that library's own DMA, so the amortisation is already paid underneath.
+
+What the correct disassembly did show is a real cost the wrong one had hidden. The edge loop
+contained a `vdiv.f32`, one floating-point division per edge, computing `(x - m) / dt` with a
+`dt` that cannot change inside the loop. That is precisely what Mozzi's oldest piece of advice
+warns about. The reciprocal is now taken in `SetFreq` and the loop multiplies: the `vdiv` is
+gone, the instruction count is unchanged at 73, and every parity row is unchanged to the
+precision the harness prints. On paper that is worth having, because `vdiv.f32` is around
+fourteen cycles and unpipelined against one to three for `vmul.f32`, and at 7040 Hz the sum
+spans about five edges per sample. It is not measured: the cycle claim needs the board, and the
+bring-up sketch's per-stage CPU readout is where it gets confirmed or dropped.
 
 ### What is actually left, in order
 
@@ -387,11 +405,11 @@ anything the size report actually builds:
 | --- | --- | --- | --- |
 | kick only | `s1_kick` | 3760 B | 1100 B |
 | kick only, `BELLOWS_FAST_MATH=1` | `s1_kick` with the flag | 924 B | 1084 B |
-| three piece kit | `s2_kit` | 28208 B | 1500 B |
-| kit plus EQ and a 250 ms delay | `p1_drums` | 20832 B | 98680 B |
-| 8 voice VA poly, EQ, 250 ms delay | `p2_poly8` | 30936 B | 100184 B |
-| 8 VA plus 8 `Pluck<80>` plus kit, EQ, delay | `p3_workstation` | 34736 B | 160216 B |
-| everything constructed and driven at once | `s5_all` | 35056 B | 223280 B |
+| three piece kit | `s2_kit` | 28248 B | 1532 B |
+| kit plus EQ and a 250 ms delay | `p1_drums` | 20856 B | 98776 B |
+| 8 voice VA poly, EQ, 250 ms delay | `p2_poly8` | 30984 B | 100280 B |
+| 8 VA plus 8 `Pluck<80>` plus kit, EQ, delay | `p3_workstation` | 34768 B | 160408 B |
+| everything constructed and driven at once | `s5_all` | 35104 B | 223324 B |
 
 And the shipped examples, whose numbers come from the same logic headers the sketches compile,
 so they cannot drift from the code:
@@ -399,10 +417,10 @@ so they cannot drift from the code:
 | Example | flash | RAM |
 | --- | --- | --- |
 | `01_OneKick` | 3776 B | 1100 B |
-| `02_DrumMachine` (bank plus euclid) | 29640 B | 1588 B |
-| `03_PolySynth` (`VoicePool<Va, 8>`) | 30360 B | 3776 B |
+| `02_DrumMachine` (bank plus euclid) | 29688 B | 1620 B |
+| `03_PolySynth` (`VoicePool<Va, 8>`) | 30408 B | 3872 B |
 | `04_ScalesAndTuning` | 7936 B | 30176 B |
-| `05_MidiInstrument` | 30296 B | 3792 B |
+| `05_MidiInstrument` | 30344 B | 3888 B |
 
 Against real boards, using the largest profile:
 
@@ -432,27 +450,32 @@ core and audio library included:
 | Example | flash total | RAM1 used | RAM1 free |
 | --- | --- | --- | --- |
 | `01_OneKick` | 36860 B | 27208 B | 482400 B |
-| `02_DrumMachine` | 65532 B | 55912 B | 463968 B |
-| `03_PolySynth` | 67580 B | 58408 B | 461920 B |
+| `02_DrumMachine` | 65532 B | 56072 B | 463968 B |
+| `03_PolySynth` | 67580 B | 58616 B | 461920 B |
 | `04_ScalesAndTuning` | 40956 B | 61240 B | 452256 B |
-| `05_MidiInstrument` | 68604 B | 59736 B | 461568 B |
+| `05_MidiInstrument` | 68604 B | 59928 B | 461568 B |
 
 Teensy 4.1 has 8 MB of flash and 512 KB of RAM1 plus 512 KB of RAM2, so the largest of these
 leaves about 8.06 MB of flash and 445 KB of RAM1 free, with RAM2 essentially untouched.
 
 The share that is bellows is worth knowing before reading any percentage in this document.
-Counting sized symbols in the `05_MidiInstrument` image: bellows is 26122 bytes, 31 percent,
-and the Arduino core, Audio Library, libm and USB stack are 57830 bytes, 68 percent. So a
-saving expressed as a fraction of the library is a much smaller fraction of the firmware. The
-fast-math table above says 75 percent on a kick; the same flag on the same kick as complete
-firmware is 5 percent, because it cannot touch the two thirds that is not bellows:
+Counting the sized code and rodata symbols in the `05_MidiInstrument` image, deduped by address:
+bellows is 22856 bytes and 42 percent, and the Arduino core, Audio Library, libm and USB stack
+are 31802 bytes and 58 percent. So a saving expressed as a fraction of the library is a smaller
+fraction of the firmware, and the fast-math table above saying 75 percent on a kick is not the
+number that decides anything on a board.
+
+What the flag actually does to the image is worth seeing, because it is not a simple shrink.
+The same measurement on the fast-math build gives bellows 26326 bytes and everything else 24842:
+bellows GROWS by 3470 while the rest falls by 6960, because the polynomials get inlined into
+bellows functions and stop being libm symbols. The image nets 4096 bytes smaller:
 
 | firmware | default | `BELLOWS_FAST_MATH=1` | saved |
 | --- | --- | --- | --- |
 | `01_OneKick` | 36860 B | 34812 B | 2048 B, 5 % |
 | `02_DrumMachine` | 65532 B | 59388 B | 6144 B, 9 % |
 | `03_PolySynth` | 67580 B | 64508 B | 3072 B, 4 % |
-| `05_MidiInstrument` | 68604 B | 63484 B | 5120 B, 7 % |
+| `05_MidiInstrument` | 68604 B | 64508 B | 4096 B, 5 % |
 
 Two to six kilobytes is nothing against a Teensy 4.1's 8 MB and worth having against a Daisy's
 128 KB of internal flash, which is the honest way to decide whether the flag is worth its

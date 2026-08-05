@@ -266,12 +266,12 @@ Library:
 
 | | bytes |
 | --- | --- |
-| FLASH code | 45320 |
+| FLASH code | 45960 |
 | FLASH data | 32032 |
-| FLASH headers | 8660 |
-| FLASH total | 86012 of 8126464 |
+| FLASH headers | 9044 |
+| FLASH total | 87036 of 8126464 |
 | RAM1 variables | 34816 |
-| RAM1 code | 42056 |
+| RAM1 code | 42696 |
 | RAM1 free for local variables | 423936 |
 | RAM2 variables | 24320 |
 
