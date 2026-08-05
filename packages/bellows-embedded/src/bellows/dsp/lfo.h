@@ -20,13 +20,7 @@ class Lfo {
     held_ = rng_ ? rng_->Bipolar() : 0.0f;
   }
 
-  /* Clamped in double to match the JS, which computes dt from two doubles
-   * before the phase ever sees it. See PhaseIncrement in config.h for why
-   * a double here does not reach the audio path. */
-  void SetFreq(float hz) {
-    const double dt = static_cast<double>(hz) / static_cast<double>(sr_);
-    inc_ = PhaseIncrement(dt < 0.0 ? 0.0 : (dt > 0.5 ? 0.5 : dt));
-  }
+  void SetFreq(float hz) { inc_ = PhaseIncrement(Clamp(hz / sr_, 0.0f, 0.5f)); }
   void SetShape(LfoShape s) { shape_ = s; }
 
   /* Sets phase (fractional part is used). Does not draw from the rng. */

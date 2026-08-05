@@ -80,29 +80,43 @@ inline constexpr int ClampI(int v, int lo, int hi) {
  * which is half of 2^-32 of a cycle.
  */
 inline constexpr float kPhaseToUnit = 2.32830643653870e-10f; /* 1 / 2^32 */
-inline constexpr double kPhaseScale = 4294967296.0;          /* 2^32 */
+inline constexpr float kPhaseScale = 4294967296.0f;          /* 2^32 */
 
 /*
- * Cycles per sample to a phase increment. Computes in double because it
- * runs from a setter and never from the audio path, so the cost does not
- * reach an inner loop even on a single precision part, and because
- * rounding rather than truncating halves the residual bias.
+ * Cycles per sample to a phase increment.
+ *
+ * All of this is single precision on purpose. An earlier revision computed
+ * it in double on the grounds that a setter is not the audio path, which
+ * was wrong twice over: engines/formant.h calls SetFreq once per sample to
+ * apply vibrato, so it IS the audio path there; and on a single-precision
+ * part the double pulled in soft-float, costing 2560 bytes of flash on the
+ * modfx sketch for Cortex-M4 against 208 for Cortex-M7. The double bought
+ * nothing anyway. Multiplying a float by 2^32 only moves the exponent, so
+ * the product is exact, and adding 0.5 rounds where a fractional part can
+ * still exist (below 2^24) and is a harmless no-op above it, where the
+ * product is already an even integer.
  */
-inline uint32_t PhaseIncrement(double cycles_per_sample) {
-  if (!(cycles_per_sample > 0.0)) return 0u;
-  const double scaled = cycles_per_sample * kPhaseScale + 0.5;
-  return scaled >= kPhaseScale ? 0xFFFFFFFFu : static_cast<uint32_t>(scaled);
+inline uint32_t PhaseIncrement(float cycles_per_sample) {
+  if (!(cycles_per_sample > 0.0f)) return 0u;
+  /* 0.5 cycles per sample is Nyquist and every caller clamps there, so the
+   * increment cannot exceed 2^31. Saturating at 0xFFFFFFFF would be the one
+   * value the wrap detector cannot see, because adding it can never carry. */
+  const float clamped = cycles_per_sample > 0.5f ? 0.5f : cycles_per_sample;
+  return static_cast<uint32_t>(clamped * kPhaseScale + 0.5f);
 }
 
 /*
  * A cycle position to a phase counter, mirroring the JS phase - floor(phase).
- * The guard catches a tiny negative input whose fraction rounds up to a
- * whole cycle, which would otherwise convert out of range.
+ *
+ * A tiny negative input rounds its fraction up to exactly 1.0f, and the
+ * guard sends that to 0. That is the right answer rather than a lost case:
+ * the counter is modulo one cycle, so a whole cycle and none of one are the
+ * same position, and the two differ by less than the counter can represent.
  */
 inline uint32_t PhaseFromCycles(float phase) {
   const float frac = phase - floorf(phase);
   if (!(frac > 0.0f) || frac >= 1.0f) return 0u;
-  return static_cast<uint32_t>(static_cast<double>(frac) * kPhaseScale);
+  return static_cast<uint32_t>(frac * kPhaseScale);
 }
 
 }  // namespace bellows
