@@ -18,15 +18,19 @@
  *
  * kPolyLow and kPolyHigh play the same eight notes six octaves apart, with
  * identical parameters, identical voice count and identical master gain.
- * The only variable is pitch. docs/AUDIT.md measured a bare saw
- * BlepOscillator at 5.1 ns/sample at 55 Hz and 71.1 at 7040 Hz, a factor of
- * 14, because SumBlep loops over every edge within kBlepKernelHalf * dt of
- * the current phase and that window grows linearly with frequency. A
- * polyphony budget sized at A440 therefore drops out on a high lead, and
- * that is the one thing a first bring-up can measure that nothing in the
- * repository currently covers.
+ * The only variable is pitch. SumBlep walks the edges within
+ * kBlepKernelHalf * dt of the current phase, and the average count of those
+ * per sample is exactly 2 * kBlepKernelHalf * dt: 0.32 at A440, 5.1 at
+ * 7040 Hz. That is the durable statement of the cost. The host measured the
+ * same class through two benchmark harnesses and got 22.6 and 59.8 ns per
+ * sample at 7040 Hz, so ns figures from a microbenchmark are not worth
+ * carrying onto a board; a ratio measured on the device is.
  *
- * Expect the measured ratio here to be smaller than 14. These are whole Va
+ * The 14x in docs/AUDIT.md is 55 Hz against 7040 Hz, and 55 Hz is an
+ * unusually cheap reference. Measured against A440 in one process the bare
+ * oscillator is about 3.7x at 7040 Hz and peaks at 9.0x at the dt clamp.
+ *
+ * Expect the measured ratio here to be smaller again. These are whole Va
  * voices: two BLEP oscillators plus a square sub, a ladder filter, two
  * envelopes and a control-rate update every 16 samples, and everything
  * except the three oscillators costs the same at both pitches. The number

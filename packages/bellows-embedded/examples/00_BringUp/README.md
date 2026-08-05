@@ -102,9 +102,11 @@ waiting for it to come round.
 ### 1. SILENCE (baseline)
 
 - **Hear**: nothing. No hiss, no hum, no ticking.
-- **PASS**: silence, and a `cpu max` of roughly 1 to 2 percent, which is the
-  audio graph's own cost with no DSP in it. Every later stage is worth
-  reading as its figure minus this one.
+- **PASS**: silence. Write down whatever `cpu max` reads: it is the audio
+  graph's own cost with no DSP in it, and every later stage is worth reading
+  as its figure minus this one. No expected value is given because no board
+  has produced one yet, and inventing a threshold here would be the exact
+  mistake this document is trying to avoid.
 - **Hum or buzz**: USB ground loop from the host, or the headphone cable
   running across the board. Try the board on a battery or a phone charger.
 - **Ticking at about 344 Hz**: blocks are not being produced. Check the
@@ -206,18 +208,28 @@ headed `BLEP PITCH COST`.
 - [ ] The voice ceiling line: how many voices fit at 7 kHz before the block
       budget runs out.
 
-`docs/AUDIT.md` measured a bare saw `BlepOscillator` at 5.1 ns/sample at
-55 Hz and 71.1 at 7040 Hz, a factor of 14, because the residual sum loops
-over every edge inside the kernel half-width and that window grows with
-frequency. Expect a smaller ratio here: these are whole `Va` voices, and the
+The residual sum walks the edges inside the kernel half-width, and the
+average count of those per sample is exactly `2 * KERNEL_HALF * dt`: 0.32 at
+A440, 5.1 at 7040 Hz. Measured on the host as a ratio in one process, a bare
+saw oscillator costs about 3.7x its A440 cost at 7040 Hz and peaks at 9.0x at
+the dt clamp. The 14x quoted in `docs/AUDIT.md` is against 55 Hz, which is an
+unusually cheap reference, and host ns figures are harness-dependent enough
+that only the ratio is worth carrying over.
+
+Expect a smaller ratio here again: these are whole `Va` voices, and the
 ladder filter, the two envelopes and the control-rate update every 16 samples
 cost the same at both pitches. The number that comes out is the one that
 sizes a real voice budget, which is why the stage plays voices rather than
 bare oscillators.
 
-If the ratio is far above 4x, or the ceiling is below about 6 voices, the
-frequency-dependent kernel cap in Milestone 2 of `docs/HANDOFF.md` moves
-ahead of everything else.
+There is no host-derived threshold worth stating for this, because nothing
+has run on a board yet: write the ratio and the ceiling down and compare them
+against the block budget, not against a number from here. If the ceiling is
+low enough to constrain the patch you want, the option to reach for is
+`boundedHighFreq` in Milestone 2 of `docs/HANDOFF.md`, which is implemented
+in the TypeScript and deliberately not ported to C++ until exactly this
+measurement exists. Note that it only helps above about 9.7 kHz, so if the
+pain is at 2 to 7 kHz the answer is a smaller voice count, not that option.
 
 ## 7. What the dropout line does and does not prove
 
@@ -254,12 +266,12 @@ Library:
 
 | | bytes |
 | --- | --- |
-| FLASH code | 42312 |
+| FLASH code | 42376 |
 | FLASH data | 32032 |
-| FLASH headers | 8596 |
+| FLASH headers | 8532 |
 | FLASH total | 82940 of 8126464 |
 | RAM1 variables | 34816 |
-| RAM1 code | 39048 |
+| RAM1 code | 39112 |
 | RAM1 free for local variables | 423936 |
 | RAM2 variables | 24320 |
 

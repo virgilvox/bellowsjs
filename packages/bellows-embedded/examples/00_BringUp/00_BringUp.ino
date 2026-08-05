@@ -21,12 +21,13 @@
  *
  * The last two stages play the same eight notes six octaves apart with
  * identical voices, identical polyphony and identical gain, and report
- * AudioProcessorUsageMax for each separately. docs/AUDIT.md measured a bare
- * saw BlepOscillator at 5.1 ns/sample at 55 Hz and 71.1 at 7040 Hz, because
- * the residual sum loops over every edge inside the kernel half-width and
- * that window grows with frequency. A voice budget sized at A440 will
- * therefore drop out on a high lead, and the ratio printed at the end of
- * each pass is the number that sizes the budget honestly.
+ * AudioProcessorUsageMax for each separately. The residual sum walks the
+ * edges inside the kernel half-width, and the average count of those per
+ * sample is exactly 2 * KERNEL_HALF * dt: 0.32 at A440, 5.1 at 7040 Hz. A
+ * voice budget sized at A440 therefore costs more on a high lead, and the
+ * ratio printed at the end of each pass is the number that sizes the budget
+ * honestly. It is the ratio that matters and not any host ns figure: the
+ * same class measured through two host harnesses differed by 2.6x.
  *
  * WIRING (Teensy 4.1 plus the Rev D audio shield)
  *   Shield on the header pins, headphones in the shield's jack, USB to the
@@ -186,12 +187,15 @@ static void PrintHeader() {
   Serial.println("                       reset at the start of every stage so");
   Serial.println("                       each figure belongs to one stage. It");
   Serial.println("                       is time spent inside the audio");
-  Serial.println("                       interrupt, so serial traffic here in");
-  Serial.println("                       loop() cannot inflate it.");
+  Serial.println("                       interrupt. Printing from loop() runs");
+  Serial.println("                       below it, but USB interrupts do not,");
+  Serial.println("                       so treat it as mostly independent of");
+  Serial.println("                       serial traffic rather than immune.");
   Serial.println("    audio mem max      AudioMemoryUsageMax against the");
-  Serial.println("                       allocation. Reaching the allocation");
-  Serial.println("                       means allocate() returned null and a");
-  Serial.println("                       block was genuinely not produced.");
+  Serial.println("                       allocation. Reaching it means the");
+  Serial.println("                       pool ran to its limit, which makes a");
+  Serial.println("                       failed allocate() possible. It does");
+  Serial.println("                       not prove one happened.");
   Serial.println("    frames / drift     frames the render was asked for");
   Serial.println("                       against elapsed wall time. See the");
   Serial.println("                       note under the first result.");
@@ -355,8 +359,8 @@ static void PrintSummary() {
   }
 
   Serial.println();
-  Serial.println("  docs/AUDIT.md measured 14x on a bare saw oscillator");
-  Serial.println("  between the same two pitches. Expect less than that here:");
+  Serial.println("  A bare saw oscillator is about 3.7x from A440 to 7 kHz");
+  Serial.println("  on the host. Expect less than that here:");
   Serial.println("  these are whole voices, and the ladder filter, envelopes");
   Serial.println("  and control-rate update cost the same at both pitches.");
   Serial.println();

@@ -1,8 +1,9 @@
 # examples
 
 Five sketches in Arduino layout, ordered so each one adds a single idea.
-Every one is a real program: it compiles, it makes sound, and its cost is
-measured rather than estimated.
+Every one is a real program: it compiles, it links as Teensy 4.1 firmware,
+and its cost is measured rather than estimated. None of them has been
+flashed to a board and listened to, which is what `00_BringUp` is for.
 
 Start with `00_BringUp`, which is not one of the five. It is the checklist
 for the first session with a board in hand: it prints the real sample rate,

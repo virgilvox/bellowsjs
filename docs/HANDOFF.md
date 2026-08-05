@@ -5,7 +5,7 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 ## Where things stand
 
 - `bellowsjs@0.1.5` is published on npm. Tags pushed to github.com/virgilvox/bellowsjs, main is current. `packages/bellows-embedded` is at 0.1.0 and is not published anywhere yet.
-- Library test suite: 81 files, 1163 tests, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- Library test suite: 81 files, 1173 tests, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`, `vue-tsc`) and was verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples.
 - Embedded: 43 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All five examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library.
@@ -43,7 +43,9 @@ Rules learned the hard way about these:
 3. **The PRNG row must be exactly zero.** If it is not, nothing below it means anything and the DSP is not the thing to look at.
 4. **`check-header.sh` proves less than it looks.** It generates its own `main()` and instantiates nothing, so templates are dead-stripped. To exercise template bodies you need a translation unit that constructs and drives the classes; the size sketches in `test/sketches/` do that.
 5. **Sample-wise RMS is the wrong instrument for a time-modulating effect.** The chorus is bit-identical with modulation off, and the modulated row used to drift in proportion to depth. That cause is now fixed (the fixed point phase in Milestone 2 took it from 4e-2 to 2.0e-4), but the principle stands and `chorus_static` is still the row that would actually catch a broken chorus. What remains in the modulated row is the read position, computed in float here and double there.
-6. **A gate that only looks at one frequency is not a gate on an oscillator.** `test/dsp-osc/oscillators.test.ts` measured alias rejection at 2637 Hz only. A four-edge kernel cap passes all seventeen of its tests while costing 39 dB at 7040 Hz. `test/dsp-osc/blep-frequency.test.ts` sweeps the band with per-frequency floors set from measurement, and that mutation is exactly what it was watched failing on.
+6. **A gate that only looks at one frequency is not a gate on an oscillator.** `test/dsp-osc/oscillators.test.ts` measured alias rejection at 2637 Hz only, so a kernel cap could cost 39 dB at 7040 Hz and 73 dB at 17 kHz with the whole repository still green. `test/dsp-osc/blep-frequency.test.ts` now sweeps 55 Hz to 19 kHz with per-frequency floors set from measurement.
+7. **Alias floors do not gate the filter, only its failure.** They look at what is NOT a harmonic, so a wrong Fourier coefficient, a flipped BLAMP drift sign and any change to `CUTOFF` or `KAISER_BETA` all passed everything. The band-edge test in `blep-frequency.test.ts` measures a low note's harmonics against the ideal saw and pins the half-amplitude point at the cutoff, which catches `CUTOFF` moving by 1.2 percent. If you change the kernel, that is the test that should fail first.
+8. **Do not quote wall-clock ns from a microbenchmark as a property of the code.** The same shipping oscillator through two harnesses on one machine gave 22.6 and 59.8 ns per sample at 7040 Hz. Quote the ratio, measure both ends in one process, and prefer a countable quantity: for the BLEP sum that is `2 * KERNEL_HALF * dt` edges, which is exact.
 
 ## Things that are not obvious from the code
 
@@ -87,15 +89,39 @@ The unvalidated assumption. Everything else is built on the belief that this wor
 
 Both are now done in the TypeScript and the C++ respectively, with one part deliberately left for the board. What follows is what the measurements actually said, because in both cases they changed the answer.
 
-- **BLEP pitch cost: DONE in the TypeScript, and the expected fix was the wrong one.** Measured properly, a saw costs about 5.7 ns per sample at A440 and 25 ns at 7040 Hz. The often-quoted 14x is against 55 Hz, which is an unusually cheap reference; against A440 it is about 4.4x, and because `setFreq` clamps dt at 0.49 the sum never spans more than about 17 edges, so the growth is bounded at roughly 6x rather than open ended. That bound is the number a polyphony budget has to be sized against, and it is a fixed, computable number.
+- **BLEP pitch cost: DONE in the TypeScript, and it took two passes.** The durable number is
+  arithmetic: the residual sum spans `2 * KERNEL_HALF * dt` edges on average, so 0.32 at A440,
+  5.1 at 7040 Hz, 15.7 at the dt clamp where one sample can span at most 16. Wall-clock ns is
+  NOT durable and should never be quoted alone: the same shipping class through two harnesses on
+  one machine gave 22.6 and 59.8 ns at 7040 Hz. Measured as a ratio in one process, the default
+  path peaks at 9.0x its A440 cost at the clamp, and a high lead is nowhere near that: 7040 Hz is
+  about 3.7x, and the top of a piano is 4186 Hz. The 14x in `docs/AUDIT.md` is against 55 Hz,
+  which is an unusually cheap reference.
 
-  A frequency-dependent kernel cap turned out to be a bad instrument: rejection falls off a cliff exactly where the cap starts to bind. At 7040 Hz a four-edge cap saves about a fifth of the cost and gives up 39 dB, and tapering the truncated kernel buys back only about 13 dB of that. What works instead is the other option: above the crossover the surviving harmonics can simply be summed, and because BLEP cost rises with dt while the harmonic sum falls as 1/dt, the two cross near dt 0.16 and above it the harmonic sum is **both cheaper and cleaner**. Measured on saw: at 9000 Hz, 30.8 ns and -81.0 dB against 21.5 ns and -96.1 dB.
+  A kernel cap is the wrong instrument: rejection falls off a cliff exactly where the cap starts
+  to bind, 39 dB for a fifth of the cost at 7040 Hz, and tapering recovers only 13 dB of that.
+  What works is switching to a harmonic sum above `SWITCH_DT`, which takes the peak to 5.2x AND
+  improves rejection (7 dB at 11 kHz, 21 dB at 13 kHz). Opt in via `boundedHighFreq`, default
+  off, so the golden render is byte identical.
 
-  It ships as an opt-in (`boundedHighFreq: 1` in an engine's construction params, `highFreq` on `BlepOscillator` directly) because turning it on changes rendered output above the crossover and this library promises a seed reproduces a render. The default path is untouched, so the golden render is byte-identical. Reachable on `va`, `westcoast`, `formant`, `snare` and `hat`.
+  The first version of this shipped broken and an audit caught it, which is worth reading before
+  touching it again. It crossfaded between the two paths across a transition band, which means
+  running BOTH across that band: it cost about twice the default over exactly the range it was
+  meant to save in, and the peak did not move. And it cut the harmonic series at the kernel
+  cutoff, where the kernel is still passing half of a harmonic, so a note sweeping through
+  9261 Hz stepped by 0.16. The switch is now hard and every harmonic carries the kernel's own
+  response, measured against what the residual path actually does to a harmonic to 6.5e-4.
 
-  NOT ported to C++ on purpose, and this is the part that needs the board. The whole cost argument rests on a sine being cheap. In the browser it is. On a Cortex-M7 with newlib, `sinf` drags in `__kernel_rem_pio2f` and is far more expensive than a table lookup, so the crossover on the target is probably not the crossover measured here and may not exist at all at `BELLOWS_FAST_MATH=0`. Measure `fm::Sin` against the residual sum on real hardware before porting it. Until then the C++ keeps the BLEP path at every pitch, which is why parity is unaffected.
+  NOT ported to C++ on purpose, and this is a bring-up measurement. The cost argument rests on a
+  sine being cheap, which it is in a browser and is not on Cortex-M7 with newlib, where `sinf`
+  drags in `__kernel_rem_pio2f`. Measure `fm::Sin` against the residual sum on hardware, in both
+  fast-math settings, before porting. Parity is unaffected because the C++ keeps the residual
+  path at every pitch.
 
-- **LFO phase in fixed point: DONE, and it was worth more than expected.** Phase now accumulates as a `uint32` counter in `bellows/config.h` (`PhaseIncrement`, `PhaseFromCycles`, `kPhaseToUnit`), used by `dsp/lfo.h` and by the `SineCarrier` in `fx/modfx.h`. The wrap is the natural unsigned overflow, so it costs neither a compare nor a branch. It moved three parity rows, not one: chorus 3.97e-2 to 2.02e-4, plate 2.44e-3 to 1.34e-5, formant 7.85e-4 to 1.39e-5. All three gates were retightened from the new measurements, and all three were watched failing on a mutation that put the add back in float, which reproduced the old numbers to two significant figures. Cost: 208 bytes of flash on the modfx sketch, 64 on formant, 24 on plate, no RAM.
+- **LFO phase in fixed point: DONE, and it was worth more than expected.** Phase now accumulates as a `uint32` counter in `bellows/config.h` (`PhaseIncrement`, `PhaseFromCycles`, `kPhaseToUnit`), used by `dsp/lfo.h` and by the `SineCarrier` in `fx/modfx.h`. The wrap is the natural unsigned overflow, so it costs neither a compare nor a branch. It moved three parity rows, not one: chorus 3.97e-2 to 2.02e-4, plate 2.44e-3 to 1.34e-5, formant 7.85e-4 to 1.39e-5. All three gates were retightened from the new measurements, and all three were watched failing on a mutation that put the add back in float, which reproduced the old numbers to two significant figures. Cost: at most 64 bytes of flash on any sketch, the same on Cortex-M7 and Cortex-M4, no RAM. An
+  earlier revision computed the increment in double and cost 2560 bytes on M4 against 208 on M7,
+  because a double on a single-precision part pulls in soft-float. It bought nothing: single
+  precision gives identical parity, since multiplying a float by 2^32 only moves the exponent.
 
 ### Milestone 3: finish the layers that are nearly free
 

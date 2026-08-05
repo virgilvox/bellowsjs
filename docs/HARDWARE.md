@@ -175,16 +175,16 @@ it, so these are real costs and not a floor. Reproduce with `./tools/size-report
 | --- | --- | --- | --- |
 | `theory/` (scales, chords, tuning, notes) | 2616 B | 116 B | the differentiator, and it is nearly free |
 | `fx/dynamics` | 4048 B | 10336 B | compressor, limiter lookahead line |
-| `fx/modfx` | 5144 B | 26056 B | chorus, flanger, tremolo, autopan, ringmod |
+| `fx/modfx` | 5000 B | 26056 B | chorus, flanger, tremolo, autopan, ringmod |
 | `engines/tube` | 5136 B | 3272 B | `Tube<80>` bore |
 | `seq/` (euclid, arp, CA, lsystem, tempomap) | 5296 B | 900 B | fixed capacity, no allocation |
 | `engines/fm` | 5384 B | 1536 B | SineOsc only, so no BLEP tables |
 | `fx/saturator` | 5536 B | 10136 B | with the oversampler |
-| `fx/plate` | 5736 B | 222684 B | Dattorro tank, the RAM is the tank |
+| `fx/plate` | 5712 B | 222684 B | Dattorro tank, the RAM is the tank |
 | `engines/modal` | 5944 B | 1584 B | five material tables in flash |
 | `kernel` | 6208 B | 2492 B | event queue plus block splitting |
 | `engines/westcoast` | 27064 B | 1200 B | BLEP tables dominate |
-| `engines/formant` | 28360 B | 1496 B | BLEP tables dominate |
+| `engines/formant` | 28328 B | 1496 B | BLEP tables dominate |
 
 The BLEP tables are 16 KB and shared, so the first module that needs them pays and every later
 one is nearly free. `fm`, `modal`, `tube` and `pluck` do not need them at all, which is why an
@@ -195,14 +195,18 @@ The theory row is the one to notice. Scales, chords, tunings and note parsing to
 
 ## Realistic firmware profiles
 
-| Profile | flash | RAM |
-| --- | --- | --- |
-| kick only | 3760 B | 1100 B |
-| kick only, `BELLOWS_FAST_MATH=1` | 1448 B | 1100 B |
-| three piece kit | 28248 B | 1500 B |
-| 8 voice VA poly, EQ, 250 ms delay | 30688 B | 135176 B |
-| 8 VA plus 8 `Pluck<80>` plus kit, EQ, 250 ms delay | 34240 B | 208520 B |
-| everything constructed and driven at once | 61328 B | 375340 B |
+Each row names the sketch in `test/sketches/` that produces it, so a row cannot drift away from
+anything the size report actually builds:
+
+| Profile | sketch | flash | RAM |
+| --- | --- | --- | --- |
+| kick only | `s1_kick` | 3760 B | 1100 B |
+| kick only, `BELLOWS_FAST_MATH=1` | `s1_kick` with the flag | 1448 B | 1100 B |
+| three piece kit | `s2_kit` | 28248 B | 1500 B |
+| kit plus EQ and a 250 ms delay | `p1_drums` | 29344 B | 133720 B |
+| 8 voice VA poly, EQ, 250 ms delay | `p2_poly8` | 30912 B | 135224 B |
+| 8 VA plus 8 `Pluck<80>` plus kit, EQ, delay | `p3_workstation` | 34496 B | 208568 B |
+| everything constructed and driven at once | `s5_all` | 34920 B | 300144 B |
 
 And the shipped examples, whose numbers come from the same logic headers the sketches compile,
 so they cannot drift from the code:
@@ -211,7 +215,7 @@ so they cannot drift from the code:
 | --- | --- | --- |
 | `01_OneKick` | 3776 B | 1100 B |
 | `02_DrumMachine` (bank plus euclid) | 29696 B | 1588 B |
-| `03_PolySynth` (`VoicePool<Va, 8>`) | 30384 B | 3776 B |
+| `03_PolySynth` (`VoicePool<Va, 8>`) | 30360 B | 3776 B |
 | `04_ScalesAndTuning` | 8080 B | 36928 B |
 | `05_MidiInstrument` | 30296 B | 3792 B |
 
@@ -242,14 +246,21 @@ core and audio library included:
 
 | Example | flash total | RAM1 used | RAM1 free |
 | --- | --- | --- | --- |
-| `01_OneKick` | 35836 B | 26312 B | 482784 B |
-| `02_DrumMachine` | 65532 B | 55912 B | 464352 B |
-| `03_PolySynth` | 66556 B | 57320 B | 462304 B |
-| `04_ScalesAndTuning` | 40956 B | 67272 B | 445856 B |
+| `01_OneKick` | 36860 B | 27208 B | 482400 B |
+| `02_DrumMachine` | 66556 B | 56808 B | 463968 B |
+| `03_PolySynth` | 67580 B | 58296 B | 461920 B |
+| `04_ScalesAndTuning` | 41980 B | 68136 B | 445504 B |
 | `05_MidiInstrument` | 68604 B | 59624 B | 461568 B |
 
 Teensy 4.1 has 8 MB of flash and 512 KB of RAM1 plus 512 KB of RAM2, so the largest of these
 leaves about 8.06 MB of flash and 445 KB of RAM1 free, with RAM2 essentially untouched.
+
+Whole-firmware figures move with the Arduino core, so the revision is part of the measurement:
+`platform = teensy` 5.1.0, `framework-arduinoteensy` 1.160.0,
+`toolchain-gccarmnoneeabi-teensy` 1.110301.0. An earlier revision of this table was about 1024
+bytes of flash and 900 bytes of RAM1 lower across four of the five rows for that reason, which
+looks like a regression and is not one. The per-module table above is freestanding and does not
+move with the core, which is why it is the one to compare against when auditing a DSP change.
 
 Two things this exercise found that a freestanding build cannot. `board_build.usb_type` is
 silently ignored by the PlatformIO teensy platform, so `05_MidiInstrument` needs
@@ -424,8 +435,12 @@ moved three rows at once:
 | `formant` | 7.85e-4 | 1.39e-5 |
 
 The wrap is the natural unsigned overflow, so it costs neither a compare nor a branch, and the
-whole change is 208 bytes of flash on the modfx sketch, 64 on formant, 24 on plate, 80 on the
-poly synth example, and no RAM anywhere. All three gates were then reset from the new
+whole change costs at most 64 bytes of flash on any sketch and no RAM anywhere: modfx 4936 to
+5000, formant 28296 to 28328, plate 5712 to 5712, the poly synth example 30304 to 30360. An
+earlier revision of it computed the increment in double, which cost 2560 bytes on Cortex-M4
+against 208 on Cortex-M7, because a double on a single-precision part pulls in soft-float. It
+bought nothing: single precision gives the same parity to every digit, since multiplying a float
+by 2^32 only moves the exponent. Both targets now pay the same 64 bytes. All three gates were then reset from the new
 measurements and watched failing, on a mutation that put the add back in `float` and reproduced
 the old numbers to two significant figures. Leaving a gate at 0.06 while the thing it measures
 sits at 2.0e-4 would have been finding 16 made again.
@@ -456,44 +471,58 @@ A and C are not exclusive. The library built here is what C runs on the device.
 
 ## Known risk: the pitch-dependent BLEP cost
 
-Measured and mostly closed, with the last piece deliberately left for the board.
+Measured, mostly closed, and with the last piece deliberately left for the board. This section
+has been wrong twice, so it is worth being precise about which numbers are durable.
 
-The residual sum walks every edge within the kernel half width, and that window holds
-`2 * KERNEL_HALF * dt + 1` edges, so oscillator cost climbs with pitch. Two corrections to how
-this has been written down so far. The 14x in `docs/AUDIT.md` is 55 Hz against 7 kHz, and 55 Hz
-is an unusually cheap reference: against A440, which is what a polyphony budget is actually sized
-at, it is about 4.4x. And the growth is bounded, not open ended, because `setFreq` clamps dt at
-0.49, so the sum never spans more than about 17 edges and the worst case sits near six times the
-A440 cost. That bound is a fixed, computable number, and it is the one a voice budget has to be
-sized against. Measured in Node, saw, 44100 Hz: 5.7 ns per sample at A440, 25 ns at 7040 Hz,
-36 ns at the clamp.
+The durable one is arithmetic, not timing. The residual sum walks the edges within the kernel
+half width, and the average count of those per sample is exactly `2 * KERNEL_HALF * dt`: 0.32 at
+A440, 5.1 at 7040 Hz, 15.7 at the `setFreq` clamp of 0.49, where one sample can span at most 16.
+Wall-clock ns is not durable. The same shipping class measured through two benchmark harnesses on
+the same machine gave 22.6 and 59.8 ns per sample at 7040 Hz, because how much of it inlines
+depends on what else the caller made the JIT specialise. Quote ratios, measure both ends in one
+process, and treat any absolute ns figure here as conditional on its harness.
+
+Measured that way, saw: the default path peaks at 9.0x its A440 cost, at the top of the clamp.
+That bound is what a fixed polyphony budget has to be sized to. Note how far the clamp is from
+anything musical: 7040 Hz costs about 3.7x A440, and the top of a piano is 4186 Hz. The 14x
+quoted in `docs/AUDIT.md` is 55 Hz against 7 kHz, and 55 Hz is an unusually cheap reference.
 
 The obvious fix does not work. A frequency-dependent kernel cap gives up alias rejection exactly
 where it starts to save anything, because truncating the residual at a nonzero value leaves a
 step: at 7040 Hz a four-edge cap saves about a fifth of the cost and costs 39 dB, and tapering
 the truncated kernel recovers only about 13 dB of that.
 
-What does work is the other option, a cheaper form above a threshold. A band-limited saw at
-7040 Hz has two harmonics under the kernel's 0.42 cutoff, so summing them directly is exact.
-BLEP cost rises with dt while the harmonic sum falls as 1/dt, so the two cross near dt 0.16 and
-above the crossover the harmonic sum wins on both axes at once:
+What works is the other option, a cheaper form above a threshold. Above `SWITCH_DT` a band
+limited saw has one or two harmonics left under Nyquist, so summing them directly beats walking
+sixteen edges and is exact where the residual sum is not:
 
-| saw, 44100 Hz | BLEP ns | additive ns | BLEP dB | additive dB |
+| saw, 44100 Hz | residual ns | harmonic ns | residual dB | harmonic dB |
 | --- | --- | --- | --- | --- |
-| 5000 Hz | 21.2 | 33.1 | -87.3 | -94.8 |
-| 7040 Hz | 25.5 | 23.3 | -86.6 | -94.0 |
-| 9000 Hz | 30.8 | 21.5 | -81.0 | -96.1 |
-| 11000 Hz | 36.3 | 10.6 | -89.8 | -97.0 |
+| 11000 Hz | 30.5 | 25.0 | -89.8 | -97.0 |
+| 13000 Hz | 38.7 | 24.5 | -77.0 | -98.1 |
+| 17000 Hz | 45.6 | 24.5 | -81.0 | -101.1 |
+| 21609 Hz | 56.4 | 24.9 | -21.7 | -101.6 |
 
-That is implemented in the TypeScript as an opt-in (`boundedHighFreq` in an engine's
-construction params), gated by `test/dsp-osc/blep-frequency.test.ts`, and off by default so
-rendered output and the golden render are unchanged.
+That takes the peak from 9.0x A440 to 5.2x while improving the top of the range rather than
+trading it away. It is opt in (`boundedHighFreq` in an engine's construction params), gated by
+`test/dsp-osc/blep-frequency.test.ts`, and off by default, so rendered output and the golden
+render are unchanged.
 
-**It is deliberately not ported to C++ yet, and this is a bring-up measurement.** The entire cost
+Two failure modes of the idea, both found by audit after the first version shipped, both worth
+knowing before anyone attempts this again. Crossfading between the two paths across a transition
+band means evaluating BOTH across that band: the first version cost about twice the default
+between 6174 and 8820 Hz, exactly the range it was meant to be saving in, and left the peak
+where it was. And cutting the harmonic series off at the kernel cutoff steps the output when a
+harmonic crosses it, because the kernel is still passing half of a harmonic at its own cutoff,
+which for the second harmonic of a saw is a jump of 0.16. The switch is therefore hard, and every
+harmonic is scaled by the kernel's own response, so harmonics fade exactly as the residual path
+fades them. Compared at the same dt the two paths now agree to a maximum sample difference of
+0.0003 for saw and square and 0.014 for triangle.
+
+**It is deliberately not ported to C++, and that is a bring-up measurement.** The whole cost
 argument rests on a sine being cheap, which it is in a browser. On Cortex-M7 with newlib it is
-not: `sinf` drags in `__kernel_rem_pio2f`, which is 1624 bytes of the VA sketch's flash on its
-own, and costs far more than a table lookup and a lerp. So the crossover on the target is not the
-crossover measured above and at `BELLOWS_FAST_MATH=0` it may not exist at all. Measure `fm::Sin`
-against the residual sum on real hardware before porting it, in both fast-math settings. Until
-that measurement exists the C++ keeps the BLEP path at every pitch, which is also why parity is
-unaffected by any of this.
+not: `sinf` drags in `__kernel_rem_pio2f`, 1624 bytes of the VA sketch's flash on its own, and
+costs far more than a table lookup and a lerp. So the crossover on the target is not the
+crossover above, and at `BELLOWS_FAST_MATH=0` it may not exist at all. Measure `fm::Sin` against
+the residual sum on real hardware, in both fast-math settings, before porting it. Until then the
+C++ keeps the residual path at every pitch, which is also why parity is unaffected by any of this.
