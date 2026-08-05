@@ -336,6 +336,57 @@ line, multi-target codegen, and replacing the tabulated BLEP with polyBLEP, DPW 
 `.github/workflows/ci.yml` has still never run. `gh api .../actions/runs` returns a total count
 of zero. Every gate this document credits to CI is run by whoever remembers.
 
+## Verified end to end on 2026-08-05, after the fix pass
+
+The suites and the harnesses are not the product. The library ships to a browser and drives
+bellows.live, and this session changed shared DSP, the parameter path, the theory layer and the
+SFZ parser, so the app was driven for real in Chrome against the dev server rather than assumed.
+What was measured, not inferred:
+
+- `npm run build -w packages/bellows` clean; `npm run build -w apps/workbench` clean;
+  `npx vue-tsc --noEmit` clean.
+- An analyser tapped onto whatever connects to `destination`, so the numbers come off the real
+  worklet output and not off an offline render. Playing the default seeded piece: peak 0.640,
+  RMS 0.103, and **zero non-finite samples in 81920 inspected**. That is the check that matters
+  after a NaN pass, because the offline suite exercises `renderOffline` while realtime runs the
+  generated worklet bundle, and those are different code paths.
+- 8-bar export while playing: rendered in 1516 ms, which matches the roughly 1.4 s this document
+  already claimed. The WAV is a valid 44100 Hz stereo 16-bit RIFF, 26.67 s, peak 0.663, 99.9
+  percent non-silent, DC offset 0.00056. Live audio kept running through the render, peak 0.437,
+  still no non-finite samples, which is the `render()` no-await invariant holding.
+- Engine hot-swap mid-phrase, pluck to additive through the real `<select>`: audio continues at
+  peak 0.431, RMS 0.117, no non-finite samples.
+- Console clean throughout: no errors, no warnings.
+
+The dev server was stopped and the tab closed afterwards. No file was downloaded: the export
+presents a link rather than writing one, and the blob was read in memory.
+
+## What changed for a user of the published library
+
+Nothing here moves the golden render, and only one item changes seeded audio.
+
+- **Non-finite parameters are ignored instead of latching.** `Svf`, `LadderFilter`, `OnePole`,
+  `Smoother`, the envelopes and the kernel `Ramp` now keep their last good setting when handed
+  NaN or Infinity, where before one NaN silenced that unit for the rest of the session with no
+  error. Strictly a recovery: nothing that worked before behaves differently.
+- **`chordToRoman` spells raised degrees with sharps.** F# in C major was `bV` and is `#IV`.
+  Spelling now follows the line of fifths, which reproduces the textbook set. `romanToChord` is
+  untouched and the two still round-trip, gated over 402 pairs.
+- **`chordToRoman` no longer throws past the seventh degree**, so five of the thirty-two shipped
+  scales can be analysed at all. Six of 408 scale and root pairs still throw, because four
+  scales have four-semitone gaps and single-accidental spelling genuinely cannot name them.
+- **`CHORD_TYPES` gained `maj7#5`**, 24 entries to 25, without which harmonic minor's III has no
+  name. The C++ port has the matching entry, so the table harness compares it.
+- **`buildProgression(bars = 2)` returns a half cadence** instead of `[0, 0]`. THIS IS THE ONE
+  THAT MOVES SEEDED OUTPUT: it draws one rng value where it drew none, so a piece written
+  against `bars = 2` sounds different. `bars >= 3` is byte-identical, and the workbench uses 8.
+- **`parseSfz` enforces six limits** and throws its own `sfz:` errors past them. A legitimate
+  file is unaffected: 2.1 MB and 20000 regions still parses, in 51 ms.
+- **`DelayLine` throws for `maxSamples` at or above 2^30** instead of hanging the tab.
+- **`quick.play()` recovers from a failed boot** instead of rejecting for the life of the page.
+
+Standalone bundle: 108400 bytes gzipped, from 106147, a 2.1 percent rise for all of the above.
+
 ## Deployment (bellows.live)
 
 The site is a DigitalOcean App Platform static site, the cheapest App Platform footprint (no services or workers; $0 while a free static-site slot is open on the account, otherwise $3 per month).
@@ -368,7 +419,7 @@ The site is a DigitalOcean App Platform static site, the cheapest App Platform f
 
 1. `npm test` and `npx tsc --noEmit` in `packages/bellows`.
 2. `npm run gen:worklet -w packages/bellows` if anything kernel-reachable changed.
-3. `npm run build -w packages/bellows`; check `dist/worklet.js` exists and the standalone size is sane. Measure it rather than remembering it: `gzip -9 -c dist/bellows.standalone.js | wc -c` prints 106147 bytes, 104 KB, at 0.1.5, against about 97 KB at 0.1.0. Compare against the previous release and ask about a jump over roughly ten percent; a fixed threshold from an old version is what turned 97 into a number three releases stale. Nothing checks this one: `check-docs.mjs` cannot, because it needs a built `dist`. Note also that `dist` goes stale against `src` silently (`gen-tables.mjs` warns and reads it anyway), so build before you measure, and before running any pure-library snippet against it.
+3. `npm run build -w packages/bellows`; check `dist/worklet.js` exists and the standalone size is sane. Measure it rather than remembering it: `gzip -9 -c dist/bellows.standalone.js | wc -c` prints 108400 bytes, 106 KB, after the 2026-08-05 fixes, against 106147 before them and about 97 KB at 0.1.0. Compare against the previous release and ask about a jump over roughly ten percent; a fixed threshold from an old version is what turned 97 into a number three releases stale. Nothing checks this one: `check-docs.mjs` cannot, because it needs a built `dist`. Note also that `dist` goes stale against `src` silently (`gen-tables.mjs` warns and reads it anyway), so build before you measure, and before running any pure-library snippet against it.
 4. Bump version, `npm publish` from `packages/bellows`, tag `vX.Y.Z`, push with the tag.
 5. Regenerate the LLM reference: `node apps/workbench/scripts/gen-llm-ref.mjs`, commit `apps/workbench/public/llm.txt`. THIS STEP WAS SKIPPED FOR 0.1.5 AND THE FILE IS STALE, which matters because five documentation pages send readers to `/llm.txt` as the authoritative parameter list. It is generated from the BUILT library, so it needs step 3 first and cannot be edited by hand: `grep -c rampParam apps/workbench/public/llm.txt` prints 0 against 3 in `src/bellows.ts` and 2 in `dist/bellows.d.ts`, and the `maxSeconds` and `maxSize` capacity options from `docs/AUDIT.md` finding 5 are missing the same way, while the file's own line 11 says "Everything in it is exact for version 0.1.5". Rebuild, regenerate, then check that grep is non-zero before believing the header.
 6. Redeploy the site (pushes do not auto-deploy): `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`.
