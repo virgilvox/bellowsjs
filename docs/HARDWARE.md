@@ -330,33 +330,49 @@ already ruled out above.
 
 Four worth comparing against, and the one decision each of them is built around.
 
-**Mozzi**, 8-bit AVR and up. Integer fixed point throughout (`SFixMath`, `UFixMath`), and its
+**Mozzi**, 8-bit AVR and up. Integer fixed point throughout, through the FixMath library's
+`UFix<NI, NF>` and `SFix<NI, NF>`, and its
 own first piece of advice is to avoid floating point entirely because the classic Arduino is
 very bad at it. Bit shifts in place of multiplies and divides, shifts by 8 or 16 preferred over
 other amounts, no division on the audio path, and a strict split between a control-rate update
 and a lean audio-rate one.
 
-bellows already takes the split (`CONTROL_INTERVAL` in `engines/va.h`) and already keeps
-division off the audio path. It does not take the fixed point, and that is the decision that
-makes it a different library rather than a better one: float is correct on anything with an FPU
-and ruinous without one, which is exactly the tier boundary further down this page.
+bellows takes the split: `engines/va.h` recomputes coefficients every sixteenth sample
+(`ctrl_ = 16`) rather than every sample. It does not take the fixed point, and that is the
+decision that makes it a different library rather than a better one: float is correct on
+anything with an FPU and ruinous without one, which is exactly the tier boundary further down
+this page.
+
+On division it was until recently worse than this section first claimed. The residual sum
+divided once per edge, and that is now a reciprocal taken in `SetFreq`. What is left is one
+division per sample in `NoiseGen::Process`, `(brown + 0.02 w) / 1.02` on the brown noise path,
+which stays because the TypeScript divides by the same constant and parity is worth more than
+the instruction. Everything else that divides is a setter or the control-rate update.
 
 **DaisySP**, Cortex-M7. The closest peer by target and by shape: one sample at a time, `float`
-everywhere, no fixed-point path, about one percent of a Teensy 4's CPU per module. Worth
-recording that the library aimed at the same silicon made the same call.
+everywhere, no fixed-point path. Worth recording that the library aimed at the same silicon made
+the same call. (A figure of about one percent of a Teensy 4's CPU per module circulates for it,
+but it comes from `rheslip/DaisySP_Teensy`, an independent port, not from Electrosmith, whose
+own README makes no CPU claim.)
 
-**Teensy Audio Library**. 128-sample blocks of `int16`, moved by DMA, with one interrupt per
-block instead of per sample. Two lessons, and bellows already has one: it renders in blocks
+**Teensy Audio Library**. 128-sample blocks of `int16`, moved by DMA, with the I2S driver
+taking two interrupts per block (half-complete and complete) instead of one per sample. Two lessons, and bellows already has one: it renders in blocks
 through `(l, r, from, to)`, and `BellowsAudioStream` sits on top of that library's own DMA, so
 the interrupt amortisation is already paid by the layer underneath. The lesson it has not taken
 is `int16`, and that choice is not arbitrary either: the Cortex-M4 has DSP instructions that
 accelerate 16-bit signals, and adding a seventeenth bit costs heavily.
 
 **CMSIS-DSP**. Q7, Q15 and Q31 alongside f32, with SIMD packing (a 32-bit word as two q15) and
-dual multiply-accumulate. The instructive result is not the SIMD: `arm_lms_f32` outperformed the
-Q15 version on M7, because the FPU is quick and the fixed-point path has to carry manual scaling
-and post-shifting. Fixed point is not a free win above the M4 line. It is a win where there is
-no FPU at all.
+dual multiply-accumulate, and ARM's own note that the Q15 path is where the M4 and M7 SIMD units
+pay off most.
+
+An earlier revision of this paragraph claimed that `arm_lms_f32` outperformed the Q15 version on
+M7 and drew the conclusion that fixed point is not a free win above the M4 line. That claim came
+from a search summary and could not be traced to a primary source; ARM's published Cortex-M7
+figures point the other way. It is withdrawn. What can be said without a source is narrower and
+still enough for the decision here: the M7 has a hardware FPU with single-cycle single-precision
+multiply-accumulate, so float costs little on the targets this library aims at, and the case for
+fixed point gets stronger the further down the tier list you go, not weaker.
 
 ### The gap that was not there, and the one that was
 
@@ -388,8 +404,9 @@ bring-up sketch's per-stage CPU readout is where it gets confirmed or dropped.
 ### What is actually left, in order
 
 1. `int16` delay storage, the Teensy library's choice and the largest remaining lever here.
-   Delay buffers are 87 percent of the RAM even after exact sizing, and 16-bit would halve them
-   again. It costs quantisation noise in a feedback path, so it belongs behind a template
+   In `s5_all` after exact sizing, the single `StereoDelay` buffer is 192152 of 223324 bytes, 86
+   percent, and everything backed by a delay line together is 99 percent. 16-bit would halve
+   that. It costs quantisation noise in a feedback path, so it belongs behind a template
    parameter with `float` as the default, and it needs measuring before it ships.
 2. CMSIS-DSP for the FFT and spectral family, which this document already recommends and which
    nothing has started.
@@ -456,7 +473,8 @@ core and audio library included:
 | `05_MidiInstrument` | 68604 B | 59928 B | 461568 B |
 
 Teensy 4.1 has 8 MB of flash and 512 KB of RAM1 plus 512 KB of RAM2, so the largest of these
-leaves about 8.06 MB of flash and 445 KB of RAM1 free, with RAM2 essentially untouched.
+leaves about 8.06 MB of flash free, and the tightest RAM1 row leaves 452 KB, with RAM2
+essentially untouched.
 
 The share that is bellows is worth knowing before reading any percentage in this document.
 Counting the sized code and rodata symbols in the `05_MidiInstrument` image, deduped by address:
@@ -472,10 +490,10 @@ bellows functions and stop being libm symbols. The image nets 4096 bytes smaller
 
 | firmware | default | `BELLOWS_FAST_MATH=1` | saved |
 | --- | --- | --- | --- |
-| `01_OneKick` | 36860 B | 34812 B | 2048 B, 5 % |
+| `01_OneKick` | 36860 B | 34812 B | 2048 B, 6 % |
 | `02_DrumMachine` | 65532 B | 59388 B | 6144 B, 9 % |
-| `03_PolySynth` | 67580 B | 64508 B | 3072 B, 4 % |
-| `05_MidiInstrument` | 68604 B | 64508 B | 4096 B, 5 % |
+| `03_PolySynth` | 67580 B | 64508 B | 3072 B, 5 % |
+| `05_MidiInstrument` | 68604 B | 64508 B | 4096 B, 6 % |
 
 Two to six kilobytes is nothing against a Teensy 4.1's 8 MB and worth having against a Daisy's
 128 KB of internal flash, which is the honest way to decide whether the flag is worth its
@@ -506,9 +524,10 @@ render classes compile through `DaisyAudio` for the STM32H750.
 | `daisy_onekick` | 75784 B | 57.8 % | 13956 B | 2.7 % |
 | the same firmware with bellows removed | 71712 B | 54.7 % | 13796 B | 2.6 % |
 
-Subtracting the two, bellows is 3916 B of flash and 160 B of RAM on top of libDaisy, and 100 of
-those 160 bytes are newlib's `impure_data`, pulled in the first time anything calls libm rather
-than being bellows state. The prediction in the table above was that the ported engine set fits
+Subtracting the two rows above gives 4072 B, which is the difference in the linker's FLASH
+region and includes the `.data` initialisers. The `.text` difference, which is the code itself,
+is 3916 B, and the RAM difference is 160 B of which 100 are newlib's `impure_data`, pulled in
+the first time anything calls libm rather than being bellows state. The prediction in the table above was that the ported engine set fits
 in internal flash with room to spare; a one-voice program leaves 54 KB free with the entire HAL,
 codec driver, SAI, DMA and USB stack already paid for, so the prediction holds and no bootloader
 is needed.
