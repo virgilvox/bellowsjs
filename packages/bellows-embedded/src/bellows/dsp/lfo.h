@@ -20,14 +20,20 @@ class Lfo {
     held_ = rng_ ? rng_->Bipolar() : 0.0f;
   }
 
-  void SetFreq(float hz) { dt_ = Clamp(hz / sr_, 0.0f, 0.5f); }
+  /* Clamped in double to match the JS, which computes dt from two doubles
+   * before the phase ever sees it. See PhaseIncrement in config.h for why
+   * a double here does not reach the audio path. */
+  void SetFreq(float hz) {
+    const double dt = static_cast<double>(hz) / static_cast<double>(sr_);
+    inc_ = PhaseIncrement(dt < 0.0 ? 0.0 : (dt > 0.5 ? 0.5 : dt));
+  }
   void SetShape(LfoShape s) { shape_ = s; }
 
   /* Sets phase (fractional part is used). Does not draw from the rng. */
-  void Reset(float phase = 0.0f) { phase_ = phase - floorf(phase); }
+  void Reset(float phase = 0.0f) { phase_ = PhaseFromCycles(phase); }
 
   inline float Process() {
-    const float t = phase_;
+    const float t = static_cast<float>(phase_) * kPhaseToUnit;
     float y = 0.0f;
     switch (shape_) {
       case LfoShape::kSine: y = fm::Sin(kTwoPi * t); break;
@@ -36,16 +42,17 @@ class Lfo {
       case LfoShape::kSquare: y = t < 0.5f ? 1.0f : -1.0f; break;
       case LfoShape::kSampleHold: y = held_; break;
     }
-    phase_ += dt_;
-    if (phase_ >= 1.0f) {
-      phase_ -= 1.0f;
-      if (rng_) held_ = rng_->Bipolar();
-    }
+    /* The wrap is the unsigned overflow, so a cycle boundary is exactly
+     * where the counter passes its own previous value. */
+    const uint32_t prev = phase_;
+    phase_ += inc_;
+    if (phase_ < prev && rng_) held_ = rng_->Bipolar();
     return y;
   }
 
  private:
-  float sr_ = 48000.0f, phase_ = 0.0f, dt_ = 0.0f, held_ = 0.0f;
+  float sr_ = 48000.0f, held_ = 0.0f;
+  uint32_t phase_ = 0u, inc_ = 0u;
   LfoShape shape_ = LfoShape::kSine;
   Rng* rng_ = nullptr;
 };

@@ -36,17 +36,23 @@ namespace detail {
 class SineCarrier {
  public:
   void Init(float sample_rate) { sr_ = sample_rate; }
-  void SetFreq(float hz) { dt_ = Clamp(hz / sr_, 0.0f, 0.5f); }
-  void Reset(float phase = 0.0f) { phase_ = phase - floorf(phase); }
+  /* Fixed point phase for the same reason Lfo uses it: see the note on
+   * PhaseIncrement in config.h. The carrier runs at audio rate here, so a
+   * drifting accumulator costs more than it does on a control rate Lfo. */
+  void SetFreq(float hz) {
+    const double dt = static_cast<double>(hz) / static_cast<double>(sr_);
+    inc_ = PhaseIncrement(dt < 0.0 ? 0.0 : (dt > 0.5 ? 0.5 : dt));
+  }
+  void Reset(float phase = 0.0f) { phase_ = PhaseFromCycles(phase); }
   inline float Process() {
-    const float y = fm::Sin(kTwoPi * phase_);
-    phase_ += dt_;
-    if (phase_ >= 1.0f) phase_ -= 1.0f;
+    const float y = fm::Sin(kTwoPi * (static_cast<float>(phase_) * kPhaseToUnit));
+    phase_ += inc_;
     return y;
   }
 
  private:
-  float sr_ = 48000.0f, phase_ = 0.0f, dt_ = 0.0f;
+  float sr_ = 48000.0f;
+  uint32_t phase_ = 0u, inc_ = 0u;
 };
 
 }  // namespace detail

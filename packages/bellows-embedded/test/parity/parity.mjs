@@ -70,7 +70,10 @@ const GATES = {
   fm: { rel: 5e-3, abs: 5e-3, note: 'six operators, phase modulation compounds' },
   modal: { rel: 1e-3, abs: 1e-3, note: '24 two-pole resonators, long ring' },
   westcoast: { rel: 2e-2, abs: 2e-2, note: 'iterated wavefolder, very sensitive to rounding' },
-  formant: { rel: 5e-3, abs: 5e-3, note: 'five bandpasses in parallel' },
+  // Was 7.9e-4 while the vibrato Lfo accumulated phase in float. Moving that
+  // accumulator to a uint32 counter took it to 1.4e-5, so this gate is set
+  // from the new measurement rather than the old one.
+  formant: { rel: 1.5e-4, abs: 1.5e-4, note: 'five bandpasses in parallel' },
   // Rel RMS is 1.7e-3. The abs gate is looser because the 0.4 percent of
   // samples that exceed it sit on the waveform's steep edges, spaced twice
   // per period at 220 Hz, where a sub-sample timing difference reads as a
@@ -85,16 +88,21 @@ const GATES = {
   saturator: { rel: 2e-6, abs: 2e-6, note: 'oversampled nonlinearity' },
   compressor: { rel: 2e-5, abs: 2e-5, note: 'dB domain detection, crest tracking' },
   // The chorus is measured twice on purpose. With modulation off the whole
-  // signal path agrees to 6.3e-6, which is what proves the DSP. With it on
-  // the error scales exactly with depth (0.1 -> 8e-3, 0.5 -> 4e-2) because
-  // the LFO phase accumulates in float here and in double there, and a
+  // signal path agrees to 6.3e-6, which is what proves the DSP. The
+  // modulated row used to sit at 4e-2 and scale exactly with depth, because
+  // the LFO phase accumulated in float here and in double there, and a
   // fractional-sample shift of a white noise read is a large sample
-  // difference for an identical sound. Sample-wise RMS is the wrong
-  // instrument for a time-modulating effect; the static row is the gate
-  // that would actually catch a broken chorus.
+  // difference for an identical sound. Moving the accumulator to a uint32
+  // counter (config.h, PhaseIncrement) took the modulated row to 2.0e-4 and
+  // confirmed that diagnosis: the two rows now differ by a factor of 32
+  // rather than four orders of magnitude. What is left is the read position
+  // itself, which is still computed in float here and double there.
+  // The static row remains the one that would catch a broken chorus.
   chorus_static: { rel: 1e-4, abs: 1e-4, note: 'depth 0: the real DSP gate' },
-  chorus: { rel: 6e-2, abs: 4e-2, note: 'depth 0.5: dominated by sub-sample LFO timing' },
-  plate: { rel: 5e-3, abs: 5e-3, note: 'Dattorro tank, recirculating' },
+  chorus: { rel: 2e-3, abs: 1e-3, note: 'depth 0.5: sub-sample read position' },
+  // Also carried by the fixed point phase: the tank modulation Lfo took this
+  // row from 2.4e-3 to 1.3e-5.
+  plate: { rel: 1.5e-4, abs: 1.5e-4, note: 'Dattorro tank, recirculating' },
 };
 
 /* Effects that take an EffectDef rather than an EngineDef, with the params
