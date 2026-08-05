@@ -65,7 +65,12 @@ jobs:
       - name: install arm toolchain
         uses: carlosperate/arm-none-eabi-gcc-action@v1
         with:
-          release: '12.3.Rel1'
+          # Must be the compiler docs/HARDWARE.md names, because the documented
+          # figures ARE that compiler's output: measured, 36 of the 37 sketches
+          # move between 11.3.1 and 9.2.1, some by hundreds of bytes. check-docs
+          # reads the version out of the document and fails loudly rather than
+          # measuring with whatever happens to be on PATH.
+          release: '11.3.Rel1'
       - name: size report
         working-directory: packages/bellows-embedded
         # Doubles as the compile check for every header: a sketch that does not
@@ -125,6 +130,14 @@ jobs:
       - name: generated headers are in sync with the TypeScript
         working-directory: packages/bellows-embedded
         run: node tools/gen-tables.mjs --check
+      - name: memory safety, ASan and UBSan over the buffer-owning classes
+        working-directory: packages/bellows-embedded
+        # Added after the Pluck::NoteOn overflow and four undefined float-to-int
+        # casts that no other gate could see: parity compares numbers at one
+        # rate and check-header.sh instantiates nothing.
+        run: |
+          npm run memsafety
+          npm run memsafety:fastmath
       - name: parity gates
         working-directory: packages/bellows-embedded
         # Renders the same note from both implementations and diffs them. The
