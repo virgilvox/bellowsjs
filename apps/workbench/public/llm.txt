@@ -1,4 +1,4 @@
-# bellowsjs 0.1.5 LLM reference
+# bellowsjs 0.1.6 LLM reference
 
 bellowsjs is a browser-native audio engine for synthesis, samples, sequencing,
 analysis, and I/O. One AudioWorklet kernel hosts every voice and effect; musical
@@ -8,7 +8,7 @@ in Node. Every stochastic decision flows from named, seeded PRNG streams.
 License Apache-2.0. Site: https://bellows.live  Repo: https://github.com/virgilvox/bellowsjs
 
 This file is generated from the library source and its type declarations.
-Everything in it is exact for version 0.1.5.
+Everything in it is exact for version 0.1.6.
 
 ## Install and import
 
@@ -84,6 +84,12 @@ export interface BootOptions {
     masterGain?: number;
     bpm?: number;
     meter?: Meter;
+    /**
+     * Whether dispose() closes the AudioContext. Defaults to true when boot
+     * created the context and false when the caller passed one. Set it false
+     * to keep a boot-created context alive for a later reboot.
+     */
+    closeContextOnDispose?: boolean;
 }
 export interface NoteOptions {
     /** Absolute context time in seconds. Defaults to a few ms from now. */
@@ -121,7 +127,9 @@ export declare class Bellows {
     private internedParams;
     private localDefs;
     private lastMeter;
-    private disposed;
+    private gone;
+    /** Deferred channel removals, so dispose() can cancel them. */
+    private pendingRemovals;
     /** last kernel error messages, newest last */
     readonly kernelErrors: string[];
     /** when set, receives kernel errors instead of console.error */
@@ -129,13 +137,42 @@ export declare class Bellows {
     private initialBpm;
     private initialMeter;
     tuning: Tuning;
+    /** boot() made the context, so dispose() is the one allowed to close it */
+    private ownsContext;
     private constructor();
     static boot(opts?: BootOptions): Promise<Bellows>;
-    /** Post a structural message: applied live and recorded for offline replay. */
+    /**
+     * Post a structural message: applied live and recorded for offline replay.
+     * The recording collapses repeated setters (see SetupLog) so a piece that
+     * moves a param every bar does not grow its setup stream forever.
+     */
     private post;
+    /** Recorded setup message count. Exposed so growth is testable. */
+    get setupSize(): number;
+    /**
+     * Tear down a channel: free its voice pool in the kernel and drop it from
+     * the setup stream so an offline render does not rebuild it. Reached only
+     * through Instrument.dispose().
+     *
+     * removeChannel deletes the voice pool outright, so anything still sounding
+     * is cut mid-sample. Held notes are released first, and releaseSeconds
+     * defers the removal so a tail can decay instead of clicking. The timer runs
+     * on the main thread because the channel only has to survive until it is
+     * silent, which is not a sample-accurate deadline.
+     *
+     * @internal
+     */
+    disposeChannel(id: number, releaseSeconds?: number): void;
     private postEvents;
     private activeTransport;
-    /** Current engine time in seconds. */
+    /**
+     * Current engine time in seconds. During render() this is the tick time of
+     * the callback being re-run, the same value untimed calls resolve to, which
+     * makes it a fourth replay invariant alongside the three in HANDOFF item 3.
+     * Without the branch a callback written `inst.note(n, { at: b.now() + 0.1 })`
+     * stamps live wall-clock times into renderCtx.events during a replay and
+     * every note in the export lands at roughly the same instant.
+     */
     now(): number;
     /** A named random stream forked off the piece seed. Deterministic per seed. */
     rng(label: string): NamedRng;
@@ -198,7 +235,17 @@ export declare class Bellows {
     noteEvents(channel: number, note: NoteValue, opts: NoteOptions, scale?: Scale): void;
     noteOnEvent(channel: number, note: NoteValue, vel: number, at?: number): number;
     noteOffEvent(channel: number, noteId: number, at?: number): void;
+    /** Intern a param name once, telling the kernel the index it answers to. */
+    private paramIndex;
     paramEvent(channel: number, name: string, value: number, at?: number): void;
+    /**
+     * Glide a param to a value over a span of time. Always an event, never a
+     * recorded setter: a ramp is a move through time, so replaying it as a
+     * final value would lose the shape.
+     */
+    rampParamEvent(channel: number, name: string, value: number, over: TimeValue | {
+        seconds: number;
+    }, at?: number): void;
     structural(msg: KernelMessage): void;
     postAllOff(channel: number): void;
     /**
@@ -215,20 +262,33 @@ export declare class Bellows {
     }): Promise<RenderedAudio & {
         wav(bitDepth?: 16 | 24 | 32): ArrayBuffer;
     }>;
+    /** True once dispose() has run. Everything below it is torn down. */
+    get disposed(): boolean;
     dispose(): void;
 }
 export declare class Instrument {
     private b;
     readonly channel: number;
+    private gone;
     constructor(b: Bellows, channel: number);
+    /** True once dispose() has run. A disposed handle ignores everything. */
+    get disposed(): boolean;
     /** Play a note. NoteValue: midi number, 'C#4', { hz }, or { degree, octave }. */
     note(note: NoteValue, opts?: NoteOptions, scale?: Scale): this;
     chord(notes: NoteValue[], opts?: NoteOptions): this;
-    /** Sustain a note; returns an id for off(). */
+    /** Sustain a note; returns an id for off(). Disposed: returns -1. */
     on(note: NoteValue, vel?: number, at?: number): number;
     off(noteId: number, at?: number): this;
     /** Set an engine parameter, immediately or at a scheduled time. */
     param(name: string, value: number, at?: number): this;
+    /**
+     * Glide a parameter to a value over a span of time, starting at `at` (or
+     * now) from wherever the parameter currently sits. `over` takes beats,
+     * notation like '4n', or { seconds }.
+     */
+    rampParam(name: string, value: number, over: TimeValue | {
+        seconds: number;
+    }, at?: number): this;
     /** Replace this instrument's insert chain. */
     fx(...fx: FxInput[]): this;
     fxParam(fxIndex: number, name: string, value: number): this;
@@ -236,6 +296,20 @@ export declare class Instrument {
     gain(value: number): this;
     pan(value: number): this;
     allOff(): this;
+    /**
+     * Free the channel: the kernel drops its voice pool, and the setup stream
+     * forgets it so an offline render does not rebuild it. Idempotent, and a
+     * disposed handle goes inert rather than throwing, since a hot swap can
+     * easily leave a stale reference in a closure.
+     *
+     * Dropping the pool cuts anything still sounding mid-sample. Pass
+     * releaseSeconds to release held notes and defer the removal by that long,
+     * which is what a hot swap wants: the outgoing engine rings out while the
+     * incoming one plays.
+     */
+    dispose(opts?: {
+        releaseSeconds?: number;
+    }): void;
 }
 export declare class BusHandle {
     private b;
@@ -842,7 +916,7 @@ a note like 'D3'; name is one of: major, ionian, dorian, phrygian, lydian, mixol
 Methods: degreeToMidi(degree, octave?) (wraps octaves, negatives fine),
 quantize(midi), contains(midi), degrees(octaves, baseOctave?), intervals.
 
-Chords: CHORD_TYPES keys: 6, 7, 9, 11, 13, maj, min, maj7, m7, dim, aug, sus2, sus4, dim7, m7b5, mMaj7, m6, add9, maj9, m9, 7b9, 7#9, 7#11, aug7.
+Chords: CHORD_TYPES keys: 6, 7, 9, 11, 13, maj, min, maj7, m7, dim, aug, sus2, sus4, dim7, m7b5, mMaj7, m6, add9, maj9, m9, 7b9, 7#9, 7#11, aug7, maj7#5.
 parseChord('F#m7b5'), detectChord(pitchClasses), diatonicTriads(scale),
 diatonicSevenths(scale), romanToChord('viio7', scale), chordToRoman(chord, scale).
 
@@ -1062,6 +1136,23 @@ export interface StepPattern<T = number> {
 /** Convert a MIDI-style note number to Hz at A4 = 440 in 12-EDO. Tunings override this. */
 export declare function mtof(midi: number): number;
 export declare function ftom(freq: number): number;
+/**
+ * Clamp to [lo, hi], and send NaN to `lo` rather than through.
+ *
+ * The comparison order is the whole point. Written as `v < lo ? lo : v > hi
+ * ? hi : v`, both tests are false for NaN and the NaN falls out of the
+ * expression untouched, which is what used to happen. One NaN reaching a
+ * parameter then poisoned everything downstream of it: measured across the
+ * shipping engines, a single NaN parameter produced non-finite audio in 191
+ * parameters across 18 engines, and threw a TypeError inside `process()` in
+ * 10 parameters across 4, which in an AudioWorklet kills the processor for
+ * the life of the page. A UI slider that reads an empty text field is
+ * enough to do it.
+ *
+ * Written this way the NaN fails the first test and lands on `lo`, which is
+ * the safe end of every parameter range in this library. Finite inputs are
+ * unaffected, so no rendered output changes.
+ */
 export declare function clamp(v: number, lo: number, hi: number): number;
 export declare function dbToGain(db: number): number;
 export declare function gainToDb(g: number): number;
