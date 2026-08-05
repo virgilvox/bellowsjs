@@ -14,7 +14,7 @@
  * the linker keeps every engine, every constant table and every delay
  * buffer, including the ones a sketch can never reach. Measured on
  * Cortex-M7, one kick through a string-keyed registry of five engines is
- * 30264 bytes of flash and 37580 of RAM against 3760 and 1100 for the
+ * 30296 bytes of flash and 30828 of RAM against 3760 and 1100 for the
  * same kick used directly. So the voice type is a template parameter,
  * fixed at compile time, and the kernel owns exactly one VoicePool of it.
  * A sketch that wants three instruments instantiates three kernels, or

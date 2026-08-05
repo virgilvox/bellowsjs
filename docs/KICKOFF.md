@@ -65,7 +65,7 @@ TRAPS THAT WILL BITE YOU, in the order they are likely to
    because tests use renderOffline which imports source directly, and realtime silently runs
    the old DSP. This has already happened once.
 2. Never add a global registry to the C++ port. One kick through a string-keyed registry of
-   five engines costs 30264 bytes of flash and 37580 of RAM against 3760 and 1100 direct.
+   five engines costs 30296 bytes of flash and 30828 of RAM against 3760 and 1100 direct.
    bellows/bank.h gives runtime dispatch at byte-identical cost.
 3. Golden renders: test/golden/piece-a.f32 must never change unless you intend a DSP change.
    Never set GOLDEN_UPDATE to make a test pass.

@@ -11,7 +11,7 @@
  *
  * Why this exists rather than a virtual interface plus a table: measured
  * on Cortex-M7, playing one kick through a string-keyed registry of five
- * engines costs 30264 bytes of flash and 37580 bytes of RAM. The same
+ * engines costs 30296 bytes of flash and 30828 bytes of RAM. The same
  * kick through this bank costs 3760 and 1104, byte for byte identical to
  * using the class directly. A registry names every engine, so the linker
  * has to keep every engine, every constant table, and every delay buffer,

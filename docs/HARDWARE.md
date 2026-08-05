@@ -51,9 +51,9 @@ These are measured decisions, not style preferences.
    | --- | --- | --- |
    | `Kick` used directly | 3760 B | 1100 B |
    | through `Bank<Kick>` with a runtime index | 3760 B | 1104 B |
-   | through a string-keyed registry of five engines | 30264 B | 37580 B |
+   | through a string-keyed registry of five engines | 30296 B | 30828 B |
 
-   Eight times the flash and thirty-four times the RAM for the same sound. A registry names
+   Eight times the flash and twenty-eight times the RAM for the same sound. A registry names
    every engine, so the linker must keep every engine, every constant table and every delay
    buffer, including ones the program can never reach. `bellows/bank.h` gives the same
    `getEngine(id)` ergonomics at literally zero cost.
@@ -79,7 +79,7 @@ These are measured decisions, not style preferences.
 
 ## Where the flash actually goes
 
-Symbol breakdown of the VA voice sketch, 28528 bytes total:
+Symbol breakdown of the VA voice sketch, 28552 bytes total:
 
 ```
 kBlepStep            8196 B   Kaiser-sinc BLEP residual table
@@ -151,12 +151,15 @@ single-precision case, so the M4 row is the right proxy for it.
 
 The stereo delay, sized as the JS hardcodes it:
 
-| Configuration | RAM |
-| --- | --- |
-| `StereoDelay<100>` | 39 KB |
-| `StereoDelay<250>` | 96 KB |
-| `StereoDelay<500>` | 189 KB |
-| `StereoDelay<4000>`, the JS maximum | link error: overflows 1 MB by 1,049,728 B |
+Buffer bytes for the two lines, at 48000 Hz, which is the rate the delay sketches are
+compiled at. The middle column is what power-of-two rounding used to reserve:
+
+| Configuration | was (rounded up) | now (exact) |
+| --- | --- | --- |
+| `StereoDelay<100>` | 65536 B | 38432 B |
+| `StereoDelay<250>` | 131072 B | 96032 B |
+| `StereoDelay<500>` | 262144 B | 192032 B |
+| `StereoDelay<4000>`, the JS maximum | overflows 1 MB by 1049728 B | still overflows, by 488608 B |
 
 A 4 second stereo delay wants 2.0 MB, which independently confirms the 2048 KB measured against
 the browser build in `docs/AUDIT.md`. As a template parameter it becomes a knob, and the same
@@ -272,10 +275,10 @@ so they cannot drift from the code:
 | Example | flash | RAM |
 | --- | --- | --- |
 | `01_OneKick` | 3776 B | 1100 B |
-| `02_DrumMachine` (bank plus euclid) | 29696 B | 1588 B |
-| `03_PolySynth` (`VoicePool<Va, 8>`) | 30360 B | 3776 B |
-| `04_ScalesAndTuning` | 8080 B | 36928 B |
-| `05_MidiInstrument` | 30296 B | 3792 B |
+| `02_DrumMachine` (bank plus euclid) | 29720 B | 1588 B |
+| `03_PolySynth` (`VoicePool<Va, 8>`) | 30384 B | 3776 B |
+| `04_ScalesAndTuning` | 7936 B | 30176 B |
+| `05_MidiInstrument` | 30320 B | 3792 B |
 
 Against real boards, using the largest profile:
 

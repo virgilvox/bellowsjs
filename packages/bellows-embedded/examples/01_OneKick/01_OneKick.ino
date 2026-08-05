@@ -11,7 +11,7 @@
  *     flash 3776 B    RAM 1100 B
  *
  * For scale: the same kick reached by string id through a five-engine
- * registry costs 30264 B of flash and 37580 B of RAM. That is the entire
+ * registry costs 30296 B of flash and 30828 B of RAM. That is the entire
  * argument for how this library is put together.
  *
  * WIRING (Teensy 4.x plus the Audio Shield)

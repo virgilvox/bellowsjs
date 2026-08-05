@@ -112,7 +112,7 @@ that reaches exactly that much of the library.
 | 3 piece kit | 28248 B | 1500 B |
 | 8 voice VA poly, EQ, 250 ms delay | 30688 B | 135176 B |
 | everything ported so far plus fx | 34240 B | 208520 B |
-| the same kick through a string registry instead of a bank | 30264 B | 37580 B |
+| the same kick through a string registry instead of a bank | 30296 B | 30828 B |
 
 That last row is the reason there is no registry in this library. One kick,
 reached by string id through a table of five engines, costs eight times the
