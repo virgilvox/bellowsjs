@@ -31,6 +31,11 @@ READ FIRST, in this order, before touching anything:
                         correction: they say CI enforces things, and CI has never run.
   5. docs/HARDWARE.md   the embedded port, every flash and RAM number, and "Making it smaller",
                         which records what was measured and deliberately NOT taken.
+  6. docs/LANDSCAPE.md  what else exists on the web and in hardware, where this library actually
+                        leads and where it does not, where the instrument algorithms come from,
+                        and what the research implies as work. Every claim in it is labelled
+                        MEASURED, SOURCED or SECONDHAND; respect that distinction when you cite
+                        it, because an earlier untraceable claim had to be withdrawn.
 
 WHERE THINGS STAND
 - packages/bellows is the library and the source of truth for all DSP. 83 test files, 1204
@@ -154,6 +159,15 @@ TypeScript only: markov (needs a fixed-capacity rewrite, the JS keys contexts by
 JSON.stringify), pattern, transport, time, progressions, voicelead, scala. Each one gets a row
 in tables.mjs with an exact comparison. Note that parallel agents cannot edit tables.mjs and
 tables.cpp concurrently; either serialise that or split the harness per module first.
+```
+
+```
+OBJECTIVE: The strategic list in docs/HANDOFF.md, "The work queue", which comes out of the
+landscape research in docs/LANDSCAPE.md. Start with int16 delay storage behind a template
+parameter, float staying the default: delay buffers are 86 percent of RAM in s5_all even after
+exact sizing, and this is the Teensy Audio Library's own central decision. Measure the
+quantisation cost before shipping it, do not assume it. Then make the scale layer tuning-aware,
+which is both a correctness fix and the thing that makes the microtonality claim true.
 ```
 
 ```

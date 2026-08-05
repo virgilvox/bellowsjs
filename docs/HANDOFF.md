@@ -1,6 +1,6 @@
 # HANDOFF
 
-State of the project as of 2026-08-04, after the audit pass and the embedded port. Read this first when picking the work back up. Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` (every finding with its evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session on this), `docs/prototype-0.html` (the original design probe).
+State of the project as of 2026-08-04, after the audit pass and the embedded port. Read this first when picking the work back up. Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` (every finding with its evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists, where this actually leads, and what the research implies), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session on this), `docs/prototype-0.html` (the original design probe).
 
 ## Where things stand
 
@@ -218,6 +218,32 @@ unasked:
 - `core/register.ts` puts the composition root in the bottom layer, producing 22 of the
   repository's 26 upward imports. Moving it to a `composition/` layer is right and is a
   structural change to a published package.
+
+**Strategic, from the landscape research.** Full reasoning and sources in `docs/LANDSCAPE.md`,
+which also labels every claim MEASURED, SOURCED or SECONDHAND so nobody inherits another
+untraceable one. In priority order:
+
+- **`int16` delay storage.** The Teensy Audio Library's central decision. After exact sizing the
+  delay buffers are still 86 percent of RAM in `s5_all`, so halving them is the largest remaining
+  lever on the constraint that actually binds. Behind a template parameter with `float` as the
+  default, because it costs quantisation noise in a feedback path.
+- **Make the scale layer tuning-aware.** A correctness fix and a competitive one at once.
+  `Scale.degreeToMidi` hardcodes a 12-semitone octave stride, so `CLAUDE.md`'s rule that 12-EDO
+  is a default and never an assumption is true of the tuning layer and not of what sits on it.
+  Tune.js already ships the whole Scala archive to Web Audio, so this is contested ground and the
+  claim is currently weaker than the competition's.
+- **CMSIS-DSP for the spectral family on Cortex-M.** Recommended since the port began, unstarted.
+  Also the thing that decides whether a board has the RAM, since each spectral effect is 84 to
+  204 KB of state.
+- **Psychoacoustic analysis: critical bands, masking, roughness.** None of it exists here (grep
+  returns nothing) and none of the surveyed web libraries occupies the ground. The BS.1770 work
+  is evidence this codebase can implement a standard exactly, and the analysis suite already has
+  the scaffolding.
+
+**Deliberately not doing**, with the reasoning in `docs/LANDSCAPE.md`: fixed point below the
+Cortex-M4 line (that is Mozzi, not a tuning of this), multi-target codegen (that is Faust, and it
+is a rewrite), and replacing the tabulated BLEP with polyBLEP, DPW or PTR (all cheaper, all
+measurably worse).
 
 **Still open from the first audit** (`docs/AUDIT.md`):
 
