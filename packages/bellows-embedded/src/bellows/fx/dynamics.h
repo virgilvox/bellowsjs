@@ -37,6 +37,33 @@ inline float OnePoleCoef(float time_sec, float sample_rate) {
   return time_sec <= 0.0f ? 1.0f : 1.0f - fm::Exp(-1.0f / (time_sec * sample_rate));
 }
 
+/*
+ * A time in seconds times a sample rate, turned into a sample count.
+ *
+ * The clamping is done in float, before the cast, and the low test is
+ * negated so NaN takes it. Both operands come from the caller: a rate read
+ * back from an SDK can be NaN or negative, and every product of one with a
+ * clamped time is then NaN too. static_cast<int32_t> of that is undefined,
+ * and UBSan says so ("nan is outside the range of representable values of
+ * type 'int'", measured at dynamics.h:110 with Init(NAN)). Clamping after
+ * the cast, which is what the compressor used to do, is already too late.
+ * For a finite in-range product this truncates exactly as the bare cast
+ * did, so no parity row moves.
+ *
+ * The default ceiling is 2^30 rather than INT32_MAX because
+ * static_cast<float>(INT32_MAX) rounds UP to 2147483648, so the `>` test
+ * would let that exact value through into the undefined cast it exists to
+ * prevent. 2^30 is exactly representable in float and is a billion samples,
+ * six hours at 48 kHz, so no counter here can reach it.
+ */
+inline constexpr int32_t kSampleCountMax = 1 << 30;
+
+inline int32_t SampleCount(float samples, int32_t max = kSampleCountMax) {
+  if (!(samples >= 0.0f)) return 0;
+  const float m = static_cast<float>(max);
+  return samples > m ? max : static_cast<int32_t>(samples);
+}
+
 /* ------------------------------------------------------------------ */
 /* Compressor                                                          */
 /* ------------------------------------------------------------------ */
@@ -107,10 +134,8 @@ class Compressor {
     const float rel = Clamp(p_.release, 0.01f, 2.0f);
     r_coef_slow_ = OnePoleCoef(rel, sr_);
     r_coef_fast_ = OnePoleCoef(rel * 0.25f, sr_);
-    look_ = static_cast<int32_t>(Clamp(p_.lookahead, 0.0f, max_look) * sr_ + 0.5f);
-    if (look_ > static_cast<int32_t>(kMaxLookSamples)) {
-      look_ = static_cast<int32_t>(kMaxLookSamples);
-    }
+    look_ = SampleCount(Clamp(p_.lookahead, 0.0f, max_look) * sr_ + 0.5f,
+                        static_cast<int32_t>(kMaxLookSamples));
     /* Auto makeup compensates half the reduction a 0 dBFS signal gets. */
     auto_makeup_db_ =
         p_.makeup_db <= -0.999f ? -0.5f * StaticGainDb(0.0f) : p_.makeup_db;
@@ -466,7 +491,7 @@ class Gate {
     close_db_ = open_db_ - kGateHysteresisDb;
     a_coef_ = OnePoleCoef(Clamp(p_.attack, 0.0001f, 0.1f), sr_);
     r_coef_ = OnePoleCoef(Clamp(p_.release, 0.001f, 2.0f), sr_);
-    hold_samples_ = static_cast<int32_t>(Clamp(p_.hold, 0.0f, 1.0f) * sr_ + 0.5f);
+    hold_samples_ = SampleCount(Clamp(p_.hold, 0.0f, 1.0f) * sr_ + 0.5f);
     floor_lin_ = fm::DbToGain(Clamp(p_.range_db, -80.0f, 0.0f));
   }
 

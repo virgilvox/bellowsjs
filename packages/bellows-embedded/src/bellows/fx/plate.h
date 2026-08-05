@@ -194,9 +194,22 @@ class PlateExt {
             const Params& p) {
     namespace pd = plate_detail;
     sr_ = sample_rate;
-    const uint32_t sr_i = static_cast<uint32_t>(sample_rate + 0.5f);
     max_predelay_ = static_cast<float>(predelay_ms) * 0.001f;
     ready_ = false;
+    /* Every one of the thirteen lengths below is scaled by this integer
+     * rate, so a rate that is not finite and positive does not just detune
+     * the tank, it makes the cast undefined: UBSan reports "nan is outside
+     * the range of representable values of type 'unsigned int'" here for
+     * Init(NAN), and a negative rate is undefined for the same reason. Init
+     * already has a failure path for a buffer that cannot hold the carve
+     * and Process() is already a no-op on !ready_, so refuse the rate the
+     * same way rather than inventing a substitute the caller cannot see.
+     * kSampleRateMax is the cast ceiling, not a DSP limit: it is exactly
+     * representable in float and is 16777216, far above any audio rate,
+     * and TotalSamples would overflow uint32_t long before it. */
+    constexpr float kSampleRateMax = 16777216.0f;
+    if (!(sample_rate > 0.0f) || sample_rate > kSampleRateMax) return false;
+    const uint32_t sr_i = static_cast<uint32_t>(sample_rate + 0.5f);
     if (buf == nullptr || buf_len < pd::TotalSamples(sr_i, predelay_ms)) return false;
 
     /* Same walk, same order, as TotalSamples. */

@@ -63,7 +63,8 @@ class DelayLineExt {
   }
 
   inline float ReadLinear(float d) const {
-    if (d < 0.0f) d = 0.0f;
+    /* Negated test, not `d < 0`, so NaN takes the branch. See ReadCubic. */
+    if (!(d >= 0.0f)) d = 0.0f;
     else if (d > static_cast<float>(max_)) d = static_cast<float>(max_);
     int32_t di = static_cast<int32_t>(d);
     float f = d - static_cast<float>(di);
@@ -73,7 +74,18 @@ class DelayLineExt {
   }
 
   inline float ReadCubic(float d) const {
-    if (d < 1.0f) d = 1.0f;
+    /* `!(d >= 1)` rather than `d < 1` so that a NaN delay takes the floor
+     * branch: both `<` and `>` are false for NaN, so the plain form let it
+     * through untouched and static_cast<int32_t>(NaN) is undefined. On
+     * x86-64 it is INT_MIN, base = w_ - 1 - INT_MIN overflows, and a single
+     * conditional add cannot fold the result back into the buffer: measured,
+     * a Pluck<20,48000> handed NoteOn(NAN, 1) segfaulted (exit 139) built
+     * -target x86_64-apple-macos11, while arm64 saturated the cast to 0 and
+     * only emitted NaN. The clamp is where this belongs because every engine
+     * reaching a delay line through a computed read position is exposed, not
+     * just the one that was found. For finite d the two forms are identical,
+     * including -0.0f, so no parity row moves. */
+    if (!(d >= 1.0f)) d = 1.0f;
     else if (d > static_cast<float>(max_)) d = static_cast<float>(max_);
     int32_t di = static_cast<int32_t>(d);
     float f = d - static_cast<float>(di);

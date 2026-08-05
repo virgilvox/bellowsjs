@@ -86,6 +86,14 @@ inline float Tanh(float x) {
  * for pitch. Degree 4 was tried first and is 1.5e-3, about 1.8 cents:
  * audible on a tuning, so the extra two multiply-adds are worth it. */
 inline float Exp2(float x) {
+  /* NaN in, NaN out, the same as exp2f, so the fast path and the libm path
+   * do not disagree about it. It has to be tested for explicitly: both range
+   * tests below are false for NaN, so it used to reach
+   * static_cast<int>(floorf(NaN)) below, which is undefined. Measured with
+   * -DBELLOWS_FAST_MATH=1 and UBSan: "nan is outside the range of
+   * representable values of type 'int'" at this function, reached from
+   * Compressor::Init(NAN) through OnePoleCoef. */
+  if (isnan(x)) return x;
   if (x < -126.0f) return 0.0f;
   if (x > 126.0f) return 3.4e38f;
   float xi = floorf(x);

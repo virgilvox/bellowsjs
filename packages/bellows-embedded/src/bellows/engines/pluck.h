@@ -24,14 +24,39 @@ class Pluck {
 
   static constexpr uint32_t kMaxPeriod = kSampleRate / kMinFreqHz + 4;
 
+  /* MinFreq() divides by kMaxPeriod - 4, which is the truncated integer
+   * kSampleRate / kMinFreqHz and reaches zero as soon as kMinFreqHz exceeds
+   * kSampleRate. DelayLine<kMaxPeriod> does not catch that: kMaxPeriod is
+   * still 4 there, so its own static_assert passes. Measured on
+   * Pluck<60000, 48000>: it compiled, MinFreq() returned inf, and
+   * NoteOn(440, 1) then faulted through ReadCubic on x86-64. The bound is
+   * kSampleRate / 8 rather than 1 because sr_ / 8 is the Nyquist guard
+   * NoteOn clamps against, so above it the playable range is empty at the
+   * design rate even when the arithmetic stays finite. */
+  static_assert(kMinFreqHz > 0 && kSampleRate > 0,
+                "Pluck kMinFreqHz and kSampleRate must both be positive");
+  static_assert(kSampleRate / kMinFreqHz >= 8,
+                "Pluck kMinFreqHz must be at most kSampleRate / 8");
+
   void Init(float sample_rate, Rng* rng) { Params d; Init(sample_rate, rng, d); }
 
   void Init(float sample_rate, Rng* rng, const Params& p) {
-    sr_ = sample_rate;
+    /* A rate that is NaN, infinite, zero or negative poisons everything
+     * derived from it: sr_ / 8 is the Nyquist guard NoteOn clamps against,
+     * so Init(0) forces freq_ to 0 and UpdateLoop's sr_ / freq_ becomes
+     * 0 / 0, and a NaN read position reaches the delay line. The delay
+     * line's clamps hold that in bounds now, but a voice tuned to NaN is
+     * still not something a caller can use. Fall back to the rate the
+     * template was sized for, which is the only rate this instance is
+     * known to be consistent at. Init() has no way to report the swap, so
+     * the caller reads it back through MinFreq() the same way it would
+     * after any other rate. */
+    sr_ = (sample_rate > 0.0f && isfinite(sample_rate)) ? sample_rate
+                                                        : static_cast<float>(kSampleRate);
     rng_ = rng;
     p_ = p;
     delay_.Init();
-    track_coef_ = fm::Exp(-1.0f / (0.05f * sample_rate));
+    track_coef_ = fm::Exp(-1.0f / (0.05f * sr_));
   }
 
   /*
@@ -48,9 +73,21 @@ class Pluck {
    * past excite_[]: a real heap-buffer-overflow, ASan-confirmed, not a
    * clamp.
    *
-   * kMaxPeriod - 4 is the delay line's own usable range (DelayLine sets
-   * max_ = cap - 4), and at sr_ == kSampleRate it evaluates to exactly
-   * kMinFreqHz, so nothing moves at the design rate. Above it the note
+   * kMaxPeriod - 4 is the truncated integer kSampleRate / kMinFreqHz: the
+   * period of the lowest note at the design rate, which is exactly why
+   * dividing sr_ by it gives kMinFreqHz back when sr_ == kSampleRate. It is
+   * NOT the delay line's usable range, which is four samples longer:
+   * DelayLine<kMaxPeriod>::kCap is kMaxPeriod + 4, so max_ = kCap - 4 is
+   * kMaxPeriod (measured 2404 for Pluck<20, 48000>, against the 2400 used
+   * here). The bound stays at the shorter figure deliberately; the four
+   * samples of slack are what the cubic read reaches past its clamp.
+   *
+   * At sr_ == kSampleRate this returns kMinFreqHz exactly only when
+   * kMinFreqHz divides kSampleRate, because that division truncates.
+   * Measured: Pluck<7, 48000> at Init(48000) returns 7.000146 Hz, since
+   * 48000 / 7 truncates to 6857. Every instantiation that ships or is
+   * tested divides exactly (48000/20, 48000/80, 44100/20), so the parity
+   * row and the golden render are unmoved. Above the design rate the note
    * clamps sharp, which is what the delay line's read clamp already did on
    * its own: the loop and the excitation now hit the same limit instead of
    * one clamping while the other ran off the end.
@@ -64,10 +101,22 @@ class Pluck {
     return cap > lo ? cap : lo;
   }
 
+  /* The pitch the voice actually settled on after NoteOn clamped it, which
+   * is not the pitch that was asked for whenever the request fell outside
+   * [MinFreq(), sr_ / 8]. A caller has no other way to read it back, and it
+   * is the one number that says whether the loop the voice is running fits
+   * the buffer: sr_ / Freq() is the period in samples. */
+  float Freq() const { return freq_; }
+
   void NoteOn(float freq, float vel) {
     float lo = MinFreq();
     float hi = sr_ / 8.0f;
-    freq_ = freq < lo ? lo : (freq > hi ? hi : freq);
+    /* `!(freq > lo)` rather than `freq < lo` so a NaN request lands on lo.
+     * Both comparisons are false for NaN, so the plain form passed it
+     * through and freq_ became NaN, which UpdateLoop turned into a NaN
+     * read_delay_. For finite freq the two forms pick the same branch,
+     * including freq == lo. */
+    freq_ = !(freq > lo) ? lo : (freq > hi ? hi : freq);
     gate_ = true;
     live_ = true;
     delay_.Clear();
