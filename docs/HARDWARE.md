@@ -260,6 +260,11 @@ rodata, because `nm -S` will otherwise hand you the delay buffer and drown every
 | every line of bellows DSP | 5704 | 16 % |
 | the sketch's own harness and startup | 3670 | 10 % |
 
+Those four sum to 34594 of the 35104 bytes the size report prints. The 510 byte gap is unsized
+symbols plus the part of `.data` that the symbol-type filter does not see, and it is left
+explicit rather than absorbed into one of the rows, because absorbing it is how the previous
+version of this table ended up claiming 35 percent for the DSP.
+
 An earlier revision of this table said 18 percent libm and 35 percent DSP. Those were estimated
 by subtraction from the twenty largest symbols rather than counted, and the subtraction quietly
 folded the harness into the DSP row and undercounted the soft-double helpers. The corrected
@@ -499,6 +504,7 @@ to end by building twice and attributes nothing:
 | `01_OneKick` | 36860 B | 34812 B | 2048 B, 6 % |
 | `02_DrumMachine` | 65532 B | 59388 B | 6144 B, 9 % |
 | `03_PolySynth` | 67580 B | 64508 B | 3072 B, 5 % |
+| `04_ScalesAndTuning` | 40956 B | 37884 B | 3072 B, 8 % |
 | `05_MidiInstrument` | 68604 B | 64508 B | 4096 B, 6 % |
 
 Two to six kilobytes is nothing against a Teensy 4.1's 8 MB and worth having against a Daisy's
