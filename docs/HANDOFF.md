@@ -4,7 +4,7 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 
 ## Where things stand
 
-- `bellowsjs@0.1.5` is published on npm. Tags pushed to github.com/virgilvox/bellowsjs, main is current. `packages/bellows-embedded` is at 0.1.0 and is not published anywhere yet.
+- `bellowsjs@0.1.6` is published on npm, tagged `v0.1.6`. See `CHANGELOG.md`: it is a safety release, and the SFZ hardening in it fixes a real denial of service on untrusted input in a browser. **`main` is NOT current**: all of this work is on `milestone-2-and-bringup`, open as PR #1. `packages/bellows-embedded` is at 0.1.0 and is not published anywhere yet.
 - Library test suite: 85 files, 1272 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`, `vue-tsc`) and was verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples.
@@ -352,6 +352,22 @@ that no local command could, which is the whole argument for it:
    `--allow-host-drift`, bounded at 16 bytes, printing every allowance; a local run stays exact.
 
 Keep it that way. The gates are only controls while this runs.
+
+It went green on the sixth attempt, all six jobs. Two more things it found on the way, both
+consequences of widening `check-docs` beyond the size report: the embedded job had no node and no
+workspace installed, so the harnesses it now calls could not run there, and the host allowance
+covered table rows but not figures written into sentences.
+
+The allowances are worth understanding before trusting a green run. `--allow-host-drift` is CI
+only and covers two things: 16 bytes on a flash figure, and 25 percent on a measured parity
+figure. Both bound a number pasted into a document and neither bounds a gate. `parity.mjs` sets
+its gates at roughly ten times their measurement and passed on both hosts in every run, so the
+check that decides whether the C++ still matches the TypeScript is forty times tighter than the
+loosest allowance. A local run is exact. Every allowance is printed and counted on a `note` line.
+
+**Next action on this branch: merge PR #1.** The site builds from `main` (`.do/app.yaml`), so
+bellows.live is still serving pre-audit code until that happens, and the deploy step of the
+release ritual has deliberately not been run for that reason.
 
 ## Verified end to end on 2026-08-05, after the fix pass
 
