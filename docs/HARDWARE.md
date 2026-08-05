@@ -249,11 +249,22 @@ The theory row is the one to notice. Scales, chords, tunings and note parsing to
 Where the bytes are, measured with `arm-none-eabi-nm --size-sort` on `s5_all`, the sketch that
 constructs and drives everything at once:
 
-| | share of flash |
-| --- | --- |
-| `kBlepStep` and `kBlepRamp` residual tables | 47 % |
-| newlib libm (`sinf`, `powf`, `__kernel_rem_pio2f`, soft-double helpers) | 18 % |
-| every line of bellows DSP | 35 % |
+Symbols are deduped by address, because newlib aliases several of its helpers
+(`__adddf3` and `__aeabi_dadd` are one symbol under two names), and restricted to code and
+rodata, because `nm -S` will otherwise hand you the delay buffer and drown everything:
+
+| | bytes | share of flash |
+| --- | --- | --- |
+| `kBlepStep` and `kBlepRamp` residual tables | 16392 | 47 % |
+| newlib libm | 8828 | 25 % |
+| every line of bellows DSP | 5664 | 16 % |
+| the sketch's own harness and startup | 3670 | 10 % |
+
+An earlier revision of this table said 18 percent libm and 35 percent DSP. Those were estimated
+by subtraction from the twenty largest symbols rather than counted, and the subtraction quietly
+folded the harness into the DSP row and undercounted the soft-double helpers. The corrected
+split makes the point harder, not softer: the DSP code is a sixth of the flash and the tables
+plus libm are nearly three quarters.
 
 The DSP code is not the weight and never was. Individual functions are 400 to 500 bytes:
 `Svf::Update` is 444, `NoiseGen::Process` is 528. Two constant tables and one delay buffer are
@@ -369,13 +380,31 @@ core and audio library included:
 | Example | flash total | RAM1 used | RAM1 free |
 | --- | --- | --- | --- |
 | `01_OneKick` | 36860 B | 27208 B | 482400 B |
-| `02_DrumMachine` | 66556 B | 56808 B | 463968 B |
-| `03_PolySynth` | 67580 B | 58296 B | 461920 B |
-| `04_ScalesAndTuning` | 41980 B | 68136 B | 445504 B |
-| `05_MidiInstrument` | 68604 B | 59624 B | 461568 B |
+| `02_DrumMachine` | 65532 B | 55912 B | 463968 B |
+| `03_PolySynth` | 67580 B | 58408 B | 461920 B |
+| `04_ScalesAndTuning` | 40956 B | 61240 B | 452256 B |
+| `05_MidiInstrument` | 68604 B | 59736 B | 461568 B |
 
 Teensy 4.1 has 8 MB of flash and 512 KB of RAM1 plus 512 KB of RAM2, so the largest of these
 leaves about 8.06 MB of flash and 445 KB of RAM1 free, with RAM2 essentially untouched.
+
+The share that is bellows is worth knowing before reading any percentage in this document.
+Counting sized symbols in the `05_MidiInstrument` image: bellows is 26122 bytes, 31 percent,
+and the Arduino core, Audio Library, libm and USB stack are 57830 bytes, 68 percent. So a
+saving expressed as a fraction of the library is a much smaller fraction of the firmware. The
+fast-math table above says 75 percent on a kick; the same flag on the same kick as complete
+firmware is 5 percent, because it cannot touch the two thirds that is not bellows:
+
+| firmware | default | `BELLOWS_FAST_MATH=1` | saved |
+| --- | --- | --- | --- |
+| `01_OneKick` | 36860 B | 34812 B | 2048 B, 5 % |
+| `02_DrumMachine` | 65532 B | 59388 B | 6144 B, 9 % |
+| `03_PolySynth` | 67580 B | 64508 B | 3072 B, 4 % |
+| `05_MidiInstrument` | 68604 B | 63484 B | 5120 B, 7 % |
+
+Two to six kilobytes is nothing against a Teensy 4.1's 8 MB and worth having against a Daisy's
+128 KB of internal flash, which is the honest way to decide whether the flag is worth its
+accuracy cost.
 
 Whole-firmware figures move with the Arduino core, so the revision is part of the measurement:
 `platform = teensy` 5.1.0, `framework-arduinoteensy` 1.160.0,
