@@ -476,17 +476,23 @@ Teensy 4.1 has 8 MB of flash and 512 KB of RAM1 plus 512 KB of RAM2, so the larg
 leaves about 8.06 MB of flash free, and the tightest RAM1 row leaves 452 KB, with RAM2
 essentially untouched.
 
-The share that is bellows is worth knowing before reading any percentage in this document.
-Counting the sized code and rodata symbols in the `05_MidiInstrument` image, deduped by address:
-bellows is 22856 bytes and 42 percent, and the Arduino core, Audio Library, libm and USB stack
-are 31802 bytes and 58 percent. So a saving expressed as a fraction of the library is a smaller
-fraction of the firmware, and the fast-math table above saying 75 percent on a kick is not the
-number that decides anything on a board.
+A percentage of the library is not a percentage of the firmware, and the fast-math table above
+saying 75 percent on a kick is not the number that decides anything on a board. Building the
+same sketch twice, with the flag and without, is:
 
-What the flag actually does to the image is worth seeing, because it is not a simple shrink.
-The same measurement on the fast-math build gives bellows 26326 bytes and everything else 24842:
-bellows GROWS by 3470 while the rest falls by 6960, because the polynomials get inlined into
-bellows functions and stop being libm symbols. The image nets 4096 bytes smaller:
+WHAT THIS SECTION NO LONGER CLAIMS. Three revisions of it tried to quantify how much of the
+image is bellows and how much is the Arduino core, and produced 31 percent, 42 percent and 34.7
+percent, because each fixed a different flaw in the same unsound method. The method cannot be
+fixed. Attribution by symbol name does not work for a header-only template library: bellows code
+is inlined into the sketch's own functions and takes the sketch's names, while sketch code that
+merely mentions a bellows type takes a bellows-looking one. In the 05_MidiInstrument image,
+`Instrument::HandleMessage(bellows::midi::MidiMessage const&)` is 760 bytes of sketch MIDI
+dispatch that any name test counts as bellows, and `Instrument::Init(float)` is 1108 bytes that
+is almost entirely inlined bellows and that the same test counts as Arduino core. The split is
+withdrawn rather than restated with a fourth number.
+
+The conclusion it was there to support does not need it, because the table below is measured end
+to end by building twice and attributes nothing:
 
 | firmware | default | `BELLOWS_FAST_MATH=1` | saved |
 | --- | --- | --- | --- |
