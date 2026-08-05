@@ -108,7 +108,7 @@ export class Bellows {
   private internedParams = new Map<string, number>();
   private localDefs: Array<{ kind: 'engine' | 'effect'; code: string }> = [];
   private lastMeter: MeterFrame | null = null;
-  private disposed = false;
+  private gone = false;
   /** Deferred channel removals, so dispose() can cancel them. */
   private pendingRemovals = new Set<ReturnType<typeof setTimeout>>();
   /** last kernel error messages, newest last */
@@ -213,7 +213,7 @@ export class Bellows {
       ]);
       const timer = setTimeout(() => {
         this.pendingRemovals.delete(timer);
-        if (!this.disposed) this.kernel.post({ type: 'removeChannel', id });
+        if (!this.gone) this.kernel.post({ type: 'removeChannel', id });
       }, releaseSeconds * 1000);
       this.pendingRemovals.add(timer);
       return;
@@ -233,9 +233,16 @@ export class Bellows {
     return this.renderCtx ? this.renderCtx.transport : this.transport;
   }
 
-  /** Current engine time in seconds. */
+  /**
+   * Current engine time in seconds. During render() this is the tick time of
+   * the callback being re-run, the same value untimed calls resolve to, which
+   * makes it a fourth replay invariant alongside the three in HANDOFF item 3.
+   * Without the branch a callback written `inst.note(n, { at: b.now() + 0.1 })`
+   * stamps live wall-clock times into renderCtx.events during a replay and
+   * every note in the export lands at roughly the same instant.
+   */
   now(): number {
-    return this.ctx.currentTime;
+    return this.renderCtx ? this.renderCtx.now : this.ctx.currentTime;
   }
 
   /** A named random stream forked off the piece seed. Deterministic per seed. */
@@ -608,9 +615,14 @@ export class Bellows {
     }
   }
 
+  /** True once dispose() has run. Everything below it is torn down. */
+  get disposed(): boolean {
+    return this.gone;
+  }
+
   dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
+    if (this.gone) return;
+    this.gone = true;
     if (this.timer) clearInterval(this.timer);
     for (const t of this.pendingRemovals) clearTimeout(t);
     this.pendingRemovals.clear();

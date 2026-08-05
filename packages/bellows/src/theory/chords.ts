@@ -35,6 +35,10 @@ export const CHORD_TYPES: Record<string, readonly number[]> = {
   '7#9': [0, 4, 7, 10, 15],
   '7#11': [0, 4, 7, 10, 18],
   'aug7': [0, 4, 8, 10],
+  // Diatonic seventh on the third degree of harmonic minor, so a shipped
+  // scale produces it. Last in the record because nothing else has to
+  // change: detectChord reads this order as its tie-break preference.
+  'maj7#5': [0, 4, 8, 11],
 };
 
 /** Aliases accepted by parseChord on top of the CHORD_TYPES keys. */
@@ -182,7 +186,21 @@ export function diatonicSevenths(scale: Scale): Chord[] {
 /* Roman numerals                                                      */
 /* ------------------------------------------------------------------ */
 
-const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'] as const;
+const ROMAN_TENS = ['', 'X', 'XX', 'XXX', 'XL', 'L', 'LX', 'LXX', 'LXXX', 'XC'] as const;
+const ROMAN_ONES = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'] as const;
+
+/**
+ * Numeral for a one-based degree number. Composed rather than tabulated
+ * because scales here go past seven degrees: the bebop scales and the two
+ * octatonics have eight and 'chromatic' has twelve, and a seven-entry
+ * table made chordToRoman throw on all five.
+ */
+function romanNumeral(n: number): string {
+  if (!Number.isInteger(n) || n < 1 || n > 99) {
+    throw new Error('no roman numeral for degree number: ' + n);
+  }
+  return ROMAN_TENS[Math.floor(n / 10)] + ROMAN_ONES[n % 10];
+}
 
 /** True when the chord has a minor or diminished third above its root. */
 function isMinorish(intervals: readonly number[]): boolean {
@@ -212,50 +230,75 @@ const ROMAN_SUFFIX: Record<string, string> = {
  * Roman numeral for a chord in a scale: lowercase for minor and diminished
  * qualities, 'o' for diminished, 'ø' for half diminished, '+' for
  * augmented. Chromatic roots take a 'b' or '#' prefix relative to the
- * nearest degree.
+ * degree a semitone away, sharp or flat per the line of fifths.
  */
 export function chordToRoman(ch: Chord, scale: Scale): string {
-  let accidental = '';
-  let degree = -1;
   const degreePc = (d: number) => mod12(scale.degreeToMidi(d));
+  let degree = -1;
+  let accidental = '';
+  /* Degrees whose lowered and raised forms land on this root. In any scale
+   * with no gap wider than two semitones (every diatonic mode, both
+   * melodic and harmonic minor, both Neapolitans) a chromatic root has
+   * both, so the choice below is what decides the spelling. */
+  let flatOf = -1;
+  let sharpOf = -1;
   for (let d = 0; d < scale.length; d++) {
-    if (degreePc(d) === ch.root) {
+    const pc = degreePc(d);
+    if (pc === ch.root) {
       degree = d;
       break;
     }
+    if (flatOf < 0 && mod12(pc - 1) === ch.root) flatOf = d;
+    if (sharpOf < 0 && mod12(pc + 1) === ch.root) sharpOf = d;
   }
   if (degree < 0) {
-    for (let d = 0; d < scale.length; d++) {
-      if (mod12(degreePc(d) - 1) === ch.root) {
-        degree = d;
-        accidental = 'b';
-        break;
-      }
+    /* Spell the way the line of fifths does: count fifths from the tonic to
+     * the root and take the shorter side, sharpward or flatward. Seven is
+     * its own inverse mod 12, so mod12(7 * offset) inverts mod12(7 * f) and
+     * gives the sharpward fifth count directly. Six fifths is the F#/Gb tie
+     * and the sharp side takes it, which is what practice does: F# in C
+     * major is #IV (of the V/V, the augmented sixth, the #ivo7), not bV,
+     * while Db one fifth further out stays bII, the Neapolitan. Trying 'b'
+     * first, as this did, made every raised degree flat and '#' dead code
+     * for any scale whose gaps are all whole tones. */
+    const fifthsUp = mod12(7 * (ch.root - degreePc(0)));
+    if (sharpOf >= 0 && (fifthsUp <= 6 || flatOf < 0)) {
+      degree = sharpOf;
+      accidental = '#';
+    } else if (flatOf >= 0) {
+      degree = flatOf;
+      accidental = 'b';
     }
   }
   if (degree < 0) {
-    for (let d = 0; d < scale.length; d++) {
-      if (mod12(degreePc(d) + 1) === ch.root) {
-        degree = d;
-        accidental = '#';
-        break;
-      }
-    }
+    throw new Error('chord root is not a scale degree or a semitone from one: ' + ch.root);
   }
-  if (degree < 0 || degree >= ROMANS.length) {
-    throw new Error('chord root does not map to a scale degree');
-  }
-  const numeral = isMinorish(ch.intervals) ? ROMANS[degree].toLowerCase() : ROMANS[degree];
+  const roman = romanNumeral(degree + 1);
+  const numeral = isMinorish(ch.intervals) ? roman.toLowerCase() : roman;
   const suffix = ROMAN_SUFFIX[ch.type] ?? ch.type;
   return accidental + numeral + suffix;
 }
 
-const ROMAN_RE = /^([b#]?)([ivIV]+)(.*)$/;
+const ROMAN_RE = /^([b#]?)([ivxlIVXL]+)(.*)$/;
 
+const ROMAN_VALUES: Record<string, number> = { I: 1, V: 5, X: 10, L: 50 };
+
+/** Zero-based scale degree for a numeral. Inverse of romanNumeral. */
 function romanDegree(numeral: string): number {
-  const idx = ROMANS.indexOf(numeral.toUpperCase() as (typeof ROMANS)[number]);
-  if (idx < 0) throw new Error('invalid roman numeral: ' + numeral);
-  return idx;
+  const upper = numeral.toUpperCase();
+  let n = 0;
+  for (let i = 0; i < upper.length; i++) {
+    const v = ROMAN_VALUES[upper[i]];
+    const next = ROMAN_VALUES[upper[i + 1]] ?? 0;
+    n += v < next ? -v : v;
+  }
+  /* Round-trip check instead of a grammar: it is the shortest way to reject
+   * 'IIII', 'VV' and 'IL', which the running sum above would otherwise
+   * accept as 4, 10 and 49. */
+  if (n < 1 || n > 99 || romanNumeral(n) !== upper) {
+    throw new Error('invalid roman numeral: ' + numeral);
+  }
+  return n - 1;
 }
 
 function romanSuffixType(suffix: string, lower: boolean): string {

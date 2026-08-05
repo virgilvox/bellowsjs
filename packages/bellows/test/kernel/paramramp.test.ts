@@ -13,6 +13,8 @@ import type { EngineDef, KernelEvent, Voice } from '../../src/types';
 import type { KernelMessage } from '../../src/kernel/messages';
 
 const SR = 48000;
+/** Mirrors RAMP_SLOTS in src/kernel/engine.ts, which is module private. */
+const RAMP_SLOTS = 32;
 
 const dc: EngineDef = {
   id: 'ramp-dc',
@@ -223,6 +225,45 @@ describe('kernel param ramps', () => {
     });
     // the channel is gone, so the render is silent and nothing throws
     expect(at(out.left, 0.15)).toBe(0);
+  });
+
+  it('applies immediately when the duration is not finite, and frees no slot', () => {
+    // `e.c > 0` rejects NaN on its own, but Infinity passed it and then held
+    // a slot for good: endFrame = start + Math.round(Infinity) is Infinity, so
+    // `frame >= s.endFrame` never fires, and t = (frame - start) / Infinity is
+    // 0 so the parameter never moved either. Reachable as
+    // rampParam(name, value, { seconds: 1 / 0 }).
+    for (const c of [Infinity, NaN]) {
+      const msgs = setup([
+        { time: 0.01, kind: EventKind.ParamRamp, target: 0, a: AMP, b: 0.25, c },
+      ]);
+      const { left } = render(msgs, 0.05);
+      expect(at(left, 0.005)).toBeCloseTo(0.5, 5);
+      expect(left[Math.round(0.01 * SR) + 1]).toBeCloseTo(0.25, 5);
+    }
+  });
+
+  it('does not let infinite-duration ramps exhaust the slot table', () => {
+    // One infinite ramp on each of the 32 channels that could fill the table,
+    // then a real 0.2 s ramp on a 33rd. Distinct channels on purpose: a
+    // repeat on one channel retargets its slot instead of claiming another,
+    // which is the previous test and would hide this one. An infinite ramp
+    // that takes a slot never releases it, so channel 32 would find the table
+    // full and jump straight to its destination.
+    const n = RAMP_SLOTS + 1;
+    const events: KernelEvent[] = [];
+    for (let id = 0; id < RAMP_SLOTS; id++) {
+      events.push({ time: 0, kind: EventKind.ParamRamp, target: id, a: AMP, b: 0.5, c: Infinity });
+    }
+    events.push({ time: 0.05, kind: EventKind.ParamRamp, target: RAMP_SLOTS, a: AMP, b: 1, c: 0.2 });
+    const msgs = setup(events, n);
+    // silence every channel but the last, so the output is its ramp alone
+    for (let id = 0; id < RAMP_SLOTS; id++) msgs.push({ type: 'channelGain', id, gain: 0 });
+    const { left } = render(msgs, 0.3);
+    // mid ramp it is between the two ends, not already parked on 1
+    expect(at(left, 0.15)).toBeGreaterThan(0.5);
+    expect(at(left, 0.15)).toBeLessThan(0.99);
+    expect(at(left, 0.29)).toBeCloseTo(1, 5);
   });
 
   it('leaves a render with no ramp events byte identical', () => {

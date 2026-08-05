@@ -11,6 +11,16 @@
  * tanh saturation in every stage, run at 2x internally to tame the
  * nonlinearity, with half-input feedback compensation so resonance does
  * not gut the passband.
+ *
+ * Every setter here rejects a non-finite argument outright and keeps the
+ * last good setting. These are recursive units: one NaN coefficient reaches
+ * a state variable and every sample after it is NaN, reset() is not called
+ * on a parameter change, and no later good value recovers it, so the session
+ * goes silent with no error. Rejecting at the setter is the same policy
+ * VoicePool.setParam already uses (what a physical control does when you let
+ * go of it), it costs one test per set() and nothing per sample, and the
+ * hand-written Math.min(Math.max(...)) guards below cannot do the job because
+ * both comparisons are false for NaN and it falls through untouched.
  */
 
 export type SvfMode =
@@ -53,7 +63,9 @@ export class Svf {
     this.update();
   }
 
+  /** A call carrying any non-finite argument is ignored whole: see the header. */
   set(cutoffHz: number, q: number, gainDb = 0): void {
+    if (!Number.isFinite(cutoffHz) || !Number.isFinite(q) || !Number.isFinite(gainDb)) return;
     this.cutoffHz = cutoffHz;
     this.q = q;
     this.gainDb = gainDb;
@@ -165,8 +177,13 @@ export class LadderFilter {
     this.set(1000, 0);
   }
 
-  /** cutoffHz in Hz, resonance 0..1 (self-oscillation near 1), drive >= 1 saturates harder. */
+  /**
+   * cutoffHz in Hz, resonance 0..1 (self-oscillation near 1), drive >= 1
+   * saturates harder. A call carrying any non-finite argument is ignored
+   * whole: see the header.
+   */
   set(cutoffHz: number, resonance: number, drive = 1): void {
+    if (!Number.isFinite(cutoffHz) || !Number.isFinite(resonance) || !Number.isFinite(drive)) return;
     const fs2 = this.sampleRate * 2; // internal 2x rate
     const fc = Math.min(Math.max(cutoffHz, 1e-3), this.sampleRate * 0.45);
     this.g = 1 - Math.exp((-2 * Math.PI * fc) / fs2);
@@ -215,12 +232,16 @@ export class OnePole {
     return 1 - Math.exp((-2 * Math.PI * fc) / this.sampleRate);
   }
 
+  /** Non-finite hz is ignored whole, mode included: see the header. */
   setLowpass(hz: number): void {
+    if (!Number.isFinite(hz)) return;
     this.a = this.coef(hz);
     this.highpass = false;
   }
 
+  /** Non-finite hz is ignored whole, mode included: see the header. */
   setHighpass(hz: number): void {
+    if (!Number.isFinite(hz)) return;
     this.a = this.coef(hz);
     this.highpass = true;
   }

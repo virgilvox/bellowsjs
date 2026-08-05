@@ -6,6 +6,20 @@
  * of lookahead on the new side and clamps its delay to at least 1.
  */
 
+/*
+ * Largest capacity the ring can express, saturating rather than wrapping the
+ * way DelayLineExt::Init does for its own degenerate size. Rounding up to a
+ * power of two means the buffer holds up to 2^30 floats, and 2^30 is the last
+ * power of two a 32-bit shift can carry: 1 << 31 is negative. Measured with
+ * the old `while (n < maxSamples + 4) n <<= 1`, 1073741820 terminated after 30
+ * shifts and 1073741821 spun forever, because n runs 2^30, -2147483648, 0, 0
+ * and every one of those is below maxSamples + 4. Nothing rescues that: the
+ * loop never allocates, so it is an unkillable spin rather than an out-of-
+ * memory throw, and node does not run out anyway (`new Float32Array(2 ** 30)`
+ * succeeds here and reserves 4 GiB). A throw is the only useful answer.
+ */
+const MAX_SAMPLES = 2 ** 30 - 4;
+
 export class DelayLine {
   /** Largest delay readInt and readLinear accept. */
   readonly maxDelay: number;
@@ -17,10 +31,15 @@ export class DelayLine {
     if (maxSamples < 1 || !Number.isFinite(maxSamples)) {
       throw new Error('DelayLine maxSamples must be a positive number');
     }
+    if (maxSamples > MAX_SAMPLES) {
+      throw new Error(`DelayLine maxSamples must be at most ${MAX_SAMPLES}`);
+    }
     // Round capacity up to a power of two with room for the cubic
-    // kernel's two-sample tail past maxDelay.
+    // kernel's two-sample tail past maxDelay. `n *= 2` and not `n <<= 1`:
+    // a float multiply has no 32-bit wrap, so the loop still terminates if
+    // the bound above is ever loosened.
     let n = 1;
-    while (n < maxSamples + 4) n <<= 1;
+    while (n < maxSamples + 4) n *= 2;
     this.buf = new Float32Array(n);
     this.mask = n - 1;
     this.maxDelay = Math.floor(maxSamples);

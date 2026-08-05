@@ -7,6 +7,12 @@
  * which is what makes percussive attacks read as punchy. Decay and release
  * aim at their real targets with a rate chosen to land within 1 percent of
  * the way there in the configured time.
+ *
+ * Every setter here rejects a non-finite argument outright and keeps the last
+ * good setting, the same policy as dsp/filters.ts and VoicePool.setParam.
+ * These are recursive units: a NaN reaching lvl or v stays there for the rest
+ * of the session, because no later good value can pull an accumulator back
+ * out of NaN and a parameter change does not call reset().
  */
 
 import { clamp } from '../types';
@@ -51,8 +57,21 @@ export class Adsr {
     return 1 - Math.exp(-rate / (timeSec * this.sampleRate));
   }
 
-  /** Times in seconds, sustain 0..1. Safe to call while running. */
+  /**
+   * Times in seconds, sustain 0..1. Safe to call while running. A call
+   * carrying any non-finite argument is ignored whole; the coef guard above
+   * and the sustain clamp are the second line, and both still matter for
+   * zero and negative times.
+   */
   set(attack: number, decay: number, sustain: number, release: number): void {
+    if (
+      !Number.isFinite(attack) ||
+      !Number.isFinite(decay) ||
+      !Number.isFinite(sustain) ||
+      !Number.isFinite(release)
+    ) {
+      return;
+    }
     this.aCoef = this.coef(attack, ATTACK_RATE);
     this.dCoef = this.coef(decay, SETTLE_RATE);
     this.rCoef = this.coef(release, SETTLE_RATE);
@@ -120,9 +139,12 @@ export class EnvelopeFollower {
   private readonly rCoef: number;
   private y = 0;
 
+  /* Negated tests, so a non-finite time takes the same branch as a
+   * non-positive one. `attackSec <= 0` is false for NaN, which put NaN in a
+   * readonly coefficient and made every output sample after it NaN. */
   constructor(sampleRate: number, attackSec: number, releaseSec: number) {
-    this.aCoef = attackSec <= 0 ? 1 : 1 - Math.exp(-1 / (attackSec * sampleRate));
-    this.rCoef = releaseSec <= 0 ? 1 : 1 - Math.exp(-1 / (releaseSec * sampleRate));
+    this.aCoef = !(attackSec > 0) ? 1 : 1 - Math.exp(-1 / (attackSec * sampleRate));
+    this.rCoef = !(releaseSec > 0) ? 1 : 1 - Math.exp(-1 / (releaseSec * sampleRate));
   }
 
   next(x: number): number {
@@ -142,16 +164,26 @@ export class Smoother {
   private target = 0;
   private v = 0;
 
+  /* Negated test, so a non-finite time takes the same branch as a
+   * non-positive one. See EnvelopeFollower. */
   constructor(sampleRate: number, timeSec: number) {
-    this.coef = timeSec <= 0 ? 1 : 1 - Math.exp(-1 / (timeSec * sampleRate));
+    this.coef = !(timeSec > 0) ? 1 : 1 - Math.exp(-1 / (timeSec * sampleRate));
   }
 
+  /**
+   * A non-finite target is ignored: the smoother keeps heading where it was
+   * already heading. Accepted, it lands in v on the very next sample and
+   * stays there even after the target is set back to something good, because
+   * v += coef * (good - NaN) is NaN.
+   */
   setTarget(v: number): void {
+    if (!Number.isFinite(v)) return;
     this.target = v;
   }
 
-  /** Jump immediately, no smoothing. */
+  /** Jump immediately, no smoothing. Non-finite is ignored, as in setTarget. */
   snap(v: number): void {
+    if (!Number.isFinite(v)) return;
     this.target = v;
     this.v = v;
   }

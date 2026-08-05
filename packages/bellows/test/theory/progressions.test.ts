@@ -71,8 +71,39 @@ describe('buildProgression', () => {
     expect(buildProgression(rng('tiny'), 0)).toEqual([]);
     expect(buildProgression(rng('tiny'), 1)).toEqual([0]);
     const two = buildProgression(rng('tiny'), 2);
+    expect(two).toHaveLength(2);
     expect(two[0]).toBe(0);
-    expect(two[1]).toBe(0);
+  });
+
+  it('two bars is a half cadence, not tonic to tonic', () => {
+    // Bar 0 is the tonic and bar 1 is both penultimate and last, so the
+    // cadence chord takes it. Returning [0, 0] means the tonic branch won.
+    const seen = new Set<number>();
+    for (let i = 0; i < 20; i++) {
+      const out = buildProgression(rng('half-' + i), 2);
+      expect(out[0]).toBe(0);
+      expect([3, 4, 6], 'seed ' + i).toContain(out[1]);
+      seen.add(out[1]);
+    }
+    // V is weighted 5 against 1.5 and 1, so it has to turn up.
+    expect(seen.has(4)).toBe(true);
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it('two bars without a cadence still walks', () => {
+    const out = buildProgression(rng('two-free'), 2, { cadence: false });
+    expect(out[0]).toBe(0);
+    expect(out[1]).toBeGreaterThanOrEqual(0);
+    expect(out[1]).toBeLessThanOrEqual(6);
+  });
+
+  it('three bars keeps the documented shape: cadence chord then tonic', () => {
+    for (let i = 0; i < 20; i++) {
+      const out = buildProgression(rng('three-' + i), 3);
+      expect(out[0]).toBe(0);
+      expect([3, 4, 6], 'seed ' + i).toContain(out[1]);
+      expect(out[2]).toBe(0);
+    }
   });
 });
 

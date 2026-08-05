@@ -26,18 +26,35 @@ class Ramp {
   private step = 0;
   private readonly rate: number;
 
+  /*
+   * Non-finite values are rejected at every entry point, including the
+   * initial one, and the last good value stays put. This ramp is recursive
+   * and unrecoverable once poisoned: step = (NaN - v) * rate is NaN,
+   * `this.step !== 0` is TRUE for NaN, both landing comparisons are false, so
+   * next() assigns v = NaN, and every later set() recomputes
+   * step = (good - NaN) * rate = NaN. It backs channel gain, channel pan,
+   * per-bus send levels, bus return level and master gain, so one
+   * masterGain(NaN) used to silence the whole output for the life of the
+   * page with no error, no 'error' reply and nothing on the console, and
+   * panic did not clear it either. Same policy as VoicePool.setParam and the
+   * dsp setters: a non-finite value is a caller error, so keep the last good
+   * one. Costs nothing per sample; next() is untouched.
+   */
   constructor(sampleRate: number, initial: number, timeSec = 0.02) {
-    this.v = initial;
-    this.target = initial;
+    const v = Number.isFinite(initial) ? initial : 0;
+    this.v = v;
+    this.target = v;
     this.rate = 1 / Math.max(1, sampleRate * timeSec);
   }
 
   set(target: number): void {
+    if (!Number.isFinite(target)) return;
     this.target = target;
     this.step = (target - this.v) * this.rate;
   }
 
   snap(v: number): void {
+    if (!Number.isFinite(v)) return;
     this.v = v;
     this.target = v;
     this.step = 0;
@@ -395,10 +412,26 @@ export class KernelEngine {
         // starts here, from whatever the parameter reads right now.
         const name = paramNameOf(e);
         const current = c.pool.getParam(name);
-        if (e.c > 0 && current !== undefined && this.startRamp(e.target, e.a, current, e.b, e.c)) break;
-        // Immediate fallback, for three cases: a duration of zero or less
-        // (the documented meaning of c <= 0), a parameter with no known
-        // current value to interpolate from, or every ramp slot busy.
+        // Number.isFinite as well as `> 0`: `e.c > 0` already rejects NaN,
+        // but Infinity passed and then wedged a slot for good. endFrame
+        // becomes startFrame + Math.round(Infinity) = Infinity, so
+        // `frame >= s.endFrame` never fires and the slot is never freed,
+        // while t = (frame - start) / Infinity is 0 so the parameter never
+        // moves either. Thirty-two of those exhaust RAMP_SLOTS and silently
+        // downgrade every later ramp on this kernel to an immediate jump.
+        // Reachable as rampParam(name, value, { seconds: 1 / 0 }).
+        if (
+          e.c > 0 &&
+          Number.isFinite(e.c) &&
+          current !== undefined &&
+          this.startRamp(e.target, e.a, current, e.b, e.c)
+        ) {
+          break;
+        }
+        // Immediate fallback, for three cases: a duration that is not a
+        // positive finite number of seconds (c <= 0 is the documented
+        // meaning), a parameter with no known current value to interpolate
+        // from, or every ramp slot busy.
         // Landing early beats dropping the automation on the floor.
         this.clearRamps(e.target, e.a);
         c.pool.setParam(name, e.b);
