@@ -143,6 +143,18 @@ inline float Log2(float x) {
 }
 
 inline float Pow(float base, float e) { return Exp2(Log2(base) * e); }
+/* Natural log rides on Log2, so it inherits that gate and adds only a
+ * multiply. The libm branch below keeps logf rather than doing the same,
+ * because at BELLOWS_FAST_MATH=0 every call site has to land on exactly the
+ * bits libm would have produced. */
+inline float Log(float x) { return Log2(x) * 0.693147180559945f; }
+/* tan as sin/cos. Safe here only because every caller stays away from the
+ * pole: dsp/filters.h clamps its cutoff to 0.49 of the sample rate, so the
+ * argument tops out at 1.539 and cos never gets closer to zero than 0.031. */
+inline float Tan(float x) {
+  float c = Cos(x);
+  return c == 0.0f ? 1e9f : Sin(x) / c;
+}
 inline float Sqrt(float x) { return sqrtf(x); } /* single instruction on any FPU */
 
 #else
@@ -154,15 +166,11 @@ inline float Exp(float x) { return expf(x); }
 inline float Exp2(float x) { return exp2f(x); }
 inline float Log2(float x) { return log2f(x); }
 inline float Pow(float base, float e) { return powf(base, e); }
+inline float Log(float x) { return logf(x); }
+inline float Tan(float x) { return tanf(x); }
 inline float Sqrt(float x) { return sqrtf(x); }
 
 #endif
-
-/* Shared helpers that are cheap either way. */
-inline float Tan(float x) {
-  float c = Cos(x);
-  return c == 0.0f ? 1e9f : Sin(x) / c;
-}
 
 /* Semitone and cent ratios, the two conversions the engines do most. */
 inline float CentsRatio(float cents) { return Exp2(cents * (1.0f / 1200.0f)); }

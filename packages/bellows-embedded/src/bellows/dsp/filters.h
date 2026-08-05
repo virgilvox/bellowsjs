@@ -5,6 +5,7 @@
  * base, so pulling in Svf never drags LadderFilter into the link. */
 #pragma once
 #include <math.h>
+#include "bellows/core/fastmath.h"
 
 namespace bellows {
 
@@ -48,7 +49,7 @@ class Svf {
     float fc = fc_ < 1e-3f ? 1e-3f : (fc_ > sr_ * 0.49f ? sr_ * 0.49f : fc_);
     float q = q_ < 1e-3f ? 1e-3f : q_;
     float w = 3.14159265358979f * (fc / sr_);
-    float g = tanf(w);
+    float g = fm::Tan(w);
     float k = 1.0f / q;
     switch (mode_) {
       case SvfMode::kLp: m0_ = 0; m1_ = 0; m2_ = 1; break;
@@ -58,20 +59,20 @@ class Svf {
       case SvfMode::kPeak: m0_ = 1; m1_ = -k; m2_ = -2; break;
       case SvfMode::kAllpass: m0_ = 1; m1_ = -2 * k; m2_ = 0; break;
       case SvfMode::kBell: {
-        float A = powf(10.0f, gain_db_ / 40.0f);
+        float A = fm::Pow(10.0f, gain_db_ / 40.0f);
         k = 1.0f / (q * A);
         m0_ = 1; m1_ = k * (A * A - 1.0f); m2_ = 0;
         break;
       }
       case SvfMode::kLowShelf: {
-        float A = powf(10.0f, gain_db_ / 40.0f);
-        g = tanf(w) / sqrtf(A);
+        float A = fm::Pow(10.0f, gain_db_ / 40.0f);
+        g = fm::Tan(w) / sqrtf(A);
         m0_ = 1; m1_ = k * (A - 1.0f); m2_ = A * A - 1.0f;
         break;
       }
       case SvfMode::kHighShelf: {
-        float A = powf(10.0f, gain_db_ / 40.0f);
-        g = tanf(w) * sqrtf(A);
+        float A = fm::Pow(10.0f, gain_db_ / 40.0f);
+        g = fm::Tan(w) * sqrtf(A);
         m0_ = A * A; m1_ = k * (1.0f - A) * A; m2_ = 1.0f - A * A;
         break;
       }
@@ -98,7 +99,7 @@ class LadderFilter {
   void Set(float cutoff_hz, float resonance, float drive = 1.0f) {
     float fs2 = sr_ * 2.0f;
     float fc = cutoff_hz < 1e-3f ? 1e-3f : (cutoff_hz > sr_ * 0.45f ? sr_ * 0.45f : cutoff_hz);
-    g_ = 1.0f - expf((-2.0f * 3.14159265358979f * fc) / fs2);
+    g_ = 1.0f - fm::Exp((-2.0f * 3.14159265358979f * fc) / fs2);
     float r = resonance < 0.0f ? 0.0f : (resonance > 1.05f ? 1.05f : resonance);
     k_ = 4.0f * r;
     drive_ = drive < 1e-3f ? 1e-3f : drive;
@@ -113,11 +114,11 @@ class LadderFilter {
 
  private:
   inline float Tick(float x) {
-    float u = tanhf(drive_ * (x - k_ * (s4_ - 0.5f * x)));
-    s1_ += g_ * (u - tanhf(s1_));
-    s2_ += g_ * (tanhf(s1_) - tanhf(s2_));
-    s3_ += g_ * (tanhf(s2_) - tanhf(s3_));
-    s4_ += g_ * (tanhf(s3_) - tanhf(s4_));
+    float u = fm::Tanh(drive_ * (x - k_ * (s4_ - 0.5f * x)));
+    s1_ += g_ * (u - fm::Tanh(s1_));
+    s2_ += g_ * (fm::Tanh(s1_) - fm::Tanh(s2_));
+    s3_ += g_ * (fm::Tanh(s2_) - fm::Tanh(s3_));
+    s4_ += g_ * (fm::Tanh(s3_) - fm::Tanh(s4_));
     return s4_;
   }
 
@@ -142,7 +143,7 @@ class OnePole {
  private:
   float Coef(float hz) {
     float fc = hz < 1e-3f ? 1e-3f : (hz > sr_ * 0.49f ? sr_ * 0.49f : hz);
-    return 1.0f - expf((-2.0f * 3.14159265358979f * fc) / sr_);
+    return 1.0f - fm::Exp((-2.0f * 3.14159265358979f * fc) / sr_);
   }
   float sr_ = 48000.0f, a_ = 1.0f, y_ = 0.0f;
   bool hp_ = false;

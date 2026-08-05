@@ -100,9 +100,43 @@ sinf + cosf + tanhf + powf + expf from newlib   5056 B
 the polynomial equivalents in core/fastmath.h    196 B
 ```
 
-Twenty-five times, about 4.9 KB recovered, and considerably faster. The whole library calls
+Twenty-five times, about 4.9 KB recovered, and considerably faster. The library calls
 transcendentals through `bellows::fm::`, so `-D BELLOWS_FAST_MATH=1` switches it in one flag.
-Measured end to end on the kick sketch: 3760 bytes at the default, 1448 with the flag.
+
+That sentence was false until recently, which is worth recording because it made the flag look
+useless. Roughly thirty call sites reached `<math.h>` directly rather than through `fm::`, across
+`dsp/filters.h`, `dsp/envelopes.h`, `dsp/noise.h`, `dsp/oscillators.h`, `engines/va.h`,
+`engines/pluck.h` and `seq/tempomap.h`, which is most of what an oscillator voice actually calls.
+The flag therefore saved 61 percent on a bare kick and NOTHING at all on anything with an
+oscillator in it: the VA sketch built byte-identical with the flag on and off. Routing them fixed
+it. Measured, Cortex-M7:
+
+| sketch | default | `BELLOWS_FAST_MATH=1` | saved |
+| --- | --- | --- | --- |
+| `s1_kick` | 3760 B | 924 B | 75 % |
+| `s9g_tube` | 5000 B | 3020 B | 39 % |
+| `p1_drums` | 29448 B | 21548 B | 26 % |
+| `s9e_westcoast` | 27064 B | 19760 B | 26 % |
+| `p2_poly8` | 31136 B | 22756 B | 26 % |
+| `s9f_formant` | 28312 B | 21000 B | 25 % |
+| `s5_all` | 34904 B | 26552 B | 23 % |
+| `s9m_seq` | 5296 B | 5296 B | 0 % |
+
+The sequencing row is 0 percent and should be: it is integer and small-float work over const
+tables and calls no transcendental at all.
+
+Two traps found while routing, both of the kind that would have been silent. `fm::Tan` was
+defined once, outside the `#if`, as `Sin(x) / Cos(x)`. At `BELLOWS_FAST_MATH=0` that is
+`sinf/cosf`, which differs from `tanf` by up to 4.9e-4 near pi/2, so routing the filter cutoff
+through it would have detuned every `Svf` at the DEFAULT setting, where nothing is supposed to
+change. It now lives in both branches, `tanf` in the libm one, and has its own gate row over
+exactly the domain `filters.h` drives (the cutoff clamps at 0.49 of the sample rate, so the
+argument tops out at 1.539 and never approaches the pole). `fm::Log` did not exist and is now
+defined in both branches for the same reason: deriving it from `Log2` at the default would not
+have landed on the bits `logf` produces.
+
+One call remains outside `fm::`, `atan2f` in `engines/pluck.h`, used once per note in the loop
+phase-delay compensation. It needs an approximation written and gated before it can be routed.
 
 The default is off, because exact libm keeps renders closer to the JS. It is also off because
 the flag is the dangerous one, and this is worth stating plainly. The first draft of

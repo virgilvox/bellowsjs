@@ -2,6 +2,7 @@
  * src/engines/drums.ts. */
 #pragma once
 #include <math.h>
+#include "bellows/core/fastmath.h"
 
 namespace bellows {
 
@@ -58,7 +59,7 @@ class Adsr {
 
   float Coef(float t, float rate) const {
     if (t <= 0.0f) return 1.0f;
-    return 1.0f - expf(-rate / (t * sr_));
+    return 1.0f - fm::Exp(-rate / (t * sr_));
   }
 
   float sr_ = 48000.0f;
@@ -70,7 +71,7 @@ class ExpDecay {
  public:
   void Init(float sample_rate) { sr_ = sample_rate; }
   void SetTime(float sec) {
-    coef_ = sec <= 0.0f ? 0.0f : expf(-6.90775527898214f / (sec * sr_));
+    coef_ = sec <= 0.0f ? 0.0f : fm::Exp(-6.90775527898214f / (sec * sr_));
   }
   void Trigger(float v = 1.0f) { level_ = v; }
   inline float Process() {
@@ -87,7 +88,7 @@ class ExpDecay {
 class Smoother {
  public:
   void Init(float sample_rate, float time_sec) {
-    coef_ = time_sec <= 0.0f ? 1.0f : 1.0f - expf(-1.0f / (time_sec * sample_rate));
+    coef_ = time_sec <= 0.0f ? 1.0f : 1.0f - fm::Exp(-1.0f / (time_sec * sample_rate));
   }
   void SetTarget(float v) { target_ = v; }
   void Snap(float v) { target_ = v; v_ = v; }

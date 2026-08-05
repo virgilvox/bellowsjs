@@ -7,6 +7,7 @@
 #include <math.h>
 #include "bellows/core/prng.h"
 #include "bellows/dsp/delayline.h"
+#include "bellows/core/fastmath.h"
 
 namespace bellows {
 
@@ -30,7 +31,7 @@ class Pluck {
     rng_ = rng;
     p_ = p;
     delay_.Init();
-    track_coef_ = expf(-1.0f / (0.05f * sample_rate));
+    track_coef_ = fm::Exp(-1.0f / (0.05f * sample_rate));
   }
 
   void NoteOn(float freq, float vel) {
@@ -98,16 +99,16 @@ class Pluck {
 
   static float OnePolePhaseDelay(float a, float w) {
     float b = 1.0f - a;
-    return atan2f(b * sinf(w), 1.0f - b * cosf(w)) / w;
+    return atan2f(b * fm::Sin(w), 1.0f - b * fm::Cos(w)) / w;
   }
 
   void UpdateLoop() {
     float n = sr_ / freq_;
     float d = p_.damp < 0.0f ? 0.0f : (p_.damp > 1.0f ? 1.0f : p_.damp);
-    float fc = 18000.0f * powf(800.0f / 18000.0f, d);
+    float fc = 18000.0f * fm::Pow(800.0f / 18000.0f, d);
     float lim = sr_ * 0.45f;
     if (fc > lim) fc = lim;
-    float a = 1.0f - expf((-6.28318530717959f * fc) / sr_);
+    float a = 1.0f - fm::Exp((-6.28318530717959f * fc) / sr_);
     lp_a_ = a;
     lp_b_ = 1.0f - a;
     float w = (6.28318530717959f * freq_) / sr_;
@@ -116,7 +117,7 @@ class Pluck {
     if (read_delay_ < 1.0f) read_delay_ = 1.0f;
     float dec = p_.decay < 0.05f ? 0.05f : (p_.decay > 20.0f ? 20.0f : p_.decay);
     float t60 = gate_ ? dec : (dec < 0.18f ? dec : 0.18f);
-    gs_ = powf(10.0f, -3.0f / (t60 * freq_));
+    gs_ = fm::Pow(10.0f, -3.0f / (t60 * freq_));
   }
 
   float sr_ = 48000.0f;

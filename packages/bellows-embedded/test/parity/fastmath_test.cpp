@@ -103,6 +103,21 @@ int main() {
   Gate("Log2 wide", Sweep([](float x) { return bellows::fm::Log2(x); },
                           [](double x) { return log2(x); }, 1e-4, 20000.0, 200000),
        1.0e-5, Measure::kAbs, "frequency ratios span the audio band");
+  /* Natural log is Log2 times a constant, so this gate mostly restates the
+   * one above. It is here because seq/tempomap.h calls it directly and a
+   * wrong constant would be invisible in Log2's own row. */
+  Gate("Log", Sweep([](float x) { return bellows::fm::Log(x); },
+                    [](double x) { return log(x); }, 1e-4, 20000.0, 200000),
+       1.0e-5, Measure::kAbs, "tempo curves integrate a log of the bpm ratio");
+
+  /* Tan over exactly the domain dsp/filters.h drives: its cutoff clamps at
+   * 0.49 of the sample rate, so the argument never exceeds pi * 0.49 and
+   * never approaches the pole. Gated because the fast branch computes it as
+   * sin/cos, which differs from tanf by up to 4.9e-4 near pi/2 and would be
+   * a silent filter detune if anything ever drove it further. */
+  Gate("Tan", Sweep([](float x) { return bellows::fm::Tan(x); },
+                    [](double x) { return tan(x); }, 1e-4, 3.14159265358979 * 0.49, 200000),
+       2.0e-3, Measure::kAbs, "filter cutoff maps to tan(pi * fc / sr), fc clamped at 0.49 sr");
 
   /* Pow is Exp2(Log2(b) * e) and inherits both, so it gets its own gate
    * over the exponents the engines use: cents and semitone ratios, decay

@@ -7,6 +7,7 @@
 #include "bellows/dsp/envelopes.h"
 #include "bellows/dsp/filters.h"
 #include "bellows/dsp/oscillators.h"
+#include "bellows/core/fastmath.h"
 
 namespace bellows {
 
@@ -95,7 +96,7 @@ class Va {
   bool Active() const { return amp_env_.Active(); }
 
  private:
-  static float CentsRatio(float c) { return powf(2.0f, c / 1200.0f); }
+  static float CentsRatio(float c) { return fm::Pow(2.0f, c / 1200.0f); }
 
   void Apply() {
     int si = static_cast<int>(p_.shape + 0.5f);
@@ -108,8 +109,8 @@ class Va {
     filt_env_.Set(p_.f_attack, p_.f_decay, p_.f_sustain, p_.f_release);
     float pan = p_.pan < -1.0f ? -1.0f : (p_.pan > 1.0f ? 1.0f : p_.pan);
     float angle = ((pan + 1.0f) * 3.14159265358979f) / 4.0f;
-    gain_l_ = cosf(angle);
-    gain_r_ = sinf(angle);
+    gain_l_ = fm::Cos(angle);
+    gain_r_ = fm::Sin(angle);
   }
 
   void UpdateControl() {
@@ -124,7 +125,7 @@ class Va {
     osc2_.SetFreq(freq_ * CentsRatio(half + dc2));
     sub_.SetFreq(freq_ * 0.5f);
     float oct = p_.env_amount * filt_env_.Level() + p_.vel_filter * vel_;
-    float cut = p_.cutoff * powf(2.0f, oct);
+    float cut = p_.cutoff * fm::Pow(2.0f, oct);
     float lim = sr_ * 0.45f;
     if (cut < 20.0f) cut = 20.0f;
     if (cut > lim) cut = lim;

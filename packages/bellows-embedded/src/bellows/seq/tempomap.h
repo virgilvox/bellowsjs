@@ -60,6 +60,7 @@
  */
 #pragma once
 #include <math.h>
+#include "bellows/core/fastmath.h"
 
 #ifndef BELLOWS_TEMPO_SCALAR
 #define BELLOWS_TEMPO_SCALAR double
@@ -73,9 +74,9 @@ namespace detail {
 /* Overload pairs so the scalar type picks the right libm entry point
  * without <cmath> and without a cast that would silently narrow. */
 inline double TempoLog(double x) { return log(x); }
-inline float TempoLog(float x) { return logf(x); }
+inline float TempoLog(float x) { return fm::Log(x); }
 inline double TempoExp(double x) { return exp(x); }
-inline float TempoExp(float x) { return expf(x); }
+inline float TempoExp(float x) { return fm::Exp(x); }
 }  // namespace detail
 
 template <int kMaxPoints = 8>

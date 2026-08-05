@@ -3,6 +3,7 @@
 #pragma once
 #include <math.h>
 #include "bellows/core/prng.h"
+#include "bellows/core/fastmath.h"
 
 namespace bellows {
 
@@ -16,7 +17,7 @@ class NoiseGen {
     rng_ = rng;
     velvet_p_ = 2000.0f / sample_rate;
     crackle_p_ = 8.0f / sample_rate;
-    crackle_decay_ = expf(-1.0f / (0.002f * sample_rate));
+    crackle_decay_ = fm::Exp(-1.0f / (0.002f * sample_rate));
   }
 
   void SetColor(NoiseColor c) {
