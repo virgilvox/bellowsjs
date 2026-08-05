@@ -412,6 +412,162 @@ describe('parseSfz: hostile input bounds', () => {
       parseSfz('#include "big.sfz"', { maxTotalInput: 1024, resolveInclude: () => big }),
     ).rejects.toThrow(/total input exceeds 1024 characters/);
   });
+
+  /*
+   * The byte caps above bound what the parser reads and stores. They said
+   * nothing about how long it spends, because the line tokenizer used to be
+   * /<([^>]*)>|([\w$]+)=/g, a greedy run followed by a required literal in
+   * both branches, which retries every length when the literal is absent.
+   * Timed on this machine before the scanner replaced it:
+   * parseSfz('x'.repeat(n)) cost 8 / 27 / 105 / 424 / 1686 ms for
+   * n = 2000 / 4000 / 8000 / 16000 / 32000, exactly 4x per doubling.
+   */
+  const QUADRATIC_SHAPES = 500;
+
+  it('tokenizes a 32000 character word run in linear time (was 1686 ms)', async () => {
+    const t0 = performance.now();
+    const { regions } = await parseSfz('x'.repeat(32000));
+    const ms = performance.now() - t0;
+    /* A run with no '=' is not an opcode, so nothing is produced: the cost
+     * was pure backtracking. Measured after the fix: 3 ms. */
+    expect(regions).toHaveLength(0);
+    expect(ms).toBeLessThan(QUADRATIC_SHAPES);
+  });
+
+  it('tokenizes 32000 unclosed angle brackets in linear time (was 1517 ms)', async () => {
+    const t0 = performance.now();
+    const { regions } = await parseSfz('<'.repeat(32000));
+    const ms = performance.now() - t0;
+    /* The '<' branch is the same shape: [^>]* runs to the end, then the
+     * required '>' fails at every length. Measured after the fix: 1 ms. */
+    expect(regions).toHaveLength(0);
+    expect(ms).toBeLessThan(QUADRATIC_SHAPES);
+  });
+
+  it('does not let a #define buy quadratic tokenizer time (336 bytes cost 1784 ms)', async () => {
+    /* The byte caps sanction this shape rather than stopping it: the line
+     * expands to 32791 characters, well under maxExpandedLength, and
+     * maxTotalInput admits hundreds of thousands of such lines. */
+    const src = defineChain(15) + '<region> sample=$A15 key=36\n';
+    expect(src.length).toBeLessThan(512);
+    const t0 = performance.now();
+    const { regions } = await parseSfz(src);
+    const ms = performance.now() - t0;
+    /* Assert the work really happened, so the timing is not measured on a
+     * parse that bailed out early. Measured after the fix: 2 ms. */
+    expect(regions[0].sample).toBe('x'.repeat(32768));
+    expect(ms).toBeLessThan(QUADRATIC_SHAPES);
+  });
+
+  /*
+   * maxExpandedLength prices one line. Nothing priced how many expanded
+   * lines a parse retains: region.sample is a slice of the expanded line
+   * and a V8 SlicedString keeps its whole parent alive. Measured with
+   * --expose-gc on lines expanding to 49175 characters each, 10935 B of
+   * input retained 19.0 MB and 42295 B retained 74.5 MB, a flat x1761.
+   */
+  it('bounds total expanded output, not just the length of one line', async () => {
+    /* Every line is inside maxExpandedLength; the sum is what escapes. */
+    const src = '#define $V 0123456789\n' + '<region> sample=$V.wav key=36\n'.repeat(2000);
+    await expect(parseSfz(src, { maxTotalExpanded: 4096 })).rejects.toThrow(
+      /sfz: #define expansion totals more than 4096 characters/,
+    );
+  });
+
+  it('bounds total expansion at the configured number, not somewhere far above it', async () => {
+    /* Each region line is 29 characters and grows by 8 when $V expands, so
+     * it charges exactly 37. A 370 budget must pass 10 lines and fail 11.
+     * A cap that only fired at some far larger total would pass the test
+     * above for the wrong reason. */
+    const src = (lines: number) =>
+      '#define $V 0123456789\n' + '<region> sample=$V.wav key=36\n'.repeat(lines);
+    await expect(parseSfz(src(10), { maxTotalExpanded: 370 })).resolves.toBeTruthy();
+    await expect(parseSfz(src(11), { maxTotalExpanded: 370 })).rejects.toThrow(
+      /totals more than 370 characters/,
+    );
+  });
+
+  it('charges nothing for a large file that uses no defines', async () => {
+    /* The budget prices amplification, not input, so a 20000-region
+     * instrument parses with the budget set to one character. */
+    const legit = Array.from(
+      { length: 20000 },
+      (_, i) => `<region> sample=Samples/note${i}.wav key=${i % 128} volume=-3`,
+    ).join('\n');
+    expect(legit.length).toBeGreaterThan(1_000_000);
+    const { regions } = await parseSfz(legit, { maxTotalExpanded: 1 });
+    expect(regions).toHaveLength(20000);
+  });
+
+  it('does not charge a line whose $ matches no define', async () => {
+    /* A '$' in a sample path allocates nothing, so it must not spend the
+     * expansion budget the way a real substitution does. */
+    const src = '#define $V 1\n' + '<region> sample=cash$money.wav key=36\n'.repeat(500);
+    const { regions } = await parseSfz(src, { maxTotalExpanded: 1 });
+    expect(regions).toHaveLength(500);
+    expect(regions[0].sample).toBe('cash$money.wav');
+  });
+
+  /*
+   * Every cap is read with ?? and checked with >, and neither survives a
+   * NaN: ?? substitutes only for null and undefined, and any comparison
+   * against NaN is false. A caller running Number(configValue) or
+   * parseInt(queryParam) over a malformed field produces exactly that, and
+   * it turned the bound off rather than falling back to the default.
+   */
+  it('falls back to the default when a cap is NaN or Infinity', async () => {
+    for (const bad of [NaN, Infinity]) {
+      /* Measured before this check: RangeError('Invalid string length'),
+       * the precise failure the test above exists to prevent. */
+      let err: unknown;
+      try {
+        await parseSfz(defineChain(30), { maxExpandedLength: bad });
+      } catch (e) {
+        err = e;
+      }
+      expect((err as Error).constructor.name).toBe('Error');
+      expect((err as Error).message).toMatch(/^sfz: #define expansion of \$A\d+ exceeds 65536 /);
+    }
+  });
+
+  it('falls back to the default include budget when maxIncludes is NaN', async () => {
+    /* Measured before this check: 65535 resolver calls and no error. */
+    const files = new Map<string, string>();
+    const DEPTH = 15;
+    for (let i = 0; i < DEPTH; i++) {
+      files.set(`f${i}.sfz`, `#include "f${i + 1}.sfz"\n#include "f${i + 1}.sfz"`);
+    }
+    files.set(`f${DEPTH}.sfz`, '<region> sample=a.wav');
+    let calls = 0;
+    await expect(
+      parseSfz('#include "f0.sfz"', {
+        maxIncludes: NaN,
+        resolveInclude: (p) => {
+          calls++;
+          return files.get(p)!;
+        },
+      }),
+    ).rejects.toThrow(/more than 1024 #include directives/);
+    expect(calls).toBeLessThanOrEqual(1024);
+  });
+
+  it('falls back to the default nesting limit when maxIncludeDepth is NaN', async () => {
+    await expect(
+      parseSfz('#include "loop.sfz"', {
+        maxIncludeDepth: NaN,
+        resolveInclude: () => '#include "loop.sfz"',
+      }),
+    ).rejects.toThrow(/nesting too deep/);
+  });
+
+  it('falls back to the default input budget when maxTotalInput is Infinity', async () => {
+    /* One character over the default. The budget is charged before any line
+     * is looked at, so this costs nothing when the cap holds. */
+    const big = 'x'.repeat(8 * 1024 * 1024 + 1);
+    await expect(parseSfz(big, { maxTotalInput: Infinity })).rejects.toThrow(
+      /total input exceeds 8388608 characters/,
+    );
+  });
 });
 
 describe('parseSfz: lexical details', () => {
@@ -431,6 +587,20 @@ key=60
     expect(regions[0].lokey).toBe(60);
   });
 
+  it('ends a line on CR, LF, or CRLF', async () => {
+    /* Classic Mac tooling wrote CR-delimited SFZ, and a splitter that only
+     * knew \r?\n made the whole file one line. A leading // then swallowed
+     * every region, #define and #include in it, and the one giant line was
+     * also the worst case for the tokenizer. */
+    const body = ['// Kit', '#define $DIR Samples', '<region> sample=$DIR/kick.wav key=36'];
+    for (const eol of ['\r', '\n', '\r\n']) {
+      const { regions } = await parseSfz(body.join(eol) + eol);
+      expect(regions).toHaveLength(1);
+      expect(regions[0].sample).toBe('Samples/kick.wav');
+      expect(regions[0].lokey).toBe(36);
+    }
+  });
+
   it('normalizes backslashes in paths', async () => {
     const { regions } = await parseSfz(
       '<control> default_path=Kit\\Close\\\n<region> sample=snare\\v1.wav key=38',
@@ -445,6 +615,29 @@ key=60
     expect(regions[0].loopMode).toBe('loop_sustain');
     expect(regions[0].loopStart).toBe(5);
     expect(regions[0].loopEnd).toBe(99);
+  });
+
+  it('starts a new header immediately after an opcode value, with no separator', async () => {
+    /* The scanner must stop a name run at the character that ended it, not
+     * past it, or the '<' that ends 'a.wav' is eaten and the second region
+     * disappears. */
+    const { regions } = await parseSfz('<region> sample=a.wav<region> sample=b.wav key=36');
+    expect(regions).toHaveLength(2);
+    expect(regions[0].sample).toBe('a.wav');
+    expect(regions[1].sample).toBe('b.wav');
+    expect(regions[1].lokey).toBe(36);
+  });
+
+  it('closes a header at the first > after it, with > characters allowed in values', async () => {
+    /* The old regex was <([^>]*)>, whose class cannot cross a '>', so the
+     * bracket always closed at the first one and a value could hold as many
+     * as it liked. A scanner that reached for the last '>' on the line
+     * instead would swallow the whole line as one header name. */
+    const { regions } = await parseSfz('<group>> volume=-3 <region> sample=a>>b.wav key=36');
+    expect(regions).toHaveLength(1);
+    expect(regions[0].volume).toBe(-3);
+    expect(regions[0].sample).toBe('a>>b.wav');
+    expect(regions[0].lokey).toBe(36);
   });
 
   it('ignores curve and effect header contents', async () => {

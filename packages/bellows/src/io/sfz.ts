@@ -91,6 +91,11 @@ export interface SfzParseOptions {
    * default 65536. See DEFAULT_MAX_EXPANDED_LENGTH.
    */
   maxExpandedLength?: number;
+  /**
+   * Characters of substituted output produced across the whole parse,
+   * default 16777216 (16 MiB). See DEFAULT_MAX_TOTAL_EXPANDED.
+   */
+  maxTotalExpanded?: number;
   /** Most #define directives accepted, default 1024. */
   maxDefines?: number;
   /** Most #include directives resolved across the whole parse, default 1024. */
@@ -126,11 +131,44 @@ export interface SfzParseOptions {
  * Worst case for the defines map is maxDefines * maxExpandedLength, 64 MiB
  * at the defaults, which takes a deliberately crafted file to approach and
  * is bounded where it was not.
+ *
+ * maxExpandedLength prices one line at a time and says nothing about how
+ * many such lines a parse RETAINS. Every expanded line is a fresh string
+ * and region.sample keeps a slice of it alive (a V8 SlicedString retains
+ * its whole parent), so the live set scales with input, not with the
+ * per-line cap. Measured with --expose-gc, a file of 28-byte lines each
+ * expanding to 49175 characters: 10935 B retained 19.0 MB (x1734) and
+ * 42295 B retained 74.5 MB (x1761). Amplification is flat, so the 8 MiB
+ * maxTotalInput alone permitted roughly 14 GB retained, which OOMs a
+ * browser tab. maxTotalExpanded bounds the sum instead.
+ *
+ * 16 MiB is twice maxTotalInput, so a file may double under substitution
+ * and still parse. With the budget in place the same shape peaks at
+ * 16.6 MB retained however large the input gets, and a 2.18 MB
+ * 20000-region file with no defines charges nothing against it at all.
  */
 const DEFAULT_MAX_EXPANDED_LENGTH = 65536;
+const DEFAULT_MAX_TOTAL_EXPANDED = 16 * 1024 * 1024;
 const DEFAULT_MAX_DEFINES = 1024;
 const DEFAULT_MAX_INCLUDES = 1024;
 const DEFAULT_MAX_TOTAL_INPUT = 8 * 1024 * 1024;
+const DEFAULT_MAX_INCLUDE_DEPTH = 16;
+
+/*
+ * Every cap above is useless if a caller can hand it a value no comparison
+ * is ever true against. Options routinely arrive from Number(configValue)
+ * or parseInt(queryParam) over a malformed field, and '??' substitutes only
+ * for null and undefined while 'x > NaN' is always false, so one NaN turned
+ * a bound off completely. Measured before this check:
+ * parseSfz(defineChain(30), { maxExpandedLength: NaN }) threw
+ * RangeError('Invalid string length'), the exact failure the cap exists to
+ * prevent, and { maxIncludes: NaN } resolved 65535 includes. Infinity does
+ * the same. Zero and negative values already fail closed, so they are left
+ * to the caller.
+ */
+function finiteOption(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
 
 export async function parseSfz(text: string, opts: SfzParseOptions = {}): Promise<SfzFile> {
   const parser = new SfzParser(opts);
@@ -354,16 +392,100 @@ function countOccurrences(haystack: string, needle: string): number {
   return n;
 }
 
+/** One '<header>' or one 'opcode=' on a line, in source order. */
+type SfzToken =
+  /** Text between the angle brackets, verbatim. */
+  | { start: number; header: string; name: null; valueFrom: number }
+  /** Opcode name, with valueFrom the index just past its '='. */
+  | { start: number; header: null; name: string; valueFrom: number };
+
+/** [A-Za-z0-9_$], the character class the opcode and define names use. */
+function isNameChar(c: number): boolean {
+  return (
+    (c >= 97 && c <= 122) || // a-z
+    (c >= 65 && c <= 90) || // A-Z
+    (c >= 48 && c <= 57) || // 0-9
+    c === 95 || // _
+    c === 36 // $
+  );
+}
+
+/*
+ * Hand written rather than /<([^>]*)>|([\w$]+)=/g, which this replaces
+ * token for token, because that regex backtracks quadratically. Both of
+ * its branches are a greedy run followed by a required literal, and when
+ * that literal is absent the engine retries the run at every length:
+ * measured with parseSfz('x'.repeat(n)), 8 / 27 / 105 / 424 / 1686 ms for
+ * n = 2000 / 4000 / 8000 / 16000 / 32000, exactly 4x per doubling, and
+ * 1517 ms for '<'.repeat(32000). Real files never hit it because '=', '/'
+ * and '.' break their word runs, but a #define manufactures the shape for
+ * free: a 336-byte file whose single line expands to 32784 characters,
+ * 32768 of them one unbroken run, cost 1784 ms, and maxTotalInput admits
+ * hundreds of thousands of such lines.
+ *
+ * This scanner reads every character a bounded number of times. A name run
+ * is skipped whole when no '=' follows it, which is what the regex did in
+ * effect: a shorter prefix of the run always ends on a name character, so
+ * it can never end on the '=' the pattern demands.
+ *
+ * Verified equivalent against the old regex over the parser's own test
+ * inputs plus 200000 random strings drawn from '<>=abZ_$09 /\\.\t-':
+ * 200059 inputs, 0 differing token streams.
+ */
+function tokenizeLine(text: string): SfzToken[] {
+  const tokens: SfzToken[] = [];
+  const n = text.length;
+  /*
+   * First '>' at or after the last place we looked, -1 once the line has
+   * none left. Carried across iterations so repeated '<' with no closing
+   * bracket cannot rescan the tail once per bracket, which would restore
+   * the quadratic cost the regex had.
+   */
+  let gt = text.indexOf('>');
+  let i = 0;
+  while (i < n) {
+    const c = text.charCodeAt(i);
+    if (c === 60 /* < */) {
+      while (gt !== -1 && gt <= i) gt = text.indexOf('>', gt + 1);
+      if (gt !== -1) {
+        tokens.push({ start: i, header: text.slice(i + 1, gt), name: null, valueFrom: 0 });
+        i = gt + 1;
+        continue;
+      }
+      /* Unclosed '<' is not a token and not a name character either, so
+       * the regex skipped past it one position at a time. */
+      i++;
+      continue;
+    }
+    if (isNameChar(c)) {
+      let j = i + 1;
+      while (j < n && isNameChar(text.charCodeAt(j))) j++;
+      if (j < n && text.charCodeAt(j) === 61 /* = */) {
+        tokens.push({ start: i, header: null, name: text.slice(i, j), valueFrom: j + 1 });
+        i = j + 1;
+      } else {
+        /* Stop at j, not past it: text[j] may be a '<' that opens a header. */
+        i = j;
+      }
+      continue;
+    }
+    i++;
+  }
+  return tokens;
+}
+
 class SfzParser {
   readonly regions: SfzRegion[] = [];
 
   private readonly resolveInclude?: IncludeResolver;
   private readonly maxDepth: number;
   private readonly maxExpandedLength: number;
+  private readonly maxTotalExpanded: number;
   private readonly maxDefines: number;
   private readonly maxIncludes: number;
   private readonly maxTotalInput: number;
   private totalInput = 0;
+  private totalExpanded = 0;
   private includeCount = 0;
   private readonly defines = new Map<string, string>();
   private defaultPath = '';
@@ -378,11 +500,12 @@ class SfzParser {
 
   constructor(opts: SfzParseOptions) {
     this.resolveInclude = opts.resolveInclude;
-    this.maxDepth = opts.maxIncludeDepth ?? 16;
-    this.maxExpandedLength = opts.maxExpandedLength ?? DEFAULT_MAX_EXPANDED_LENGTH;
-    this.maxDefines = opts.maxDefines ?? DEFAULT_MAX_DEFINES;
-    this.maxIncludes = opts.maxIncludes ?? DEFAULT_MAX_INCLUDES;
-    this.maxTotalInput = opts.maxTotalInput ?? DEFAULT_MAX_TOTAL_INPUT;
+    this.maxDepth = finiteOption(opts.maxIncludeDepth, DEFAULT_MAX_INCLUDE_DEPTH);
+    this.maxExpandedLength = finiteOption(opts.maxExpandedLength, DEFAULT_MAX_EXPANDED_LENGTH);
+    this.maxTotalExpanded = finiteOption(opts.maxTotalExpanded, DEFAULT_MAX_TOTAL_EXPANDED);
+    this.maxDefines = finiteOption(opts.maxDefines, DEFAULT_MAX_DEFINES);
+    this.maxIncludes = finiteOption(opts.maxIncludes, DEFAULT_MAX_INCLUDES);
+    this.maxTotalInput = finiteOption(opts.maxTotalInput, DEFAULT_MAX_TOTAL_INPUT);
     this.scope = this.globalScope;
   }
 
@@ -394,7 +517,11 @@ class SfzParser {
     if (this.totalInput > this.maxTotalInput) {
       throw new Error(`sfz: total input exceeds ${this.maxTotalInput} characters`);
     }
-    for (const rawLine of text.split(/\r?\n/)) {
+    /* CR, LF and CRLF all end a line. SFZ libraries authored on classic Mac
+     * tooling are CR delimited, and a splitter that only knew \r?\n turned
+     * such a file into one line of the whole input, which is both wrong and
+     * the worst case for the line scanner. */
+    for (const rawLine of text.split(/\r\n?|\n/)) {
       const line = stripComment(rawLine);
       if (line.trim() === '') continue;
       const inc = /^\s*#include\s+"([^"]*)"\s*$/.exec(line);
@@ -431,6 +558,7 @@ class SfzParser {
     /* Longest names first so $NOTE2 wins over $NOTE. */
     const names = [...this.defines.keys()].sort((a, b) => b.length - a.length);
     let out = text;
+    let expanded = false;
     for (const n of names) {
       const value = this.defines.get(n)!;
       /*
@@ -448,26 +576,41 @@ class SfzParser {
         );
       }
       out = out.split(n).join(value);
+      expanded = true;
+    }
+    /*
+     * Charged after the loop, not per name, so a line touched by several
+     * defines is counted once. Safe to charge on the finished string
+     * because the per-line cap above already refused to build anything
+     * longer than maxExpandedLength. Lines that contain a '$' but match no
+     * define name are not charged: they allocate nothing new.
+     */
+    if (expanded) {
+      this.totalExpanded += out.length;
+      if (this.totalExpanded > this.maxTotalExpanded) {
+        throw new Error(
+          `sfz: #define expansion totals more than ${this.maxTotalExpanded} characters`,
+        );
+      }
     }
     return out;
   }
 
   /*
    * A line holds headers and opcode=value pairs in any mix. A value runs
-   * from its '=' to the start of the next header or opcode, so sample
-   * paths with spaces survive.
+   * from its '=' to the start of the next token, so sample paths with
+   * spaces survive.
    */
   private line(text: string): void {
-    const tokens = [...text.matchAll(/<([^>]*)>|([\w$]+)=/g)];
+    const tokens = tokenizeLine(text);
     for (let i = 0; i < tokens.length; i++) {
-      const m = tokens[i];
-      if (m[1] !== undefined) {
-        this.header(m[1].trim().toLowerCase());
+      const t = tokens[i];
+      if (t.header !== null) {
+        this.header(t.header.trim().toLowerCase());
         continue;
       }
-      const from = m.index! + m[0].length;
-      const to = i + 1 < tokens.length ? tokens[i + 1].index! : text.length;
-      this.opcode(m[2].toLowerCase(), text.slice(from, to).trim());
+      const to = i + 1 < tokens.length ? tokens[i + 1].start : text.length;
+      this.opcode(t.name.toLowerCase(), text.slice(t.valueFrom, to).trim());
     }
   }
 
