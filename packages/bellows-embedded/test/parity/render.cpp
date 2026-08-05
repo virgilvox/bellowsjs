@@ -76,15 +76,54 @@ void RenderVoice(V& v, int frames, float freq, float vel) {
 /* Effects get a bit-exact input: white noise straight from the shared
  * PRNG, so both implementations see identical bits and the only thing the
  * diff can be measuring is the effect's own arithmetic. */
-template <class Fx>
+/*
+ * Input envelope for the effect rows, selected by BELLOWS_FX_DRIVE and
+ * mirrored exactly in parity.mjs.
+ *
+ * Most effects want a steady signal, and 0.25 is what every row was written
+ * against. Two do not, and driving them at 0.25 made their rows vacuous: a
+ * limiter whose ceiling is -0.3 dB never engages on a signal that peaks at
+ * 0.25, and a gate whose threshold is -40 dB never closes on one. Both rows
+ * passed a deliberate mutation because of it.
+ *
+ * Every constant here is a power of two, so it is exact in float and in
+ * double and the two sides start from bit-identical input. 0.25 * 1.6 would
+ * not be, and the difference would land in the comparison as if it were the
+ * effect's own.
+ */
+enum class Drive { kSteady, kHot, kBursts };
+
+Drive DriveFromEnv() {
+  const char* s = getenv("BELLOWS_FX_DRIVE");
+  if (s && strcmp(s, "hot") == 0) return Drive::kHot;
+  if (s && strcmp(s, "bursts") == 0) return Drive::kBursts;
+  return Drive::kSteady;
+}
+
+/* 4096 samples is 93 ms at 44.1 kHz, longer than the gate's 50 ms hold plus
+ * 100 ms release is short, so it fully opens and fully closes each time. */
+float DriveAmp(Drive d, int i) {
+  switch (d) {
+    case Drive::kHot:
+      return 1.5f;  // well past a -0.3 dB ceiling
+    case Drive::kBursts:
+      return ((i / 4096) % 2) == 0 ? 1.0f : 0.001953125f;  // 1 and 1/512
+    default:
+      return 0.25f;
+  }
+}
+
+template <typename Fx>
 void RenderFx(Fx& fx, int frames, uint32_t seed) {
   bellows::Rng r;
   r.Init(seed);
+  const Drive drive = DriveFromEnv();
   float* l = static_cast<float*>(calloc(frames, sizeof(float)));
   float* rr = static_cast<float*>(calloc(frames, sizeof(float)));
   for (int i = 0; i < frames; ++i) {
-    l[i] = r.Bipolar() * 0.25f;
-    rr[i] = r.Bipolar() * 0.25f;
+    const float a = DriveAmp(drive, i);
+    l[i] = r.Bipolar() * a;
+    rr[i] = r.Bipolar() * a;
   }
   for (int i = 0; i < frames; i += kBlock) {
     int to = i + kBlock > frames ? frames : i + kBlock;
@@ -195,6 +234,48 @@ int main(int argc, char** argv) {
     RenderFx(fx, frames, SeedFromEnv());
   } else if (strcmp(which, "plate") == 0) {
     static bellows::Plate<44100> fx;
+    fx.Init(sr);
+    RenderFx(fx, frames, SeedFromEnv());
+    /*
+     * The six below were ported, built into the size sketches, and never
+     * numerically compared to anything. The sketches assert nothing about
+     * output; they exist to be measured. All six run on default params,
+     * which the two sides declare separately and by hand, so agreeing on
+     * the numbers is itself part of what these rows prove.
+     */
+  } else if (strcmp(which, "limiter") == 0) {
+    /* Default detector. The true-peak path is a template parameter, so it
+     * would be a different class and a different row. */
+    static bellows::Limiter<44100, false, kBlock> fx;
+    fx.Init(sr);
+    RenderFx(fx, frames, SeedFromEnv());
+  } else if (strcmp(which, "gate") == 0) {
+    static bellows::Gate fx;
+    fx.Init(sr);
+    RenderFx(fx, frames, SeedFromEnv());
+  } else if (strcmp(which, "flanger") == 0) {
+    static bellows::Flanger<44100> fx;
+    fx.Init(sr);
+    RenderFx(fx, frames, SeedFromEnv());
+  } else if (strcmp(which, "flanger_static") == 0) {
+    /* Modulation off, for the same reason chorus_static exists: a
+     * sample-wise RMS of a time-modulating effect mostly measures the read
+     * position, so this is the row that would catch broken flanger DSP. */
+    static bellows::Flanger<44100> fx;
+    bellows::Flanger<44100>::Params p;
+    p.depth = 0.0f;
+    fx.Init(sr, p);
+    RenderFx(fx, frames, SeedFromEnv());
+  } else if (strcmp(which, "tremolo") == 0) {
+    static bellows::Tremolo fx;
+    fx.Init(sr);
+    RenderFx(fx, frames, SeedFromEnv());
+  } else if (strcmp(which, "autopan") == 0) {
+    static bellows::AutoPan fx;
+    fx.Init(sr);
+    RenderFx(fx, frames, SeedFromEnv());
+  } else if (strcmp(which, "ringmod") == 0) {
+    static bellows::RingMod fx;
     fx.Init(sr);
     RenderFx(fx, frames, SeedFromEnv());
   } else if (strcmp(which, "theory") == 0) {

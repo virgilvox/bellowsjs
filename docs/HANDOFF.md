@@ -5,11 +5,11 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 ## Where things stand
 
 - `bellowsjs@0.1.5` is published on npm. Tags pushed to github.com/virgilvox/bellowsjs, main is current. `packages/bellows-embedded` is at 0.1.0 and is not published anywhere yet.
-- Library test suite: 83 files, 1204 tests, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- Library test suite: 83 files, 1227 tests, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`, `vue-tsc`) and was verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples.
 - Embedded: 43 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All five examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library.
-- Parity against the TypeScript passes on 19 audio modules with the PRNG bit exact, plus 317 exactly-compared value rows for the parts that make no sound.
+- Parity against the TypeScript passes on 26 audio modules with the PRNG bit exact, plus 317 exactly-compared value rows for the parts that make no sound.
 - The embedded package went through a size pass whose findings are in `docs/HARDWARE.md` under "Making it smaller". Delay buffers are sized exactly rather than rounded to a power of two, which took 25 percent off RAM library-wide with bit-identical output; the oscillator gained per-shape entry points so the linker can drop the residual table a program never reads; and every transcendental now routes through `fm::`, which is what the docs had claimed for months and was not true, so `BELLOWS_FAST_MATH` went from saving nothing on any sketch with an oscillator to saving 23 to 75 percent. Read that section before optimising anything: it also records what was measured and deliberately NOT taken, and why attributing firmware bytes to a header-only library by symbol name does not work.
 
 **Two things that have not happened, and both are load bearing.**
@@ -40,7 +40,7 @@ Run all of them from `packages/bellows-embedded` unless noted.
 | Command | What it proves | What it caught |
 | --- | --- | --- |
 | `npm test` (in `packages/bellows`) | the TypeScript, including the golden render and the oscillator band sweep | the regression fixture is the only whole-piece guard; `test/dsp-osc/blep-frequency.test.ts` is the only thing that can see alias rejection collapse above 2637 Hz |
-| `npm run parity` | 19 C++ modules match the TypeScript numerically | the `eq.h` three-band-mislabelled-as-port, the `StereoDelay` clamp bug |
+| `npm run parity` | 26 C++ modules match the TypeScript numerically | the `eq.h` three-band-mislabelled-as-port, the `StereoDelay` clamp bug, and two rows of its own that measured nothing until the drive was fixed |
 | `npm run tables` | euclid, scales, chords, notes, CA, arp, tempo map, MIDI compared EXACTLY | nothing yet, but it is the only thing that can see a wrong scale table |
 | `npm run fastmath` | every polynomial in `core/fastmath.h` against libm | `fm::Log2` wrong by 213 cents, inherited by every `Pow` |
 | `npm run memsafety` (and `memsafety:fastmath`) | ASan and UBSan over every buffer-owning class at 0.5x to 4x its template rate | the `Pluck::NoteOn` overflow. Nothing else could: parity compares numbers at one rate, and `check-header.sh` instantiates nothing |
@@ -55,6 +55,7 @@ Rules learned the hard way about these:
 
 1. **Gates are set from measurement, at roughly ten times the observed drift.** An earlier revision used round numbers that left `saturator` with 25000x headroom, and a deliberate 0.01 percent mutation of the `Svf` integrator passed every gate. If you add a module, measure it first and set the gate from the measurement.
 2. **Mutation test a gate before you trust it.** Both harnesses have been shown to fail on a deliberate break and pass on its revert. A gate nobody has watched fail is a gate nobody should trust.
+2b. **Mutation testing is also the vacuity check, and it is the reason to do it first.** The limiter and gate parity rows were added, passed, and measured NOTHING: the shared effect driver feeds white noise at 0.25, a limiter with a -0.3 dB ceiling never engages on that and a gate with a -40 dB threshold never closes, so both rows sat at their float noise floor. A 0.1 percent ceiling change did not move the limiter row at all. They only became gates once the driver grew a per-effect envelope. Every constant in that envelope is a power of two, because 0.25 * 1.6 is not exact in float and the difference would land in the comparison looking like the effect's own error. And when a mutation does not fire, check the mutation before the gate: the first limiter mutation moved `ceil_lin_`, which is only the threshold test, while the reduction is computed from `ceiling_db`.
 3. **The PRNG row must be exactly zero.** If it is not, nothing below it means anything and the DSP is not the thing to look at.
 4. **`check-header.sh` proves less than it looks.** It generates its own `main()` and instantiates nothing, so templates are dead-stripped. To exercise template bodies you need a translation unit that constructs and drives the classes; the size sketches in `test/sketches/` do that.
 5. **Sample-wise RMS is the wrong instrument for a time-modulating effect.** The chorus is bit-identical with modulation off, and the modulated row used to drift in proportion to depth. That cause is now fixed (the fixed point phase in Milestone 2 took it from 4e-2 to 2.0e-4), but the principle stands and `chorus_static` is still the row that would actually catch a broken chorus. What remains in the modulated row is the read position, computed in float here and double there.
@@ -190,22 +191,34 @@ The endgame from the research: keep bellows.live as the composition brain and pu
 Full detail in `docs/AUDIT-2.md`. These are the confirmed ones, grouped by whether they need a
 decision from the owner.
 
-**Unambiguous, no judgement call, start here.** One of five is done (the NaN guards, commit
-`c57e15d`). The rest:
+**Unambiguous, no judgement call.** All five are now done:
 
-- **SFZ `#define` expands eagerly and doubles per line.** A 622-byte file allocates 352 MB and a
-  644-byte one throws `RangeError`. This is the only part of the library that parses hostile
-  input, and it runs in a browser.
-- **`Pluck::NoteOn` writes past `excite_[]`** on the embedded side when the runtime sample rate
-  exceeds about twice the template rate. ASan-confirmed. Six buffer-owning classes share the
-  underlying template-rate versus `Init()`-rate mismatch.
-- **`packages/bellows-embedded/README.md` is stale in 9 of 15 rows**, one by 26 KB of flash and
-  152 KB of RAM, and its registry table contradicts `HARDWARE.md`. Extend `check-docs.mjs` to
-  cover that file rather than fixing it by hand again.
-- **Coverage holes with teeth**: the saturator's curve dispatch and `CHEBY_COEFFS` are
-  constrained by no test in either language, six ported effects (limiter, gate, flanger,
-  tremolo, autopan, ringmod) sit outside every numeric comparison, and `rng.shuffle` and
-  `rng.gauss` are never called by any test.
+- NaN guards on the parameter path, commit `c57e15d`.
+- SFZ macro expansion and include fan-out are bounded, commit `3f6de1e`. The measured figures
+  were 601 bytes allocating 537 MB and 645 bytes throwing a bare `RangeError`. The include
+  fan-out was a second defect of the same shape that the audit did not record: `maxIncludeDepth`
+  bounds depth but not breadth, so 575 bytes across 16 files made 65535 resolver calls.
+- `Pluck::NoteOn` no longer writes past `excite_[]`, commit `07a07f1`, along with the
+  `npm run memsafety` harness that can see it.
+- The embedded README is under `check-docs`, commit `92bc579`, which also picked up three stale
+  prose figures including two in this file.
+- The coverage holes are closed: the saturator's curve dispatch and `CHEBY_COEFFS` now have
+  gates, `rng.shuffle`, `rng.gauss` and `rng.int`'s top value now have tests, and the six
+  uncompared effects have parity rows.
+
+**Found while doing the above, and still open.** Neither is a regression; both are the wider
+version of something already fixed narrowly:
+
+- **Six buffer-owning classes still size storage from a template int and compute indices from
+  the float given to `Init()`.** Only `Pluck` corrupted memory and only `Pluck` is fixed. The
+  rest clamp, which means they detune or stop sweeping silently instead: `Chorus<44100>` at
+  `Init(48000)` has its deepest voice stop moving. `npm run memsafety` proves they are memory
+  safe at 0.5x to 4x, and proves nothing about whether they still sound right. What to do about
+  it is a policy question (clamp quietly, report, or size at `Init`) and it changes seven public
+  classes, so it needs a decision.
+- **`config.h` says `BELLOWS_SAMPLE_RATE` sizes "delay lines, pluck loops"** and those are
+  exactly the two that hardcode 48000 instead of reading it. It is the first knob a user
+  reaching for a non-default rate will pull, and it half works.
 
 **Needs an owner decision, because it changes rendered output or package shape.** Do not do these
 unasked:

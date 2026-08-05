@@ -103,6 +103,34 @@ const GATES = {
   // Also carried by the fixed point phase: the tank modulation Lfo took this
   // row from 2.4e-3 to 1.3e-5.
   plate: { rel: 1.5e-4, abs: 1.5e-4, note: 'Dattorro tank, recirculating' },
+  // Six effects that were ported and then compared to nothing. They are
+  // built by the size sketches, but those assert nothing about output, so a
+  // wrong coefficient in any of them was invisible in both languages at
+  // once. All run on default params, which the two sides declare separately
+  // and by hand, so the rows also prove the defaults still agree.
+  // measured 1.1e-6 / 3.1e-6, driven hot so the ceiling is actually reached.
+  // At the steady 0.25 input the row read 5.5e-8 and a 0.1 percent ceiling
+  // change did not move it at all, because the limiter never engaged.
+  limiter: { rel: 1.2e-5, abs: 3e-5, note: 'lookahead brickwall, sliding max' },
+  // measured 1.3e-6 / 4.8e-6, driven in bursts so it opens and closes four
+  // times. At a steady input it never crossed the threshold downward.
+  gate: { rel: 1.3e-5, abs: 5e-5, note: 'hysteresis and hold, dB domain' },
+  // The flanger is measured twice for the reason the chorus is, and the
+  // numbers say the same thing: 7.9e-6 with modulation off against 2.9e-4
+  // with it on, a factor of 37, which is the sub-sample read position and
+  // not the DSP. The static row is the one that would catch a broken
+  // flanger. measured 7.9e-6 / 2.8e-6 and 2.9e-4 / 1.5e-4.
+  flanger_static: { rel: 8e-5, abs: 3e-5, note: 'depth 0: the real DSP gate' },
+  flanger: { rel: 3e-3, abs: 1.5e-3, note: 'depth 0.7: sub-sample read position' },
+  // measured 1.0e-6 / 4.6e-7. An LFO on a gain, so there is no read
+  // position to disagree about and the fixed point phase carries it.
+  tremolo: { rel: 1e-5, abs: 5e-6, note: 'LFO on gain, no delay line' },
+  // measured 7.4e-6 / 1.4e-6. Larger than tremolo because the equal-power
+  // pan law puts a sqrt either side of the LFO.
+  autopan: { rel: 7.5e-5, abs: 1.5e-5, note: 'LFO through the equal-power pan law' },
+  // measured 1.9e-5 / 8.0e-6. The carrier is a sine evaluated per sample,
+  // so this row is mostly fm::Sin against Math.sin.
+  ringmod: { rel: 2e-4, abs: 8e-5, note: 'sine carrier multiplied in' },
 };
 
 /* Effects that take an EffectDef rather than an EngineDef, with the params
@@ -115,7 +143,36 @@ const FX = {
   compressor: ['fx/dynamics.ts', 'compressorDef', {}],
   chorus: ['fx/modfx.ts', 'chorusDef', {}],
   plate: ['fx/plate.ts', 'plateDef', {}],
+  limiter: ['fx/dynamics.ts', 'limiterDef', {}],
+  gate: ['fx/dynamics.ts', 'gateDef', {}],
+  flanger_static: ['fx/modfx.ts', 'flangerDef', { depth: 0 }],
+  flanger: ['fx/modfx.ts', 'flangerDef', {}],
+  tremolo: ['fx/modfx.ts', 'tremoloDef', {}],
+  autopan: ['fx/modfx.ts', 'autopanDef', {}],
+  ringmod: ['fx/modfx.ts', 'ringmodDef', {}],
 };
+
+/*
+ * Input envelope per effect row, mirroring DriveAmp() in render.cpp. Absent
+ * means 'steady', which is 0.25 and is what every row before these was
+ * written against.
+ *
+ * The limiter and the gate need their own because at 0.25 neither of them
+ * does anything: a -0.3 dB ceiling is never reached and a -40 dB threshold
+ * is never crossed downward, so both rows sat at their float noise floor
+ * and passed a deliberate mutation. Every constant is a power of two so the
+ * two sides start from bit-identical input.
+ */
+const DRIVE = {
+  limiter: 'hot',
+  gate: 'bursts',
+};
+
+function driveAmp(kind) {
+  if (kind === 'hot') return () => 1.5;
+  if (kind === 'bursts') return (i) => (Math.floor(i / 4096) % 2 === 0 ? 1.0 : 0.001953125);
+  return () => 0.25;
+}
 
 function buildRenderer() {
   mkdirSync(BUILD, { recursive: true });
@@ -133,7 +190,12 @@ function buildRenderer() {
 
 function renderCpp(bin, voice, frames, freq, vel) {
   const buf = execFileSync(bin, [voice, String(frames), String(freq), String(vel), String(SR)], {
-    env: { ...process.env, BELLOWS_SEED: String(SEED), BELLOWS_RNG_LABEL: RNG_LABEL[voice] || '' },
+    env: {
+      ...process.env,
+      BELLOWS_SEED: String(SEED),
+      BELLOWS_RNG_LABEL: RNG_LABEL[voice] || '',
+      BELLOWS_FX_DRIVE: DRIVE[voice] || '',
+    },
     maxBuffer: 1 << 28,
   });
   const f = new Float32Array(buf.buffer, buf.byteOffset, Math.floor(buf.byteLength / 4));
@@ -166,13 +228,16 @@ async function renderTs(voice, frames, freq, vel) {
     const [path, name, params] = FX[voice];
     const def = (await import(join(src, path)))[name];
     const fx = def.create(SR, params);
-    /* Same bit-exact noise the C++ side feeds itself. */
+    /* Same bit-exact noise the C++ side feeds itself, through the same
+     * envelope. Must stay identical to DriveAmp() in render.cpp. */
     const next = mulberry32(SEED);
+    const amp = driveAmp(DRIVE[voice]);
     const l = new Float32Array(frames);
     const r = new Float32Array(frames);
     for (let i = 0; i < frames; i++) {
-      l[i] = (2 * next() - 1) * 0.25;
-      r[i] = (2 * next() - 1) * 0.25;
+      const a = amp(i);
+      l[i] = (2 * next() - 1) * a;
+      r[i] = (2 * next() - 1) * a;
     }
     for (let i = 0; i < frames; i += 128) fx.process(l, r, i, Math.min(i + 128, frames));
     return l;
