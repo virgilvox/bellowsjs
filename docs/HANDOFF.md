@@ -35,6 +35,7 @@ Run all of them from `packages/bellows-embedded` unless noted.
 | `npm run size` | flash and RAM per sketch, `cortex-m7` or `cortex-m4` | the whole no-registry design argument |
 | `./tools/check-header.sh <h>` | one header compiles standalone, `-Wall -Wextra` | header hygiene; note it instantiates nothing |
 | `node tools/gen-tables.mjs --check` | generated headers match the TypeScript ParamSpecs | new `Eq6` class the moment it appeared |
+| `node tools/check-docs.mjs --check` | every flash and RAM figure in `docs/HARDWARE.md` that a sketch produces | six stale rows on its first run, including the registry comparison rule 2 rests on |
 
 Rules learned the hard way about these:
 
@@ -45,7 +46,8 @@ Rules learned the hard way about these:
 5. **Sample-wise RMS is the wrong instrument for a time-modulating effect.** The chorus is bit-identical with modulation off, and the modulated row used to drift in proportion to depth. That cause is now fixed (the fixed point phase in Milestone 2 took it from 4e-2 to 2.0e-4), but the principle stands and `chorus_static` is still the row that would actually catch a broken chorus. What remains in the modulated row is the read position, computed in float here and double there.
 6. **A gate that only looks at one frequency is not a gate on an oscillator.** `test/dsp-osc/oscillators.test.ts` measured alias rejection at 2637 Hz only, so a kernel cap could cost 39 dB at 7040 Hz and 73 dB at 17 kHz with the whole repository still green. `test/dsp-osc/blep-frequency.test.ts` now sweeps 55 Hz to 19 kHz with per-frequency floors set from measurement.
 7. **Alias floors do not gate the filter, only its failure.** They look at what is NOT a harmonic, so a wrong Fourier coefficient, a flipped BLAMP drift sign and any change to `CUTOFF` or `KAISER_BETA` all passed everything. The band-edge test in `blep-frequency.test.ts` measures a low note's harmonics against the ideal saw and pins the half-amplitude point at the cutoff, which catches `CUTOFF` moving by 1.2 percent. If you change the kernel, that is the test that should fail first.
-8. **Do not quote wall-clock ns from a microbenchmark as a property of the code.** The same shipping oscillator through two harnesses on one machine gave 22.6 and 59.8 ns per sample at 7040 Hz. Quote the ratio, measure both ends in one process, and prefer a countable quantity: for the BLEP sum that is `2 * KERNEL_HALF * dt` edges, which is exact.
+8. **A number in a document rots exactly like a stale generated file.** Four times in one session a change moved a sketch and the tables quoting it were left behind, each caught by hand afterwards. Finding 11 in `docs/AUDIT.md` already said a warning in a document is not a control; the same is true of a figure in one. `tools/check-docs.mjs` is the control, and CI runs it. It does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables or the board capacity table, and those still rot by hand.
+9. **Do not quote wall-clock ns from a microbenchmark as a property of the code.** The same shipping oscillator through two harnesses on one machine gave 22.6 and 59.8 ns per sample at 7040 Hz. Quote the ratio, measure both ends in one process, and prefer a countable quantity: for the BLEP sum that is `2 * KERNEL_HALF * dt` edges, which is exact.
 
 ## Things that are not obvious from the code
 

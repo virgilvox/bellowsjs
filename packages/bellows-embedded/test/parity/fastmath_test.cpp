@@ -140,6 +140,24 @@ int main() {
     Gate("Pow (rel)", r, 5.0e-4, Measure::kAbs, "inherits Exp2 and Log2, base 0.05..20, exp -6..6");
   }
 
+  /* Atan2 over the whole circle, by reconstructing an angle from its own
+   * sine and cosine. That exercises all four quadrants and both octants of
+   * each, which a one-sided sweep would not. */
+  {
+    Result r{0.0, 0.0, 0.0};
+    for (int i = -31400; i <= 31400; ++i) {
+      const double th = i * 1e-4; /* -pi .. pi */
+      const double a = bellows::fm::Atan2(static_cast<float>(sin(th)), static_cast<float>(cos(th)));
+      double d = fabs(a - th);
+      if (d > 6.0) d = fabs(d - 2.0 * 3.14159265358979); /* the wrap at +/-pi */
+      if (d > r.max_abs) {
+        r.max_abs = d;
+        r.at = th;
+      }
+    }
+    Gate("Atan2", r, 1.2e-4, Measure::kAbs, "radians, all quadrants; 0.003 cents on the lowest pluck");
+  }
+
   /* The two pitch helpers, gated in cents because that is the unit that
    * decides whether it is acceptable. */
   {

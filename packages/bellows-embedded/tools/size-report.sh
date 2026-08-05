@@ -10,6 +10,14 @@
 #   ./tools/size-report.sh cortex-m4       # single-precision FPU
 #   ./tools/size-report.sh cortex-m0plus   # no FPU
 #
+# EXTRA_CXXFLAGS is appended to every compile, which is how the fast-math
+# figures in docs/HARDWARE.md are produced:
+#
+#   EXTRA_CXXFLAGS=-DBELLOWS_FAST_MATH=1 ./tools/size-report.sh
+#
+# It exists so those numbers come from this script like every other number
+# in that document, rather than from a scratch file nobody can rerun.
+#
 # Needs arm-none-eabi-g++ on PATH, or a PlatformIO toolchain in
 # ~/.platformio/packages.
 set -u
@@ -49,18 +57,21 @@ FLAGS=(-mthumb -std=c++17 -Os
        -nostdlib -nostartfiles
        -Wl,--gc-sections -Wl,-T,"$HERE/test/m7.ld")
 
+# shellcheck disable=SC2206
+EXTRA=(${EXTRA_CXXFLAGS:-})
+
 OUT="$HERE/test/build"
 mkdir -p "$OUT"
 SUPPORT=("$HERE/test/sketches/common.cpp" "$HERE/test/sketches/zz_stubs.cpp")
 
-echo "target: $TARGET   flags: -Os -ffunction-sections -fdata-sections -Wl,--gc-sections"
+echo "target: $TARGET   flags: -Os -ffunction-sections -fdata-sections -Wl,--gc-sections ${EXTRA_CXXFLAGS:-}"
 echo
 printf "%-24s %10s %10s %10s\n" sketch flash data+bss ""
 printf "%-24s %10s %10s\n" "------" "-----" "--------"
 fail=0
 for f in "$HERE"/test/sketches/[sp][0-9]*.cpp; do
   n=$(basename "$f" .cpp)
-  if "$CXX" "${ARCH[@]}" "${FLAGS[@]}" "$f" "${SUPPORT[@]}" \
+  if "$CXX" "${ARCH[@]}" "${FLAGS[@]}" ${EXTRA[@]+"${EXTRA[@]}"} "$f" "${SUPPORT[@]}" \
         -o "$OUT/$n.elf" -lm -lc -lgcc 2>"$OUT/$n.err"; then
     read -r text data bss _ <<<"$("$SIZE" "$OUT/$n.elf" | tail -1)"
     printf "%-24s %10s %10s\n" "$n" "$text" "$((data + bss))"

@@ -155,6 +155,39 @@ inline float Tan(float x) {
   float c = Cos(x);
   return c == 0.0f ? 1e9f : Sin(x) / c;
 }
+/* atan2 by the standard octant reduction plus a cubic in the ratio of the
+ * smaller magnitude to the larger, which is the Hastings form:
+ *
+ *   atan(z) = z * (c1 + z2 (c3 + z2 (c5 + z2 (c7 + z2 c9)))),  z in [0, 1]
+ *
+ * about 1e-7 radians over the whole circle. The obvious cheaper choice, the
+ * Hastings cubic z (pi/4 - (z-1)(0.2447 + 0.0663 z)), measures 1.5e-3 and
+ * is NOT good enough here, which the gate caught. engines/pluck.h divides
+ * the result by w = 2 pi f / sr to turn the loop filter's phase shift into
+ * a fractional delay length, so the angular error is amplified by 1/w: at a
+ * 20 Hz fundamental 1.5e-3 radians becomes 0.58 samples of loop length,
+ * which is an audible detune on the lowest notes. The odd polynomial costs
+ * four more multiply-adds and measures 1.2e-5 radians, worst at the octant
+ * boundary. Through the same 1/w that is 0.003 cents on a 20 Hz pluck,
+ * against the 0.15 cents CentsRatio is allowed. It earns its place on
+ * size:
+ * newlib's atan2f drags in __ieee754_atan2f and atanf for 764 bytes, and
+ * with BELLOWS_FAST_MATH=1 it was the last libm symbol left in a pluck. */
+inline float Atan2(float y, float x) {
+  const float ax = x < 0.0f ? -x : x;
+  const float ay = y < 0.0f ? -y : y;
+  if (ax == 0.0f && ay == 0.0f) return 0.0f;
+  const float hi = ax > ay ? ax : ay;
+  const float lo = ax > ay ? ay : ax;
+  const float z = lo / hi;
+  const float z2 = z * z;
+  float a =
+      z * (0.999866f +
+           z2 * (-0.330299f + z2 * (0.180141f + z2 * (-0.085133f + z2 * 0.0208351f))));
+  if (ay > ax) a = 1.57079632679490f - a;
+  if (x < 0.0f) a = 3.14159265358979f - a;
+  return y < 0.0f ? -a : a;
+}
 inline float Sqrt(float x) { return sqrtf(x); } /* single instruction on any FPU */
 
 #else
@@ -168,6 +201,7 @@ inline float Log2(float x) { return log2f(x); }
 inline float Pow(float base, float e) { return powf(base, e); }
 inline float Log(float x) { return logf(x); }
 inline float Tan(float x) { return tanf(x); }
+inline float Atan2(float y, float x) { return atan2f(y, x); }
 inline float Sqrt(float x) { return sqrtf(x); }
 
 #endif

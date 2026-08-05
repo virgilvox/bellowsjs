@@ -114,13 +114,14 @@ it. Measured, Cortex-M7:
 | sketch | default | `BELLOWS_FAST_MATH=1` | saved |
 | --- | --- | --- | --- |
 | `s1_kick` | 3760 B | 924 B | 75 % |
+| `s3_pluck` | 6552 B | 2276 B | 65 % |
 | `s9g_tube` | 5000 B | 3020 B | 39 % |
-| `p1_drums` | 20832 B | 12876 B | 38 % |
+| `p1_drums` | 20832 B | 12816 B | 38 % |
 | `s9e_westcoast` | 16768 B | 11184 B | 33 % |
 | `s4_va` | 28528 B | 20628 B | 27 % |
-| `p2_poly8` | 31112 B | 22772 B | 26 % |
+| `p2_poly8` | 30936 B | 22616 B | 26 % |
 | `s9f_formant` | 28280 B | 20968 B | 25 % |
-| `s5_all` | 35056 B | 26704 B | 23 % |
+| `s5_all` | 35056 B | 26064 B | 25 % |
 | `s9m_seq` | 5296 B | 5296 B | 0 % |
 
 The sequencing row is 0 percent and should be: it is integer and small-float work over const
@@ -136,8 +137,19 @@ argument tops out at 1.539 and never approaches the pole). `fm::Log` did not exi
 defined in both branches for the same reason: deriving it from `Log2` at the default would not
 have landed on the bits `logf` produces.
 
-One call remains outside `fm::`, `atan2f` in `engines/pluck.h`, used once per note in the loop
-phase-delay compensation. It needs an approximation written and gated before it can be routed.
+Nothing calls `<math.h>` directly any more. The last holdout was `atan2f` in `engines/pluck.h`,
+used once per note to turn the loop filter's phase shift into a fractional delay length, and it
+was worth routing: newlib pulls in `__ieee754_atan2f` and `atanf` for 764 bytes, and with the
+flag on it was the only libm symbol left in a pluck sketch. `s3_pluck` is now 6552 bytes at the
+default and 2276 with the flag, a 65 percent saving where there was none before.
+
+Its gate is the one that argued back. The obvious cheap approximation, the Hastings cubic,
+measures 1.5e-3 radians and looked fine until the gate asked what that meant downstream: pluck
+divides the result by `w = 2 pi f / sr`, so the angular error is amplified by 1/w and 1.5e-3
+radians becomes 0.58 samples of loop length at a 20 Hz fundamental, which is an audible detune on
+the lowest notes. The seventh-order odd polynomial costs four more multiply-adds and measures
+1.2e-5 radians, which is 0.003 cents of pitch at every fundamental, against the 0.15 cents
+`CentsRatio` is allowed.
 
 The default is off, because exact libm keeps renders closer to the JS. It is also off because
 the flag is the dangerous one, and this is worth stating plainly. The first draft of
@@ -219,7 +231,7 @@ it, so these are real costs and not a floor. Reproduce with `./tools/size-report
 | `seq/` (euclid, arp, CA, lsystem, tempomap) | 5296 B | 900 B | fixed capacity, no allocation |
 | `engines/fm` | 5384 B | 1536 B | SineOsc only, so no BLEP tables |
 | `fx/saturator` | 5544 B | 10136 B | with the oversampler |
-| `fx/plate` | 5656 B | 156728 B | Dattorro tank, the RAM is the tank |
+| `fx/plate` | 5664 B | 156728 B | Dattorro tank, the RAM is the tank |
 | `engines/modal` | 5944 B | 1584 B | five material tables in flash |
 | `kernel` | 6208 B | 2492 B | event queue plus block splitting |
 | `engines/westcoast` | 16768 B | 1200 B | BLEP tables dominate |
@@ -311,10 +323,10 @@ anything the size report actually builds:
 | Profile | sketch | flash | RAM |
 | --- | --- | --- | --- |
 | kick only | `s1_kick` | 3760 B | 1100 B |
-| kick only, `BELLOWS_FAST_MATH=1` | `s1_kick` with the flag | 1448 B | 1100 B |
+| kick only, `BELLOWS_FAST_MATH=1` | `s1_kick` with the flag | 924 B | 1084 B |
 | three piece kit | `s2_kit` | 28208 B | 1500 B |
 | kit plus EQ and a 250 ms delay | `p1_drums` | 20832 B | 98680 B |
-| 8 voice VA poly, EQ, 250 ms delay | `p2_poly8` | 31112 B | 100184 B |
+| 8 voice VA poly, EQ, 250 ms delay | `p2_poly8` | 30936 B | 100184 B |
 | 8 VA plus 8 `Pluck<80>` plus kit, EQ, delay | `p3_workstation` | 34736 B | 160216 B |
 | everything constructed and driven at once | `s5_all` | 35056 B | 223280 B |
 

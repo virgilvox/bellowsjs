@@ -99,7 +99,7 @@ class Pluck {
 
   static float OnePolePhaseDelay(float a, float w) {
     float b = 1.0f - a;
-    return atan2f(b * fm::Sin(w), 1.0f - b * fm::Cos(w)) / w;
+    return fm::Atan2(b * fm::Sin(w), 1.0f - b * fm::Cos(w)) / w;
   }
 
   void UpdateLoop() {

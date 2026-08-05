@@ -30,9 +30,10 @@
  * lives: EXTMEM on a Teensy 4.1, DSY_SDRAM_BSS on a Daisy, plain .bss on
  * anything with room. Plate<kSampleRate, kMaxPredelayMs> owns its storage
  * for the cases where that fits, and the predelay ceiling is a template
- * parameter because at 48 kHz it alone rounds up to 64 KB: dropping it
- * from 250 ms to 50 ms takes the total to 216 KB, and the tank on its own
- * is 200 KB.
+ * parameter because at 48 kHz it alone is 46.9 KB: dropping it from 250 ms
+ * to 50 ms takes the total from 189.1 KB to 151.6 KB, and the tank on its
+ * own is 142.2 KB. Those were 64 KB, 216 KB and 200 KB while the elements
+ * were rounded up to a power of two.
  */
 #pragma once
 #include <stdint.h>
@@ -358,8 +359,10 @@ class PlateExt {
  * Owning form. kStoreSamples is the exact carve and there is no rounding
  * left to waste: each element takes what it reads plus the four samples of
  * slack the cubic read needs. At 48 kHz with the default 250 ms predelay
- * the whole tank is 156728 bytes, against 222684 when every element was
- * rounded up to a power of two.
+ * that is 48407 floats, 193628 bytes, against 67584 floats and 270336
+ * bytes when every element was rounded up to a power of two. (The
+ * s9k_plate sketch reports less, 156728, because it is Plate<48000, 50>:
+ * a 50 ms predelay ceiling rather than the default 250.)
  */
 template <int kSampleRate = BELLOWS_SAMPLE_RATE, int kMaxPredelayMs = 250>
 class Plate : public PlateExt {

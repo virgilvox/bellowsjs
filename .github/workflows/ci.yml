@@ -78,6 +78,14 @@ jobs:
           for h in $(cd src && find bellows -name '*.h' | sort); do
             ./tools/check-header.sh "$h"
           done
+      - name: documented figures match the size report
+        # cortex-m7 only, because that is the target docs/HARDWARE.md quotes.
+        # Four separate times in one working session a change moved a sketch
+        # and the tables quoting it were left behind, each caught by hand
+        # afterwards by whoever happened to look. This is the control.
+        if: matrix.target == 'cortex-m7'
+        working-directory: packages/bellows-embedded
+        run: node tools/check-docs.mjs --check
 
   parity:
     name: C++ against TypeScript
