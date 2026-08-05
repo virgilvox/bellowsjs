@@ -326,6 +326,58 @@ perceptually alias-free to about 4 kHz, and the four-point polyBLEP was measured
 gates exist to protect for less than table compression gives, and table compression is the thing
 already ruled out above.
 
+## What the other embedded audio libraries do
+
+Four worth comparing against, and the one decision each of them is built around.
+
+**Mozzi**, 8-bit AVR and up. Integer fixed point throughout (`SFixMath`, `UFixMath`), and its
+own first piece of advice is to avoid floating point entirely because the classic Arduino is
+very bad at it. Bit shifts in place of multiplies and divides, shifts by 8 or 16 preferred over
+other amounts, no division on the audio path, and a strict split between a control-rate update
+and a lean audio-rate one.
+
+bellows already takes the split (`CONTROL_INTERVAL` in `engines/va.h`) and already keeps
+division off the audio path. It does not take the fixed point, and that is the decision that
+makes it a different library rather than a better one: float is correct on anything with an FPU
+and ruinous without one, which is exactly the tier boundary further down this page.
+
+**DaisySP**, Cortex-M7. The closest peer by target and by shape: one sample at a time, `float`
+everywhere, no fixed-point path, about one percent of a Teensy 4's CPU per module. Worth
+recording that the library aimed at the same silicon made the same call.
+
+**Teensy Audio Library**. 128-sample blocks of `int16`, moved by DMA, with one interrupt per
+block instead of per sample. Two lessons, and bellows already has one: it renders in blocks
+through `(l, r, from, to)`, and `BellowsAudioStream` sits on top of that library's own DMA, so
+the interrupt amortisation is already paid by the layer underneath. The lesson it has not taken
+is `int16`, and that choice is not arbitrary either: the Cortex-M4 has DSP instructions that
+accelerate 16-bit signals, and adding a seventeenth bit costs heavily.
+
+**CMSIS-DSP**. Q7, Q15 and Q31 alongside f32, with SIMD packing (a 32-bit word as two q15) and
+dual multiply-accumulate. The instructive result is not the SIMD: `arm_lms_f32` outperformed the
+Q15 version on M7, because the FPU is quick and the fixed-point path has to carry manual scaling
+and post-shifting. Fixed point is not a free win above the M4 line. It is a win where there is
+no FPU at all.
+
+### The one gap that looked real and is not
+
+The Teensy design note argues that block processing beats per-sample work, and every bellows
+engine calls its oscillator once per sample, which looks like the same mistake. It is not.
+Compiled for Cortex-M7 at `-Os`, the innermost loop of a saw render is five instructions and
+reloads neither `dt_` nor `phase_`: GCC has already hoisted everything a hand-written block API
+would hoist by hand. The Teensy lesson is about DMA and interrupt overhead at the driver level,
+which this library does not own.
+
+### What is actually left, in order
+
+1. `int16` delay storage, the Teensy library's choice and the largest remaining lever here.
+   Delay buffers are 87 percent of the RAM even after exact sizing, and 16-bit would halve them
+   again. It costs quantisation noise in a feedback path, so it belongs behind a template
+   parameter with `float` as the default, and it needs measuring before it ships.
+2. CMSIS-DSP for the FFT and spectral family, which this document already recommends and which
+   nothing has started.
+3. Fixed point below the M4 line, which is not an optimisation of this library but a different
+   library, and Mozzi already is it.
+
 ## Realistic firmware profiles
 
 Each row names the sketch in `test/sketches/` that produces it, so a row cannot drift away from
