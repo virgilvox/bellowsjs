@@ -38,19 +38,19 @@ Cortex-M7, freestanding, no Arduino core:
 | --- | --- | --- |
 | baseline harness | 60 B | 1028 B |
 | `Kick` | 3760 B | 1100 B |
-| `Kick` + `Snare` + `Hat` | 28248 B | 1500 B |
-| `Pluck<80>` (80 Hz lowest note) | 6536 B | 10052 B |
-| `Pluck<20>` (20 Hz lowest note) | 6664 B | 36740 B |
-| `Va` | 28528 B | 1364 B |
-| `Eq3` | 6808 B | 1344 B |
-| `StereoDelay<100>` | 1744 B | 66688 B |
-| `StereoDelay<500>` | 1744 B | 263296 B |
+| `Kick` + `Snare` + `Hat` | 28248 B | 1532 B |
+| `Pluck<80>` (80 Hz lowest note) | 6824 B | 8388 B |
+| `Pluck<20>` (20 Hz lowest note) | 6712 B | 29988 B |
+| `Va` | 28576 B | 1376 B |
+| `Eq3` | 6984 B | 1392 B |
+| `StereoDelay<100>` | 1768 B | 39584 B |
+| `StereoDelay<500>` | 1760 B | 193184 B |
 | `theory/` (scales, chords, tunings, notes) | 2616 B | 116 B |
 | `seq/` (euclid, arp, CA, lsystem, tempomap) | 5296 B | 900 B |
 | `Fm` | 5384 B | 1536 B |
-| `Plate` | 5712 B | 222684 B |
+| `Plate` | 5664 B | 156728 B |
 | `kernel` | 6208 B | 2492 B |
-| everything, constructed and driven | 61328 B | 375340 B |
+| everything, constructed and driven | 35152 B | 223324 B |
 
 Run `./tools/size-report.sh` to reproduce it, or `./tools/check-header.sh bellows/engines/va.h`
 for one module.
@@ -69,7 +69,7 @@ constant table and every delay buffer, including ones the program can never reac
 | --- | --- | --- |
 | `Kick` used directly | 3760 B | 1100 B |
 | through `Bank<Kick>`, dispatched by runtime index | 3760 B | 1104 B |
-| through a string-keyed registry of five engines | 30264 B | 37580 B |
+| through a string-keyed registry of five engines | 30488 B | 30872 B |
 
 Eight times the flash and thirty-four times the RAM for the same sound. So there is no registry
 here. `bellows/bank.h` gives you the same ergonomics for free:
@@ -126,7 +126,7 @@ of internal flash with room to spare, so it needs no bootloader at all.
 
 | Flag | Default | Effect |
 | --- | --- | --- |
-| `BELLOWS_FAST_MATH` | `0` | `1` swaps libm for polynomial approximations. Measured end to end: the kick sketch is 3760 bytes at the default and 1448 with the flag. Accuracy is measured against libm by `npm run fastmath` and gated in CI (Sin 3.6e-6, Log2 1.9e-6, pitch within 0.015 cents), but it is not bit-identical to the JavaScript. |
+| `BELLOWS_FAST_MATH` | `0` | `1` swaps libm for polynomial approximations. Measured end to end: the kick sketch is 3760 bytes at the default and 924 with the flag. Accuracy is measured against libm by `npm run fastmath` and gated in CI (Sin 3.6e-6, Log2 1.9e-6, pitch within 0.015 cents), but it is not bit-identical to the JavaScript. |
 | `BELLOWS_SAMPLE_RATE` | `48000` | Only sizes compile-time buffers. `Init()` still takes the real rate. |
 | `BELLOWS_BLOCK_SIZE` | `128` | Matches the AudioWorklet quantum and the Teensy Audio Library block. |
 
