@@ -6,3 +6,4 @@ coverage/
 .vite/
 packages/bellows-embedded/test/build/
 packages/bellows-embedded/test/parity/build/
+packages/bellows-embedded/examples/daisy_onekick/build/

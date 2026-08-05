@@ -22,7 +22,9 @@
  *   On a Daisy Seed, replace the AudioStream plumbing with:
  *     #include "bellows/platform/daisy.h"
  *     bellows::DaisyAudio<onekick::Voice>::Start(hw, voice);
- *   The Voice class itself does not change.
+ *   The Voice class itself does not change. That port is done and built in
+ *   examples/daisy_onekick, which includes this folder's onekick.h rather
+ *   than copying it, so the claim is checked by the compiler.
  */
 
 #include <Audio.h>

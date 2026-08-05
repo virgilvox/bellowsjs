@@ -32,11 +32,15 @@
  */
 #pragma once
 
-/* libDaisy does not publish a single identifying macro, so this guards on
- * the part define that every libDaisy build passes (-DSTM32H750xx) and on
- * an explicit opt in for build systems that do not. Define
- * BELLOWS_TARGET_DAISY yourself if you are on an H750 board that is not a
- * Daisy, or if your Makefile spells the part differently. */
+/* libDaisy does have a version macro, LIBDAISY_VER_MAJ in src/version.h,
+ * but it is only reachable through the umbrella src/daisy.h and not
+ * through daisy_seed.h, which is what this header includes. Guarding on it
+ * would mean the guard passed or failed depending on the sketch's include
+ * order. So this guards instead on the part define that every libDaisy
+ * build passes (-DSTM32H750xx), plus an explicit opt in for build systems
+ * that do not. Define BELLOWS_TARGET_DAISY yourself if you are on an H750
+ * board that is not a Daisy, or if your Makefile spells the part
+ * differently. */
 #if defined(BELLOWS_TARGET_DAISY) || defined(STM32H750xx)
 
 #include <stddef.h>
@@ -44,12 +48,28 @@
 
 namespace bellows {
 
-/* Defaults libDaisy boots with. Both are settable: SetAudioBlockSize takes
- * anything from 1 to 256 frames, SetAudioSampleRate takes 8, 16, 32, 48 or
- * 96 kHz. Read the rate back with hw.AudioSampleRate() and hand that to
- * Init() rather than assuming, since the SAI clock is what it is. Block
- * size is free to choose because the bellows kernel already splits a block
- * at event frames and renders each span as its own (from, to) range. */
+/* Defaults libDaisy boots with, matching AudioHandle::Config. Both are
+ * settable, with a wrinkle each.
+ *
+ * SetAudioBlockSize takes 1 to 256 frames. The ceiling is not a round
+ * number someone chose, it is kAudioMaxBufferSize / 4 in hid/audio.cpp,
+ * where the DMA buffer is 1024 samples covering two channels double
+ * buffered. Asking for more does not fail loudly: SetBlockSize clamps to
+ * the maximum and returns an ERR nobody usually reads, so call
+ * hw.AudioBlockSize() back if the exact figure matters.
+ *
+ * On DaisySeed, SetAudioSampleRate takes a SaiHandle::Config::SampleRate
+ * enumerator rather than a number, so hw.SetAudioSampleRate(48000) does not
+ * compile there. It is an enum class, so the enumerators need qualifying:
+ * SaiHandle::Config::SampleRate::SAI_48KHZ. This is not universal, and
+ * Start() below is deliberately board agnostic: DaisyPatchSM carries a
+ * float overload as well, where passing 48000 is fine. Either way, read the
+ * rate back as a float with hw.AudioSampleRate() and hand that to Init()
+ * rather than assuming, since the SAI clock lands where the PLL puts it.
+ *
+ * Block size is free to choose because the bellows kernel already splits a
+ * block at event frames and renders each span as its own (from, to)
+ * range. */
 inline constexpr int kDaisyDefaultBlockSize = 48;
 inline constexpr float kDaisyDefaultSampleRate = 48000.0f;
 
@@ -72,20 +92,25 @@ inline constexpr float kDaisyDefaultSampleRate = 48000.0f;
  *         kick.Process(l, r, from, to);
  *       }
  *     };
- *     daisy::DaisySeed hw;
- *     MyPatch patch;
- *     bellows::DaisyAudio<MyPatch> audio;
+ *     static daisy::DaisySeed hw;
+ *     static MyPatch patch;
  *
  *     int main() {
  *       hw.Init();
  *       hw.SetAudioBlockSize(bellows::kDaisyDefaultBlockSize);
  *       patch.kick.Init(hw.AudioSampleRate());
- *       audio.Init(patch);
- *       hw.StartAudio(bellows::DaisyAudio<MyPatch>::Callback);
+ *       bellows::DaisyAudio<MyPatch>::Start(hw, patch);
  *       for (;;) {}
  *     }
  *
- * Use the non-interleaved StartAudio overload shown above. The
+ * Start() takes the board by template parameter rather than naming
+ * daisy::DaisySeed, so the adapter never learns which board it is on and
+ * the same line works for DaisyPatchSM, DaisyPod and a hand-rolled
+ * AudioHandle. Init() plus a bare hw.StartAudio(Callback) is the same
+ * thing spelled out, for a sketch that wants to swap callbacks later.
+ *
+ * Either way the non-interleaved StartAudio overload is the one selected,
+ * because Callback matches AudioHandle::AudioCallback exactly. The
  * interleaving overload hands one LRLR buffer, which would force a
  * deinterleave pass into scratch and undo the point of this adapter.
  */
@@ -97,13 +122,27 @@ class DaisyAudio {
    * temporary. */
   void Init(Render& render) { render_ = &render; }
 
+  /* Bind the render and start the stream in one call. Board is a template
+   * parameter so this header still names no board type: anything with a
+   * StartAudio(AudioHandle::AudioCallback) works. Same lifetime rule as
+   * Init(), the render must outlive the stream. */
+  template <class Board>
+  static void Start(Board& hw, Render& render) {
+    render_ = &render;
+    hw.StartAudio(Callback);
+  }
+
   static void Callback(::daisy::AudioHandle::InputBuffer in,
                        ::daisy::AudioHandle::OutputBuffer out, size_t size) {
     (void)in;
     if (render_ == nullptr) return;
     float* l = out[0];
     float* r = out[1];
-    /* Voices add into the buffers, so the block starts silent. */
+    /* Voices add into the buffers, so the block starts silent. This is
+     * load-bearing rather than tidy: libDaisy builds the non-interleaved
+     * output as an uninitialized stack array in hid/audio.cpp and
+     * reinterleaves whatever the callback leaves behind, so skipping the
+     * clear sends stack garbage to the codec, not silence. */
     for (size_t i = 0; i < size; ++i) {
       l[i] = 0.0f;
       r[i] = 0.0f;

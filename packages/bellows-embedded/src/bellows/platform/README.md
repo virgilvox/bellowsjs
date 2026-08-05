@@ -22,7 +22,19 @@ converts to int16 with a hard clip, transmits both blocks and releases them.
 matches `daisy::AudioHandle::AudioCallback`. It zeroes `out[0]` and `out[1]`
 and calls your render directly into them. libDaisy is float already and
 hands the two channels as separate pointers, so there is no conversion and
-no copy.
+no copy. `DaisyAudio<Render>::Start(hw, render)` binds the render and starts
+the stream in one call; `hw` is a template parameter, so the header names no
+board type and the same call works for a Seed, a PatchSM or a Pod.
+
+The zeroing is not defensive. libDaisy's non-interleaved path builds the
+output buffer as an uninitialized stack array in `hid/audio.cpp` and
+reinterleaves whatever the callback leaves there, so a render that only adds
+into the block would otherwise play back stack garbage.
+
+Verified against libDaisy 8.1.0 (commit `c02245d`) for Cortex-M7 with
+`-mfpu=fpv5-d16 -mfloat-abi=hard`: all five example renders compile through
+`DaisyAudio`, and `examples/daisy_onekick` links as a complete Daisy Seed
+image.
 
 `Render` is any callable with the library render signature:
 
