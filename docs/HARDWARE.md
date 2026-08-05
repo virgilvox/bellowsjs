@@ -161,7 +161,7 @@ it. Measured, Cortex-M7:
 | `s3_pluck` | 6728 B | 2468 B | 63 % |
 | `s9g_tube` | 5000 B | 3028 B | 39 % |
 | `p1_drums` | 20856 B | 12856 B | 38 % |
-| `s9e_westcoast` | 16784 B | 11212 B | 33 % |
+| `s9e_westcoast` | 17656 B | 12088 B | 31 % |
 | `s4_va` | 28576 B | 20672 B | 27 % |
 | `p2_poly8` | 30984 B | 22660 B | 26 % |
 | `s9f_formant` | 28368 B | 21048 B | 25 % |
@@ -283,7 +283,7 @@ it, so these are real costs and not a floor. Reproduce with `./tools/size-report
 | `fx/plate` | 5752 B | 156736 B | Dattorro tank, the RAM is the tank |
 | `engines/modal` | 5944 B | 1584 B | five material tables in flash |
 | `kernel` | 6208 B | 2492 B | event queue plus block splitting |
-| `engines/westcoast` | 16784 B | 1204 B | BLEP tables dominate |
+| `engines/westcoast` | 17656 B | 2564 B | BLEP tables dominate |
 | `engines/formant` | 28368 B | 1504 B | BLEP tables dominate |
 
 The BLEP tables are 16 KB and shared, so the first module that needs them pays and every later
@@ -355,7 +355,7 @@ that was already there. If your shape really is a compile-time constant you get 
 without calling the helper.
 
 The engines whose shape is fixed at construction now call the helpers, and that is where the
-saving actually lands: `s9e_westcoast` went 27064 to 16784 bytes and
+saving actually lands: `s9e_westcoast` went 27064 to 17656 bytes and
 `p1_drums` 29448 to 20856, each keeping only the table it reads. A program that
 mixes both styles, like `s5_all`, pays about 150 bytes for carrying the two dispatch paths, which
 is the honest cost of the choice being per call site rather than global.
@@ -680,7 +680,7 @@ theory        9.42e-8   7.32e-4 0.000001  pass  12/19/24/31/53-EDO and 5-limit J
 snare         3.17e-5   1.32e-5   0.0003  pass
 fm            5.25e-4   9.84e-4    0.005  pass
 modal         1.23e-4   9.42e-5    0.001  pass
-westcoast     2.77e-3   2.20e-3     0.02  pass  iterated wavefolder
+westcoast     2.75e-3   2.14e-3     0.02  pass  iterated wavefolder
 formant       1.39e-5   1.37e-5  0.00015  pass
 tube          1.70e-3   1.09e-2    0.005  pass  error rides the waveform edges
 eq            2.88e-7   1.79e-7 0.000003  pass

@@ -29,6 +29,7 @@
 #include "bellows/dsp/envelopes.h"
 #include "bellows/dsp/filters.h"
 #include "bellows/dsp/oscillators.h"
+#include "bellows/dsp/oversample.h"
 #include "bellows/dsp/waveshaper.h"
 
 namespace bellows {
@@ -56,6 +57,7 @@ class WestCoast {
     osc_.SetShape(BlepShape::kTriangle);
     lpg_.Init(sample_rate);
     lpg_.SetMode(SvfMode::kLp);
+    os_.Init();
     fold_env_gen_.Init(sample_rate);
     fold_env_gen_.Set(0.003f, 0.25f, 0.5f, 0.12f);
     rise1_ = 1.0f - fm::Exp(-1.0f / (0.0015f * sample_rate));
@@ -89,26 +91,54 @@ class WestCoast {
     float fold_amt = Clamp(p_.fold_amount, 0.0f, 1.0f);
     float env_mix = Clamp(p_.fold_env, 0.0f, 1.0f);
     float level = p_.level * vel_;
-    for (int i = from; i < to; ++i) {
+    /* Chunked so a chunk never crosses a control tick, which is what keeps
+     * the low pass gate at the base rate: inside a chunk the Svf
+     * coefficients and amp_ do not move, so only the fold needs 4x. */
+    int i = from;
+    while (i < to) {
       if (ctrl_ <= 0) {
         Control();
         ctrl_ = kCtrl;
       }
-      --ctrl_;
+      int n = to - i;
+      if (n > ctrl_) n = ctrl_;
+      if (n > kOsBlock) n = kOsBlock;
 
-      /* vactrol tick: fast rise toward the gate, slow nonlinear fall */
-      float target = gate_ ? vel_ : 0.0f;
-      s1_ += (target > s1_ ? rise1_ : fall1_) * (target - s1_);
-      s2_ += (s1_ > s2_ ? rise2_ : fall2_) * (s1_ - s2_);
+      for (int j = 0; j < n; ++j) {
+        /* vactrol tick: fast rise toward the gate, slow nonlinear fall */
+        float target = gate_ ? vel_ : 0.0f;
+        s1_ += (target > s1_ ? rise1_ : fall1_) * (target - s1_);
+        s2_ += (s1_ > s2_ ? rise2_ : fall2_) * (s1_ - s2_);
 
-      float fe = fold_env_gen_.Process();
-      float gain = 1.0f + fold_amt * kMaxFold * (1.0f - env_mix + env_mix * fe);
-      float x = osc_.ProcessTriangle();
-      for (int s = 0; s < stages; ++s) x = Foldback(x, gain);
+        float fe = fold_env_gen_.Process();
+        gain_buf_[j] = 1.0f + fold_amt * kMaxFold * (1.0f - env_mix + env_mix * fe);
+        osc_buf_[j] = osc_.ProcessTriangle();
+      }
 
-      float o = lpg_.Process(x) * amp_ * level;
-      l[i] += o;
-      r[i] += o;
+      /* One fold gain per INPUT sample, held across its four oversampled
+       * ones. The gain is an envelope, so a zero order hold on it is
+       * inaudible; the corner in Foldback is what needed the headroom. */
+      float* up = os_.Up(osc_buf_, 0, n);
+      for (int j = 0; j < n; ++j) {
+        float gain = gain_buf_[j];
+        const int base = j * 4;
+        for (int k = 0; k < 4; ++k) {
+          float x = up[base + k];
+          for (int s = 0; s < stages; ++s) x = Foldback(x, gain);
+          up[base + k] = x;
+        }
+      }
+      os_.Down(up, fold_buf_, 0, n);
+
+      const float amp = amp_;
+      for (int j = 0; j < n; ++j) {
+        float o = lpg_.Process(fold_buf_[j]) * amp * level;
+        l[i + j] += o;
+        r[i + j] += o;
+      }
+
+      ctrl_ -= n;
+      i += n;
     }
     if (!gate_ && s2_ < kSilence && s1_ < kSilence) live_ = false;
   }
@@ -119,6 +149,20 @@ class WestCoast {
   static constexpr float kSilence = 1e-4f;
   /* Control rate divider for the vactrol fall coefficients and the Svf. */
   static constexpr int kCtrl = 16;
+  /*
+   * The fold chain runs at 4x, mirroring src/engines/westcoast.ts.
+   *
+   * Foldback is a periodic triangle wrap, so every fold is an infinite-slope
+   * corner and each of the up-to-six stages multiplies the harmonic count
+   * again. Measured in the TypeScript at the shipped default, alias energy
+   * against harmonic energy went from -47.0 dB to -72.8 dB at 110 Hz and
+   * from -10.6 dB to -34.6 dB at 1760 Hz. 16x was measured too and bought
+   * nothing further at the default, so 4x is where the curve flattens.
+   *
+   * Blocks are bounded by kCtrl because the chunk loop never crosses a
+   * control tick.
+   */
+  static constexpr int kOsBlock = kCtrl;
   static constexpr float kMaxFold = 7.0f;
   /* log2(16000): the cutoff with the gate wide open. */
   static constexpr float kOpenLog2 = 13.965784284662087f;
@@ -148,6 +192,11 @@ class WestCoast {
   float sr_ = 48000.0f;
   Params p_;
   BlepOsc osc_;
+  /* Preallocated, like everything else here: nothing allocates. */
+  Oversampler<4, kOsBlock> os_;
+  float osc_buf_[kOsBlock] = {};
+  float gain_buf_[kOsBlock] = {};
+  float fold_buf_[kOsBlock] = {};
   Svf lpg_;
   Adsr fold_env_gen_;
 
