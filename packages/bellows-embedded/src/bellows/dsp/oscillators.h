@@ -3,6 +3,7 @@
  * instead of being built into RAM at module load as the JS does. */
 #pragma once
 #include <math.h>
+#include "bellows/core/fastmath.h"
 #include "bellows/dsp/blep_tables.h"
 
 namespace bellows {
@@ -20,40 +21,76 @@ class BlepOsc {
   void SetPulseWidth(float pw) { pw_ = pw < 0.01f ? 0.01f : (pw > 0.99f ? 0.99f : pw); }
   void Reset(float phase = 0.0f) { phase_ = phase - floorf(phase); }
 
+  /* Runtime shape, chosen with SetShape. Identical arithmetic to the four
+   * methods below, which is where it dispatches. */
   inline float Process() {
-    float t = phase_;
-    float dt = dt_;
-    float y = 0.0f;
     switch (shape_) {
-      case BlepShape::kSaw:
-        y = 2.0f * t - 1.0f;
-        if (dt > 0.0f) y += SumBlep(t, -2.0f);
-        break;
-      case BlepShape::kSquare:
-        y = t < pw_ ? 1.0f : -1.0f;
-        if (dt > 0.0f) {
-          y += SumBlep(t, 2.0f);
-          y += SumBlep(t - pw_, -2.0f);
-        }
-        break;
-      case BlepShape::kTriangle:
-        y = t < 0.5f ? 4.0f * t - 1.0f : 3.0f - 4.0f * t;
-        if (dt > 0.0f) {
-          float mu = 8.0f * dt;
-          y += SumBlamp(t, mu);
-          y += SumBlamp(t - 0.5f, -mu);
-        }
-        break;
-      case BlepShape::kSine:
-        y = sinf(6.28318530717959f * t);
-        break;
+      case BlepShape::kSaw: return ProcessSaw();
+      case BlepShape::kSquare: return ProcessSquare();
+      case BlepShape::kTriangle: return ProcessTriangle();
+      case BlepShape::kSine: return ProcessSine();
     }
-    phase_ += dt;
-    if (phase_ >= 1.0f) phase_ -= 1.0f;
+    return 0.0f;
+  }
+
+  /*
+   * One shape, fixed at the call site. Same arithmetic as Process(), and
+   * the reason to prefer one is the linker rather than the cycles.
+   *
+   * Process() names every shape, so any program that calls it keeps both
+   * residual tables, 16 KB, even if it only ever plays a saw. Calling
+   * ProcessSaw() instead leaves the BLAMP path unreferenced and
+   * --gc-sections drops the table with it. This is the rule that keeps
+   * this library small (docs/HARDWARE.md, rule 2) applied one level down:
+   * a runtime switch over shapes costs the same thing a runtime registry
+   * of engines costs, for the same reason, just at a smaller scale.
+   *
+   * SetShape is ignored by these, by definition. Mixing them with
+   * Process() on one instance is legal and does what it looks like.
+   */
+  inline float ProcessSaw() {
+    const float t = phase_, dt = dt_;
+    float y = 2.0f * t - 1.0f;
+    if (dt > 0.0f) y += SumBlep(t, -2.0f);
+    Advance();
+    return y;
+  }
+
+  inline float ProcessSquare() {
+    const float t = phase_, dt = dt_;
+    float y = t < pw_ ? 1.0f : -1.0f;
+    if (dt > 0.0f) {
+      y += SumBlep(t, 2.0f);
+      y += SumBlep(t - pw_, -2.0f);
+    }
+    Advance();
+    return y;
+  }
+
+  inline float ProcessTriangle() {
+    const float t = phase_, dt = dt_;
+    float y = t < 0.5f ? 4.0f * t - 1.0f : 3.0f - 4.0f * t;
+    if (dt > 0.0f) {
+      const float mu = 8.0f * dt;
+      y += SumBlamp(t, mu);
+      y += SumBlamp(t - 0.5f, -mu);
+    }
+    Advance();
+    return y;
+  }
+
+  inline float ProcessSine() {
+    const float y = fm::Sin(6.28318530717959f * phase_);
+    Advance();
     return y;
   }
 
  private:
+  inline void Advance() {
+    phase_ += dt_;
+    if (phase_ >= 1.0f) phase_ -= 1.0f;
+  }
+
   static inline float BlepResidual(float d) {
     float pos = (d + kBlepKernelHalf) * kBlepTableRes;
     int i = static_cast<int>(floorf(pos));
@@ -104,13 +141,13 @@ class SineOsc {
   }
   void Reset(float phase = 0.0f) { phase_ = phase - floorf(phase); }
   inline float Process() {
-    float y = sinf(6.28318530717959f * phase_);
+    float y = fm::Sin(6.28318530717959f * phase_);
     phase_ += dt_;
     if (phase_ >= 1.0f) phase_ -= 1.0f;
     return y;
   }
   inline float ProcessPm(float pm) {
-    float y = sinf(6.28318530717959f * phase_ + pm);
+    float y = fm::Sin(6.28318530717959f * phase_ + pm);
     phase_ += dt_;
     if (phase_ >= 1.0f) phase_ -= 1.0f;
     return y;

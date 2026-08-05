@@ -153,9 +153,9 @@ The stereo delay, sized as the JS hardcodes it:
 
 | Configuration | RAM |
 | --- | --- |
-| `StereoDelay<100>` | 65 KB |
-| `StereoDelay<250>` | 128 KB |
-| `StereoDelay<500>` | 257 KB |
+| `StereoDelay<100>` | 39 KB |
+| `StereoDelay<250>` | 96 KB |
+| `StereoDelay<500>` | 189 KB |
 | `StereoDelay<4000>`, the JS maximum | link error: overflows 1 MB by 1,049,728 B |
 
 A 4 second stereo delay wants 2.0 MB, which independently confirms the 2048 KB measured against
@@ -174,17 +174,17 @@ it, so these are real costs and not a floor. Reproduce with `./tools/size-report
 | Module | flash | RAM | notes |
 | --- | --- | --- | --- |
 | `theory/` (scales, chords, tuning, notes) | 2616 B | 116 B | the differentiator, and it is nearly free |
-| `fx/dynamics` | 4048 B | 10336 B | compressor, limiter lookahead line |
-| `fx/modfx` | 5000 B | 26056 B | chorus, flanger, tremolo, autopan, ringmod |
-| `engines/tube` | 5136 B | 3272 B | `Tube<80>` bore |
+| `fx/dynamics` | 4104 B | 10016 B | compressor, limiter lookahead line |
+| `fx/modfx` | 4904 B | 17672 B | chorus, flanger, tremolo, autopan, ringmod |
+| `engines/tube` | 5000 B | 2460 B | `Tube<80>` bore |
 | `seq/` (euclid, arp, CA, lsystem, tempomap) | 5296 B | 900 B | fixed capacity, no allocation |
 | `engines/fm` | 5384 B | 1536 B | SineOsc only, so no BLEP tables |
-| `fx/saturator` | 5536 B | 10136 B | with the oversampler |
-| `fx/plate` | 5712 B | 222684 B | Dattorro tank, the RAM is the tank |
+| `fx/saturator` | 5544 B | 10136 B | with the oversampler |
+| `fx/plate` | 5656 B | 156728 B | Dattorro tank, the RAM is the tank |
 | `engines/modal` | 5944 B | 1584 B | five material tables in flash |
 | `kernel` | 6208 B | 2492 B | event queue plus block splitting |
 | `engines/westcoast` | 27064 B | 1200 B | BLEP tables dominate |
-| `engines/formant` | 28328 B | 1496 B | BLEP tables dominate |
+| `engines/formant` | 28312 B | 1496 B | BLEP tables dominate |
 
 The BLEP tables are 16 KB and shared, so the first module that needs them pays and every later
 one is nearly free. `fm`, `modal`, `tube` and `pluck` do not need them at all, which is why an
@@ -192,6 +192,64 @@ FM plus pluck instrument is under 12 KB while a formant voice alone is 28 KB.
 
 The theory row is the one to notice. Scales, chords, tunings and note parsing together are
 2.6 KB of flash and 116 bytes of RAM.
+
+## Making it smaller
+
+Where the bytes are, measured with `arm-none-eabi-nm --size-sort` on `s5_all`, the sketch that
+constructs and drives everything at once:
+
+| | share of flash |
+| --- | --- |
+| `kBlepStep` and `kBlepRamp` residual tables | 47 % |
+| newlib libm (`sinf`, `powf`, `__kernel_rem_pio2f`, soft-double helpers) | 18 % |
+| every line of bellows DSP | 35 % |
+
+The DSP code is not the weight and never was. Individual functions are 400 to 500 bytes:
+`Svf::Update` is 444, `NoiseGen::Process` is 528. Two constant tables and one delay buffer are
+the library's size, which is why the wins below are all about storage rather than about
+arithmetic, and why no rewrite of the DSP in another language or another architecture would move
+any of them.
+
+**Delay buffers are sized exactly.** They used to round up to a power of two so the wrap could be
+a bitwise AND, which cost up to 49 percent of the largest RAM consumer in the library. Exact
+sizing costs one conditional add per read instead. Measured: `s5_all` 300144 to 223280 bytes
+(25 percent), the plate tank 222684 to 156728 (29 percent), a 100 ms stereo delay 66688 to 39584
+(40 percent). Flash is a wash. The samples are identical, so every parity row reads exactly what
+it read before.
+
+**Pick the oscillator shape at the call site when you know it.** `BlepOsc::Process()` switches on
+a runtime shape, so it names every shape and the linker has to keep both residual tables, 16 KB,
+even in a program that only ever plays a saw. `ProcessSaw()`, `ProcessSquare()`,
+`ProcessTriangle()` and `ProcessSine()` are the same arithmetic with the shape fixed, so
+`--gc-sections` can drop what is unreachable. Measured on a one-oscillator sketch:
+
+| call | flash | tables kept |
+| --- | --- | --- |
+| `Process()` | 19000 B | both |
+| `ProcessSaw()` | 8540 B | step only |
+| `ProcessTriangle()` | 8624 B | ramp only |
+| `ProcessSine()` | 1984 B | neither |
+
+This is rule 2 applied one level down. A runtime switch over shapes costs what a runtime registry
+of engines costs, for the same reason, at a smaller scale.
+
+### Measured and deliberately not taken
+
+Compressing the residual tables further does work acoustically and does not survive parity. Half
+the step table is genuinely redundant (the residual is odd to 2.9e-15), and cubic interpolation
+at a quarter of the resolution with int16 storage holds alias rejection at exactly -86.6 dB in
+514 bytes against 8196. But it moves the C++ 7.08e-4 away from the TypeScript, which walks
+through the formant gate (1.5e-4) and the snare gate (3.0e-4). Taking only the symmetry is
+5.95e-5, which fits, but it spends about half the formant headroom to save 4 KB. Neither trade
+looks worth it while flash is the constraint nobody is actually hitting; revisit if a target
+appears where 4 KB decides something.
+
+Swapping the tabulated BLEP for a closed-form method (polyBLEP, DPW, PTR/EPTR) is the other
+obvious idea and is worse than it looks. The literature puts fourth-order polyBLEP at
+perceptually alias-free to about 4 kHz, and the four-point polyBLEP was measured here at about
+-37 dB against the -86.6 dB the tabulated kernel holds. It would trade the property the spectrum
+gates exist to protect for less than table compression gives, and table compression is the thing
+already ruled out above.
 
 ## Realistic firmware profiles
 
@@ -202,11 +260,11 @@ anything the size report actually builds:
 | --- | --- | --- | --- |
 | kick only | `s1_kick` | 3760 B | 1100 B |
 | kick only, `BELLOWS_FAST_MATH=1` | `s1_kick` with the flag | 1448 B | 1100 B |
-| three piece kit | `s2_kit` | 28248 B | 1500 B |
-| kit plus EQ and a 250 ms delay | `p1_drums` | 29344 B | 133720 B |
-| 8 voice VA poly, EQ, 250 ms delay | `p2_poly8` | 30912 B | 135224 B |
-| 8 VA plus 8 `Pluck<80>` plus kit, EQ, delay | `p3_workstation` | 34496 B | 208568 B |
-| everything constructed and driven at once | `s5_all` | 34920 B | 300144 B |
+| three piece kit | `s2_kit` | 28280 B | 1500 B |
+| kit plus EQ and a 250 ms delay | `p1_drums` | 29448 B | 98680 B |
+| 8 voice VA poly, EQ, 250 ms delay | `p2_poly8` | 31136 B | 100184 B |
+| 8 VA plus 8 `Pluck<80>` plus kit, EQ, delay | `p3_workstation` | 34592 B | 160216 B |
+| everything constructed and driven at once | `s5_all` | 34904 B | 223280 B |
 
 And the shipped examples, whose numbers come from the same logic headers the sketches compile,
 so they cannot drift from the code:
