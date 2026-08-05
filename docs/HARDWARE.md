@@ -231,6 +231,37 @@ set is 34 KB, so it fits in internal flash and needs no bootloader at all.
 Restated plainly: on every viable board, bellows uses well under one percent of flash and under
 half the RAM, and delay buffers are the only thing that moves the needle.
 
+## Does it actually build as firmware
+
+Every number above is the library measured in isolation, freestanding, with no Arduino core.
+That is the right way to attribute cost, and it is not the same question as "does this flash".
+
+All five examples were built against the real Teensy core and Audio Library with PlatformIO
+(`platform = teensy`, `board = teensy41`, `framework = arduino`). Complete firmware, Arduino
+core and audio library included:
+
+| Example | flash total | RAM1 used | RAM1 free |
+| --- | --- | --- | --- |
+| `01_OneKick` | 35836 B | 26312 B | 482784 B |
+| `02_DrumMachine` | 65532 B | 55912 B | 464352 B |
+| `03_PolySynth` | 66556 B | 57320 B | 462304 B |
+| `04_ScalesAndTuning` | 40956 B | 67272 B | 445856 B |
+| `05_MidiInstrument` | 68604 B | 59624 B | 461568 B |
+
+Teensy 4.1 has 8 MB of flash and 512 KB of RAM1 plus 512 KB of RAM2, so the largest of these
+leaves about 8.06 MB of flash and 445 KB of RAM1 free, with RAM2 essentially untouched.
+
+Two things this exercise found that a freestanding build cannot. `board_build.usb_type` is
+silently ignored by the PlatformIO teensy platform, so `05_MidiInstrument` needs
+`-D USB_MIDI_SERIAL` in `build_flags` or `usbMIDI` is undeclared. And the platform still
+defaults to `gnu++14` on some releases, so `build_unflags` has to remove it rather than just
+setting `-std=gnu++17`. `examples/platformio.ini` carries both.
+
+WHAT HAS NOT BEEN DONE: none of this has been flashed to a board and listened to. Everything is
+compile-verified and numerically verified against the TypeScript, which is a strong position and
+is not the same as having heard it. The Daisy adapter has not been built end to end at all,
+because libDaisy is not an Arduino framework and the toolchain was not set up here.
+
 ## Board tiers
 
 **Tier 1, the full set with room to spare.** Daisy Seed3 or Seed2 DFM (480 MHz Cortex-M7, 64 MB

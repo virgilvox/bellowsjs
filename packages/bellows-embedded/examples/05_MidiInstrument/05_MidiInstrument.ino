@@ -6,8 +6,14 @@
  * pitch bend, CC74 for brightness, and CC123 all-notes-off.
  *
  * BOARD SETUP
- *   Tools > USB Type > "MIDI" or "Serial + MIDI". Without this the board
- *   enumerates as serial only and usbMIDI does nothing.
+ *   Arduino IDE: Tools > USB Type > "MIDI" or "Serial + MIDI". Without
+ *   this the board enumerates as serial only, usbMIDI is not declared,
+ *   and the sketch does not compile.
+ *
+ *   PlatformIO: the menu has no equivalent, so set the define yourself.
+ *     build_flags = -D USB_MIDI_SERIAL
+ *   board_build.usb_type does NOT work on the teensy platform; it is
+ *   silently ignored and you get the same undeclared usbMIDI error.
  *
  * WHY THE PARSE IS NOT usbMIDI's JOB
  *   The Teensy library already hands you a decoded note number, so this
