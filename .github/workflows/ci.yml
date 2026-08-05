@@ -62,15 +62,17 @@ jobs:
         target: [cortex-m7, cortex-m4]
     steps:
       - uses: actions/checkout@v4
-      - name: install arm toolchain
-        uses: carlosperate/arm-none-eabi-gcc-action@v1
-        with:
-          # Must be the compiler docs/HARDWARE.md names, because the documented
-          # figures ARE that compiler's output: measured, 36 of the 37 sketches
-          # move between 11.3.1 and 9.2.1, some by hundreds of bytes. check-docs
-          # reads the version out of the document and fails loudly rather than
-          # measuring with whatever happens to be on PATH.
-          release: '11.3.Rel1'
+      - name: install the toolchain the documents were measured with
+        # PlatformIO's Teensy build of GCC 11.3.1, not ARM's own release of the
+        # same version. They are not interchangeable: the first CI run used
+        # ARM's and came back 8 bytes high on s6_registry, s2_kit, p1_drums and
+        # p3_workstation, and moved the newlib rows in the symbol breakdown.
+        # This is also the compiler that builds the actual Teensy firmware, so
+        # it is the one the size tables should describe. size-report.sh finds it
+        # under ~/.platformio/packages when it is not on PATH.
+        run: |
+          pip install --quiet platformio
+          pio pkg install --global --tool "platformio/toolchain-gccarmnoneeabi-teensy@1.110301.0"
       - name: size report
         working-directory: packages/bellows-embedded
         # Doubles as the compile check for every header: a sketch that does not
