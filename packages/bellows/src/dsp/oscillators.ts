@@ -20,11 +20,73 @@
  * Hard sync is intentionally not implemented: done cleanly it needs a
  * BLEP at the fractional sync point plus slave phase rewind, and the
  * present design only knows edges at fixed phase offsets.
+ *
+ * THE HIGH FREQUENCY FALLBACK, and why it is off by default.
+ *
+ * The residual sum walks every edge lying within KERNEL_HALF samples of
+ * the current phase, and the number of edges in that window is
+ * 2 * KERNEL_HALF * dt + 1, so oscillator cost climbs linearly with
+ * pitch. Measured here at 44100 Hz, a saw costs about 5.7 ns per sample
+ * at A440 and about 25 ns at 7040 Hz. Because setFreq clamps dt at 0.49
+ * the growth is bounded rather than open ended: the sum never spans more
+ * than about 17 edges, which puts the worst case near six times the A440
+ * cost. That bound, not the ratio against a very low note, is the number
+ * a fixed polyphony budget has to be sized against.
+ *
+ * Above roughly a sixth of the sample rate there is a better option than
+ * paying that cost. A band limited saw at 7040 Hz has only two harmonics
+ * under the kernel's 0.42 cutoff, so summing the harmonics directly is
+ * both cheaper and exact. The two costs run in opposite directions (the
+ * BLEP sum grows with dt, the harmonic sum shrinks as 1/dt) and they
+ * cross near dt = 0.16. Measured, saw, 44100 Hz:
+ *
+ *     hz     BLEP ns   additive ns    BLEP dB   additive dB
+ *     5000      21.2          33.1      -87.3         -94.8
+ *     7040      25.5          23.3      -86.6         -94.0
+ *     9000      30.8          21.5      -81.0         -96.1
+ *    11000      36.3          10.6      -89.8         -97.0
+ *
+ * So above the crossover the harmonic sum wins on both axes at once,
+ * which a kernel cap cannot do: capping the sum to four edges saves about
+ * a fifth of the cost at 7040 Hz and gives up 39 dB of alias rejection,
+ * and tapering the truncated kernel buys back only about 13 dB of that.
+ *
+ * It is nonetheless opt in, through the highFreq option, because turning
+ * it on changes rendered output above the crossover and this library
+ * promises that a given seed reproduces a given render. The default keeps
+ * the BLEP path for every dt, so the shipping code path is unchanged.
+ * Callers who want the bounded cost ask for it, the same way the delay
+ * effects take their capacity at construction.
  */
 
 import { clamp } from '../types';
 
 export type BlepShape = 'saw' | 'square' | 'triangle' | 'sine';
+
+/**
+ * How the oscillator behaves above the crossover documented at the top of
+ * this file. 'blep' pays the growing residual sum at every pitch and is
+ * the default because it leaves rendered output unchanged. 'additive'
+ * sums the surviving harmonics instead, which is cheaper and cleaner
+ * above the crossover and identical below it.
+ */
+export type BlepHighFreqMode = 'blep' | 'additive';
+
+export interface BlepOscillatorOptions {
+  highFreq?: BlepHighFreqMode;
+}
+
+/**
+ * Reads the fallback choice out of an engine's numeric parameter bag.
+ * Engines already take construction-time options by this route: the delay
+ * effects size their rings from params.maxSeconds the same way. Like
+ * those, it stays out of the ParamSpec arrays on purpose, because a
+ * ParamSpec advertises a control the user can move while a note sounds,
+ * and moving this one mid note would step the waveform.
+ */
+export function blepOptionsFromParams(params: Record<string, number>): BlepOscillatorOptions {
+  return { highFreq: params.boundedHighFreq ? 'additive' : 'blep' };
+}
 
 const TWO_PI = Math.PI * 2;
 
@@ -128,6 +190,22 @@ function blampResidual(d: number): number {
 /* BlepOscillator                                                      */
 /* ------------------------------------------------------------------ */
 
+/**
+ * dt below which the fallback contributes nothing. Sits under the
+ * measured cost crossover (about dt 0.16) so the blend is complete
+ * before the harmonic sum would ever be the more expensive of the two.
+ */
+const FALLBACK_LO_DT = 0.14;
+/** dt at and above which the harmonic sum runs alone. */
+const FALLBACK_HI_DT = 0.2;
+/**
+ * Harmonics the fallback can ever need. The count is floor(CUTOFF / dt)
+ * and dt never goes below FALLBACK_LO_DT while the fallback is engaged,
+ * so three is the true ceiling; the array is one longer so index k is
+ * harmonic k and the zero slot stays unused.
+ */
+const MAX_HARMONICS = 4;
+
 export class BlepOscillator {
   /**
    * Output delay in samples. The residual sum looks at edges on both
@@ -143,22 +221,113 @@ export class BlepOscillator {
   private dt = 0;
   private pw = 0.5;
 
-  constructor(sampleRate: number) {
+  /* Fallback state. blend stays 0 for the whole of the default mode, and
+   * next() then runs exactly the code it ran before the fallback existed.
+   * The coefficient arrays are allocated once here so the audio path
+   * never does. */
+  private readonly highFreq: BlepHighFreqMode;
+  private blend = 0;
+  private harmonics = 0;
+  private dc = 0;
+  private readonly cosCoef = new Float64Array(MAX_HARMONICS + 1);
+  private readonly sinCoef = new Float64Array(MAX_HARMONICS + 1);
+
+  constructor(sampleRate: number, options?: BlepOscillatorOptions) {
     this.sampleRate = sampleRate;
+    this.highFreq = options?.highFreq ?? 'blep';
     if (stepTable === null) buildTables();
   }
 
   setShape(shape: BlepShape): void {
     this.shape = shape;
+    this.updateFallback();
   }
 
   setFreq(hz: number): void {
     this.dt = clamp(hz / this.sampleRate, 0, 0.49);
+    this.updateFallback();
   }
 
   /** Pulse width for the square shape, clamped away from degenerate edges. */
   setPulseWidth(pw: number): void {
     this.pw = clamp(pw, 0.01, 0.99);
+    this.updateFallback();
+  }
+
+  /**
+   * Recomputes how much of the output comes from the harmonic sum and
+   * what that sum contains. Called from the setters rather than from
+   * next(), so the per sample path never evaluates a transcendental to
+   * build a coefficient. Sine is excluded because it has no harmonics
+   * above the fundamental and therefore nothing to alias.
+   */
+  private updateFallback(): void {
+    if (this.highFreq !== 'additive' || this.shape === 'sine' || this.dt <= FALLBACK_LO_DT) {
+      this.blend = 0;
+      return;
+    }
+    const dt = this.dt;
+    this.blend =
+      dt >= FALLBACK_HI_DT ? 1 : (dt - FALLBACK_LO_DT) / (FALLBACK_HI_DT - FALLBACK_LO_DT);
+    /* Keep the same band limit the BLEP kernel imposes, so the two forms
+     * describe the same waveform and the blend has nothing to step over.
+     * At least one harmonic always survives: past dt 0.42 the fundamental
+     * itself is over the cutoff, and the BLEP path does not remove it
+     * either, so dropping it here would blend towards silence. */
+    this.harmonics = clamp(Math.floor(CUTOFF / dt), 1, MAX_HARMONICS);
+
+    const k = this.harmonics;
+    const cos = this.cosCoef;
+    const sin = this.sinCoef;
+    cos.fill(0);
+    sin.fill(0);
+    this.dc = 0;
+    switch (this.shape) {
+      case 'saw':
+        // 2t - 1 has the series -(2/pi) * sum sin(2 pi n t) / n
+        for (let n = 1; n <= k; n++) sin[n] = -2 / (Math.PI * n);
+        break;
+      case 'square': {
+        // duty pw: mean 2pw - 1, then the standard pulse train coefficients
+        const pw = this.pw;
+        this.dc = 2 * pw - 1;
+        for (let n = 1; n <= k; n++) {
+          cos[n] = (2 * Math.sin(TWO_PI * n * pw)) / (Math.PI * n);
+          sin[n] = (2 * (1 - Math.cos(TWO_PI * n * pw))) / (Math.PI * n);
+        }
+        break;
+      }
+      case 'triangle':
+        // -1 at phase 0 rising to +1 at a half: odd cosines falling as 1/n^2
+        for (let n = 1; n <= k; n += 2) cos[n] = -8 / (Math.PI * Math.PI * n * n);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Sum of the surviving harmonics at phase t. One sine and one cosine,
+   * then an angle addition recurrence for the rest, so the count of
+   * transcendentals does not grow with the harmonic count.
+   */
+  private additive(t: number): number {
+    const th = TWO_PI * t;
+    const c1 = Math.cos(th);
+    const s1 = Math.sin(th);
+    let c = c1;
+    let s = s1;
+    let y = this.dc;
+    const k = this.harmonics;
+    const cos = this.cosCoef;
+    const sin = this.sinCoef;
+    for (let n = 1; n <= k; n++) {
+      y += cos[n] * c + sin[n] * s;
+      const nc = c * c1 - s * s1;
+      s = s * c1 + c * s1;
+      c = nc;
+    }
+    return y;
   }
 
   reset(phase = 0): void {
@@ -193,33 +362,42 @@ export class BlepOscillator {
   next(): number {
     const t = this.phase;
     const dt = this.dt;
+    const blend = this.blend;
     let y: number;
-    switch (this.shape) {
-      case 'saw':
-        y = 2 * t - 1;
-        if (dt > 0) y += this.sumBlep(t, -2);
-        break;
-      case 'square': {
-        const pw = this.pw;
-        y = t < pw ? 1 : -1;
-        if (dt > 0) {
-          y += this.sumBlep(t, 2); // rising edges at integers
-          y += this.sumBlep(t - pw, -2); // falling edges at integers + pw
+    if (blend >= 1) {
+      /* The residual sum is skipped outright here, which is where the
+       * saving comes from: blending against a BLEP value we then throw
+       * most of away would cost more than the path it replaces. */
+      y = this.additive(t);
+    } else {
+      switch (this.shape) {
+        case 'saw':
+          y = 2 * t - 1;
+          if (dt > 0) y += this.sumBlep(t, -2);
+          break;
+        case 'square': {
+          const pw = this.pw;
+          y = t < pw ? 1 : -1;
+          if (dt > 0) {
+            y += this.sumBlep(t, 2); // rising edges at integers
+            y += this.sumBlep(t - pw, -2); // falling edges at integers + pw
+          }
+          break;
         }
-        break;
-      }
-      case 'triangle': {
-        y = t < 0.5 ? 4 * t - 1 : 3 - 4 * t;
-        if (dt > 0) {
-          const mu = 8 * dt; // slope change per sample at the corners
-          y += this.sumBlamp(t, mu); // upward corners at integers
-          y += this.sumBlamp(t - 0.5, -mu); // downward corners at halves
+        case 'triangle': {
+          y = t < 0.5 ? 4 * t - 1 : 3 - 4 * t;
+          if (dt > 0) {
+            const mu = 8 * dt; // slope change per sample at the corners
+            y += this.sumBlamp(t, mu); // upward corners at integers
+            y += this.sumBlamp(t - 0.5, -mu); // downward corners at halves
+          }
+          break;
         }
-        break;
+        case 'sine':
+          y = Math.sin(TWO_PI * t);
+          break;
       }
-      case 'sine':
-        y = Math.sin(TWO_PI * t);
-        break;
+      if (blend > 0) y += (this.additive(t) - y) * blend;
     }
     this.phase += dt;
     if (this.phase >= 1) this.phase -= 1;

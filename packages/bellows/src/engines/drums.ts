@@ -10,7 +10,7 @@
  */
 
 import type { EngineDef, NamedRng, ParamSpec, Voice } from '../types';
-import { BlepOscillator } from '../dsp/oscillators';
+import { BlepOscillator, blepOptionsFromParams } from '../dsp/oscillators';
 import { NoiseGen } from '../dsp/noise';
 import { Svf } from '../dsp/filters';
 import { tanhShape } from '../dsp/waveshaper';
@@ -158,9 +158,10 @@ class SnareVoice implements Voice {
 
   constructor(sampleRate: number, params: Record<string, number>, rng: NamedRng) {
     this.p = fillDefaults(SNARE_PARAMS, params);
-    this.osc1 = new BlepOscillator(sampleRate);
+    const oscOpts = blepOptionsFromParams(params);
+    this.osc1 = new BlepOscillator(sampleRate, oscOpts);
     this.osc1.setShape('triangle');
-    this.osc2 = new BlepOscillator(sampleRate);
+    this.osc2 = new BlepOscillator(sampleRate, oscOpts);
     this.osc2.setShape('triangle');
     this.noise = new NoiseGen(sampleRate, 'white', rng.fork('snare/noise'));
     this.hp = new Svf(sampleRate);
@@ -251,8 +252,9 @@ class HatVoice implements Voice {
     this.sampleRate = sampleRate;
     this.p = fillDefaults(HAT_PARAMS, params);
     this.oscs = [];
+    const oscOpts = blepOptionsFromParams(params);
     for (let i = 0; i < HAT_RATIOS.length; i++) {
-      const o = new BlepOscillator(sampleRate);
+      const o = new BlepOscillator(sampleRate, oscOpts);
       o.setShape('square');
       this.oscs.push(o);
     }

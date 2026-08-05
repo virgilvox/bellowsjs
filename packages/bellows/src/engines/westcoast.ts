@@ -14,7 +14,7 @@
 
 import type { EngineDef, NamedRng, ParamSpec, Voice } from '../types';
 import { clamp } from '../types';
-import { BlepOscillator } from '../dsp/oscillators';
+import { BlepOscillator, blepOptionsFromParams } from '../dsp/oscillators';
 import { Svf } from '../dsp/filters';
 import { Adsr } from '../dsp/envelopes';
 import { foldback } from '../dsp/waveshaper';
@@ -59,7 +59,7 @@ class WestCoastVoice implements Voice {
 
   constructor(sampleRate: number, params: Record<string, number>, _rng: NamedRng) {
     this.sr = sampleRate;
-    this.osc = new BlepOscillator(sampleRate);
+    this.osc = new BlepOscillator(sampleRate, blepOptionsFromParams(params));
     this.osc.setShape('triangle');
     this.lpg = new Svf(sampleRate);
     this.lpg.setMode('lp');

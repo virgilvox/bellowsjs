@@ -20,7 +20,7 @@
 
 import type { EngineDef, NamedRng, ParamSpec, Rng, Voice } from '../types';
 import { clamp } from '../types';
-import { BlepOscillator, type BlepShape } from '../dsp/oscillators';
+import { BlepOscillator, blepOptionsFromParams, type BlepShape } from '../dsp/oscillators';
 import { LadderFilter, Svf } from '../dsp/filters';
 import { Adsr } from '../dsp/envelopes';
 
@@ -89,9 +89,10 @@ class VaVoice implements Voice {
     this.sampleRate = sampleRate;
     this.p = fillDefaults(params);
     this.rand = rng.fork('va');
-    this.osc1 = new BlepOscillator(sampleRate);
-    this.osc2 = new BlepOscillator(sampleRate);
-    this.subOsc = new BlepOscillator(sampleRate);
+    const oscOpts = blepOptionsFromParams(params);
+    this.osc1 = new BlepOscillator(sampleRate, oscOpts);
+    this.osc2 = new BlepOscillator(sampleRate, oscOpts);
+    this.subOsc = new BlepOscillator(sampleRate, oscOpts);
     this.subOsc.setShape('square');
     this.ladder = new LadderFilter(sampleRate);
     this.svf = new Svf(sampleRate);
