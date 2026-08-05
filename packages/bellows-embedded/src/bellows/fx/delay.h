@@ -23,17 +23,17 @@ class StereoDelayExt {
   };
 
   /*
-   * bufL and bufR must each be power-of-two sized. max_sec is the longest
-   * delay the caller asked for; pass 0 to use whatever the buffer holds.
+   * bufL and bufR are any length; they no longer have to be a power of two.
+   * max_sec is the longest delay the caller asked for; pass 0 to use
+   * whatever the buffer holds.
    *
-   * Why the requested maximum and not the buffer's: DelayLine rounds
-   * capacity up to a power of two, so a 250 ms request at 44100 gets a
-   * 16384 sample ring, which is 371 ms. Clamping at the ring would hand
-   * back 50 percent more delay than was asked for, and would disagree with
-   * the TypeScript, which clamps at exactly its maxSeconds. Surprising the
-   * caller and diverging from the source of truth is worse than leaving
-   * some ring unused, and the tail is wanted anyway: the cubic read needs
-   * samples past the tap.
+   * The explicit maximum is kept even though StereoDelay now sizes its ring
+   * to exactly what was asked, because this entry point also takes a
+   * caller-supplied buffer of any size. It used to matter more: rings were
+   * rounded up to a power of two, so a 250 ms request at 44100 got a 16384
+   * sample ring holding 371 ms, and clamping at the ring would have handed
+   * back 50 percent more delay than was asked for and disagreed with the
+   * TypeScript, which clamps at exactly its maxSeconds.
    */
   void Init(float sample_rate, float* buf_l, float* buf_r, uint32_t cap,
             const Params& p, float max_sec = 0.0f) {

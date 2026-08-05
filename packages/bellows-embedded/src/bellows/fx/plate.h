@@ -355,9 +355,11 @@ class PlateExt {
 };
 
 /*
- * Owning form. kStoreSamples is the exact carve, so nothing is wasted
- * beyond the per-element power-of-two rounding. At 48 kHz with the
- * default 250 ms predelay that is 67584 floats, 270336 bytes.
+ * Owning form. kStoreSamples is the exact carve and there is no rounding
+ * left to waste: each element takes what it reads plus the four samples of
+ * slack the cubic read needs. At 48 kHz with the default 250 ms predelay
+ * the whole tank is 156728 bytes, against 222684 when every element was
+ * rounded up to a power of two.
  */
 template <int kSampleRate = BELLOWS_SAMPLE_RATE, int kMaxPredelayMs = 250>
 class Plate : public PlateExt {

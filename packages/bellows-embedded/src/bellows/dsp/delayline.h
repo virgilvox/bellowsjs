@@ -15,11 +15,13 @@
  * chorus and flanger lines, the pluck loop and the tube bore, that
  * rounding was costing more than every table in the library put together.
  *
- * Exact sizing costs one conditional add per read instead of the AND.
- * Every index this class forms lies in [-(cap-1), cap-1]: reads clamp the
- * delay to max_ = cap - 4, and ReadCubic reaches at most two samples
- * further back, so a single add is always enough to bring an index back
- * into range. No modulo, no loop, no division.
+ * Exact sizing costs one conditional add per index formed, so one for an
+ * integer read and four for a cubic read, in place of the AND. Every index
+ * lies in [-cap, cap-1]: reads clamp the delay to max_ = cap - 4 and
+ * ReadCubic reaches two samples further back, and the lower end is reached
+ * only in the degenerate cap = 4 case, where ReadCubic's floor clamp of 1
+ * outruns a max_ of 0. Wrap(-cap) is 0, so a single add still covers it,
+ * with exactly one index to spare. No modulo, no loop, no division.
  *
  * The samples it returns are unchanged. The ring holds the same history at
  * the same offsets and only the modulus differs, so this is a pure memory
@@ -35,7 +37,11 @@ class DelayLineExt {
   void Init(float* buf, uint32_t cap) {
     buf_ = buf;
     cap_ = cap;
-    max_ = cap - 4;
+    /* Saturating, not wrapping. max_ is unsigned and cap - 4 underflows to
+     * 4294967295 for a cap below four, which would defeat the upper clamp in
+     * every read and let the caller index anywhere. The old mask folded that
+     * back harmlessly; exact sizing does not. */
+    max_ = cap >= 4 ? cap - 4 : 0;
     w_ = 0;
     Clear();
   }
@@ -103,6 +109,10 @@ template <uint32_t kSamples>
 class DelayLine : public DelayLineExt {
  public:
   static constexpr uint32_t kCap = kSamples + 4;
+  /* Below this the reads have no room to interpolate and the clamps stop
+   * meaning anything. Every user in the tree is orders of magnitude above
+   * it; the check is here so a future one cannot slip under. */
+  static_assert(kSamples >= 4, "DelayLine needs at least four samples of delay");
   void Init() { DelayLineExt::Init(store_, kCap); }
 
  private:

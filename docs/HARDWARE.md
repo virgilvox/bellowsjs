@@ -201,8 +201,9 @@ the browser build in `docs/AUDIT.md`. As a template parameter it becomes a knob,
 change recovers the waste in the browser.
 
 The other knob that matters is the loop length of the physical models. `Pluck<20>` reserves for a
-20 Hz fundamental and costs 36.7 KB per voice; `Pluck<80>` costs 10 KB. Eight-voice polyphony is
-the difference between 294 KB and 80 KB.
+20 Hz fundamental and costs 30.0 KB per voice; `Pluck<80>` costs 8.4 KB. Eight-voice polyphony is
+the difference between 240 KB and 67 KB. Those figures moved when the rings stopped rounding up
+to a power of two: they were 36.7 KB and 10 KB per voice, 294 KB and 80 KB for eight.
 
 ## Per module, measured
 
