@@ -73,12 +73,18 @@ void RenderVoice(V& v, int frames, float freq, float vel) {
   free(r);
 }
 
-/* Effects get a bit-exact input: white noise straight from the shared
- * PRNG, so both implementations see identical bits and the only thing the
- * diff can be measuring is the effect's own arithmetic. */
+/* Effects are driven by white noise from the shared PRNG, generated the
+ * same way on both sides down to the rounding: Rng::Next() casts the
+ * uint32 to float before scaling and Bipolar() subtracts in float, and
+ * parity.mjs mirrors both roundings with Math.fround. Only then is the
+ * input actually bit-identical and the only thing the diff measures the
+ * effect's own arithmetic. That claim used to be asserted here and was
+ * false: the JS computed 2*(u/2^32)-1 in double and rounded once at the
+ * store, which left 17580 of 32768 samples differing at 5.5e-8 rel rms,
+ * more than the delay row's own 7.8e-8. The fxin rows now gate it. */
 /*
- * Input envelope for the effect rows, selected by BELLOWS_FX_DRIVE and
- * mirrored exactly in parity.mjs.
+ * Input shape for the effect rows, selected by BELLOWS_FX_DRIVE and mirrored
+ * exactly in parity.mjs. u is one draw of Rng::Bipolar().
  *
  * Most effects want a steady signal, and 0.25 is what every row was written
  * against. Two do not, and driving them at 0.25 made their rows vacuous: a
@@ -86,30 +92,97 @@ void RenderVoice(V& v, int frames, float freq, float vel) {
  * 0.25, and a gate whose threshold is -40 dB never closes on one. Both rows
  * passed a deliberate mutation because of it.
  *
- * Every constant here is a power of two, so it is exact in float and in
- * double and the two sides start from bit-identical input. 0.25 * 1.6 would
- * not be, and the difference would land in the comparison as if it were the
+ * Every constant here is exactly representable in binary floating point:
+ * 0.25, 1.5, 1/512, and n * 10 * 2^-24 for integer n with 10n well below
+ * 2^24. So each envelope value is the same number in float and in double,
+ * and the sweep's sign flip is exact too. 0.25 * 1.6 would not be,
+ * and the difference would land in the comparison as if it were the
  * effect's own.
  */
-enum class Drive { kSteady, kHot, kBursts };
+enum class Drive { kSteady, kHot, kBursts, kSweep };
 
 Drive DriveFromEnv() {
   const char* s = getenv("BELLOWS_FX_DRIVE");
   if (s && strcmp(s, "hot") == 0) return Drive::kHot;
   if (s && strcmp(s, "bursts") == 0) return Drive::kBursts;
+  if (s && strcmp(s, "sweep") == 0) return Drive::kSweep;
   return Drive::kSteady;
 }
 
-/* 4096 samples is 93 ms at 44.1 kHz, longer than the gate's 50 ms hold plus
- * 100 ms release is short, so it fully opens and fully closes each time. */
-float DriveAmp(Drive d, int i) {
+/*
+ * kBursts and kSweep are both the gate, because neither one alone tests it.
+ *
+ * kBursts steps between 1 and 1/512 every 4096 samples, which is 93 ms at
+ * 44.1 kHz, longer than the gate's 50 ms hold plus 100 ms release, so it
+ * fully opens and fully closes four times. What it measures is timing: 0.1
+ * percent changes to the gate's attack, hold and release all trip that row,
+ * and so does the same change to the detector's own release, because after
+ * a step the detector is in free decay and the moment it passes the
+ * threshold is set by its time constant.
+ *
+ * What kBursts cannot see is the thresholds themselves. A step crosses any
+ * threshold at the same instant, so kGateHysteresisDb 3.0 -> 3.003 moved
+ * that row not at all, to three significant figures. Hence kSweep: a slow
+ * triangle that ramps up through the open threshold and back down through
+ * the close threshold. It is the mirror image, and the two rows together are
+ * what covers the class: on kSweep the detector's release changes the ramp's
+ * lag by 0.07 samples of crossing time and the row does not move at all,
+ * measured, while the thresholds move it by two orders of magnitude.
+ *
+ * Three things make the threshold observable on kSweep, and it needs all
+ * three.
+ *
+ * ONE, the samples have to BE the envelope, not noise riding on it. The
+ * detector's input is max(|l|, |r|), and with white noise that is a run of
+ * peaks scattered by a percent or so, jittering the detector by about 0.05 dB
+ * from one sample to the next while the envelope moves 0.0007. The last
+ * sample above the close threshold is then chosen by which peak happened to
+ * land there, not by the threshold: measured, it was sample 40544 at -43.000
+ * dB and sample 40544 at -43.003 dB, moving only once the threshold reached
+ * -43.03. So kSweep emits +envelope or -envelope with the sign from the PRNG.
+ * |x| is then exactly the ramp, the detector sees it clean, and the crossing
+ * is a function of the threshold alone. The signal is still white and still
+ * bit-identical on both sides, because a sign flip is exact.
+ *
+ * TWO, the ramp has to be slow. The close threshold is -43 dB and 0.1 percent
+ * of 3 dB moves it by 0.003 dB. At 10 * 2^-24 per sample the detector falls
+ * 7.31e-4 dB per sample near the crossing, so the mutation moves the crossing
+ * 4.1 samples. A ramp from 0 to 1 over 4096 samples would have moved it by
+ * 0.005 samples and rounded to nothing. Slow also means long: 65536 frames,
+ * four times the harness default, to finish the sweep and the release.
+ *
+ * THREE, the crossing must not sit on a sample boundary, or the C++ and the
+ * TypeScript land on opposite sides of it for no better reason than float
+ * against double, and the row's own baseline eats the mutation. Only the
+ * slope moves that phase (changing the base shifts the crossing by whole
+ * samples). At 2^-21 the crossing fell 0.002 samples from a boundary and the
+ * two sides duly disagreed, C++ closing at 44790 and the JS at 44791, which
+ * put the row at 2.7e-5 / 1.4e-6 all by itself. At 10 * 2^-24 the open
+ * crossing clears its boundary by 0.455 samples and the close by 0.342, both
+ * some fifty times the 0.007 samples of float-against-double uncertainty.
+ *
+ * Amplitude runs 6554 * 10 * 2^-24 (-48.2 dB, under the -43 dB close
+ * threshold) up to 31130 * 10 * 2^-24 (-34.6 dB, over the -40 dB open
+ * threshold) and back over 49152 samples, then sits at the floor for the
+ * remaining 16384 so the 50 ms hold and 100 ms release play out to completion
+ * inside the render. Every value is (6554 + t) * 10 * 2^-24 with t an integer
+ * under 2^15, and the product of the integers stays under 2^24, so each one
+ * is exact in float and in double.
+ */
+float DriveSample(Drive d, int i, float u) {
   switch (d) {
     case Drive::kHot:
-      return 1.5f;  // well past a -0.3 dB ceiling
+      return u * 1.5f;  // well past a -0.3 dB ceiling
     case Drive::kBursts:
-      return ((i / 4096) % 2) == 0 ? 1.0f : 0.001953125f;  // 1 and 1/512
+      return u * (((i / 4096) % 2) == 0 ? 1.0f : 0.001953125f);  // 1 and 1/512
+    case Drive::kSweep: {
+      const int p = i % 65536;
+      const int t = p < 24576 ? p : (p < 49152 ? 49152 - p : 0);
+      const float a = static_cast<float>(6554 + t) * 5.9604644775390625e-07f;  // 10 * 2^-24
+      return u < 0.0f ? -a : a;
+    }
     default:
-      return 0.25f;
+      return u * 0.25f;
   }
 }
 
@@ -121,9 +194,8 @@ void RenderFx(Fx& fx, int frames, uint32_t seed) {
   float* l = static_cast<float*>(calloc(frames, sizeof(float)));
   float* rr = static_cast<float*>(calloc(frames, sizeof(float)));
   for (int i = 0; i < frames; ++i) {
-    const float a = DriveAmp(drive, i);
-    l[i] = r.Bipolar() * a;
-    rr[i] = r.Bipolar() * a;
+    l[i] = DriveSample(drive, i, r.Bipolar());
+    rr[i] = DriveSample(drive, i, r.Bipolar());
   }
   for (int i = 0; i < frames; i += kBlock) {
     int to = i + kBlock > frames ? frames : i + kBlock;
@@ -197,6 +269,13 @@ int main(int argc, char** argv) {
     bellows::Tube<20, 44100> v;
     v.Init(sr, &rng);
     RenderVoice(v, frames, freq, vel);
+  } else if (strcmp(which, "fxin") == 0) {
+    /* No effect at all: the input to every effect row, straight back out.
+     * Gated bit exact, because every other effect row assumes it is. */
+    struct Identity {
+      void Process(float*, float*, int, int) {}
+    } fx;
+    RenderFx(fx, frames, SeedFromEnv());
   } else if (strcmp(which, "eq") == 0) {
     bellows::Eq6 fx;
     bellows::Eq6::Params p;
@@ -209,12 +288,64 @@ int main(int argc, char** argv) {
     fx.Init(sr, p);
     RenderFx(fx, frames, SeedFromEnv());
   } else if (strcmp(which, "delay") == 0) {
+    /*
+     * Short, fractional, recirculating, and crossed, because the defaults
+     * are none of those and the row measured almost nothing.
+     *
+     * On the defaults both times clamp to the 250 ms maximum, which is 11025
+     * samples. The first echo lands at sample 11025 of a 16384 sample render
+     * and the second at 22050, outside it, so the feedback gain, the damping
+     * filter in the feedback path and the cross-feedback mix never reach the
+     * output at all: 0.1 percent mutations of feedback and of damping left
+     * the row at 5.72e-8 / 2.98e-8, identical to three figures. The delay
+     * time also never moves, so the Smoother is snapped at Init and stays
+     * there, and 11025 - 1 is an integer, so ReadCubic interpolates between
+     * nothing. The row's own note said "cubic reads, smoothed time".
+     *
+     * 11/1024 and 17/1024 of a second are 473.73 and 732.13 samples, so the
+     * reads are properly fractional, and 33 echoes recirculate inside the
+     * render. Both are dyadic and 44100 is an integer, so time * sr is exact
+     * in float and in double and no part of the setup drifts on its own.
+     * Feedback, cross-feedback and mix are dyadic for the same reason.
+     */
     static bellows::StereoDelay<250, 44100> fx;
-    fx.Init(sr);
+    bellows::StereoDelay<250, 44100>::Params p;
+    p.time_l = 0.0107421875f;  // 11/1024 s, 473.73046875 samples
+    p.time_r = 0.0166015625f;  // 17/1024 s, 732.12890625 samples
+    p.feedback = 0.375f;
+    p.cross_feedback = 0.25f;
+    p.mix = 0.5f;
+    fx.Init(sr, p);
     RenderFx(fx, frames, SeedFromEnv());
   } else if (strcmp(which, "saturator") == 0) {
+    /* Default params, which is curve 0. The other three curves get their
+     * own rows below: with only this one, softClip, Foldback and the whole
+     * Chebyshev recurrence were constrained by nothing in either language,
+     * since the golden render also runs on curve 0. */
     static bellows::Saturator<4, kBlock> fx;
     fx.Init(sr);
+    RenderFx(fx, frames, SeedFromEnv());
+  } else if (strcmp(which, "saturator_soft") == 0) {
+    static bellows::Saturator<4, kBlock> fx;
+    bellows::Saturator<4, kBlock>::Params p;
+    p.curve = bellows::SatCurve::kSoft;
+    fx.Init(sr, p);
+    RenderFx(fx, frames, SeedFromEnv());
+  } else if (strcmp(which, "saturator_fold") == 0) {
+    static bellows::Saturator<4, kBlock> fx;
+    bellows::Saturator<4, kBlock>::Params p;
+    p.curve = bellows::SatCurve::kFold;
+    fx.Init(sr, p);
+    RenderFx(fx, frames, SeedFromEnv());
+  } else if (strcmp(which, "saturator_cheby") == 0) {
+    /* The one row where the two implementations are deliberately different
+     * algorithms: the JS interpolates a 2048-point table, this evaluates the
+     * T(n+1) = 2x T(n) - T(n-1) recurrence directly. The gate is therefore
+     * set by the table's interpolation error, not by float rounding. */
+    static bellows::Saturator<4, kBlock> fx;
+    bellows::Saturator<4, kBlock>::Params p;
+    p.curve = bellows::SatCurve::kCheby;
+    fx.Init(sr, p);
     RenderFx(fx, frames, SeedFromEnv());
   } else if (strcmp(which, "compressor") == 0) {
     static bellows::Compressor<10, 44100> fx;
@@ -249,7 +380,10 @@ int main(int argc, char** argv) {
     static bellows::Limiter<44100, false, kBlock> fx;
     fx.Init(sr);
     RenderFx(fx, frames, SeedFromEnv());
-  } else if (strcmp(which, "gate") == 0) {
+  } else if (strcmp(which, "gate") == 0 || strcmp(which, "gate_sweep") == 0) {
+    /* Same unit, two envelopes. The caller picks which through
+     * BELLOWS_FX_DRIVE; see the note on Drive above for why one of them is
+     * not enough. */
     static bellows::Gate fx;
     fx.Init(sr);
     RenderFx(fx, frames, SeedFromEnv());
