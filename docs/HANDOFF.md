@@ -202,15 +202,21 @@ Subtract them and 73 findings are genuinely open.
 
 ### Done, with the commit
 
-- NaN guards on the parameter path, `c57e15d`.
+- NaN guards on the parameter path, `c57e15d`, completed in `e28db8d` once a re-verification
+  showed the recursive units were never covered.
 - SFZ macro expansion and include fan-out bounded, `3f6de1e`, then time and retained heap
   bounded in `5cc22ab` after a review found the first pass had bounded the wrong resources.
 - `Pluck::NoteOn` overflow, `07a07f1`, plus `npm run memsafety`; then the delay line and three
   more call sites made NaN safe in `ac99eb1` after the same review found a live out-of-bounds
   read in the function that commit had hardened.
-- Embedded README under `check-docs`, `92bc579`.
+- Embedded README under `check-docs`, `92bc579`, widened to six documents and five measurement
+  sources in `1c2a08d`.
 - Coverage holes closed, `30dec12`, then the effect rows given the bit-exact input they had
   claimed for months, `939e8d5`.
+- Seven embedded correctness findings, `b9782dc`. The label hash is the one that mattered:
+  `Xmur3` read plain `char`, so any label byte at or above 0x80 hashed differently on the board
+  than in the browser, and the host-only harness could not see it.
+- Five TypeScript safety findings and four music theory findings, `e28db8d`.
 
 ### What the reviews taught, and it is the same lesson three times
 
@@ -231,71 +237,60 @@ does not fire is as likely to be a bad mutation as a weak gate.
 
 ### Open, no judgement call needed
 
-Grouped by where they are, roughly in the order I would take them. Line numbers are into
-`docs/AUDIT-2.md`.
+Nineteen of these were closed on 2026-08-05 in `b9782dc`, `e28db8d` and `1c2a08d`. What is left,
+with line numbers into `docs/AUDIT-2.md`. Note those line numbers shifted by five when the
+refuted findings were annotated inline.
 
-**Embedded correctness, and the first one is the most important thing in this list.**
+**Embedded.**
 
-- **`Xmur3` hashes plain `char`, whose signedness differs between the host and ARM** (539). The
-  PRNG label hash is the foundation of the determinism contract, and the parity harness runs on
-  the host, so this is a latent divergence the harness is structurally unable to see.
-- `midi::Parse` writes into `*out` on paths where it returns false, against its own comment (545).
-- Teensy `ToInt16` converts NaN to `int16_t`, which is undefined (551).
-- `Oversampler` drops the `maxBlock` bound check the TypeScript throws on (515).
-- `Lfo` sample-and-hold with a null `Rng` is a constant zero, so Tremolo and AutoPan silently
-  stop modulating in that shape (521).
-- `s9n_kernel.cpp`, the only call site of the kernel in the tree, passes `PushNoteOn` arguments
-  in the wrong order (273).
-- `bringup.h` `Rig::SetStage` races the audio interrupt (533).
 - `bellows::Clamp` in `config.h` passes NaN through, the same shape as the pluck defect. Harmless
-  everywhere the harness currently reaches, and the next engine that casts a clamped float to an
-  index reintroduces the fault. Found while fixing `ac99eb1` and deliberately left: it is a
-  library-wide behaviour change that needs its own parity argument.
+  everywhere the harness currently reaches, because the delay line clamps now absorb a NaN read
+  position and the four undefined casts are guarded, and the next engine that casts a clamped
+  float to an index reintroduces the fault. Deliberately left: it is a library-wide behaviour
+  change that needs its own parity argument.
+- `fm::Log2(NaN)` under `BELLOWS_FAST_MATH` punts the NaN through a union type pun and returns
+  finite garbage where libm returns NaN. Defined behaviour, so nothing gates it, but the two
+  paths disagree. `Exp2` was the one that was actually undefined and is fixed.
+- `params.gen.h` still has no compile-time consumer (117).
 
-**TypeScript safety and correctness.**
+**TypeScript.**
 
-- `DelayLine`'s constructor spins forever for `maxSamples` at or above 2^30 (485).
-- A non-finite ramp duration wedges one of the 32 ramp slots forever (563).
-- NaN still latches in `Svf`, `LadderFilter`, `OnePole`, `Smoother` and the envelopes; the
-  `c57e15d` fix covered the facade, not the recursive units (255, and 85 is the same shape).
-- `quick.ts` never resets its shared boot promise and never clears its instrument cache (575).
-- `b.now()` is not render-aware, so a callback timing off it misroutes during replay (569).
 - `Adsr` sustain changed mid-note steps the level in one sample (491); with sustain 0 a voice
   never goes idle and the release runs about twice its configured time (497).
 
-**Music theory.**
+**Architecture and duplication.** None of these were touched, and all five are refactors rather
+than defects, so they are the natural next chunk.
 
-- `chordToRoman` throws for any degree past the seventh, so five of the thirty-two shipped scales
-  cannot be analysed (299), and it tries flat before sharp so F# in C major comes back as bV (311).
-- `CHORD_TYPES` omits `[0,4,8,11]`, so harmonic minor's III types as unknown (317).
-- `buildProgression(bars = 2)` returns `[0,0]` because the two cadence branches collide (323).
-
-**Architecture and duplication.**
-
-- Schroeder allpass implemented twice, verbatim, inside the fx layer (329).
-- `ChromaAnalyzer` and `OnsetDetector` each hand-roll the framer `dsp/stft.ts` already provides (335).
-- `SampleZone` and `SamplerZoneData` are field-for-field twins bridged by an unchecked cast (341).
-- `TempoPoint` is declared in the contracts file and used nowhere (353).
-- `engines/soundfont.ts` and `core/scheduler.ts` both import upward (365). Type-only.
+- Schroeder allpass implemented twice, verbatim, inside the fx layer (334). Check byte-for-byte
+  equivalence before merging them: the golden render runs through one of the two.
+- `ChromaAnalyzer` and `OnsetDetector` each hand-roll the framer `dsp/stft.ts` already provides (340).
+- `SampleZone` and `SamplerZoneData` are field-for-field twins bridged by an unchecked cast (346).
+- `TempoPoint` is declared in the contracts file and used nowhere (358).
+- `engines/soundfont.ts` and `core/scheduler.ts` both import upward (370). Type-only.
 
 **Coverage.**
 
-- The `Svf` cutoff gate is a -4 to -2 dB band that admits roughly 11 percent cutoff error (219).
-- `voiceLead`'s unequal-size branch, including the crossing penalty, is never executed (461).
-- `Scheduler.rewind()` has no test and it is on the `b.start()` path (467).
-- The Web MIDI runtime path is uncovered; only parsing is tested (473).
+- The `Svf` cutoff gate is a -4 to -2 dB band that admits roughly 11 percent cutoff error (224).
+- `voiceLead`'s unequal-size branch, including the crossing penalty, is never executed (466).
+- `Scheduler.rewind()` has no test and it is on the `b.start()` path (472).
+- The Web MIDI runtime path is uncovered; only parsing is tested (478).
 - The gate's range floor and the delay's time smoother are both unreachable from the parity
   output. Recorded next to their rows with the arithmetic; both need an instrument the harness
   does not have, one reading gain directly and one changing a param mid-render.
-- `params.gen.h` still has no compile-time consumer (117).
+- A 0.1 percent `Foldback` mutation moves `westcoast` to 1.04e-2 against a 2e-2 gate and fires
+  nothing, and the same shape of `TanhShape` mutation moves `kick` to 3.47e-4 against 1e-3.
+  Both rows are looser than they look. `saturator_fold` now covers Foldback itself.
 - `gen-tables --check` warns about a stale `dist` and then reads it anyway, so it passes on a
   stale checkout (31). The clean-checkout half is fixed in `ci.yml`, which has never run.
+- `chordToRoman` still throws for 6 of the 408 shipped scale and chromatic root pairs: four
+  scales have four-semitone gaps, so a root in the middle is more than one accidental from any
+  degree. A genuine limit of single-accidental spelling, and the message now says so.
 
-**Documents, which rot faster than anything else here.** Sixteen findings, nearly all trivial:
-147, 159, 171, 177, 183, 189, 195, 201, 395, 401, 407, 419, 425, 431, 437, 443, plus the README
-conclusion at 49 that still says "thirty-four times the RAM" where the measurement says
-twenty-eight. The pattern is always the same, so prefer extending `check-docs.mjs` to cover a
-figure over correcting it. Its prose reader already catches numbers written into sentences.
+**Documents.** `apps/workbench/public/llm.txt` still claims to be exact for 0.1.5 and predates
+the audit fixes (206). It is generated from the BUILT library, so fixing it means building and
+regenerating, which the release ritual now spells out. Everything else a command can print is
+under `check-docs`, and what is not is listed in that file's header and at the point where
+HARDWARE.md promises reproduction.
 
 ### Needs an owner decision, because it changes rendered output or package shape
 
