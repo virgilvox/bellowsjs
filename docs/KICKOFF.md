@@ -63,12 +63,14 @@ HARD RULES (from CLAUDE.md, non-negotiable)
   an assumption. Dependency direction is one way and never imports upward.
 
 VERIFY EVERYTHING WITH THESE. Run them before you claim anything works.
-  packages/bellows:            npm test                     83 files, 1204 tests
+  packages/bellows:            npm test                     83 files, 1227 tests
                                npx tsc --noEmit
                                npm run gen:worklet          then confirm no git diff
-  packages/bellows-embedded:   npm run parity               19 modules against the TypeScript
+  packages/bellows-embedded:   npm run parity               26 modules against the TypeScript
                                npm run tables               317 value rows, compared exactly
                                npm run fastmath             polynomial accuracy against libm
+                               npm run memsafety            ASan and UBSan, 0.5x to 4x rate
+                               npm run memsafety:fastmath   the same under BELLOWS_FAST_MATH
                                ./tools/size-report.sh       flash and RAM per sketch
                                EXTRA_CXXFLAGS=-DBELLOWS_FAST_MATH=1 ./tools/size-report.sh
                                node tools/gen-tables.mjs --check
@@ -82,8 +84,9 @@ TRAPS THAT WILL BITE YOU, in the order they are likely to
    DSP. This has already happened once. CI would catch it if CI ran.
 2. Every documented number rots. A change moves a sketch and the tables quoting it are left
    behind; that happened four times in one session. node tools/check-docs.mjs --check is the
-   control for docs/HARDWARE.md. It does NOT cover the embedded README, the whole-firmware
-   Teensy table, the Daisy table or the ns tables, and some of those are stale right now.
+   control, and it now covers docs/HARDWARE.md, the embedded README and the two figures
+   HANDOFF rule 12 rests on: 122 figures. It does NOT cover the whole-firmware Teensy table,
+   the Daisy table, the ns tables or the board capacity table, and those still rot by hand.
 3. Never add a global registry to the C++ port. One kick through a string-keyed registry of five
    engines costs 30488 bytes of flash and 30872 of RAM against 3760 and 1100 direct.
    bellows/bank.h gives runtime dispatch at byte-identical cost.
@@ -92,7 +95,12 @@ TRAPS THAT WILL BITE YOU, in the order they are likely to
 5. Gates are set from measurement at roughly ten times the observed value. Do not widen one to
    make it pass; find out which side moved. And a gate nobody has watched fail is a gate nobody
    should trust, so mutation test anything you add.
-6. Check a new test for VACUITY. A gate that passes on silence, or on a fixture whose
+6. Check a new test for VACUITY, and mutation testing is how you check. Two parity rows added
+   for effects that had none passed immediately and measured nothing: the shared driver feeds
+   noise at 0.25, which never reaches a limiter's -0.3 dB ceiling or falls under a gate's
+   -40 dB threshold. When a mutation does not fire, suspect the mutation first: the first
+   limiter mutation moved a variable used only as the threshold test, not the one the gain
+   reduction is computed from. A gate that passes on silence, or on a fixture whose
    constructor signature is wrong, passes for the wrong reason. That has already happened here.
 7. Do not attribute firmware bytes to this library by symbol name. It is header-only templates,
    so its code inlines into the sketch's functions under the sketch's names, while sketch code
@@ -122,11 +130,13 @@ HOW TO WORK
 Replace the OBJECTIVE line with one of these.
 
 ```
-OBJECTIVE: Work the unambiguous list in docs/HANDOFF.md, "The work queue". In order: the SFZ
-#define expansion blowup (a 622-byte file allocates 352 MB, and it is the only place this
-library parses hostile input), the Pluck::NoteOn buffer overflow on the embedded side, the
-stale embedded README (extend check-docs.mjs to cover it rather than fixing it by hand), and
-the coverage holes with teeth. Do not touch anything on the second list without asking me.
+OBJECTIVE: The unambiguous list in docs/HANDOFF.md, "The work queue", is finished. Take what
+it turned up instead: the six buffer-owning C++ classes that size storage from a template int
+and compute indices from the rate given to Init(). Pluck was the one that corrupted memory and
+is fixed; the rest clamp, so they detune or stop sweeping silently, and npm run memsafety
+proves only that they are memory safe. Decide the policy with me first (clamp quietly, report,
+or size at Init), because it changes seven public classes. Then make config.h honest:
+BELLOWS_SAMPLE_RATE claims to size delay lines and pluck loops and those two hardcode 48000.
 ```
 
 ```
