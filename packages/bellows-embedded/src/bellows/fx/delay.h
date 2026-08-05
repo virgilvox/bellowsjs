@@ -99,16 +99,16 @@ class StereoDelayExt {
 template <uint32_t kMaxMs = 500, uint32_t kSampleRate = 48000>
 class StereoDelay : public StereoDelayExt {
  public:
-  static constexpr uint32_t kCap =
-      detail::NextPow2((kMaxMs * kSampleRate) / 1000 + 4);
+  static constexpr uint32_t kCap = (kMaxMs * kSampleRate) / 1000 + 4;
 
   void Init(float sample_rate) {
     Params p;
     Init(sample_rate, p);
   }
   void Init(float sample_rate, const Params& p) {
-    /* Clamp at the kMaxMs that was asked for, not at the power-of-two ring
-     * that ended up backing it. See the note on StereoDelayExt::Init. */
+    /* Clamp at the kMaxMs that was asked for. The ring is now sized to
+     * exactly that, so the two agree, but the explicit limit stays because
+     * StereoDelayExt is also reachable with a caller-sized buffer. */
     StereoDelayExt::Init(sample_rate, l_, r_, kCap, p, kMaxMs * 0.001f);
   }
 

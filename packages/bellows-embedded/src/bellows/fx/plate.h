@@ -17,11 +17,12 @@
  * rate, so the constexpr sizing function and the runtime carve agree to
  * the sample; every audio rate anyone runs this at is an integer anyway.
  *
- * Memory is the whole story here. Thirteen delay elements, each rounded
- * up to a power of two because DelayLineExt masks rather than compares,
- * which is the same policy the JS DelayLine uses: at 44.1 kHz the carve
- * comes to exactly the 248 KB the JS costs, and at 48 kHz to 67584
- * floats, 264 KB.
+ * Memory is the whole story here. Thirteen delay elements, each sized to
+ * exactly what it reads. They used to be rounded up to a power of two,
+ * matching the JS DelayLine, which cost 264 KB at 48 kHz; the lengths are
+ * odd and mutually prime by design, which is close to the worst case for
+ * that rounding, so exact sizing is worth more here than anywhere else in
+ * the library.
  *
  * That is more than the internal SRAM of most parts this library targets,
  * so PlateExt takes one caller-supplied float buffer and carves the
@@ -79,8 +80,10 @@ inline constexpr uint32_t ExcExtra(uint32_t sr) {
 }
 
 /* Buffer a single element claims. The +4 mirrors DelayLine<N>, which
- * keeps four samples of slack past the longest read. */
-inline constexpr uint32_t Cap(uint32_t need) { return detail::NextPow2(need + 4u); }
+ * keeps four samples of slack past the longest read. Exact, not rounded:
+ * the thirteen Dattorro lengths are odd numbers chosen to be mutually
+ * prime, which is close to the worst case for power-of-two rounding. */
+inline constexpr uint32_t Cap(uint32_t need) { return need + 4u; }
 
 /* Total float count PlateExt::Init carves at this rate and predelay
  * ceiling. Init walks the elements in exactly this order. */
