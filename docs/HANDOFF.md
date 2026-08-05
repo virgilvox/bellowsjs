@@ -5,21 +5,24 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 ## Where things stand
 
 - `bellowsjs@0.1.5` is published on npm. Tags pushed to github.com/virgilvox/bellowsjs, main is current. `packages/bellows-embedded` is at 0.1.0 and is not published anywhere yet.
-- Library test suite: 81 files, 1173 tests, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- Library test suite: 83 files, 1204 tests, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`, `vue-tsc`) and was verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples.
 - Embedded: 43 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All five examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library.
 - Parity against the TypeScript passes on 19 audio modules with the PRNG bit exact, plus 317 exactly-compared value rows for the parts that make no sound.
+- The embedded package went through a size pass whose findings are in `docs/HARDWARE.md` under "Making it smaller". Delay buffers are sized exactly rather than rounded to a power of two, which took 25 percent off RAM library-wide with bit-identical output; the oscillator gained per-shape entry points so the linker can drop the residual table a program never reads; and every transcendental now routes through `fm::`, which is what the docs had claimed for months and was not true, so `BELLOWS_FAST_MATH` went from saving nothing on any sketch with an oscillator to saving 23 to 75 percent. Read that section before optimising anything: it also records what was measured and deliberately NOT taken, and why attributing firmware bytes to a header-only library by symbol name does not work.
 
-**Two things that have not happened.** The first: none of this has been flashed to a board and
-listened to. The second, found later: `.github/workflows/ci.yml` has never run. It is not on the
-default branch, so GitHub has never scheduled it and `gh run list` is empty. Every sentence in
-these documents that says CI enforces something is describing a file rather than a control, and
-the guards it was written to provide (a stale worklet bundle, a drifted generated header, a
-documented figure that no longer matches the size report) are all still manual. Getting that
-workflow onto the default branch is the cheapest large win available in this repository.
+**Two things that have not happened, and both are load bearing.**
 
-**The original one: none of this has been flashed to a board and listened to.** Everything is compile-verified and numerically verified. That is a strong position and it is not the same as having heard it. Assume the first bring-up finds something.
+1. **Nothing has been flashed to a board and listened to.** Everything is compile-verified,
+   link-verified and numerically verified against the TypeScript. That is a strong position and
+   it is not the same as having heard it. Assume the first bring-up finds something.
+2. **`.github/workflows/ci.yml` has never run.** It is not on the default branch, so GitHub has
+   never scheduled it and `gh run list` is empty. Every sentence in these documents that says CI
+   enforces something describes a file, not a control: the stale-worklet guard, the
+   generated-header drift check and `check-docs` are all still manual, run by whoever remembers.
+   Pushing that workflow is the cheapest large win in the repository and it needs one `git push`
+   that nobody has been asked to make.
 
 ## Layout
 
@@ -43,7 +46,9 @@ Run all of them from `packages/bellows-embedded` unless noted.
 | `npm run size` | flash and RAM per sketch, `cortex-m7` or `cortex-m4` | the whole no-registry design argument |
 | `./tools/check-header.sh <h>` | one header compiles standalone, `-Wall -Wextra` | header hygiene; note it instantiates nothing |
 | `node tools/gen-tables.mjs --check` | generated headers match the TypeScript ParamSpecs | new `Eq6` class the moment it appeared |
-| `node tools/check-docs.mjs --check` | every flash and RAM figure in `docs/HARDWARE.md` that a sketch produces | six stale rows on its first run, including the registry comparison rule 2 rests on |
+| `node tools/check-docs.mjs --check` | every flash and RAM figure in `docs/HARDWARE.md` that a sketch produces | six stale rows on its first run, including the registry comparison rule 2 rests on. Does NOT cover the embedded README, the whole-firmware table, the Daisy table or the ns tables |
+| `npx vitest run test/integration/engine-tuning.test.ts` | every pitched engine plays the note it was given, to 2 cents | proves the fractional-delay tuning is real: an integer-rounded loop is 28 cents flat at E7 |
+| `npx vitest run test/integration/nan-safety.test.ts` | one NaN parameter cannot break the audio graph | 10 parameters threw inside `process()` and 191 poisoned the output before it existed |
 
 Rules learned the hard way about these:
 
@@ -77,7 +82,8 @@ Rules learned the hard way about these:
 
 ## Recent history worth knowing
 
-- The 2026-08-04 audit is in `docs/AUDIT.md`, findings 1 through 20, each with its evidence. Read it before touching the facade, the fx capacity options, the kernel ramp table, or anything in the embedded port.
+- **`docs/AUDIT-2.md` is the current one**: a whole-repository pass on 2026-08-05, forty agents across eight slices, 95 findings, each escalated finding then attacked by a skeptic whose default was to refute. Two slices came back sound (the architecture holds, the DSP core is correct); six came back needs-work. Five findings were refuted and are listed at the end so nobody rediscovers them: the ladder cutoff is deliberate, `romanToChord`'s accidentals are right, and `pattern.fast()`'s cycle length is the documented contract. Read the blocking and major sections before touching anything.
+- The 2026-08-04 audit is in `docs/AUDIT.md`, findings 1 through 20, each with its evidence. Read it before touching the facade, the fx capacity options, the kernel ramp table, or anything in the embedded port. Findings 10 and 11 carry a correction: they claim CI enforces things, and CI has never run.
 - An earlier 22-agent review confirmed and fixed 17 findings (commits `5baef09`, `74e4cbe`). Read those before touching kernel timing, the scheduler, dynamics, spectral, loudness, sf2, or midifile parsing.
 - The oscillator antialiasing gate is enforced by spectrum-measuring tests in `test/dsp-osc`. The 4-point polyBLEP was tried and measured insufficient (about -37 dB); the shipping implementation is a tabulated Kaiser-sinc BLEP at about -90 dB. Do not "simplify" it back.
 - Bowed string realism history is in `docs/BOWED-STRINGS.md` with measured evidence; the spectral gates in `test/engines-physical/waveguide.test.ts` are the contract. Do not loosen a gate to pass a change.
@@ -178,9 +184,42 @@ The endgame from the research: keep bellows.live as the composition brain and pu
 3. **`SetupLog` is exported from the public index** and is an implementation detail. Trimming it (and possibly `VoicePool`) would keep the public surface honest, but it is a breaking change once released.
 4. **Whether `Eq3` stays.** It is a deliberate non-port that exists for size. It is currently marked `UNPORTED_BY_DESIGN` in the codegen so it does not pollute the orphan report. Fine, but it is a precedent: every non-port needs that treatment or the report becomes noise.
 
-## Still open from the audit
+## The work queue, in the order I would take it
 
-Full detail in `docs/AUDIT.md`. The short list:
+Full detail in `docs/AUDIT-2.md`. These are the confirmed ones, grouped by whether they need a
+decision from the owner.
+
+**Unambiguous, no judgement call, start here.** One of five is done (the NaN guards, commit
+`c57e15d`). The rest:
+
+- **SFZ `#define` expands eagerly and doubles per line.** A 622-byte file allocates 352 MB and a
+  644-byte one throws `RangeError`. This is the only part of the library that parses hostile
+  input, and it runs in a browser.
+- **`Pluck::NoteOn` writes past `excite_[]`** on the embedded side when the runtime sample rate
+  exceeds about twice the template rate. ASan-confirmed. Six buffer-owning classes share the
+  underlying template-rate versus `Init()`-rate mismatch.
+- **`packages/bellows-embedded/README.md` is stale in 9 of 15 rows**, one by 26 KB of flash and
+  152 KB of RAM, and its registry table contradicts `HARDWARE.md`. Extend `check-docs.mjs` to
+  cover that file rather than fixing it by hand again.
+- **Coverage holes with teeth**: the saturator's curve dispatch and `CHEBY_COEFFS` are
+  constrained by no test in either language, six ported effects (limiter, gate, flanger,
+  tremolo, autopan, ringmod) sit outside every numeric comparison, and `rng.shuffle` and
+  `rng.gauss` are never called by any test.
+
+**Needs an owner decision, because it changes rendered output or package shape.** Do not do these
+unasked:
+
+- The west coast fold chain runs at 1x with no antialiasing, throwing away 7 to 23 dB that the
+  same codebase recovers elsewhere. Fixing it moves the golden render.
+- The BLAMP table's drift-removal step is the wrong correction and costs the triangle 20 to 45 dB.
+  Fixing it moves the golden render.
+- The string waveguide plays audibly flat below about 165 Hz: the loop's dc blocker is
+  phase-compensated on one side only. Fixing it changes low-string tone.
+- `core/register.ts` puts the composition root in the bottom layer, producing 22 of the
+  repository's 26 upward imports. Moving it to a `composition/` layer is right and is a
+  structural change to a published package.
+
+**Still open from the first audit** (`docs/AUDIT.md`):
 
 - `SamplerBank.zonesFor` allocates at note-on rate on the audio thread. Survivable in a browser, blocking for the sampler's port.
 - Kernel event insertion is O(n) per event, so a 50000 event MIDI import would stall.
