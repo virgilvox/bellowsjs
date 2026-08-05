@@ -62,6 +62,14 @@ jobs:
         target: [cortex-m7, cortex-m4]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # check-docs no longer reads only the size report: it also runs the
+      # parity, value-table and fastmath harnesses, so this job needs the
+      # workspace installed as well as a cross compiler.
+      - run: npm ci
       - name: install the toolchain the documents were measured with
         # PlatformIO's Teensy build of GCC 11.3.1, not ARM's own release of the
         # same version. They are not interchangeable: the first CI run used

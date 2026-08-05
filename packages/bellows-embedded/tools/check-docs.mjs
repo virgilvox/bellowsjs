@@ -892,7 +892,20 @@ function agrees(text, actual) {
   if (actual === undefined || Number.isNaN(actual)) return false;
   const sig = sigDigits(text);
   if (sig === 0) return Number(text) === 0 && actual === 0;
-  return Number(text) === Number(actual.toPrecision(sig));
+  if (Number(text) === Number(actual.toPrecision(sig))) return true;
+  /* Same host-build allowance the table rows get, for a byte figure written
+   * into a sentence. Whole numbers only: a tolerance on a ratio, a percentage
+   * or an error bound would be meaningless, and those are the other things
+   * prose carries. */
+  if (ALLOW_HOST_DRIFT && Number.isInteger(actual) && Number.isInteger(Number(text))) {
+    const delta = actual - Number(text);
+    if (delta !== 0 && Math.abs(delta) <= HOST_DRIFT_BYTES) {
+      driftAllowed++;
+      console.log(`  host drift allowed in prose: doc ${text} against ${actual}, delta ${delta}`);
+      return true;
+    }
+  }
+  return false;
 }
 
 function show(actual) {
