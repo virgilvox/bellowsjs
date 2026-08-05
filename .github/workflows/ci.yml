@@ -115,6 +115,13 @@ jobs:
           mkdir -p test/parity/build
           c++ -std=c++17 -O2 -Wall -Wextra -I src test/parity/tables.cpp -o test/parity/build/tables
           npm run tables:check
+      - name: build the TypeScript bundle the codegen reads
+        # gen-tables.mjs reads packages/bellows/dist/bellows.js, which is
+        # gitignored and which nothing else in this job produces. Without
+        # this step the next one exits 2 on any clean checkout. It has never
+        # been caught because this workflow has never run: it is not on the
+        # default branch, so GitHub has never scheduled it.
+        run: npm run build -w packages/bellows
       - name: generated headers are in sync with the TypeScript
         working-directory: packages/bellows-embedded
         run: node tools/gen-tables.mjs --check

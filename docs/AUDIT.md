@@ -210,8 +210,18 @@ Status: open, bounded, worth fixing when MIDI file playback lands.
 Golden-render regression was the strongest correctness guarantee in the repository and it did
 not run on push.
 
-Fixed: `.github/workflows/ci.yml` runs typecheck, the suite and the build on node 20 and 22,
-plus both app builds and the embedded size report on two ARM targets.
+Fixed, with a caveat added later that undoes most of it:
+`.github/workflows/ci.yml` was written and runs typecheck, the suite and the build on node 20 and
+22, plus both app builds and the embedded size report on two ARM targets.
+
+IT HAS NEVER RUN. The file is not on the default branch, so GitHub has never scheduled it, and
+`gh run list` returns nothing. Everything below that says CI enforces something describes a file,
+not a control. Two consequences found by inspection rather than by a red build: the parity job
+called `gen-tables.mjs --check` without first building `packages/bellows/dist/bellows.js`, which
+that script reads and which is gitignored, so the job would have exited 2 on its first run; and
+the worklet-regeneration guard in finding 11 has never actually guarded anything. The missing
+build step is fixed. The workflow still has to reach the default branch before any of this is
+true.
 
 ## Two findings the fixes themselves produced
 
@@ -227,8 +237,9 @@ playback would have shipped without `ParamRamp` and without the fx capacity opti
 would have caught it.
 
 `docs/HANDOFF.md` has warned about exactly this since the first release, which is evidence that a
-warning in a document is not a control. The CI job now regenerates the bundle and fails on a
-diff.
+warning in a document is not a control. A CI job to regenerate the bundle and fail on a diff was
+written, and it is not a control either until the workflow reaches the default branch: see the
+note under finding 10. As of this writing nothing has ever enforced it automatically.
 
 ### 12. The one upward import in the lower half of the tree
 

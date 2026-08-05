@@ -11,7 +11,15 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 - Embedded: 43 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All five examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library.
 - Parity against the TypeScript passes on 19 audio modules with the PRNG bit exact, plus 317 exactly-compared value rows for the parts that make no sound.
 
-**The one thing that has not happened: none of this has been flashed to a board and listened to.** Everything is compile-verified and numerically verified. That is a strong position and it is not the same as having heard it. Assume the first bring-up finds something.
+**Two things that have not happened.** The first: none of this has been flashed to a board and
+listened to. The second, found later: `.github/workflows/ci.yml` has never run. It is not on the
+default branch, so GitHub has never scheduled it and `gh run list` is empty. Every sentence in
+these documents that says CI enforces something is describing a file rather than a control, and
+the guards it was written to provide (a stale worklet bundle, a drifted generated header, a
+documented figure that no longer matches the size report) are all still manual. Getting that
+workflow onto the default branch is the cheapest large win available in this repository.
+
+**The original one: none of this has been flashed to a board and listened to.** Everything is compile-verified and numerically verified. That is a strong position and it is not the same as having heard it. Assume the first bring-up finds something.
 
 ## Layout
 
