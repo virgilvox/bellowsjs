@@ -4,6 +4,14 @@ Five sketches in Arduino layout, ordered so each one adds a single idea.
 Every one is a real program: it compiles, it makes sound, and its cost is
 measured rather than estimated.
 
+Start with `00_BringUp`, which is not one of the five. It is the checklist
+for the first session with a board in hand: it prints the real sample rate,
+sustains an A440 you can check on a tuner, walks a fixed sequence of stages
+with a stated pass condition each, and reports CPU load and a dropout
+indicator per stage. Its last two stages measure the one thing no test in
+this repository covers, the pitch dependence of the BLEP oscillator cost
+against a fixed voice budget. See `00_BringUp/README.md`.
+
 | example | adds | flash | RAM |
 | --- | --- | --- | --- |
 | 01_OneKick | one voice, one audio callback | 3776 B | 1100 B |
@@ -47,6 +55,15 @@ Daisy Seed is the two lines noted at the top of each sketch: swap
 `bellows/platform/teensy.h` for `bellows/platform/daisy.h` and start the
 audio through `DaisyAudio<Render>` instead of an `AudioStream` node. The
 logic headers contain no board code and do not change.
+
+`daisy_onekick/` is that port done for real, against libDaisy 8.1.0, linked
+as a Daisy Seed firmware image. It is worth reading next to `01_OneKick`
+because of what it does not contain: it includes `01_OneKick/onekick.h`
+directly rather than copying it, and that header needed no change, no
+`#ifdef` and no Daisy define to build for a different SDK, a different codec
+and a different sample rate. All five logic headers compile against the
+Daisy adapter for the STM32H750; only `01_OneKick` has been linked all the
+way to an image.
 
 Set the sample rate from the SDK (`bellows::TeensySampleRate()`,
 `hw.AudioSampleRate()`) rather than writing 44100 or 48000 by hand. Every
