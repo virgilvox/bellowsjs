@@ -121,7 +121,7 @@ class Snare {
     float bg = fm::Cos((p_.tone * kPi) * 0.5f) * vel_;
     float ng = fm::Sin((p_.tone * kPi) * 0.5f) * vel_;
     for (int i = from; i < to; ++i) {
-      float body = (osc1_.Process() + osc2_.Process()) * 0.5f * body_.Process();
+      float body = (osc1_.ProcessTriangle() + osc2_.ProcessTriangle()) * 0.5f * body_.Process();
       float nz = hp_.Process(noise_.Process()) * snap_.Process();
       float y = body * bg + nz * ng;
       l[i] += y * 0.70710678f;
@@ -183,7 +183,7 @@ class Hat {
     if (!Active()) return;
     for (int i = from; i < to; ++i) {
       float m = 0.0f;
-      for (int o = 0; o < 6; ++o) m += oscs_[o].Process();
+      for (int o = 0; o < 6; ++o) m += oscs_[o].ProcessSquare();
       float y = hp_.Process(m / 6.0f) * amp_.Process() * vel_;
       l[i] += y * 0.70710678f;
       r[i] += y * 0.70710678f;

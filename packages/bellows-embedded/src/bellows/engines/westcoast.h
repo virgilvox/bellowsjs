@@ -103,7 +103,7 @@ class WestCoast {
 
       float fe = fold_env_gen_.Process();
       float gain = 1.0f + fold_amt * kMaxFold * (1.0f - env_mix + env_mix * fe);
-      float x = osc_.Process();
+      float x = osc_.ProcessTriangle();
       for (int s = 0; s < stages; ++s) x = Foldback(x, gain);
 
       float o = lpg_.Process(x) * amp_ * level;

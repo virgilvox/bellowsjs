@@ -51,7 +51,7 @@ These are measured decisions, not style preferences.
    | --- | --- | --- |
    | `Kick` used directly | 3760 B | 1100 B |
    | through `Bank<Kick>` with a runtime index | 3760 B | 1104 B |
-   | through a string-keyed registry of five engines | 30296 B | 30828 B |
+   | through a string-keyed registry of five engines | 30448 B | 30828 B |
 
    Eight times the flash and twenty-eight times the RAM for the same sound. A registry names
    every engine, so the linker must keep every engine, every constant table and every delay
@@ -115,11 +115,12 @@ it. Measured, Cortex-M7:
 | --- | --- | --- | --- |
 | `s1_kick` | 3760 B | 924 B | 75 % |
 | `s9g_tube` | 5000 B | 3020 B | 39 % |
-| `p1_drums` | 29448 B | 21548 B | 26 % |
-| `s9e_westcoast` | 27064 B | 19760 B | 26 % |
-| `p2_poly8` | 31136 B | 22756 B | 26 % |
-| `s9f_formant` | 28312 B | 21000 B | 25 % |
-| `s5_all` | 34904 B | 26552 B | 23 % |
+| `p1_drums` | 20832 B | 12876 B | 38 % |
+| `s9e_westcoast` | 16768 B | 11184 B | 33 % |
+| `s4_va` | 28528 B | 20628 B | 27 % |
+| `p2_poly8` | 31112 B | 22772 B | 26 % |
+| `s9f_formant` | 28280 B | 20968 B | 25 % |
+| `s5_all` | 35056 B | 26704 B | 23 % |
 | `s9m_seq` | 5296 B | 5296 B | 0 % |
 
 The sequencing row is 0 percent and should be: it is integer and small-float work over const
@@ -220,8 +221,8 @@ it, so these are real costs and not a floor. Reproduce with `./tools/size-report
 | `fx/plate` | 5656 B | 156728 B | Dattorro tank, the RAM is the tank |
 | `engines/modal` | 5944 B | 1584 B | five material tables in flash |
 | `kernel` | 6208 B | 2492 B | event queue plus block splitting |
-| `engines/westcoast` | 27064 B | 1200 B | BLEP tables dominate |
-| `engines/formant` | 28312 B | 1496 B | BLEP tables dominate |
+| `engines/westcoast` | 16768 B | 1200 B | BLEP tables dominate |
+| `engines/formant` | 28280 B | 1496 B | BLEP tables dominate |
 
 The BLEP tables are 16 KB and shared, so the first module that needs them pays and every later
 one is nearly free. `fm`, `modal`, `tube` and `pluck` do not need them at all, which is why an
@@ -260,12 +261,25 @@ even in a program that only ever plays a saw. `ProcessSaw()`, `ProcessSquare()`,
 `ProcessTriangle()` and `ProcessSine()` are the same arithmetic with the shape fixed, so
 `--gc-sections` can drop what is unreachable. Measured on a one-oscillator sketch:
 
-| call | flash | tables kept |
-| --- | --- | --- |
-| `Process()` | 19000 B | both |
-| `ProcessSaw()` | 8540 B | step only |
-| `ProcessTriangle()` | 8624 B | ramp only |
-| `ProcessSine()` | 1984 B | neither |
+| call | sketch | flash | tables kept |
+| --- | --- | --- | --- |
+| `Process()` | `s10a_osc_runtime` | 18944 B | both |
+| `ProcessSaw()` | `s10b_osc_saw` | 8540 B | step only |
+| `ProcessTriangle()` | `s10c_osc_tri` | 8608 B | ramp only |
+| `ProcessSine()` | `s10d_osc_sine` | 1960 B | neither |
+
+Those four are sketches in `test/sketches/`, so the size report prints them like every other
+number here. The runtime one holds its shape in `volatile` storage on purpose: given a constant
+`SetShape` the compiler folds `Process()` down to the one branch and drops the other table by
+itself, which would make a naive runtime sketch measure the fixed-shape case and report a saving
+that was already there. If your shape really is a compile-time constant you get this for free
+without calling the helper.
+
+The engines whose shape is fixed at construction now call the helpers, and that is where the
+saving actually lands: `s9e_westcoast` went 27064 to 16768 bytes and
+`p1_drums` 29448 to 20832, each keeping only the table it reads. A program that
+mixes both styles, like `s5_all`, pays about 150 bytes for carrying the two dispatch paths, which
+is the honest cost of the choice being per call site rather than global.
 
 This is rule 2 applied one level down. A runtime switch over shapes costs what a runtime registry
 of engines costs, for the same reason, at a smaller scale.
@@ -297,11 +311,11 @@ anything the size report actually builds:
 | --- | --- | --- | --- |
 | kick only | `s1_kick` | 3760 B | 1100 B |
 | kick only, `BELLOWS_FAST_MATH=1` | `s1_kick` with the flag | 1448 B | 1100 B |
-| three piece kit | `s2_kit` | 28280 B | 1500 B |
-| kit plus EQ and a 250 ms delay | `p1_drums` | 29448 B | 98680 B |
-| 8 voice VA poly, EQ, 250 ms delay | `p2_poly8` | 31136 B | 100184 B |
-| 8 VA plus 8 `Pluck<80>` plus kit, EQ, delay | `p3_workstation` | 34592 B | 160216 B |
-| everything constructed and driven at once | `s5_all` | 34904 B | 223280 B |
+| three piece kit | `s2_kit` | 28208 B | 1500 B |
+| kit plus EQ and a 250 ms delay | `p1_drums` | 20832 B | 98680 B |
+| 8 voice VA poly, EQ, 250 ms delay | `p2_poly8` | 31112 B | 100184 B |
+| 8 VA plus 8 `Pluck<80>` plus kit, EQ, delay | `p3_workstation` | 34736 B | 160216 B |
+| everything constructed and driven at once | `s5_all` | 35056 B | 223280 B |
 
 And the shipped examples, whose numbers come from the same logic headers the sketches compile,
 so they cannot drift from the code:
@@ -309,10 +323,10 @@ so they cannot drift from the code:
 | Example | flash | RAM |
 | --- | --- | --- |
 | `01_OneKick` | 3776 B | 1100 B |
-| `02_DrumMachine` (bank plus euclid) | 29720 B | 1588 B |
-| `03_PolySynth` (`VoicePool<Va, 8>`) | 30384 B | 3776 B |
+| `02_DrumMachine` (bank plus euclid) | 29640 B | 1588 B |
+| `03_PolySynth` (`VoicePool<Va, 8>`) | 30360 B | 3776 B |
 | `04_ScalesAndTuning` | 7936 B | 30176 B |
-| `05_MidiInstrument` | 30320 B | 3792 B |
+| `05_MidiInstrument` | 30296 B | 3792 B |
 
 Against real boards, using the largest profile:
 

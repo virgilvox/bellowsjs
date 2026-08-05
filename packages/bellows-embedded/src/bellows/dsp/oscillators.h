@@ -30,6 +30,10 @@ class BlepOsc {
       case BlepShape::kTriangle: return ProcessTriangle();
       case BlepShape::kSine: return ProcessSine();
     }
+    /* An enum value outside the four still advances the phase, which is
+     * what the old switch did by falling out of its default-less body. */
+    phase_ += dt_;
+    if (phase_ >= 1.0f) phase_ -= 1.0f;
     return 0.0f;
   }
 
@@ -52,7 +56,8 @@ class BlepOsc {
     const float t = phase_, dt = dt_;
     float y = 2.0f * t - 1.0f;
     if (dt > 0.0f) y += SumBlep(t, -2.0f);
-    Advance();
+    phase_ += dt;
+    if (phase_ >= 1.0f) phase_ -= 1.0f;
     return y;
   }
 
@@ -63,7 +68,8 @@ class BlepOsc {
       y += SumBlep(t, 2.0f);
       y += SumBlep(t - pw_, -2.0f);
     }
-    Advance();
+    phase_ += dt;
+    if (phase_ >= 1.0f) phase_ -= 1.0f;
     return y;
   }
 
@@ -75,22 +81,19 @@ class BlepOsc {
       y += SumBlamp(t, mu);
       y += SumBlamp(t - 0.5f, -mu);
     }
-    Advance();
+    phase_ += dt;
+    if (phase_ >= 1.0f) phase_ -= 1.0f;
     return y;
   }
 
   inline float ProcessSine() {
     const float y = fm::Sin(6.28318530717959f * phase_);
-    Advance();
+    phase_ += dt_;
+    if (phase_ >= 1.0f) phase_ -= 1.0f;
     return y;
   }
 
  private:
-  inline void Advance() {
-    phase_ += dt_;
-    if (phase_ >= 1.0f) phase_ -= 1.0f;
-  }
-
   static inline float BlepResidual(float d) {
     float pos = (d + kBlepKernelHalf) * kBlepTableRes;
     int i = static_cast<int>(floorf(pos));
