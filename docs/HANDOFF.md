@@ -5,11 +5,11 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 ## Where things stand
 
 - `bellowsjs@0.1.5` is published on npm. Tags pushed to github.com/virgilvox/bellowsjs, main is current. `packages/bellows-embedded` is at 0.1.0 and is not published anywhere yet.
-- Library test suite: 83 files, 1227 tests, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- Library test suite: 83 files, 1241 tests, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`, `vue-tsc`) and was verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples.
 - Embedded: 43 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All five examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library.
-- Parity against the TypeScript passes on 26 audio modules with the PRNG bit exact, plus 317 exactly-compared value rows for the parts that make no sound.
+- Parity against the TypeScript passes on 34 rows with the PRNG bit exact and the effect input bit exact, plus 317 exactly-compared value rows for the parts that make no sound.
 - The embedded package went through a size pass whose findings are in `docs/HARDWARE.md` under "Making it smaller". Delay buffers are sized exactly rather than rounded to a power of two, which took 25 percent off RAM library-wide with bit-identical output; the oscillator gained per-shape entry points so the linker can drop the residual table a program never reads; and every transcendental now routes through `fm::`, which is what the docs had claimed for months and was not true, so `BELLOWS_FAST_MATH` went from saving nothing on any sketch with an oscillator to saving 23 to 75 percent. Read that section before optimising anything: it also records what was measured and deliberately NOT taken, and why attributing firmware bytes to a header-only library by symbol name does not work.
 
 **Two things that have not happened, and both are load bearing.**
@@ -40,10 +40,10 @@ Run all of them from `packages/bellows-embedded` unless noted.
 | Command | What it proves | What it caught |
 | --- | --- | --- |
 | `npm test` (in `packages/bellows`) | the TypeScript, including the golden render and the oscillator band sweep | the regression fixture is the only whole-piece guard; `test/dsp-osc/blep-frequency.test.ts` is the only thing that can see alias rejection collapse above 2637 Hz |
-| `npm run parity` | 26 C++ modules match the TypeScript numerically | the `eq.h` three-band-mislabelled-as-port, the `StereoDelay` clamp bug, and two rows of its own that measured nothing until the drive was fixed |
+| `npm run parity` | 34 rows match the TypeScript numerically, four of them exactly | the `eq.h` three-band-mislabelled-as-port, the `StereoDelay` clamp bug, and three rows of its own that measured nothing until their input was fixed |
 | `npm run tables` | euclid, scales, chords, notes, CA, arp, tempo map, MIDI compared EXACTLY | nothing yet, but it is the only thing that can see a wrong scale table |
 | `npm run fastmath` | every polynomial in `core/fastmath.h` against libm | `fm::Log2` wrong by 213 cents, inherited by every `Pow` |
-| `npm run memsafety` (and `memsafety:fastmath`) | ASan and UBSan over every buffer-owning class at 0.5x to 4x its template rate | the `Pluck::NoteOn` overflow. Nothing else could: parity compares numbers at one rate, and `check-header.sh` instantiates nothing |
+| `npm run memsafety` (and `memsafety:fastmath`) | ASan and UBSan over the buffer-owning classes at 0.5x to 4x their template rate, and at NaN, zero and negative rates | the `Pluck::NoteOn` overflow, then four undefined float-to-int casts reached through a NaN. Nothing else could: parity compares numbers at one rate, and `check-header.sh` instantiates nothing. Build it for x86-64 as well as arm64: the NaN cast saturates harmlessly on arm64 and only faults on x86-64 |
 | `npm run size` | flash and RAM per sketch, `cortex-m7` or `cortex-m4` | the whole no-registry design argument |
 | `./tools/check-header.sh <h>` | one header compiles standalone, `-Wall -Wextra` | header hygiene; note it instantiates nothing |
 | `node tools/gen-tables.mjs --check` | generated headers match the TypeScript ParamSpecs | new `Eq6` class the moment it appeared |
@@ -55,7 +55,7 @@ Rules learned the hard way about these:
 
 1. **Gates are set from measurement, at roughly ten times the observed drift.** An earlier revision used round numbers that left `saturator` with 25000x headroom, and a deliberate 0.01 percent mutation of the `Svf` integrator passed every gate. If you add a module, measure it first and set the gate from the measurement.
 2. **Mutation test a gate before you trust it.** Both harnesses have been shown to fail on a deliberate break and pass on its revert. A gate nobody has watched fail is a gate nobody should trust.
-2b. **Mutation testing is also the vacuity check, and it is the reason to do it first.** The limiter and gate parity rows were added, passed, and measured NOTHING: the shared effect driver feeds white noise at 0.25, a limiter with a -0.3 dB ceiling never engages on that and a gate with a -40 dB threshold never closes, so both rows sat at their float noise floor. A 0.1 percent ceiling change did not move the limiter row at all. They only became gates once the driver grew a per-effect envelope. Every constant in that envelope is a power of two, because 0.25 * 1.6 is not exact in float and the difference would land in the comparison looking like the effect's own error. And when a mutation does not fire, check the mutation before the gate: the first limiter mutation moved `ceil_lin_`, which is only the threshold test, while the reduction is computed from `ceiling_db`.
+2b. **Mutation testing is also the vacuity check, and it is the reason to do it first.** The limiter and gate parity rows were added, passed, and measured NOTHING: the shared effect driver feeds white noise at 0.25, a limiter with a -0.3 dB ceiling never engages on that and a gate with a -40 dB threshold never closes, so both rows sat at their float noise floor. A 0.1 percent ceiling change did not move the limiter row at all. They only became gates once the driver grew a per-effect envelope. Every constant in that envelope is exactly representable in binary floating point, because 0.25 * 1.6 is not exact in float and the difference would land in the comparison looking like the effect's own error. And when a mutation does not fire, check the mutation before the gate: the first limiter mutation moved `ceil_lin_`, which is only the threshold test, while the reduction is computed from `ceiling_db`. An envelope also only exposes what its shape can expose: a step crosses every threshold at the same sample, so the burst envelope that made the gate row see its attack, hold and release left it blind to its thresholds, and it took a second row on a slow ramp to cover them. The `fxin` rows exist for the claim underneath all of this, that the two sides start from identical bits, which was written down in three places and false in all three until the JS was taught to round where `Rng::Bipolar()` rounds.
 3. **The PRNG row must be exactly zero.** If it is not, nothing below it means anything and the DSP is not the thing to look at.
 4. **`check-header.sh` proves less than it looks.** It generates its own `main()` and instantiates nothing, so templates are dead-stripped. To exercise template bodies you need a translation unit that constructs and drives the classes; the size sketches in `test/sketches/` do that.
 5. **Sample-wise RMS is the wrong instrument for a time-modulating effect.** The chorus is bit-identical with modulation off, and the modulated row used to drift in proportion to depth. That cause is now fixed (the fixed point phase in Milestone 2 took it from 4e-2 to 2.0e-4), but the principle stands and `chorus_static` is still the row that would actually catch a broken chorus. What remains in the modulated row is the read position, computed in float here and double there.
@@ -79,7 +79,7 @@ Rules learned the hard way about these:
 10. `Bellows.setup` is a `SetupLog` (`src/kernel/setuplog.ts`), not an array. Idempotent setters collapse last-write-wins by identity key, updated in place so non-idempotent ordering survives. Anything added to `KernelMessage` needs a decision in `collapseKey`: append or collapse. Getting it wrong silently changes what `render()` replays.
 11. `Instrument.dispose()` is the only way `removeChannel` is ever posted, and it prunes the channel from the setup log. Without it every channel leaks its whole voice pool, which is what the workbench engine swap used to do at about 400 KB a time. `dispose({ releaseSeconds })` defers the removal so a ringing tail decays instead of being cut.
 12. **The embedded library must never grow a global registry.** Playing one kick through a string-keyed registry of five engines costs 30488 bytes of flash and 30872 of RAM against 3760 and 1100 direct, because a registry names every engine so the linker must keep every engine. `bellows/bank.h` gives runtime index dispatch at byte-identical cost. This is the single load-bearing design rule of that package.
-13. `BELLOWS_FAST_MATH=1` swaps libm for polynomials and takes the kick from 3760 to 924 bytes. It is also the most dangerous flag in the tree, for the reason in the harness table. Run `npm run fastmath` after touching any approximation.
+13. `BELLOWS_FAST_MATH=1` swaps libm for polynomials and takes the kick from 3760 to 936 bytes. It is also the most dangerous flag in the tree, for the reason in the harness table. Run `npm run fastmath` after touching any approximation.
 14. On the PlatformIO teensy platform, `board_build.usb_type` is silently ignored: use `-D USB_MIDI_SERIAL` in `build_flags`. The platform also still defaults to `gnu++14` on some releases, so `build_unflags` has to remove it. `examples/platformio.ini` carries both and is verified.
 
 ## Recent history worth knowing
@@ -188,86 +188,158 @@ The endgame from the research: keep bellows.live as the composition brain and pu
 
 ## The work queue, in the order I would take it
 
-Full detail in `docs/AUDIT-2.md`. These are the confirmed ones, grouped by whether they need a
-decision from the owner.
+Every one of the 95 findings in `docs/AUDIT-2.md` was re-verified against the code on
+2026-08-05, after the fixes below landed, by agents that had to produce a file and line or a
+command output for each verdict. The tally: **8 fixed, 8 partial, 77 open, 2 not a defect.**
+The lists here are that triage, grouped by whether they need a decision from you.
 
-**Unambiguous, no judgement call.** All five are now done:
+**Read this before trusting the count.** Four of the five findings the earlier pass refuted were
+re-raised by the re-verification, because the refuted list lives at the end of a 90 KB document
+and nobody reading a finding ever gets there. They are now annotated inline at their own
+headings. Refuted, do not act on them: the ladder cutoff (twice, lines 135 and 249),
+`romanToChord`'s accidentals, `pattern.fast()`'s cycle length, and the plate's gate coverage.
+Subtract them and 73 findings are genuinely open.
 
-- NaN guards on the parameter path, commit `c57e15d`.
-- SFZ macro expansion and include fan-out are bounded, commit `3f6de1e`. The measured figures
-  were 601 bytes allocating 537 MB and 645 bytes throwing a bare `RangeError`. The include
-  fan-out was a second defect of the same shape that the audit did not record: `maxIncludeDepth`
-  bounds depth but not breadth, so 575 bytes across 16 files made 65535 resolver calls.
-- `Pluck::NoteOn` no longer writes past `excite_[]`, commit `07a07f1`, along with the
-  `npm run memsafety` harness that can see it.
-- The embedded README is under `check-docs`, commit `92bc579`, which also picked up three stale
-  prose figures including two in this file.
-- The coverage holes are closed: the saturator's curve dispatch and `CHEBY_COEFFS` now have
-  gates, `rng.shuffle`, `rng.gauss` and `rng.int`'s top value now have tests, and the six
-  uncompared effects have parity rows.
+### Done, with the commit
 
-**Found while doing the above, and still open.** Neither is a regression; both are the wider
-version of something already fixed narrowly:
+- NaN guards on the parameter path, `c57e15d`.
+- SFZ macro expansion and include fan-out bounded, `3f6de1e`, then time and retained heap
+  bounded in `5cc22ab` after a review found the first pass had bounded the wrong resources.
+- `Pluck::NoteOn` overflow, `07a07f1`, plus `npm run memsafety`; then the delay line and three
+  more call sites made NaN safe in `ac99eb1` after the same review found a live out-of-bounds
+  read in the function that commit had hardened.
+- Embedded README under `check-docs`, `92bc579`.
+- Coverage holes closed, `30dec12`, then the effect rows given the bit-exact input they had
+  claimed for months, `939e8d5`.
 
-- **Six buffer-owning classes still size storage from a template int and compute indices from
-  the float given to `Init()`.** Only `Pluck` corrupted memory and only `Pluck` is fixed. The
-  rest clamp, which means they detune or stop sweeping silently instead: `Chorus<44100>` at
-  `Init(48000)` has its deepest voice stop moving. `npm run memsafety` proves they are memory
-  safe at 0.5x to 4x, and proves nothing about whether they still sound right. What to do about
-  it is a policy question (clamp quietly, report, or size at `Init`) and it changes seven public
-  classes, so it needs a decision.
-- **`config.h` says `BELLOWS_SAMPLE_RATE` sizes "delay lines, pluck loops"** and those are
-  exactly the two that hardcode 48000 instead of reading it. It is the first knob a user
-  reaching for a non-default rate will pull, and it half works.
+### What the reviews taught, and it is the same lesson three times
 
-**Needs an owner decision, because it changes rendered output or package shape.** Do not do these
-unasked:
+Each of the three commits above was reviewed by an agent whose default was to refute it, and
+each review found something real. Not one of the central claims fell over, and every one of the
+supporting claims that overreached did. A gate that passes is not the same as a gate that
+measures, a comment asserting a property is not the same as a gate on it, and a mutation that
+does not fire is as likely to be a bad mutation as a weak gate.
 
-- The west coast fold chain runs at 1x with no antialiasing, throwing away 7 to 23 dB that the
-  same codebase recovers elsewhere. Fixing it moves the golden render.
-- The BLAMP table's drift-removal step is the wrong correction and costs the triangle 20 to 45 dB.
-  Fixing it moves the golden render.
-- The string waveguide plays audibly flat below about 165 Hz: the loop's dc blocker is
-  phase-compensated on one side only. Fixing it changes low-string tone.
-- `core/register.ts` puts the composition root in the bottom layer, producing 22 of the
-  repository's 26 upward imports. Moving it to a `composition/` layer is right and is a
-  structural change to a published package.
+- The SFZ caps bounded memory and resolver calls and left CPU time unbounded: 651 bytes cost
+  43 seconds. Bounding an amplification means bounding every resource it amplifies.
+- Three separate comments said the parity effect input was bit exact. It never had been, and for
+  the delay row about seventy percent of the measured drift was that untruth. It is a gate now,
+  not a comment.
+- The delay parity row was vacuous on its own default params: both times clamped to the buffer
+  maximum, so the echo landed past the end of the render and feedback, damping and cross-feed
+  never reached the output.
 
-**Strategic, from the landscape research.** Full reasoning and sources in `docs/LANDSCAPE.md`,
-which also labels every claim MEASURED, SOURCED or SECONDHAND so nobody inherits another
-untraceable one. In priority order:
+### Open, no judgement call needed
 
-- **`int16` delay storage.** The Teensy Audio Library's central decision. After exact sizing the
-  delay buffers are still 86 percent of RAM in `s5_all`, so halving them is the largest remaining
-  lever on the constraint that actually binds. Behind a template parameter with `float` as the
-  default, because it costs quantisation noise in a feedback path.
-- **Make the scale layer tuning-aware.** A correctness fix and a competitive one at once.
-  `Scale.degreeToMidi` hardcodes a 12-semitone octave stride, so `CLAUDE.md`'s rule that 12-EDO
-  is a default and never an assumption is true of the tuning layer and not of what sits on it.
-  Tune.js already ships the whole Scala archive to Web Audio, so this is contested ground and the
-  claim is currently weaker than the competition's.
-- **CMSIS-DSP for the spectral family on Cortex-M.** Recommended since the port began, unstarted.
-  Also the thing that decides whether a board has the RAM, since each spectral effect is 84 to
-  204 KB of state.
-- **Psychoacoustic analysis: critical bands, masking, roughness.** None of it exists here (grep
-  returns nothing) and none of the surveyed web libraries occupies the ground. The BS.1770 work
-  is evidence this codebase can implement a standard exactly, and the analysis suite already has
-  the scaffolding.
+Grouped by where they are, roughly in the order I would take them. Line numbers are into
+`docs/AUDIT-2.md`.
 
-**Deliberately not doing**, with the reasoning in `docs/LANDSCAPE.md`: fixed point below the
-Cortex-M4 line (that is Mozzi, not a tuning of this), multi-target codegen (that is Faust, and it
-is a rewrite), and replacing the tabulated BLEP with polyBLEP, DPW or PTR (all cheaper, all
-measurably worse).
+**Embedded correctness, and the first one is the most important thing in this list.**
 
-**Still open from the first audit** (`docs/AUDIT.md`):
+- **`Xmur3` hashes plain `char`, whose signedness differs between the host and ARM** (539). The
+  PRNG label hash is the foundation of the determinism contract, and the parity harness runs on
+  the host, so this is a latent divergence the harness is structurally unable to see.
+- `midi::Parse` writes into `*out` on paths where it returns false, against its own comment (545).
+- Teensy `ToInt16` converts NaN to `int16_t`, which is undefined (551).
+- `Oversampler` drops the `maxBlock` bound check the TypeScript throws on (515).
+- `Lfo` sample-and-hold with a null `Rng` is a constant zero, so Tremolo and AutoPan silently
+  stop modulating in that shape (521).
+- `s9n_kernel.cpp`, the only call site of the kernel in the tree, passes `PushNoteOn` arguments
+  in the wrong order (273).
+- `bringup.h` `Rig::SetStage` races the audio interrupt (533).
+- `bellows::Clamp` in `config.h` passes NaN through, the same shape as the pluck defect. Harmless
+  everywhere the harness currently reaches, and the next engine that casts a clamped float to an
+  index reintroduces the fault. Found while fixing `ac99eb1` and deliberately left: it is a
+  library-wide behaviour change that needs its own parity argument.
 
-- `SamplerBank.zonesFor` allocates at note-on rate on the audio thread. Survivable in a browser, blocking for the sampler's port.
-- Kernel event insertion is O(n) per event, so a 50000 event MIDI import would stall.
-- `createBus`, `registerBank`, `registerGrain` and `defOp` are not collapsed in the setup log, so an app creating a bus per reforge still grows.
-- Param ramps advance at block granularity; one shorter than a block lands immediately.
-- `quick.ts` never resets its shared boot promise, so a failed boot rejects every subsequent `play()`.
-- There is no `removeBus`.
-- `engines/soundfont.ts` imports types from `io/`, the one place the layering rule is bent. Type-only, so it costs nothing at runtime.
+**TypeScript safety and correctness.**
+
+- `DelayLine`'s constructor spins forever for `maxSamples` at or above 2^30 (485).
+- A non-finite ramp duration wedges one of the 32 ramp slots forever (563).
+- NaN still latches in `Svf`, `LadderFilter`, `OnePole`, `Smoother` and the envelopes; the
+  `c57e15d` fix covered the facade, not the recursive units (255, and 85 is the same shape).
+- `quick.ts` never resets its shared boot promise and never clears its instrument cache (575).
+- `b.now()` is not render-aware, so a callback timing off it misroutes during replay (569).
+- `Adsr` sustain changed mid-note steps the level in one sample (491); with sustain 0 a voice
+  never goes idle and the release runs about twice its configured time (497).
+
+**Music theory.**
+
+- `chordToRoman` throws for any degree past the seventh, so five of the thirty-two shipped scales
+  cannot be analysed (299), and it tries flat before sharp so F# in C major comes back as bV (311).
+- `CHORD_TYPES` omits `[0,4,8,11]`, so harmonic minor's III types as unknown (317).
+- `buildProgression(bars = 2)` returns `[0,0]` because the two cadence branches collide (323).
+
+**Architecture and duplication.**
+
+- Schroeder allpass implemented twice, verbatim, inside the fx layer (329).
+- `ChromaAnalyzer` and `OnsetDetector` each hand-roll the framer `dsp/stft.ts` already provides (335).
+- `SampleZone` and `SamplerZoneData` are field-for-field twins bridged by an unchecked cast (341).
+- `TempoPoint` is declared in the contracts file and used nowhere (353).
+- `engines/soundfont.ts` and `core/scheduler.ts` both import upward (365). Type-only.
+
+**Coverage.**
+
+- The `Svf` cutoff gate is a -4 to -2 dB band that admits roughly 11 percent cutoff error (219).
+- `voiceLead`'s unequal-size branch, including the crossing penalty, is never executed (461).
+- `Scheduler.rewind()` has no test and it is on the `b.start()` path (467).
+- The Web MIDI runtime path is uncovered; only parsing is tested (473).
+- The gate's range floor and the delay's time smoother are both unreachable from the parity
+  output. Recorded next to their rows with the arithmetic; both need an instrument the harness
+  does not have, one reading gain directly and one changing a param mid-render.
+- `params.gen.h` still has no compile-time consumer (117).
+- `gen-tables --check` warns about a stale `dist` and then reads it anyway, so it passes on a
+  stale checkout (31). The clean-checkout half is fixed in `ci.yml`, which has never run.
+
+**Documents, which rot faster than anything else here.** Sixteen findings, nearly all trivial:
+147, 159, 171, 177, 183, 189, 195, 201, 395, 401, 407, 419, 425, 431, 437, 443, plus the README
+conclusion at 49 that still says "thirty-four times the RAM" where the measurement says
+twenty-eight. The pattern is always the same, so prefer extending `check-docs.mjs` to cover a
+figure over correcting it. Its prose reader already catches numbers written into sentences.
+
+### Needs an owner decision, because it changes rendered output or package shape
+
+Do not do these unasked.
+
+- The west coast fold chain runs at 1x with no antialiasing (129). Moves the golden render.
+- The BLAMP table's drift-removal step is the wrong correction (237). Moves the golden render.
+- The string waveguide is up to 23 cents flat below about 165 Hz (37). Measured again during
+  re-verification: -23.17 cents at 41 Hz, -11.54 at 82, -3.94 at 220, -0.07 at 440. Both pitch
+  gates sit at 220 and 440, so they are blind to it by construction.
+- The bow position comb delay is twice the physical value (123).
+- `b.render()` is not reproducible for the rng pattern the README and every doc page teach (55).
+  A real fix changes what render emits for every piece written the documented way.
+- The scale layer is hardcoded 12-EDO above a correct tuning layer (93). `degreeFreq` already
+  does it right and is called from nowhere.
+- Six buffer-owning C++ classes still disagree silently when the template rate and the `Init()`
+  rate differ (67, and `config.h` half-wires `BELLOWS_SAMPLE_RATE` at 261). Only `Pluck`
+  corrupted memory and only `Pluck` is fixed; the rest clamp, so they detune or stop sweeping.
+  `memsafety` now proves they are memory safe and says nothing about whether they sound right.
+- `core/register.ts` puts the composition root in the bottom layer, 22 upward imports (111).
+- The public surface is 293 symbols from one flat barrel with 33 star exports (347).
+- `createBus`, `registerBank`, `registerGrain` and `defOp` grow the setup log without bound, and
+  there is no `removeBus` (581).
+- Input validation on public methods is inconsistent: some throw, some clamp, most accept
+  anything (587).
+- Modal draws rng per rendered sample, so a retrigger diverges from the JS stream (527).
+- `05_MidiInstrument` pitch bend never reaches a sounding note (267).
+
+### Strategic, from the landscape research
+
+Full reasoning and sources in `docs/LANDSCAPE.md`, which labels every claim MEASURED, SOURCED or
+SECONDHAND. In priority order: `int16` delay storage (the delay buffers are still 86 percent of
+RAM in `s5_all`); making the scale layer tuning-aware, which is finding 93 above and a
+competitive gap against Tune.js at the same time; CMSIS-DSP for the spectral family, which also
+decides whether a board has the RAM; and psychoacoustic analysis, which nothing surveyed
+occupies.
+
+**Deliberately not doing**, reasoning in `docs/LANDSCAPE.md`: fixed point below the Cortex-M4
+line, multi-target codegen, and replacing the tabulated BLEP with polyBLEP, DPW or PTR.
+
+### The one that costs a single push
+
+`.github/workflows/ci.yml` has still never run. `gh api .../actions/runs` returns a total count
+of zero. Every gate this document credits to CI is run by whoever remembers.
 
 ## Deployment (bellows.live)
 

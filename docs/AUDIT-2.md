@@ -98,12 +98,14 @@ Tuning itself is correct (EDO, JI, cents, Scala all verified below). But Scale.d
 
 **Music theory: romanToChord reads 'b' and '#' relative to the current scale, so bVII / bVI / bIII in a minor key give the wrong chords**
 
+> REFUTED ON REVIEW, see "Refuted on review, do not re-raise" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding.
 `packages/bellows/src/theory/chords.ts` REFUTED.
 
 chords.ts:296-297 computes `root = mod12(scale.degreeToMidi(degree) + offset)` where offset is -1 for 'b'. In standard roman numeral analysis the accidental is relative to the major-scale (parallel major) reference degree, not to whatever the current mode already has. In A natural minor, degree 6 is already G, so 'bVII' lowers it again to F#. The single most common minor-key progression there is, i - bVI - bVII - i, resolves to Am - E - F# - Am instead of Am - F - G - Am. Same for 'bIII' (gives B instead of C) and 'bVI' (gives E instead of F). chordToRoman is unaffected because it finds an exact diatonic degree first, so the round trip looks clean in tests and only user-typed numerals break.
 
 **Music theory: fast() reports a cycle length that is wrong when n does not divide the pattern length, breaking the module's stated wrap invariant and corrupting stack()'s LCM**
 
+> REFUTED ON REVIEW, see "Refuted on review, do not re-raise" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding.
 `packages/bellows/src/seq/pattern.ts`
 
 pattern.ts:128-134 sets `at: step => p.at(step * n)` with `length: ceil(p.length / n)`. The true period of step -> p.at(step * n) is p.length / gcd(n, p.length), not ceil(p.length / n). The module header at pattern.ts:16 states as an invariant that "All constructors produce patterns that wrap: at(i) === at(i mod length)". For fast(3, len 4) the declared length is 2 but the sequence only repeats after 4 steps. Anything that drives a sequencer off `.length` (bar length, loop points) desyncs, and stack() at pattern.ts:70-79 folds the wrong length into its LCM, so a stacked pattern's declared cycle no longer repeats either.
@@ -134,6 +136,7 @@ The core oscillator is a band-limited BLEP triangle, but it is then pushed throu
 
 **Instrument algorithms: Ladder filter cutoff is uncalibrated: the -3 dB corner lands at 0.435 x the requested Hz across the whole range**
 
+> REFUTED ON REVIEW, see "Refuted on review, do not re-raise" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding.
 `packages/bellows/src/dsp/filters.ts:169-175`
 
 `set()` puts each of the four one-pole stages at the requested cutoff (g = 1 - exp(-2 pi fc / (2 fs))). Four cascaded identical one-poles have their composite -3 dB point at fc * sqrt(2^(1/4) - 1) = 0.4350 * fc, so the va engine's `cutoff` parameter, labelled in Hz, is off by a factor of 2.3 (more than an octave). The file comment calls this 'a Huovilainen style four stage transistor ladder', and docs/ENGINEERING.md section 2.3 spells out the Huovilainen tuning polynomials (fcr = 1.8730 fc^3 + 0.4955 fc^2 - 0.6490 fc + 0.9988, acr = -3.9364 fc^2 + 1.8409 fc + 0.9968) and the half-sample feedback delay precisely because they are what make the composite corner track fc. Neither is implemented. The 2x internal rate is also a zero-order hold of the input with the second sub-sample taken as output, with no interpolation or decimation filter, so it buys integration stability rather than alias 
@@ -206,6 +209,7 @@ Line 11 of the generated reference says "Everything in it is exact for version 0
 
 **Coverage and gates: The plate reverb has no gate that any wrong constant can trip**
 
+> REFUTED ON REVIEW, see "Refuted on review, do not re-raise" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding.
 `packages/bellows/src/fx/plate.ts`
 
 test/fx-time/plate.test.ts asserts only qualitative properties: tail still audible at 1 s, density above 0.5, |correlation| < 0.9, decay monotonic, predelay silent, bit-exact at mix 0, bounded at max decay. None of these constrain the Dattorro topology. Six independent mutations of the paper's own numbers all passed the entire 1173-test suite. The plate is also absent from test/golden, so nothing else sees it. The C++ port has a plate parity row (1.34e-5), but parity only proves the two implementations agree, not that either matches Dattorro: a wrong constant ported faithfully passes parity too.
@@ -248,6 +252,7 @@ setPosition (line 244) guards with clamp(pos, 0, 1), but clamp in src/types.ts l
 
 **DSP core: LadderFilter's cutoff is 2.3x flat against the SVF, and the two share one param declared in Hz**
 
+> REFUTED ON REVIEW, see "Refuted on review, do not re-raise" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding.
 `packages/bellows/src/dsp/filters.ts` REFUTED.
 
 LadderFilter.set (line 172) computes g = 1 - exp(-2*pi*fc/fs2) and gives that pole frequency to each of the four one-pole stages, with no composite tuning correction. Four identical one-poles put the composite -3 dB corner at sqrt(2^(1/4) - 1) = 0.435 of the stage pole frequency, so asking for 1000 Hz gets a knee at 434 Hz. Huovilainen's model, which line 10 names, carries a tuning polynomial for exactly this reason. In isolation this is arguably the Moog pole-frequency convention: the resonant peak does land at 0.98 to 1.05 of the requested value. The defect is that engines/va.ts feeds one `cutoff` param, declared `{ name: 'cutoff', min: 20, max: 20000, default: 9000, curve: 'exp', unit: 'Hz' }`, to either filter depending on filterType (line 161). At the default cutoff of 9000 the ladder's knee is at 3906 Hz and the SVF's is at 9000 Hz, so flipping filterType moves the perceived bright
