@@ -86,7 +86,51 @@ export interface SfzParseOptions {
   resolveInclude?: IncludeResolver;
   /** Include nesting limit, default 16. */
   maxIncludeDepth?: number;
+  /**
+   * Characters a line or a #define value may grow to once substituted,
+   * default 65536. See DEFAULT_MAX_EXPANDED_LENGTH.
+   */
+  maxExpandedLength?: number;
+  /** Most #define directives accepted, default 1024. */
+  maxDefines?: number;
+  /** Most #include directives resolved across the whole parse, default 1024. */
+  maxIncludes?: number;
+  /**
+   * Total characters of source parsed, counting every resolved #include,
+   * default 8388608 (8 MiB).
+   */
+  maxTotalInput?: number;
 }
+
+/*
+ * Hostile-input bounds. This parser is the only part of the library that
+ * reads untrusted data, and in a browser its input is a user-chosen file or
+ * a fetched URL, so both of its expansion steps need a ceiling.
+ *
+ * #define substitution is eager: a define's value is expanded when it is
+ * stored, which is what makes nested defines resolve. It also means a chain
+ * where each line references the previous one twice doubles the stored text
+ * per line, so N lines produce 2^N characters. Measured before this bound
+ * existed: 601 bytes of input allocated 537 MB, and 645 bytes threw a bare
+ * RangeError('Invalid string length') that no caller catching this parser's
+ * own 'sfz: ' errors would recognise.
+ *
+ * #include has the same shape one step removed. maxIncludeDepth bounds
+ * nesting depth but not breadth, so a tree whose every level includes the
+ * next one twice never trips it: 575 bytes across 16 files produced 65535
+ * resolver calls and 32768 regions with no error. A byte budget alone does
+ * not catch that, because 65535 forty-byte files is only 2.6 MB; the
+ * amplified quantity is the resolver call, which is caller-supplied and may
+ * well be a network fetch, so that is what gets counted.
+ *
+ * Worst case for the defines map is maxDefines * maxExpandedLength, 64 MiB
+ * at the defaults, which takes a deliberately crafted file to approach and
+ * is bounded where it was not.
+ */
+const DEFAULT_MAX_EXPANDED_LENGTH = 65536;
+const DEFAULT_MAX_DEFINES = 1024;
+const DEFAULT_MAX_INCLUDES = 1024;
+const DEFAULT_MAX_TOTAL_INPUT = 8 * 1024 * 1024;
 
 export async function parseSfz(text: string, opts: SfzParseOptions = {}): Promise<SfzFile> {
   const parser = new SfzParser(opts);
@@ -298,11 +342,29 @@ function buildRegion(merged: Map<string, string>, defaultPath: string): SfzRegio
   return r;
 }
 
+/*
+ * Non-overlapping left to right, which is what String.split does, so the
+ * count matches the split/join that follows it.
+ */
+function countOccurrences(haystack: string, needle: string): number {
+  let n = 0;
+  for (let i = haystack.indexOf(needle); i !== -1; i = haystack.indexOf(needle, i + needle.length)) {
+    n++;
+  }
+  return n;
+}
+
 class SfzParser {
   readonly regions: SfzRegion[] = [];
 
   private readonly resolveInclude?: IncludeResolver;
   private readonly maxDepth: number;
+  private readonly maxExpandedLength: number;
+  private readonly maxDefines: number;
+  private readonly maxIncludes: number;
+  private readonly maxTotalInput: number;
+  private totalInput = 0;
+  private includeCount = 0;
   private readonly defines = new Map<string, string>();
   private defaultPath = '';
   private controlScope = new Map<string, string>();
@@ -317,11 +379,21 @@ class SfzParser {
   constructor(opts: SfzParseOptions) {
     this.resolveInclude = opts.resolveInclude;
     this.maxDepth = opts.maxIncludeDepth ?? 16;
+    this.maxExpandedLength = opts.maxExpandedLength ?? DEFAULT_MAX_EXPANDED_LENGTH;
+    this.maxDefines = opts.maxDefines ?? DEFAULT_MAX_DEFINES;
+    this.maxIncludes = opts.maxIncludes ?? DEFAULT_MAX_INCLUDES;
+    this.maxTotalInput = opts.maxTotalInput ?? DEFAULT_MAX_TOTAL_INPUT;
     this.scope = this.globalScope;
   }
 
   async feed(text: string, depth: number): Promise<void> {
     if (depth > this.maxDepth) throw new Error('sfz: #include nesting too deep');
+    /* Bytes, counted across resolved includes as well as the top-level text,
+     * so a small include tree cannot pull in an unbounded amount of source. */
+    this.totalInput += text.length;
+    if (this.totalInput > this.maxTotalInput) {
+      throw new Error(`sfz: total input exceeds ${this.maxTotalInput} characters`);
+    }
     for (const rawLine of text.split(/\r?\n/)) {
       const line = stripComment(rawLine);
       if (line.trim() === '') continue;
@@ -330,11 +402,19 @@ class SfzParser {
         if (!this.resolveInclude) {
           throw new Error(`sfz: #include "${inc[1]}" but no resolver was provided`);
         }
+        /* Counted before the resolver runs, so a hostile tree cannot spend
+         * one more fetch than the budget allows. */
+        if (++this.includeCount > this.maxIncludes) {
+          throw new Error(`sfz: more than ${this.maxIncludes} #include directives`);
+        }
         await this.feed(await this.resolveInclude(inc[1]), depth + 1);
         continue;
       }
       const def = /^\s*#define\s+(\$\w+)\s+(\S+)\s*$/.exec(line);
       if (def) {
+        if (!this.defines.has(def[1]) && this.defines.size >= this.maxDefines) {
+          throw new Error(`sfz: more than ${this.maxDefines} #define directives`);
+        }
         this.defines.set(def[1], this.substitute(def[2]));
         continue;
       }
@@ -351,7 +431,24 @@ class SfzParser {
     /* Longest names first so $NOTE2 wins over $NOTE. */
     const names = [...this.defines.keys()].sort((a, b) => b.length - a.length);
     let out = text;
-    for (const n of names) out = out.split(n).join(this.defines.get(n)!);
+    for (const n of names) {
+      const value = this.defines.get(n)!;
+      /*
+       * Price each expansion before building it. Checking the result
+       * afterwards would mean allocating the very string the cap exists to
+       * prevent, which past V8's limit throws a RangeError this parser does
+       * not own.
+       */
+      const hits = countOccurrences(out, n);
+      if (hits === 0) continue;
+      const grown = out.length + hits * (value.length - n.length);
+      if (grown > this.maxExpandedLength) {
+        throw new Error(
+          `sfz: #define expansion of ${n} exceeds ${this.maxExpandedLength} characters`,
+        );
+      }
+      out = out.split(n).join(value);
+    }
     return out;
   }
 

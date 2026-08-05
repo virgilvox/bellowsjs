@@ -275,6 +275,143 @@ describe('parseSfz: includes and defines', () => {
     expect(regions[0].group).toBe(2);
     expect(regions[0].offBy).toBe(1);
   });
+
+  it('still resolves a define written in terms of earlier defines', async () => {
+    const { regions } = await parseSfz(`
+#define $DIR Samples
+#define $FILE $DIR/kick.wav
+<region> sample=$FILE key=36
+`);
+    expect(regions[0].sample).toBe('Samples/kick.wav');
+  });
+});
+
+/*
+ * The only part of the library that parses untrusted input, and in a browser
+ * that input is a user-chosen file or a fetched URL. Every case here is a
+ * measured amplification, not a hypothetical: the numbers in the names are
+ * what the parser did before these bounds existed.
+ */
+describe('parseSfz: hostile input bounds', () => {
+  /** N lines, each referencing the previous one twice: 2^N characters. */
+  function defineChain(n: number): string {
+    const lines = ['#define $A0 x'];
+    for (let i = 1; i <= n; i++) lines.push(`#define $A${i} $A${i - 1}$A${i - 1}`);
+    return lines.join('\n') + '\n';
+  }
+
+  it('rejects the doubling #define chain that allocated 537 MB from 601 bytes', async () => {
+    const src = defineChain(28);
+    expect(src.length).toBeLessThan(1024); // the whole point: tiny input
+    await expect(parseSfz(src)).rejects.toThrow(/sfz: #define expansion of \$A\d+ exceeds/);
+  });
+
+  it('reports its own error shape rather than a bare RangeError past the string limit', async () => {
+    /* 645 bytes used to throw RangeError('Invalid string length'), which a
+     * caller catching this parser's documented 'sfz: ' errors does not catch. */
+    let err: unknown;
+    try {
+      await parseSfz(defineChain(30));
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Error);
+    /* Not a RangeError, which is what this used to be. */
+    expect((err as Error).constructor.name).toBe('Error');
+    expect((err as Error).message).toMatch(/^sfz: /);
+  });
+
+  it('bounds expansion at the configured length, not one define past it', async () => {
+    /* $A9 is 512 characters, $A10 is 1024, so a 600 cap must pass one and
+     * fail the next. A cap that only fired at some far larger size would
+     * pass the test above for the wrong reason. */
+    await expect(parseSfz(defineChain(9), { maxExpandedLength: 600 })).resolves.toBeTruthy();
+    await expect(parseSfz(defineChain(10), { maxExpandedLength: 600 })).rejects.toThrow(
+      /exceeds 600 characters/,
+    );
+  });
+
+  it('accepts a define chain that stays under the cap', async () => {
+    /* Guards against a fix that simply refuses nested defines. */
+    const { regions } = await parseSfz(defineChain(6) + '<region> sample=$A6.wav key=36\n');
+    expect(regions[0].sample).toBe('x'.repeat(64) + '.wav');
+  });
+
+  it('caps the number of #define directives', async () => {
+    const many = Array.from({ length: 40 }, (_, i) => `#define $D${i} ${i}`).join('\n');
+    await expect(parseSfz(many, { maxDefines: 32 })).rejects.toThrow(
+      /more than 32 #define directives/,
+    );
+    /* Redefining one name must not consume a fresh slot. */
+    const rebound = Array.from({ length: 40 }, () => '#define $D 1').join('\n');
+    await expect(parseSfz(rebound, { maxDefines: 32 })).resolves.toBeTruthy();
+  });
+
+  it('bounds #include breadth, not only depth: 575 bytes made 65535 resolver calls', async () => {
+    /* Each level includes the next one twice. Depth never exceeds the limit,
+     * so maxIncludeDepth never fires; the expansion is 2^depth leaves. */
+    const files = new Map<string, string>();
+    const DEPTH = 15;
+    for (let i = 0; i < DEPTH; i++) {
+      files.set(`f${i}.sfz`, `#include "f${i + 1}.sfz"\n#include "f${i + 1}.sfz"`);
+    }
+    files.set(`f${DEPTH}.sfz`, '<region> sample=a.wav');
+    const attackerBytes =
+      '#include "f0.sfz"'.length + [...files.values()].reduce((a, b) => a + b.length, 0);
+    expect(attackerBytes).toBeLessThan(1024);
+
+    let calls = 0;
+    await expect(
+      parseSfz('#include "f0.sfz"', {
+        resolveInclude: (p) => {
+          calls++;
+          return files.get(p)!;
+        },
+      }),
+    ).rejects.toThrow(/sfz: more than 1024 #include directives/);
+    /* The resolver is caller-supplied and may be a network fetch, so the call
+     * count is the quantity that matters. A byte budget alone does not catch
+     * this: 65535 forty-byte files is only 2.6 MB. */
+    expect(calls).toBeLessThanOrEqual(1024);
+  });
+
+  it('bounds include count at the configured number, not somewhere far above it', async () => {
+    const chain = (n: number) =>
+      new Map(
+        Array.from({ length: n }, (_, i) => [
+          `f${i}.sfz`,
+          i === n - 1 ? '<region> sample=a.wav' : `#include "f${i + 1}.sfz"`,
+        ]),
+      );
+    const run = (n: number, maxIncludes: number) => {
+      const files = chain(n);
+      return parseSfz('#include "f0.sfz"', {
+        maxIncludes,
+        maxIncludeDepth: 64,
+        resolveInclude: (p) => files.get(p)!,
+      });
+    };
+    await expect(run(8, 8)).resolves.toBeTruthy();
+    await expect(run(9, 8)).rejects.toThrow(/more than 8 #include directives/);
+  });
+
+  it('leaves a legitimate multi-file instrument well inside the input budget', async () => {
+    const files: Record<string, string> = {
+      'control.sfz': '<control> default_path=Samples/',
+      'regions.sfz': '<region> sample=kick.wav key=36',
+    };
+    const { regions } = await parseSfz('#include "control.sfz"\n#include "regions.sfz"', {
+      resolveInclude: (p) => files[p],
+    });
+    expect(regions).toHaveLength(1);
+  });
+
+  it('counts resolved includes toward the input budget, not just the top-level text', async () => {
+    const big = '<region> sample=a.wav key=36\n'.repeat(200);
+    await expect(
+      parseSfz('#include "big.sfz"', { maxTotalInput: 1024, resolveInclude: () => big }),
+    ).rejects.toThrow(/total input exceeds 1024 characters/);
+  });
 });
 
 describe('parseSfz: lexical details', () => {
