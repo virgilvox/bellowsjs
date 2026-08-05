@@ -1,6 +1,6 @@
 # HANDOFF
 
-State of the project as of 2026-08-04, after the audit pass and the embedded port. Read this first when picking the work back up. Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` (every finding with its evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `CLAUDE.md` (house rules), `docs/prototype-0.html` (the original design probe).
+State of the project as of 2026-08-04, after the audit pass and the embedded port. Read this first when picking the work back up. Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` (every finding with its evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session on this), `docs/prototype-0.html` (the original design probe).
 
 ## Where things stand
 
