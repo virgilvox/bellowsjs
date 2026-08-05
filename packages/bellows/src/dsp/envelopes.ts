@@ -9,6 +9,8 @@
  * the way there in the configured time.
  */
 
+import { clamp } from '../types';
+
 const enum Stage {
   Idle,
   Attack,
@@ -40,8 +42,12 @@ export class Adsr {
     this.set(0.01, 0.1, 0.7, 0.2);
   }
 
+  /* Negated so NaN takes the same branch as a non-positive time. Written
+   * as `timeSec <= 0` the NaN fails the test, reaches the exponential and
+   * comes back NaN, which latches into the level and every sample it
+   * multiplies for the life of the voice. */
   private coef(timeSec: number, rate: number): number {
-    if (timeSec <= 0) return 1;
+    if (!(timeSec > 0)) return 1;
     return 1 - Math.exp(-rate / (timeSec * this.sampleRate));
   }
 
@@ -50,7 +56,7 @@ export class Adsr {
     this.aCoef = this.coef(attack, ATTACK_RATE);
     this.dCoef = this.coef(decay, SETTLE_RATE);
     this.rCoef = this.coef(release, SETTLE_RATE);
-    this.sus = Math.min(Math.max(sustain, 0), 1);
+    this.sus = clamp(sustain, 0, 1);
   }
 
   /** Start the attack from the current level. Safe from any stage: no clicks. */

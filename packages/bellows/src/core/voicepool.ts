@@ -76,7 +76,22 @@ export class VoicePool {
     }
   }
 
+  /**
+   * Set a parameter on the pool and on every live voice.
+   *
+   * Non-finite values are dropped here rather than passed down. Engines
+   * each clamp their own parameters, but clamping is not a filter: most
+   * ranges are open at one end, and a NaN that survives one multiply is in
+   * the recursive state of a filter or an envelope for the life of the
+   * voice. Measured before this guard existed, one NaN parameter produced
+   * non-finite audio in 129 parameters across 17 engines. A NaN arriving
+   * here is a caller error every time (an empty text field read as a
+   * number, a division by a zero rate), so the useful behaviour is to
+   * ignore it and leave the last good value in place, which is what a
+   * physical control does when you let go of it.
+   */
   setParam(name: string, value: number): void {
+    if (!Number.isFinite(value)) return;
     this.params[name] = value;
     for (const s of this.slots) s.voice.setParam(name, value);
   }
