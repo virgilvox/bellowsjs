@@ -331,10 +331,27 @@ occupies.
 **Deliberately not doing**, reasoning in `docs/LANDSCAPE.md`: fixed point below the Cortex-M4
 line, multi-target codegen, and replacing the tabulated BLEP with polyBLEP, DPW or PTR.
 
-### The one that costs a single push
+### CI, which has now run
 
-`.github/workflows/ci.yml` has still never run. `gh api .../actions/runs` returns a total count
-of zero. Every gate this document credits to CI is run by whoever remembers.
+`.github/workflows/ci.yml` ran for the first time on 2026-08-05, on PR #1. It found four things
+that no local command could, which is the whole argument for it:
+
+1. **`npm ci` could not install this repository at all.** `bellows-embedded@0.1.0` was in
+   `workspaces` and had never been recorded in `package-lock.json`. `npm install` reconciles that
+   silently, so every documented command worked on a machine that had installed once, and a clean
+   checkout failed four jobs on it.
+2. **`npm run fastmath` could not run on a clean checkout.** Its build directory is gitignored and
+   the script never created it. Every document listing it as a verification command was wrong for
+   anyone who had not already built.
+3. **The compiler decides the size tables.** The workflow installed GCC 12.3 while the documents
+   record 11.3.1, and 36 of 37 sketches move between toolchains. CI installs PlatformIO's Teensy
+   toolchain now, the one that builds the actual firmware.
+4. **So does the host.** With the SAME toolchain package and version, Linux comes back exactly 8
+   bytes heavier than macOS on five sketches, every RAM figure matching. Byte figures are
+   reproducible on the host that measured them and approximately anywhere else. CI passes
+   `--allow-host-drift`, bounded at 16 bytes, printing every allowance; a local run stays exact.
+
+Keep it that way. The gates are only controls while this runs.
 
 ## Verified end to end on 2026-08-05, after the fix pass
 
