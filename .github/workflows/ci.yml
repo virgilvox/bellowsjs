@@ -92,7 +92,12 @@ jobs:
         # afterwards by whoever happened to look. This is the control.
         if: matrix.target == 'cortex-m7'
         working-directory: packages/bellows-embedded
-        run: node tools/check-docs.mjs --check
+        # --allow-host-drift because the documents were measured on macOS and
+        # this runner is Linux: the same toolchain package version comes back
+        # 8 bytes heavier on four sketches. Bounded at 16 bytes and every
+        # allowance is printed, so it cannot hide the hundreds-to-thousands of
+        # bytes this gate exists to catch. A local run is still byte exact.
+        run: node tools/check-docs.mjs --check --allow-host-drift
 
   parity:
     name: C++ against TypeScript

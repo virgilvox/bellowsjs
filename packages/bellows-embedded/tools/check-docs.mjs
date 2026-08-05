@@ -57,6 +57,26 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/*
+ * Byte figures are reproducible on the host that measured them, and only
+ * approximately anywhere else. The documents were measured on macOS with
+ * PlatformIO's toolchain-gccarmnoneeabi-teensy 1.110301.0; CI installs the
+ * SAME package version on Linux and four sketches come back exactly 8 bytes
+ * heavier (s6_registry, s2_kit, p1_drums, p3_workstation, p6_e3_polysynth),
+ * while every RAM figure and every other sketch matches. Same compiler
+ * version, different host build of it.
+ *
+ * So --allow-host-drift relaxes the flash comparison by this many bytes and
+ * prints every non-zero delta it allowed. It exists for CI and nothing else.
+ * A local run stays byte exact, which is where the documents are edited and
+ * where a drift would be introduced. The bound is deliberately far below what
+ * the gate is for: the four rot events that motivated this file moved
+ * sketches by 26 KB, 152 KB, hundreds of bytes and 2.7x, not by eight.
+ */
+const HOST_DRIFT_BYTES = 16;
+const ALLOW_HOST_DRIFT = process.argv.includes('--allow-host-drift');
+let driftAllowed = 0;
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PKG = join(HERE, '..');
 const REPO = join(PKG, '..', '..');
@@ -963,7 +983,18 @@ for (const doc of DOCS) {
       continue;
     }
     checked += want.length;
-    const ok = want.length === found.length && want.every((v, i) => v === found[i]);
+    let ok = want.length === found.length && want.every((v, i) => v === found[i]);
+    if (!ok && ALLOW_HOST_DRIFT && want.length === found.length) {
+      const deltas = want.map((v, i) => v - found[i]);
+      if (deltas.every((d) => Math.abs(d) <= HOST_DRIFT_BYTES)) {
+        ok = true;
+        driftAllowed++;
+        console.log(
+          `  host drift allowed ${label} line ${idx + 1} (${row.sketch}): ` +
+            `doc ${found.join('/')} against ${want.join('/')}, delta ${deltas.join('/')}`,
+        );
+      }
+    }
     if (!ok) {
       console.log(`  MISMATCH ${label} line ${idx + 1} (${row.sketch})`);
       console.log(`    doc says    ${found.join(' / ')}`);
@@ -1134,4 +1165,10 @@ console.log(
     ? `ok       ${checked} figures across ${rowCount} rows in ${DOCS.length} documents match what the harnesses print`
     : `${bad} row(s) do not match what the harnesses print`,
 );
+if (driftAllowed > 0) {
+  console.log(
+    `note     ${driftAllowed} row(s) passed only under --allow-host-drift, within ` +
+      `${HOST_DRIFT_BYTES} bytes. Byte-exact figures need the host that measured them.`,
+  );
+}
 if (process.argv.includes('--check') && bad > 0) process.exit(1);
