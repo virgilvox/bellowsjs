@@ -74,10 +74,19 @@ inline constexpr int ClampI(int v, int lo, int hi) {
  * modulation running against 6.3e-6 with it switched off.
  *
  * A uint32 counter over one cycle removes it. The wrap is the natural
- * unsigned overflow, so it costs neither a compare nor a branch, the
- * increment is exact for the life of the note, and the only residual
- * against the double reference is the one-time rounding of the increment,
- * which is half of 2^-32 of a cycle.
+ * unsigned overflow, so the accumulator itself needs neither a compare nor
+ * a branch, and the increment is exact for the life of the note. Lfo still
+ * tests for the wrap, because its sample-and-hold has to draw on one, so
+ * the saving there is the exactness rather than the branch; SineCarrier
+ * has no such test and drops the compare entirely.
+ *
+ * What is left against the double reference is not zero. The increment is
+ * rounded once, to within half of 2^-32 of a cycle, and that error is a
+ * fixed frequency offset, so accumulated phase still drifts linearly with
+ * the length of the note, about 128 times more slowly than the float
+ * accumulator did. The readout is also quantised: converting a counter
+ * near 2^32 to float keeps 24 bits. Neither accumulates the way the old
+ * error did, which is what the parity rows show.
  */
 inline constexpr float kPhaseToUnit = 2.32830643653870e-10f; /* 1 / 2^32 */
 inline constexpr float kPhaseScale = 4294967296.0f;          /* 2^32 */

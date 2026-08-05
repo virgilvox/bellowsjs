@@ -25,22 +25,26 @@
  *     bellows::StereoDelayExt d;
  *     d.Init(hw.AudioSampleRate(), delayL, delayR, 1 << 20, params);
  *
- * SDRAM is off chip and uncached, so it is the right home for delay and
- * reverb tails read once per sample and the wrong home for a wavetable or
- * a pluck loop read four times per sample. Those stay in the 512 KB of
- * internal SRAM, which is the default .bss.
+ * SDRAM is off chip, so it is the right home for delay and reverb tails
+ * read once per sample and the wrong home for a wavetable or a pluck loop
+ * read four times per sample. Those stay in the 512 KB of internal SRAM,
+ * which is the default .bss. Note it is cacheable rather than uncached:
+ * libDaisy's System::Init maps the SDRAM region MPU_ACCESS_CACHEABLE and
+ * enables the D-cache (src/sys/system.cpp). That helps sequential reads
+ * and it is also why a DMA buffer placed there needs the cache maintained
+ * by hand.
  */
 #pragma once
 
-/* libDaisy does have a version macro, LIBDAISY_VER_MAJ in src/version.h,
- * but it is only reachable through the umbrella src/daisy.h and not
- * through daisy_seed.h, which is what this header includes. Guarding on it
- * would mean the guard passed or failed depending on the sketch's include
- * order. So this guards instead on the part define that every libDaisy
- * build passes (-DSTM32H750xx), plus an explicit opt in for build systems
- * that do not. Define BELLOWS_TARGET_DAISY yourself if you are on an H750
- * board that is not a Daisy, or if your Makefile spells the part
- * differently. */
+/* libDaisy has a version macro, LIBDAISY_VER_MAJ in src/version.h, and it
+ * IS reachable here: daisy_seed.h includes the umbrella daisy.h, which
+ * pulls in version.h. It is still the wrong thing to guard on, because it
+ * only exists once libDaisy has been included at all, so the guard would
+ * pass or fail on the sketch's include order rather than on the target.
+ * This guards instead on the part define every libDaisy build passes
+ * (-DSTM32H750xx), plus an explicit opt in for build systems that do not.
+ * Define BELLOWS_TARGET_DAISY yourself if you are on an H750 board that is
+ * not a Daisy, or if your Makefile spells the part differently. */
 #if defined(BELLOWS_TARGET_DAISY) || defined(STM32H750xx)
 
 #include <stddef.h>
