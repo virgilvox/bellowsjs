@@ -25,25 +25,60 @@
  * stream directly. The C++ voices take one Rng and use it the way the JS
  * uses its own, so passing the correctly labelled stream is what makes
  * the noise match. Nothing enforces this: if you pass an unlabelled Rng
- * you get perfectly good noise that is simply not the browser's noise. */
+ * you get perfectly good noise that is simply not the browser's noise.
+ *
+ * LABELS ARE ASCII. The JS hashes str.charCodeAt(i), which is a UTF-16
+ * code unit, and str.length, which counts code units. This hashes bytes.
+ * The two agree for every character below 0x80 and cannot agree above it,
+ * because one U+00E9 is a single 0xE9 code unit in the browser and two
+ * bytes (0xC3 0xA9) here. Measured: "cafe" with an acute accent seeds
+ * 0x14cad659 in the JS and 0x1ab6029e here. Every label in this tree and
+ * every label the engines use is ASCII; keep yours ASCII too, or the
+ * stream is simply a different stream from the browser's. */
 #pragma once
 #include <stdint.h>
 
 namespace bellows {
 
-inline uint32_t Xmur3(const char* s) {
+/*
+ * constexpr so the two static_asserts below run on every target this
+ * header is compiled for, rather than only where a test happens to run.
+ * It is still an ordinary inline function at a runtime call site.
+ */
+inline constexpr uint32_t Xmur3(const char* s) {
   uint32_t h = 1779033703u;
   uint32_t len = 0;
   for (const char* p = s; *p; ++p) ++len;
   h ^= len;
   for (const char* p = s; *p; ++p) {
-    h = (h ^ static_cast<uint32_t>(*p)) * 3432918353u;
+    /* Read the byte through unsigned char, never through plain char.
+     * Plain char's signedness is implementation defined: signed on the
+     * x86-64 host where test/parity/render.cpp is built and where the
+     * prng row is proved bit exact, unsigned on ARM EABI, which is every
+     * board this library targets. static_cast<uint32_t> of a negative
+     * char sign extends, so a byte of 0xE9 entered the mix as
+     * 0xFFFFFFE9 on the host and as 0x000000E9 on the board and the two
+     * seeds diverged for the rest of the stream. Measured on the label
+     * below: 0x33bbfd30 signed against 0x1ab6029e unsigned. The parity
+     * harness only ever builds for the host, so it is structurally
+     * unable to see that; the asserts below are the gate that is not. */
+    h = (h ^ static_cast<uint32_t>(static_cast<unsigned char>(*p))) * 3432918353u;
     h = (h << 13) | (h >> 19);
   }
   h = (h ^ (h >> 16)) * 2246822507u;
   h = (h ^ (h >> 13)) * 3266489909u;
   return h ^ (h >> 16);
 }
+
+/* A label whose fourth character is two bytes above 0x7f, so the constant
+ * differs between the two signedness choices. Whatever plain char is on
+ * the compiler reading this header, one answer has to come out. */
+static_assert(Xmur3("caf\xc3\xa9") == 0x1ab6029eu,
+              "Xmur3 must hash bytes as unsigned on every target");
+/* And an ASCII label, hashed here and in the browser, to pin the half of
+ * the contract that the fix must not have moved. Node, same generator:
+ * xmur3('bringup')() is 0xe9e81aca. */
+static_assert(Xmur3("bringup") == 0xe9e81acau, "Xmur3 must match the JS for ASCII labels");
 
 class Rng {
  public:

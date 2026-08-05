@@ -256,8 +256,9 @@ class Flanger {
 /*
  * Lfo on amplitude. Gain stays at 1 when the Lfo is at its peak and dips
  * to 1 - depth at the trough. phase offsets the right channel Lfo in
- * cycles (0.5 gives anti-phase stereo tremolo). Pass an Rng if the shape
- * is sample and hold, so the stream stays forkable.
+ * cycles (0.5 gives anti-phase stereo tremolo). Pass an Rng to put the
+ * sample and hold shape in a stream you can fork and follow; leave it out
+ * and each Lfo owns an 'lfo/sh' stream, which is what the JS does.
  */
 class Tremolo {
  public:

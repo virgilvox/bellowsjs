@@ -70,8 +70,19 @@ struct MidiMessage {
 
 /*
  * Parse one channel voice message. Returns false for system messages,
- * running status (no status byte), and truncated input, leaving out
+ * running status (no status byte), and truncated input, leaving *out
  * untouched. Never reads past len.
+ *
+ * The comment is honoured rather than corrected: the JS returns null and
+ * writes nothing, so "false means the struct did not move" is the same
+ * contract on both sides, and it is the one a caller can check cheaply.
+ * The earlier form filled channel, data1, data2 and bend14 before the
+ * switch, so a truncated message left *out half written with a stale
+ * kind: a caller that inspected the struct after a false return read a
+ * plausible note on the wrong channel. Everything is assembled in locals
+ * now and committed in one place, which costs three registers and no
+ * branches: measured by ./tools/size-report.sh, p8_e5_midiinstrument
+ * went from 30344 to 30336 bytes of flash.
  */
 inline bool Parse(const uint8_t* bytes, int len, MidiMessage* out) {
   if (bytes == nullptr || out == nullptr || len < 1) return false;
@@ -79,50 +90,58 @@ inline bool Parse(const uint8_t* bytes, int len, MidiMessage* out) {
   if (status < 0x80 || status >= 0xf0) return false;
   const uint8_t kind = static_cast<uint8_t>(status & 0xf0);
 
-  out->channel = static_cast<uint8_t>(status & 0x0f);
-  out->data1 = len > 1 ? static_cast<uint8_t>(bytes[1] & 0x7f) : 0;
-  out->data2 = len > 2 ? static_cast<uint8_t>(bytes[2] & 0x7f) : 0;
-  out->bend14 = 8192;
+  const uint8_t channel = static_cast<uint8_t>(status & 0x0f);
+  const uint8_t data1 = len > 1 ? static_cast<uint8_t>(bytes[1] & 0x7f) : 0;
+  uint8_t data2 = len > 2 ? static_cast<uint8_t>(bytes[2] & 0x7f) : 0;
+  uint16_t bend14 = 8192;
+  Kind parsed;
 
   switch (kind) {
     case 0x90:
       if (len < 3) return false;
       /* Velocity zero is a note-off. Most controllers send it that way,
        * so a parser that misses this leaves notes hanging. */
-      out->kind = out->data2 == 0 ? Kind::kNoteOff : Kind::kNoteOn;
-      return true;
+      parsed = data2 == 0 ? Kind::kNoteOff : Kind::kNoteOn;
+      break;
     case 0x80:
       if (len < 3) return false;
-      out->kind = Kind::kNoteOff;
-      return true;
+      parsed = Kind::kNoteOff;
+      break;
     case 0xa0:
       if (len < 3) return false;
-      out->kind = Kind::kKeyPressure;
-      return true;
+      parsed = Kind::kKeyPressure;
+      break;
     case 0xb0:
       if (len < 3) return false;
-      out->kind = Kind::kControlChange;
-      return true;
+      parsed = Kind::kControlChange;
+      break;
     case 0xc0:
       if (len < 2) return false;
-      out->kind = Kind::kProgramChange;
-      return true;
+      parsed = Kind::kProgramChange;
+      break;
     case 0xd0:
       if (len < 2) return false;
       /* Channel pressure carries its value in the first data byte; the
        * JS reports it as `value`, mirrored into data2 here so callers
        * read pressure off one field whatever the message. */
-      out->data2 = out->data1;
-      out->kind = Kind::kChannelPressure;
-      return true;
+      data2 = data1;
+      parsed = Kind::kChannelPressure;
+      break;
     case 0xe0:
       if (len < 3) return false;
-      out->bend14 = static_cast<uint16_t>(out->data1 | (out->data2 << 7));
-      out->kind = Kind::kPitchBend;
-      return true;
+      bend14 = static_cast<uint16_t>(data1 | (data2 << 7));
+      parsed = Kind::kPitchBend;
+      break;
     default:
       return false;
   }
+
+  out->kind = parsed;
+  out->channel = channel;
+  out->data1 = data1;
+  out->data2 = data2;
+  out->bend14 = bend14;
+  return true;
 }
 
 /*

@@ -1,7 +1,7 @@
 /* Transcription of src/theory/chords.ts. Chord types, chord building,
  * diatonic harmony, roman numerals, symbol parsing, and detection.
  *
- * The twenty-four interval sets are a flat table with an offset index, the
+ * The twenty-five interval sets are a flat table with an offset index, the
  * same shape as the scale table and for the same reason: a record keyed by
  * "m7b5" would drag every chord name into every sketch. Table order is
  * also preference order for DetectChord, earlier entries win ties, which
@@ -59,6 +59,7 @@ enum ChordType : uint8_t {
   kChordDom7s9,
   kChordDom7s11,
   kChordAug7,
+  kChordAugMaj7,
 
   kChordCount,
   /* An interval stack with no named type, the '?' of the JS. */
@@ -91,13 +92,14 @@ inline constexpr int8_t kChordSteps[] = {
     0, 4, 7, 10, 15,     /* 7#9 */
     0, 4, 7, 10, 18,     /* 7#11 */
     0, 4, 8, 10,         /* aug7 */
+    0, 4, 8, 11,         /* maj7#5, the diatonic III of harmonic minor */
 };
 
 /* Start of each chord in kChordSteps, terminated so the length of type c
  * is kChordOffset[c + 1] - kChordOffset[c]. */
 inline constexpr uint8_t kChordOffset[kChordCount + 1] = {
     0,  3,  6,  10, 14, 18, 21, 24, 27, 30, 34, 38, 42,
-    46, 50, 54, 59, 64, 69, 75, 81, 86, 91, 96, 100,
+    46, 50, 54, 59, 64, 69, 75, 81, 86, 91, 96, 100, 104,
 };
 
 static_assert(kChordOffset[kChordCount] == sizeof(kChordSteps) / sizeof(kChordSteps[0]),
@@ -333,6 +335,7 @@ inline constexpr const char* const kChordNames[kChordCount] = {
     "maj",  "min", "7",    "maj7", "m7",  "dim", "aug",  "sus2",
     "sus4", "dim7", "m7b5", "mMaj7", "6",  "m6",  "add9", "maj9",
     "m9",   "9",   "11",   "13",   "7b9", "7#9", "7#11", "aug7",
+    "maj7#5",
 };
 
 /* Half diminished, written out as its UTF-8 bytes so the header does not

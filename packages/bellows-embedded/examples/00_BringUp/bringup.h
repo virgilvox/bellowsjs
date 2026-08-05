@@ -169,25 +169,55 @@ class Rig {
     voice_ = p;
     for (int i = 0; i < kPoly; ++i) pool_.at(i).Init(sample_rate, &rng_, voice_);
 
+    /* Init runs before the audio graph is started, so plain stores. */
     stage_ = kSilence;
     pending_ = kSilence;
+    requested_ = kSilence;
+    req_stage_ = kSilence;
+    req_seq_ = 0u;
+    seen_seq_ = 0u;
     phase_ = Phase::kRunning;
+    running_ = 1;
     target_ = 0.0f;
     gain_ = 0.0f;
   }
 
-  /* Ask for a stage. The rig fades out, waits out the gap, then enters it,
+  /*
+   * Ask for a stage. The rig fades out, waits out the gap, then enters it,
    * so the stage is not actually sounding for about 410 ms. The .ino's
-   * settle window is longer than that on purpose. */
+   * settle window is longer than that on purpose.
+   *
+   * Called from loop(), which the audio software interrupt preempts. The
+   * stage machine therefore has exactly one writer, AdvancePhase() inside
+   * the interrupt, and this function only publishes a request: the stage
+   * first, then the sequence number that makes it visible, and nothing
+   * else. It used to write pending_, phase_ and target_ directly, which
+   * races AdvancePhase's own store of phase_. One interrupt landing
+   * between `pending_ = stage` and `phase_ = kFadeOut` could store
+   * kRunning last, losing the fade-out; and because the early-out
+   * compared against pending_, which the interrupt had already consumed,
+   * the next call for the same stage was a no-op and the rig stayed on
+   * the old stage for the rest of the pass while the .ino printed numbers
+   * under the new stage's name. The window is one block wide, and this is
+   * the sketch whose whole job is to produce numbers worth trusting.
+   *
+   * requested_ is loop's alone, so the early-out no longer depends on
+   * anything the interrupt writes.
+   */
   void SetStage(int stage) {
-    if (stage == pending_) return;
-    pending_ = stage;
-    phase_ = Phase::kFadeOut;
-    target_ = 0.0f;
+    if (stage == requested_) return;
+    requested_ = stage;
+    __atomic_store_n(&req_stage_, stage, __ATOMIC_RELAXED);
+    /* Release, paired with the acquire in AdvancePhase: the sequence
+     * number is what publishes the stage, so the stage has to be visible
+     * first. Single word, so there is no half-published request. */
+    __atomic_store_n(&req_seq_, req_seq_ + 1u, __ATOMIC_RELEASE);
   }
 
-  int CurrentStage() const { return stage_; }
-  bool Running() const { return phase_ == Phase::kRunning; }
+  /* Both read state the interrupt owns, so both load it explicitly rather
+   * than letting the compiler cache it across a spin in loop(). */
+  int CurrentStage() const { return __atomic_load_n(&stage_, __ATOMIC_RELAXED); }
+  bool Running() const { return __atomic_load_n(&running_, __ATOMIC_RELAXED) != 0; }
   int ActiveVoices() const { return pool_.ActiveCount(); }
 
   /* Frames handed to the render, and calls into it. The .ino compares
@@ -227,8 +257,21 @@ class Rig {
 
   /* The stage machine runs at block granularity. Nothing here is sample
    * accurate and nothing needs to be: a stage boundary is a thing a person
-   * hears, not a thing a sequencer schedules. */
+   * hears, not a thing a sequencer schedules.
+   *
+   * This runs in the audio interrupt and is the only writer of pending_,
+   * phase_, target_ and stage_. It picks a request up at the top of a
+   * block, so a request published anywhere inside a block takes effect on
+   * the next one, whatever the interrupt was doing at the time. */
   void AdvancePhase(int n) {
+    const uint32_t seq = __atomic_load_n(&req_seq_, __ATOMIC_ACQUIRE);
+    if (seq != seen_seq_) {
+      seen_seq_ = seq;
+      pending_ = __atomic_load_n(&req_stage_, __ATOMIC_RELAXED);
+      phase_ = Phase::kFadeOut;
+      __atomic_store_n(&running_, static_cast<uint8_t>(0), __ATOMIC_RELAXED);
+      target_ = 0.0f;
+    }
     if (phase_ == Phase::kFadeOut) {
       if (gain_ <= 0.0f) {
         ReleaseAll();
@@ -242,6 +285,7 @@ class Rig {
       if (gap_left_ <= 0) {
         Enter(pending_);
         phase_ = Phase::kRunning;
+        __atomic_store_n(&running_, static_cast<uint8_t>(1), __ATOMIC_RELAXED);
       }
     }
   }
@@ -257,7 +301,8 @@ class Rig {
   }
 
   void Enter(int stage) {
-    stage_ = stage;
+    /* Published for CurrentStage(), which loop() reads while this runs. */
+    __atomic_store_n(&stage_, stage, __ATOMIC_RELAXED);
     step_samples_ = 0;
     countdown_ = 0;
     chord_on_ = false;
@@ -427,7 +472,14 @@ class Rig {
   float sr_ = 48000.0f;
   float gain_ = 0.0f, target_ = 0.0f, fade_step_ = 1.0f;
   float sweep_pos_ = 0.0f;
+  /* loop() writes req_stage_ and req_seq_ and nothing else; the audio
+   * interrupt writes stage_, pending_, phase_, running_ and everything
+   * below them. requested_ and seen_seq_ are private to their one side. */
+  int requested_ = kSilence;
+  int req_stage_ = kSilence;
+  uint32_t req_seq_ = 0u, seen_seq_ = 0u;
   int stage_ = kSilence, pending_ = kSilence;
+  uint8_t running_ = 1;
   Phase phase_ = Phase::kRunning;
   int gap_samples_ = 0, gap_left_ = 0;
   int step_samples_ = 0, countdown_ = 0;

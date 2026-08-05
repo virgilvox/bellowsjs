@@ -158,9 +158,27 @@ class Oversampler {
     }
   }
 
-  /* Upsample input[from..to). Returns the internal buffer holding
-   * (to - from) * kFactor samples, valid until the next call. */
+  /*
+   * Upsample input[from..to). Returns the internal buffer holding
+   * (to - from) * kFactor samples, valid until the next call.
+   *
+   * A span longer than kMaxBlock is truncated to kMaxBlock. src/dsp/
+   * oversample.ts throws 'Oversampler block exceeds maxBlock' at the top
+   * of both up() and down(); an MCU has no exceptions (the size report
+   * builds with -fno-exceptions) and nothing sane to unwind to inside an
+   * audio callback, so the choice here is between truncating and writing
+   * past buf2_/buf4_. Truncation is a quiet wrong answer, which is bad;
+   * the overrun is a silent memory corruption of whatever the linker put
+   * next, which is worse, and it is exactly the class of fault the safety
+   * harness exists to keep out. The caller that oversteps hears the tail
+   * of its span come through unprocessed rather than losing an unrelated
+   * buffer. Both in-tree users already chunk at kMaxBlock (Saturator::
+   * Process and Limiter::Process), so this changes nothing they do; it is
+   * here because Oversampler is a public class in a header-only library.
+   * Two compares per block, below the noise of the 16-tap inner loop.
+   */
   float* Up(const float* input, int from, int to) {
+    if (to - from > kMaxBlock) to = from + kMaxBlock;
     const int n = to - from;
     up1_.Process(input, from, to, buf2_, 0);
     if constexpr (kFactor == 4) {
@@ -172,8 +190,11 @@ class Oversampler {
   }
 
   /* Downsample `processed` ((to - from) * kFactor samples starting at 0)
-   * into out[from..to). */
+   * into out[from..to). Truncated at kMaxBlock the same way Up() is, and
+   * for the same reason: out[from + kMaxBlock .. to) keeps whatever it
+   * held, which for an in-place effect is the dry signal. */
   void Down(const float* processed, float* out, int from, int to) {
+    if (to - from > kMaxBlock) to = from + kMaxBlock;
     const int n = to - from;
     if constexpr (kFactor == 4) {
       stage2_.down.Process(processed, 0, n * 2, buf2_, 0);

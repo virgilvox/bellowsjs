@@ -40,11 +40,44 @@
  */
 #pragma once
 
+#include <stdint.h>
+
+#include "bellows/config.h"
+
+namespace bellows {
+namespace detail {
+
+/* Hard clip, then scale. Wrapping an out of range sample would turn a
+ * moment of overdrive into full-scale noise, which is the worst failure
+ * mode available on a speaker. 32767 rather than 32768 so that +1.0 and
+ * -1.0 stay symmetric.
+ *
+ * NaN is the one input the clip cannot clip. bellows::Clamp is
+ * `v < lo ? lo : (v > hi ? hi : v)` and both comparisons are false for
+ * NaN, so it used to reach static_cast<int16_t>(NaN * 32767.0f), which is
+ * undefined: measured under UBSan through npm run memsafety, "nan is
+ * outside the range of representable values of type 'short'", and with
+ * -fno-sanitize-recover the run aborts. Cortex-M7's VCVT happens to
+ * yield 0, so the practical result on the board was already a sample of
+ * silence; this makes silence the defined answer instead of the one the
+ * part chose. Same treatment as fastmath.h's Exp2, and the realistic
+ * source is the same: a self-oscillating filter or a divide in a feedback
+ * path handing the codec a NaN block.
+ *
+ * Outside the __IMXRT1062__ guard below on purpose. It is pure float to
+ * int arithmetic with nothing Teensy about it, and the host safety
+ * harness cannot gate a conversion it cannot compile. */
+inline int16_t ToInt16(float x) {
+  if (isnan(x)) return 0;
+  return static_cast<int16_t>(Clamp(x, -1.0f, 1.0f) * 32767.0f);
+}
+
+}  // namespace detail
+}  // namespace bellows
+
 #if defined(__IMXRT1062__)
 
 #include <Audio.h>
-#include <stdint.h>
-#include "bellows/config.h"
 
 namespace bellows {
 
@@ -70,14 +103,7 @@ namespace detail {
  * same time. Sharing saves a kilobyte for every stream after the first. */
 inline float teensy_scratch_l[AUDIO_BLOCK_SAMPLES];
 inline float teensy_scratch_r[AUDIO_BLOCK_SAMPLES];
-
-/* Hard clip, then scale. Wrapping an out of range sample would turn a
- * moment of overdrive into full-scale noise, which is the worst failure
- * mode available on a speaker. 32767 rather than 32768 so that +1.0 and
- * -1.0 stay symmetric. */
-inline int16_t ToInt16(float x) {
-  return static_cast<int16_t>(Clamp(x, -1.0f, 1.0f) * 32767.0f);
-}
+/* ToInt16 lives above the guard; see the note on it there. */
 }  // namespace detail
 
 /* Wraps any callable with the bellows render signature
