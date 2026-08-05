@@ -44,7 +44,7 @@ detectChord([0, 4, 7]);      // 'C'
 detectChord([2, 5, 9]);      // 'Dm'
 \`\`\`
 
-\`parseChord\` reads the usual symbols; \`detectChord\` names a set of pitch classes, treating the first element as the bass, and returns null when nothing matches exactly. Twenty-four chord types ship in \`CHORD_TYPES\`, from triads through altered dominants. \`ch.midi(octave)\` is the bridge to sound: feed the array to \`inst.chord()\`.
+\`parseChord\` reads the usual symbols; \`detectChord\` names a set of pitch classes, treating the first element as the bass, and returns null when nothing matches exactly. Twenty-five chord types ship in \`CHORD_TYPES\`, from triads through altered dominants. \`ch.midi(octave)\` is the bridge to sound: feed the array to \`inst.chord()\`.
 
 ## Diatonic sets
 
@@ -67,7 +67,7 @@ import { romanToChord, chordToRoman } from 'bellowsjs';
 
 const five = romanToChord('V7', cmaj);   // G7
 five.midi(3);                            // [55,59,62,65]
-romanToChord('bVII', cmaj);              // borrowed Bb
+romanToChord('bVII', cmaj);              // borrowed, spelled A# (see chordName)
 chordToRoman(parseChord('Dm'), cmaj);    // 'ii'
 \`\`\`
 

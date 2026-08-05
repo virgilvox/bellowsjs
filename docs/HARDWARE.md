@@ -2,9 +2,21 @@
 
 What it takes to run bellows on a microcontroller, which parts port and which do not, and the
 design of `packages/bellows-embedded`. Every number here is measured, not estimated: the C++ is
-compiled with `arm-none-eabi-g++` 11.3 at `-Os` with `-ffunction-sections -fdata-sections
+compiled with `arm-none-eabi-g++` 11.3.1 at `-Os` with `-ffunction-sections -fdata-sections
 -Wl,--gc-sections`, linked freestanding against a 1 MB RAM and 8 MB flash script, with no
 Arduino core and no BSP, so the figures are the library and nothing else.
+
+Read that version as part of the measurement, because the compiler is not interchangeable here.
+`size-report.sh` takes the first `arm-none-eabi-g++` on `PATH` and otherwise the first under
+`~/.platformio/packages`, and this machine has two: 11.3.1 from the Teensy toolchain, which is
+what a run with an empty `PATH` finds and what every figure below came from, and 9.2.1 from the
+generic one. Running the whole report under both moves 36 of its 37 rows: `s1_kick` 3752 against
+3760, `s4_va` 29560 against 28576, `s9c_fm` 5800 against 5384. An earlier revision of this line
+said the two were byte identical, which was written from a report that had not been re-run.
+`check-docs.mjs` therefore does not just read the version out of whichever compiler it finds; it
+reads this sentence, finds the compiler that reports that version, and puts it at the front of
+`PATH` for the size report, so a machine with two toolchains cannot silently produce a different
+document.
 
 Reproduce any of it with:
 
@@ -13,7 +25,22 @@ cd packages/bellows-embedded
 ./tools/size-report.sh              # Cortex-M7, the Teensy 4.1 and Daisy target
 ./tools/size-report.sh cortex-m4    # single-precision FPU
 ./tools/check-header.sh bellows/engines/va.h
+node tools/check-docs.mjs --check   # every figure below, against every harness
 ```
+
+`check-docs.mjs` is the honest answer to "reproduce any of it": it re-reads this document, the
+package README, the examples README, `docs/HANDOFF.md`, `docs/KICKOFF.md` and
+`docs/ENGINEERING.md` and compares every figure in them against the size report, the symbol table
+of the sketches it links, `npm run parity`, `npm run tables`, `npm run fastmath` and `npx vitest
+list`. It reads prose over the reflowed paragraph rather than line by line, because a rewrap had
+switched five claims off silently, and it reports a marker that matches nothing rather than
+passing. Seven things here it cannot reach, and they are
+the ones to distrust first: the whole-firmware Teensy table and the Daisy table (they need
+PlatformIO, the Arduino core and libDaisy), the double-precision recursion table and the
+oscillator residual-versus-harmonic ns table (both separate benchmarks with no source in this
+tree), the `StereoDelay` memory table (arithmetic, with only the overflow row verified by
+compiling), the board capacity table (data sheets), and the newlib-against-fastmath byte
+comparison below (five symbols summed by hand across two builds). Those still rot by hand.
 
 ## The short version
 
@@ -53,7 +80,7 @@ These are measured decisions, not style preferences.
    | through `Bank<Kick>` with a runtime index | 3760 B | 1104 B |
    | through a string-keyed registry of five engines | 30488 B | 30872 B |
 
-   Eight times the flash and twenty-eight times the RAM for the same sound. A registry names
+   8.1 times the flash and 28.1 times the RAM for the same sound. A registry names
    every engine, so the linker must keep every engine, every constant table and every delay
    buffer, including ones the program can never reach. `bellows/bank.h` gives the same
    `getEngine(id)` ergonomics at literally zero cost.
@@ -74,26 +101,43 @@ These are measured decisions, not style preferences.
    one: 32 KB of `Float64Array` built at module load in JS, 16 KB of const `float` in flash here.
 
 7. **One header per concept, and headers include only what they use.** This is why
-   `engines/pluck.h` costs 6.6 KB and `engines/va.h` costs 28.5 KB: pluck does not pull in the
-   BLEP tables.
+   `engines/pluck.h` costs 6728 B and `engines/va.h` costs 28576 B: pluck does not pull in the
+   BLEP tables. (Both were written as "6.6 KB" and "28.5 KB" and both went stale in the third
+   digit, which is why the sketch figures are quoted in bytes now: a byte count is checkable and
+   a rounded one is an opinion about which kilobyte you meant.)
 
 ## Where the flash actually goes
 
-Symbol breakdown of the VA voice sketch, 28552 bytes total:
+Symbol breakdown of the VA voice sketch, 28576 bytes of flash. Counted with `arm-none-eabi-nm
+-S -C` over the elf the size report links, deduped by address (newlib aliases several helpers,
+`__adddf3` and `__aeabi_dadd` being one symbol under two names) and restricted to code and
+rodata. The split is by a rule a script applies rather than by eye: the two residual tables by
+name, everything else whose demangled name begins with `bellows::`, the sketch's own `main`, and
+whatever is left, which is newlib.
 
-```
-kBlepStep            8196 B   Kaiser-sinc BLEP residual table
-kBlepRamp            8196 B   BLAMP residual table
-__kernel_rem_pio2f   1624 B   newlib sinf argument reduction
-powf                  800 B
-__adddf3 / __subdf3  ~1270 B  soft double helpers newlib drags in
-------------------------------
-tables plus libm    ~21.5 KB
-Va, Ladder, Adsr, Svf code    ~7 KB
-```
+| `s4_va` | bytes | share of flash |
+| --- | --- | --- |
+| residual tables, `kBlepStep` plus `kBlepRamp` | 16392 | 57 % |
+| newlib, libm and libc together | 8630 | 30 % |
+| every other `bellows::` symbol | 2632 | 9 % |
+| the sketch's own `main` | 552 | 2 % |
 
-The DSP code is small. Tables and libm are three quarters of it. That leads to the second-largest
-single win available:
+Those four sum to 28206 of the 28576 the size report prints. The 370 byte remainder is unsized
+symbols plus the part of `.text` the symbol table does not attribute, and it is left explicit
+rather than folded into a row.
+
+An earlier revision of this table gave the two rows "tables plus libm ~21.5 KB" and "Va, Ladder,
+Adsr, Svf code ~7 KB", which were chosen to add up to the sketch total rather than counted. That
+put the DSP row 2.7 times too high, because subtracting from the total folds the harness and
+every uncounted libm symbol into it. It is the same error this document records at the `s5_all`
+table below, made twice, which is why both tables are now generated by the same rule and checked
+by `check-docs.mjs`.
+
+The largest single entries are the two tables, and then argument reduction: `__kernel_rem_pio2f`
+is 1624 bytes and `powf` 800, both of which the fast-math flag removes outright.
+
+The DSP code is a tenth of the flash. Tables and libm are seven eighths of it. That leads to the
+second-largest single win available:
 
 ```
 sinf + cosf + tanhf + powf + expf from newlib   5056 B
@@ -120,7 +164,7 @@ it. Measured, Cortex-M7:
 | `s9e_westcoast` | 16784 B | 11212 B | 33 % |
 | `s4_va` | 28576 B | 20672 B | 27 % |
 | `p2_poly8` | 30984 B | 22660 B | 26 % |
-| `s9f_formant` | 28344 B | 21036 B | 25 % |
+| `s9f_formant` | 28368 B | 21048 B | 25 % |
 | `s5_all` | 35168 B | 26176 B | 25 % |
 | `s9m_seq` | 5296 B | 5296 B | 0 % |
 
@@ -140,8 +184,9 @@ have landed on the bits `logf` produces.
 Nothing calls `<math.h>` directly any more. The last holdout was `atan2f` in `engines/pluck.h`,
 used once per note to turn the loop filter's phase shift into a fractional delay length, and it
 was worth routing: newlib pulls in `__ieee754_atan2f` and `atanf` for 764 bytes, and with the
-flag on it was the only libm symbol left in a pluck sketch. `s3_pluck` is now 6552 bytes at the
-default and 2276 with the flag, a 65 percent saving where there was none before.
+flag on it was the only libm symbol left in a pluck sketch.
+`s3_pluck` is now 6728 bytes at the default and 2468 with the flag, a 63 percent saving where
+there was none before.
 
 Its gate is the one that argued back. The obvious cheap approximation, the Hastings cubic,
 measures 1.5e-3 radians and looked fine until the gate asked what that meant downstream: pluck
@@ -169,6 +214,9 @@ the file against libm over the domain the DSP actually drives, and fails on regr
 | `Exp2` | 1.7e-5 abs | 1e-4 |
 | `Log2` | 1.9e-6 abs | 1e-5 |
 | `Pow` | 1.4e-5 rel | 5e-4 |
+| `Log` | 1.9e-6 abs | 1e-5 |
+| `Tan` | 3.1e-4 abs | 2e-3 |
+| `Atan2` | 1.2e-5 abs | 1.2e-4 |
 | `CentsRatio` | 0.015 cents | 0.15 cents |
 
 The pitch helper is gated in cents on purpose, because that is the only unit in which "is this
@@ -213,9 +261,10 @@ the browser build in `docs/AUDIT.md`. As a template parameter it becomes a knob,
 change recovers the waste in the browser.
 
 The other knob that matters is the loop length of the physical models. `Pluck<20>` reserves for a
-20 Hz fundamental and costs 30.0 KB per voice; `Pluck<80>` costs 8.4 KB. Eight-voice polyphony is
-the difference between 240 KB and 67 KB. Those figures moved when the rings stopped rounding up
-to a power of two: they were 36.7 KB and 10 KB per voice, 294 KB and 80 KB for eight.
+20 Hz fundamental and costs 29988 B of RAM; `Pluck<80>` costs 8388 B, both measured as the whole
+sketch, so each carries the same 1028 B of harness. Eight-voice polyphony is the difference
+between about 240 KB and about 67 KB. Those figures moved when the rings stopped rounding up to a
+power of two: they were 36740 B and 10052 B.
 
 ## Per module, measured
 
@@ -224,22 +273,22 @@ it, so these are real costs and not a floor. Reproduce with `./tools/size-report
 
 | Module | flash | RAM | notes |
 | --- | --- | --- | --- |
-| `theory/` (scales, chords, tuning, notes) | 2616 B | 116 B | the differentiator, and it is nearly free |
+| `theory/` (scales, chords, tuning, notes) | 2624 B | 116 B | the differentiator, and it is nearly free |
 | `fx/dynamics` | 4048 B | 10016 B | compressor, limiter lookahead line |
-| `fx/modfx` | 4904 B | 17672 B | chorus, flanger, tremolo, autopan, ringmod |
+| `fx/modfx` | 4928 B | 17712 B | chorus, flanger, tremolo, autopan, ringmod |
 | `engines/tube` | 5000 B | 2460 B | `Tube<80>` bore |
 | `seq/` (euclid, arp, CA, lsystem, tempomap) | 5296 B | 900 B | fixed capacity, no allocation |
 | `engines/fm` | 5384 B | 1536 B | SineOsc only, so no BLEP tables |
-| `fx/saturator` | 5544 B | 10136 B | with the oversampler |
-| `fx/plate` | 5704 B | 156728 B | Dattorro tank, the RAM is the tank |
+| `fx/saturator` | 5568 B | 10136 B | with the oversampler |
+| `fx/plate` | 5752 B | 156736 B | Dattorro tank, the RAM is the tank |
 | `engines/modal` | 5944 B | 1584 B | five material tables in flash |
 | `kernel` | 6208 B | 2492 B | event queue plus block splitting |
 | `engines/westcoast` | 16784 B | 1204 B | BLEP tables dominate |
-| `engines/formant` | 28344 B | 1500 B | BLEP tables dominate |
+| `engines/formant` | 28368 B | 1504 B | BLEP tables dominate |
 
 The BLEP tables are 16 KB and shared, so the first module that needs them pays and every later
-one is nearly free. `fm`, `modal`, `tube` and `pluck` do not need them at all, which is why an
-FM plus pluck instrument is under 12 KB while a formant voice alone is 28 KB.
+one is nearly free. `fm`, `modal`, `tube` and `pluck` do not need them at all, which is why
+`fm` costs 5384 B and `pluck` 6728 B where a formant voice alone costs 28368 B.
 
 The theory row is the one to notice. Scales, chords, tunings and note parsing together are
 2.6 KB of flash and 116 bytes of RAM.
@@ -251,16 +300,17 @@ constructs and drives everything at once:
 
 Symbols are deduped by address, because newlib aliases several of its helpers
 (`__adddf3` and `__aeabi_dadd` are one symbol under two names), and restricted to code and
-rodata, because `nm -S` will otherwise hand you the delay buffer and drown everything:
+rodata, because `nm -S` will otherwise hand you the delay buffer and drown everything. Same
+four-way rule as the VA table above:
 
-| | bytes | share of flash |
+| `s5_all` | bytes | share of flash |
 | --- | --- | --- |
 | `kBlepStep` and `kBlepRamp` residual tables | 16392 | 47 % |
-| newlib libm | 8828 | 25 % |
+| newlib, libm and libc together | 10002 | 28 % |
 | every line of bellows DSP | 5704 | 16 % |
-| the sketch's own harness and startup | 3670 | 10 % |
+| the sketch's own `main` | 2560 | 7 % |
 
-Those four sum to 34594 of the 35104 bytes the size report prints. The 510 byte gap is unsized
+Those four sum to 34658 of the 35168 bytes the size report prints. The 510 byte gap is unsized
 symbols plus the part of `.data` that the symbol-type filter does not see, and it is left
 explicit rather than absorbed into one of the rows, because absorbing it is how the previous
 version of this table ended up claiming 35 percent for the DSP.
@@ -271,7 +321,7 @@ folded the harness into the DSP row and undercounted the soft-double helpers. Th
 split makes the point harder, not softer: the DSP code is a sixth of the flash and the tables
 plus libm are nearly three quarters.
 
-The DSP code is not the weight and never was. Individual functions are 400 to 500 bytes:
+The DSP code is not the weight and never was. Individual functions run a few hundred bytes:
 `Svf::Update` is 444, `NoiseGen::Process` is 528. Two constant tables and one delay buffer are
 the library's size, which is why the wins below are all about storage rather than about
 arithmetic, and why no rewrite of the DSP in another language or another architecture would move
@@ -279,8 +329,8 @@ any of them.
 
 **Delay buffers are sized exactly.** They used to round up to a power of two so the wrap could be
 a bitwise AND, which cost up to 49 percent of the largest RAM consumer in the library. Exact
-sizing costs one conditional add per read instead. Measured: `s5_all` 300144 to 223280 bytes
-(25 percent), the plate tank 222684 to 156728 (29 percent), a 100 ms stereo delay 66688 to 39584
+sizing costs one conditional add per read instead. Measured: `s5_all` 300144 to 223324 bytes
+(25 percent), the plate tank 222684 to 156736 (29 percent), a 100 ms stereo delay 66688 to 39584
 (40 percent). Flash is a wash. The samples are identical, so every parity row reads exactly what
 it read before.
 
@@ -305,8 +355,8 @@ that was already there. If your shape really is a compile-time constant you get 
 without calling the helper.
 
 The engines whose shape is fixed at construction now call the helpers, and that is where the
-saving actually lands: `s9e_westcoast` went 27064 to 16768 bytes and
-`p1_drums` 29448 to 20832, each keeping only the table it reads. A program that
+saving actually lands: `s9e_westcoast` went 27064 to 16784 bytes and
+`p1_drums` 29448 to 20856, each keeping only the table it reads. A program that
 mixes both styles, like `s5_all`, pays about 150 bytes for carrying the two dispatch paths, which
 is the honest cost of the choice being per call site rather than global.
 
@@ -440,25 +490,30 @@ so they cannot drift from the code:
 | --- | --- | --- |
 | `01_OneKick` | 3776 B | 1100 B |
 | `02_DrumMachine` (bank plus euclid) | 29688 B | 1620 B |
-| `03_PolySynth` (`VoicePool<Va, 8>`) | 30408 B | 3872 B |
+| `03_PolySynth` (`VoicePool<Va, 8>`) | 30408 B | 3876 B |
 | `04_ScalesAndTuning` | 8096 B | 30176 B |
-| `05_MidiInstrument` | 30344 B | 3888 B |
+| `05_MidiInstrument` | 30336 B | 3888 B |
 
 Against real boards, using the largest profile:
 
 | Board | Flash | RAM | flash used | RAM used |
 | --- | --- | --- | --- | --- |
-| Teensy 4.1 | 8 MB | 1 MB (512 ITCM + 512 OCRAM), plus soldered PSRAM to 16 MB | 0.4 % | 20 % |
-| Daisy Seed / Seed3 | 128 KB internal, 8 MB QSPI | 512 KB SRAM, 64 MB SDRAM | fits in internal flash, 94 KB spare | 40 % |
-| RP2350 | external, 2 to 16 MB | 520 KB | under 1 % | 40 % |
-| ESP32-S3 | 8 to 16 MB | 512 KB, plus 8 MB octal PSRAM | under 1 % | 40 % |
+| Teensy 4.1 | 8 MB | 1 MB (512 ITCM + 512 OCRAM), plus soldered PSRAM to 16 MB | 0.4 % | 21 % |
+| Daisy Seed / Seed3 | 128 KB internal, 8 MB QSPI | 512 KB SRAM, 64 MB SDRAM | 27 % of internal flash, 93.7 KB spare | 43 % |
+| RP2350 | external, 2 to 16 MB | 520 KB | under 1 % | 42 % |
+| ESP32-S3 | 8 to 16 MB | 512 KB, plus 8 MB octal PSRAM | under 1 % | 43 % |
 
 The Daisy row is the striking one. The STM32H750 has only 128 KB of internal flash, which is why
 libDaisy ships a bootloader that executes in place from the 8 MB QSPI. The whole ported engine
 set is 34 KB, so it fits in internal flash and needs no bootloader at all.
 
-Restated plainly: on every viable board, bellows uses well under one percent of flash and under
-half the RAM, and delay buffers are the only thing that moves the needle.
+Restated plainly: on every board here that has megabytes of flash, bellows is a rounding error
+against it; on the one board where flash is tight, the whole ported set is 27 percent of the
+STM32H750's internal 128 KB and still leaves 93.7 KB free. RAM is the number that actually moves,
+at 42 to 43 percent of a 512 KB part, and delay buffers are 86 percent of that. An earlier
+revision of this paragraph said "well under one percent of flash and under half the RAM on every
+viable board", which the Daisy row of the table directly above it contradicts, and the Daisy row
+is the whole point of the table.
 
 ## Does it actually build as firmware
 
@@ -610,7 +665,9 @@ is what `bellows/bank.h` is.
 
 `test/parity/parity.mjs` renders the same note from both implementations and diffs them. It runs
 in CI. The gates sit at roughly ten times the drift actually measured, so they catch a regression
-rather than rubber stamping anything that runs.
+rather than rubber stamping anything that runs. The harness prints 34 rows in all; the block
+below is the engine and effect subset, without the four bit-exact `fxin` input rows or the
+per-curve and per-shape variants.
 
 ```
 module        rel rms   max abs     gate  result
@@ -626,9 +683,9 @@ modal         1.23e-4   9.42e-5    0.001  pass
 westcoast     2.77e-3   2.20e-3     0.02  pass  iterated wavefolder
 formant       1.39e-5   1.37e-5  0.00015  pass
 tube          1.70e-3   1.09e-2    0.005  pass  error rides the waveform edges
-eq            2.93e-7   1.79e-7 0.000003  pass
-delay         7.78e-8   2.98e-8 0.000001  pass
-saturator     2.00e-7   1.49e-7 0.000002  pass
+eq            2.88e-7   1.79e-7 0.000003  pass
+delay         9.54e-8   4.66e-8 0.000001  pass
+saturator     1.92e-7   1.49e-7 0.000002  pass
 compressor    2.25e-6   1.16e-6  0.00002  pass
 chorus_static 6.31e-6   1.26e-6   0.0001  pass  depth 0: the real DSP gate
 chorus        2.02e-4   8.87e-5    0.002  pass  depth 0.5: sub-sample read position
@@ -649,7 +706,7 @@ group         rows   bad  result        group         rows   bad  result
 euclid         152     0  pass          ca              32     0  pass
 euclidrot        7     0  pass          arp              5     0  pass
 scale           34     0  pass          tempo           17     0  pass
-chord           24     0  pass          tempoinv         9     0  pass
+chord           25     0  pass          tempoinv         9     0  pass
 parsenote        8     0  pass          midi            10     0  pass
 notename        19     0  pass
 ```
@@ -692,8 +749,11 @@ moved three rows at once:
 | `formant` | 7.85e-4 | 1.39e-5 |
 
 The wrap is the natural unsigned overflow, so it costs neither a compare nor a branch, and the
-whole change costs at most 64 bytes of flash on any sketch and no RAM anywhere: modfx 4936 to
-5000, formant 28296 to 28328, plate 5712 to 5712, the poly synth example 30304 to 30360. An
+whole change cost at most 64 bytes of flash on any sketch and no RAM anywhere, measured on four
+sketches as it landed: modfx 4936 to 5000, formant 28296 to 28328, plate 5712 to 5712, the poly
+synth example 30304 to 30360. Those four pairs are a delta from that day and not a claim about
+today's sizes, which is why they are the only figures in this section `check-docs.mjs` does not
+re-read; the current sizes are in the per-module and profile tables above. An
 earlier revision of it computed the increment in double, which cost 2560 bytes on Cortex-M4
 against 208 on Cortex-M7, because a double on a single-precision part pulls in soft-float. It
 bought nothing: single precision gives the same parity to every digit, since multiplying a float

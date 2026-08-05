@@ -16,21 +16,22 @@ against a fixed voice budget. See `00_BringUp/README.md`.
 | example | adds | flash | RAM |
 | --- | --- | --- | --- |
 | 01_OneKick | one voice, one audio callback | 3776 B | 1100 B |
-| 02_DrumMachine | a compile-time Bank, euclidean patterns | 29696 B | 1588 B |
-| 03_PolySynth | VoicePool, a swept filter | 30304 B | 3776 B |
-| 04_ScalesAndTuning | the theory layer, 12-EDO against 19-EDO | 8080 B | 36928 B |
-| 05_MidiInstrument | MIDI byte parsing into a voice pool | 30296 B | 3792 B |
+| 02_DrumMachine | a compile-time Bank, euclidean patterns | 29688 B | 1620 B |
+| 03_PolySynth | VoicePool, a swept filter | 30408 B | 3876 B |
+| 04_ScalesAndTuning | the theory layer, 12-EDO against 19-EDO | 8096 B | 30176 B |
+| 05_MidiInstrument | MIDI byte parsing into a voice pool | 30336 B | 3888 B |
 
 Cortex-M7 at `-Os` with `--gc-sections`, library only: no Arduino core and
 no audio library, so these are the bellows half of the binary and nothing
 else. Reproduce them with `./tools/size-report.sh`, rows `p4_` through
-`p8_`.
+`p8_`, and `node ../tools/check-docs.mjs --check` reads these five rows
+back and compares them, because four of the five had drifted before it did.
 
 Two of these numbers are worth reading rather than skimming. 02, 03 and 05
 all sit near 30 KB because each reaches `BlepOsc`, whose band-limited step
 tables are about 16 KB and are paid once no matter how many voices use
-them. 04 is 8 KB because a plucked string needs no such table, and its 36 KB
-of RAM is the delay line that is the string. That spread is the whole
+them. 04 is 8096 B of flash because a plucked string needs no such table, and its
+30176 B of RAM is the delay line that is the string. That spread is the whole
 argument for one header per concept.
 
 ## Layout
@@ -47,6 +48,11 @@ that same header and is what the size report compiles, so the numbers above
 come from the code you are reading rather than from a copy of it that can
 drift. Anything a sketch does that is not board-specific belongs in the
 header.
+
+That mechanism worked and the table still went stale, in four of its five
+rows, because nothing re-read this file. Sharing a source with the size
+report keeps a number honest about WHAT it measures; only a checker keeps it
+honest about WHEN. `tools/check-docs.mjs` is that checker.
 
 ## Targets
 

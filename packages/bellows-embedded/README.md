@@ -14,8 +14,9 @@ void setup() { kick.Init(48000.0f); }
 kick.Process(bufL, bufR, 0, blockSize);
 ```
 
-That sketch costs **3760 bytes of flash and 1100 bytes of RAM**. Including every header in the
-library but using only the kick costs 16 bytes more. That is the whole point of the design.
+That sketch costs **3760 bytes of flash and 1100 bytes of RAM**. Wrapping it the way the
+`01_OneKick` example does, in a render class with non-default parameters, costs 16 bytes more.
+That is the whole point of the design.
 
 ## Why another embedded audio library
 
@@ -31,8 +32,10 @@ the same seed gives the same stream on a laptop and on a board.
 
 ## You pay only for what you include
 
-This is enforced by structure, not by hope. Measured with `arm-none-eabi-g++` 11.3 at `-Os` for
-Cortex-M7, freestanding, no Arduino core:
+This is enforced by structure, not by hope. Measured with `arm-none-eabi-g++` 11.3.1 at `-Os` for
+Cortex-M7, freestanding, no Arduino core. The compiler version is part of the measurement: a
+different one moves most of these rows by tens to hundreds of bytes, and `docs/HARDWARE.md` has
+the comparison.
 
 | Sketch | flash | RAM |
 | --- | --- | --- |
@@ -45,10 +48,10 @@ Cortex-M7, freestanding, no Arduino core:
 | `Eq3` | 6984 B | 1392 B |
 | `StereoDelay<100>` | 1768 B | 39584 B |
 | `StereoDelay<500>` | 1760 B | 193184 B |
-| `theory/` (scales, chords, tunings, notes) | 2616 B | 116 B |
+| `theory/` (scales, chords, tunings, notes) | 2624 B | 116 B |
 | `seq/` (euclid, arp, CA, lsystem, tempomap) | 5296 B | 900 B |
 | `Fm` | 5384 B | 1536 B |
-| `Plate` | 5704 B | 156728 B |
+| `Plate` | 5752 B | 156736 B |
 | `kernel` | 6208 B | 2492 B |
 | everything, constructed and driven | 35168 B | 223324 B |
 
@@ -71,7 +74,7 @@ constant table and every delay buffer, including ones the program can never reac
 | through `Bank<Kick>`, dispatched by runtime index | 3760 B | 1104 B |
 | through a string-keyed registry of five engines | 30488 B | 30872 B |
 
-Eight times the flash and thirty-four times the RAM for the same sound. So there is no registry
+8.1 times the flash and 28.1 times the RAM for the same sound. So there is no registry
 here. `bellows/bank.h` gives you the same ergonomics for free:
 
 ```cpp
@@ -171,15 +174,15 @@ pluck         4.96e-6   1.94e-6  0.00005  pass
 theory        9.42e-8   7.32e-4 0.000001  pass  12/19/24/31/53-EDO and 5-limit JI
 fm            5.25e-4   9.84e-4    0.005  pass
 modal         1.23e-4   9.42e-5    0.001  pass
-formant       7.85e-4   3.74e-4    0.005  pass
-eq            2.93e-7   1.79e-7 0.000003  pass
-delay         7.78e-8   2.98e-8 0.000001  pass
-plate         2.44e-3   1.91e-3    0.005  pass
+formant       1.39e-5   1.37e-5  0.00015  pass
+eq            2.88e-7   1.79e-7 0.000003  pass
+delay         9.54e-8   4.66e-8 0.000001  pass
+plate         1.34e-5   1.00e-5  0.00015  pass
 ```
 
-Nineteen modules in all, plus `npm run tables`, which compares the parts that make no sound
+34 rows in all, plus `npm run tables`, which compares the parts that make no sound
 (scales, chords, euclid, arp, cellular automata, the tempo map, MIDI parsing) exactly rather
-than by tolerance: 317 rows, 0 mismatched.
+than by tolerance: 318 rows, 0 mismatched.
 
 The theory row covers pitch rather than audio, because a wrong tuning table is silent and no
 test that listens to a buffer can catch it.

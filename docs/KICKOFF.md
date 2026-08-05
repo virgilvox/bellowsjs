@@ -38,12 +38,14 @@ READ FIRST, in this order, before touching anything:
                         it, because an earlier untraceable claim had to be withdrawn.
 
 WHERE THINGS STAND
-- packages/bellows is the library and the source of truth for all DSP. 83 test files, 1204
-  tests, tsc clean, golden render green.
+- packages/bellows is the library and the source of truth for all DSP. tsc clean, golden render
+  green, and the whole suite passing. The file and test counts live in docs/HANDOFF.md and
+  nowhere else, because nothing checks them and two copies of a count are two chances to be
+  wrong: this prompt used to carry a third and a fourth, and all four disagreed.
 - packages/bellows-embedded is the C++ port. 43 headers, compiling standalone and combined for
   Cortex-M7 and M4. All five examples plus a bring-up rig build as real Teensy 4.1 firmware, and
   examples/daisy_onekick links against real libDaisy.
-- Parity passes on 19 audio modules with the PRNG bit exact, plus 317 exactly-compared value
+- Parity passes on 34 rows with the PRNG bit exact, plus 318 exactly-compared value
   rows for the parts that make no sound.
 - TWO THINGS HAVE NOT HAPPENED, and both matter more than they look:
     NOTHING HAS BEEN FLASHED TO A BOARD AND LISTENED TO. Everything is compile-verified and
@@ -63,11 +65,11 @@ HARD RULES (from CLAUDE.md, non-negotiable)
   an assumption. Dependency direction is one way and never imports upward.
 
 VERIFY EVERYTHING WITH THESE. Run them before you claim anything works.
-  packages/bellows:            npm test                     83 files, 1227 tests
+  packages/bellows:            npm test                     all green, no count quoted here
                                npx tsc --noEmit
                                npm run gen:worklet          then confirm no git diff
-  packages/bellows-embedded:   npm run parity               26 modules against the TypeScript
-                               npm run tables               317 value rows, compared exactly
+  packages/bellows-embedded:   npm run parity               34 rows against the TypeScript
+                               npm run tables               318 value rows, compared exactly
                                npm run fastmath             polynomial accuracy against libm
                                npm run memsafety            ASan and UBSan, 0.5x to 4x rate
                                npm run memsafety:fastmath   the same under BELLOWS_FAST_MATH
@@ -83,10 +85,17 @@ TRAPS THAT WILL BITE YOU, in the order they are likely to
    tests use renderOffline which imports source directly, and realtime silently runs the old
    DSP. This has already happened once. CI would catch it if CI ran.
 2. Every documented number rots. A change moves a sketch and the tables quoting it are left
-   behind; that happened four times in one session. node tools/check-docs.mjs --check is the
-   control, and it now covers docs/HARDWARE.md, the embedded README and the two figures
-   HANDOFF rule 12 rests on: 122 figures. It does NOT cover the whole-firmware Teensy table,
-   the Daisy table, the ns tables or the board capacity table, and those still rot by hand.
+   behind; that happened four times in one session, and a second audit then found sixteen more.
+   node tools/check-docs.mjs --check is the control, and it now covers 360 figures across
+   docs/HARDWARE.md, the embedded README, examples/README.md, docs/HANDOFF.md, docs/ENGINEERING.md
+   and this file, against the size report, the sketch symbol tables, parity, tables, fastmath and
+   vitest list.
+   It does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board
+   capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release
+   ritual. If you write a figure a command can print, add it to check-docs.mjs in the same
+   commit. Note that it pins the ARM toolchain to the version docs/HARDWARE.md names: the two
+   installed on this machine disagree on 36 of the 37 size rows, so a report run under the other
+   one looks like a repository-wide regression and is not one.
 3. Never add a global registry to the C++ port. One kick through a string-keyed registry of five
    engines costs 30488 bytes of flash and 30872 of RAM against 3760 and 1100 direct.
    bellows/bank.h gives runtime dispatch at byte-identical cost.
