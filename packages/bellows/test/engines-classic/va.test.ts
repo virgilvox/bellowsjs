@@ -21,8 +21,12 @@ describe('va engine', () => {
     expect(maxDiff(plain.l, bounded.l)).toBe(0);
     expect(maxDiff(plain.r, bounded.r)).toBe(0);
 
-    const highPlain = render(vaEngine, { freq: 9000, seed: 'va/hf' });
-    const highBounded = render(vaEngine, { freq: 9000, params: { boundedHighFreq: 1 }, seed: 'va/hf' });
+    /* Above SWITCH_DT (0.22, so 9702 Hz at 44100) the two oscillators take
+     * the harmonic path. The sub oscillator runs an octave down and stays
+     * on the residual path, which is the point: the switch is per
+     * oscillator and per pitch, not per voice. */
+    const highPlain = render(vaEngine, { freq: 12000, seed: 'va/hf' });
+    const highBounded = render(vaEngine, { freq: 12000, params: { boundedHighFreq: 1 }, seed: 'va/hf' });
     expect(maxDiff(highPlain.l, highBounded.l)).toBeGreaterThan(0);
     expect(hasBadSamples(highBounded.l)).toBe(false);
     expect(peak(highBounded.l)).toBeGreaterThan(0.03);

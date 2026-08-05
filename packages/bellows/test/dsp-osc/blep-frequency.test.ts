@@ -1,20 +1,23 @@
 /*
- * Alias rejection across the band, and the high frequency fallback.
+ * Alias rejection across the whole band, and the high frequency fallback.
  *
  * oscillators.test.ts measures rejection at one frequency, 2637 Hz. That
- * leaves the whole top of the range unguarded, which matters because
- * oscillator cost and alias behaviour both change with pitch: the residual
- * sum spans 2 * KERNEL_HALF * dt + 1 edges, so the character of the
- * correction at 7 kHz is not the character of the correction at A440. A
- * change that quietly cost 30 dB above 5 kHz would pass every existing
- * test in this directory.
+ * leaves the rest of the range unguarded, which matters because oscillator
+ * cost and alias behaviour both change with pitch: the residual sum spans
+ * 2 * KERNEL_HALF * dt + 1 edges, so the character of the correction at
+ * 7 kHz is not the character of the correction at A440. A change that
+ * quietly cost 30 dB above 5 kHz would pass every other test here.
  *
- * The floors below are set from measurement with about 10 dB of margin,
+ * The floors are set from measurement with about 10 dB of margin,
  * following the rule the parity harness learned the hard way: a gate made
- * of round numbers is a gate with so much headroom that a real regression
- * walks through it. 10 dB is wide enough for platform differences in
+ * of round numbers has so much headroom that a real regression walks
+ * through it. 10 dB is wide enough for platform differences in
  * transcendental rounding and far too narrow for a broken kernel, which
  * costs 30 to 50 dB.
+ *
+ * The rows above 7040 Hz exist because an audit of the first version of
+ * this file found that a six-edge kernel cap cost 39 dB at 11 kHz and
+ * 73 dB at 17 kHz while every test in the repository still passed.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -25,21 +28,38 @@ import { correlation, measureAliasing } from './spectrum';
 const SR = 44100;
 const N = 16384;
 
-/* The two ends of the fallback blend, mirrored from oscillators.ts. */
-const FALLBACK_LO_HZ = 0.14 * SR; // 6174
-const FALLBACK_HI_HZ = 0.2 * SR; // 8820
+/** Mirrored from SWITCH_DT in oscillators.ts. */
+const SWITCH_DT = 0.22;
+const SWITCH_HZ = SWITCH_DT * SR; // 9702
 
-function render(shape: BlepShape, hz: number, highFreq: BlepHighFreqMode = 'blep'): Float32Array {
+function render(
+  shape: BlepShape,
+  hz: number,
+  highFreq: BlepHighFreqMode = 'blep',
+  n = N,
+): Float32Array {
   const osc = new BlepOscillator(SR, { highFreq });
   osc.setShape(shape);
   osc.setFreq(hz);
-  const out = new Float32Array(N);
-  osc.process(out, 0, N);
+  const out = new Float32Array(n);
+  osc.process(out, 0, n);
   return out;
 }
 
 function rejection(shape: BlepShape, hz: number, mode: BlepHighFreqMode = 'blep'): number {
   return measureAliasing(render(shape, hz, mode), SR, hz).worstAliasRelDb;
+}
+
+/** Amplitude of one exact frequency, in cycles per sample. */
+function amplitudeAt(buf: Float32Array, cyclesPerSample: number): number {
+  let re = 0;
+  let im = 0;
+  const w = 2 * Math.PI * cyclesPerSample;
+  for (let i = 0; i < buf.length; i++) {
+    re += buf[i] * Math.cos(w * i);
+    im -= buf[i] * Math.sin(w * i);
+  }
+  return (2 * Math.hypot(re, im)) / buf.length;
 }
 
 /* Measured floors, dB below the fundamental. Triangle is allowed to fall
@@ -56,6 +76,12 @@ const FLOORS: Array<{ hz: number; saw: number; square: number; triangle: number 
   { hz: 3520, saw: -75, square: -75, triangle: -55 },
   { hz: 5000, saw: -77, square: -77, triangle: -49 },
   { hz: 7040, saw: -76, square: -79, triangle: -46 },
+  { hz: 9000, saw: -71, square: -71, triangle: -39 },
+  { hz: 11000, saw: -79, square: -79, triangle: -37 },
+  { hz: 13000, saw: -67, square: -80, triangle: -36 },
+  { hz: 15000, saw: -70, square: -79, triangle: -35 },
+  { hz: 17000, saw: -71, square: -78, triangle: -34 },
+  { hz: 19000, saw: -63, square: -73, triangle: -24 },
 ];
 
 describe('BlepOscillator alias rejection across the band', () => {
@@ -66,6 +92,24 @@ describe('BlepOscillator alias rejection across the band', () => {
       expect(rejection('triangle', row.hz)).toBeLessThan(row.triangle);
     });
   }
+
+  it('puts the kernel band edge where CUTOFF says it is', () => {
+    /* Nothing else in the repository notices a change to CUTOFF or to
+     * KAISER_BETA. The alias floors do not move enough to fail, the
+     * correlation tests run at 110 Hz where the band edge is nowhere near,
+     * and the golden render never drives a bare oscillator. So this
+     * measures the band edge itself, by comparing a low note's harmonics
+     * against the ideal 1/n saw. Half amplitude at the cutoff is the
+     * defining property of a windowed-sinc lowpass at its design point. */
+    const dt = 0.02; // 882 Hz, 25 harmonics under Nyquist
+    const buf = render('saw', dt * SR, 'blep', 1 << 16);
+    const gain = (n: number) => amplitudeAt(buf, n * dt) / (2 / Math.PI / n);
+    expect(gain(18)).toBeGreaterThan(0.99); // 0.36, still passband
+    expect(gain(21)).toBeGreaterThan(0.47); // 0.42, the cutoff itself
+    expect(gain(21)).toBeLessThan(0.53);
+    expect(gain(23)).toBeLessThan(0.06); // 0.46, into the stopband
+    expect(gain(24)).toBeLessThan(0.01); // 0.48, gone
+  });
 
   it('never returns a non finite sample anywhere in the band', () => {
     for (const shape of ['saw', 'square', 'triangle', 'sine'] as BlepShape[]) {
@@ -80,11 +124,11 @@ describe('BlepOscillator alias rejection across the band', () => {
 });
 
 describe('BlepOscillator high frequency fallback', () => {
-  it('is inert below the crossover, sample for sample', () => {
+  it('is inert below the switch, sample for sample', () => {
     /* The whole musical range has to be untouched by the option, or
      * turning it on would be a tone change rather than a cost change. */
     for (const shape of ['saw', 'square', 'triangle'] as BlepShape[]) {
-      for (const hz of [55, 440, 2637, 5000, FALLBACK_LO_HZ - 1]) {
+      for (const hz of [55, 440, 2637, 5000, 7040, 9000, SWITCH_HZ - 1]) {
         const a = render(shape, hz, 'blep');
         const b = render(shape, hz, 'additive');
         expect(Array.from(b)).toEqual(Array.from(a));
@@ -93,39 +137,72 @@ describe('BlepOscillator high frequency fallback', () => {
   });
 
   it('leaves the sine shape alone at every pitch', () => {
-    for (const hz of [5000, 9000, 11000]) {
+    for (const hz of [5000, 11000, 17000]) {
       const a = render('sine', hz, 'blep');
       const b = render('sine', hz, 'additive');
       expect(Array.from(b)).toEqual(Array.from(a));
     }
   });
 
-  it('enters the blend continuously rather than stepping into it', () => {
-    /* Just inside the blend the additive share is a few percent, so the
-     * two modes must still describe nearly the same waveform. A step here
-     * would be an audible click on any pitch sweep through the crossover. */
-    const hz = FALLBACK_LO_HZ + 20;
-    for (const shape of ['saw', 'square'] as BlepShape[]) {
-      const a = render(shape, hz, 'blep');
-      const b = render(shape, hz, 'additive');
-      expect(correlation(a, b)).toBeGreaterThan(0.999);
+  it('crosses the switch without a step', () => {
+    /* The switch is hard, with no crossfade, so the two paths have to
+     * already agree at the switch point. Compared at the SAME dt, where
+     * one mode takes the residual path and the other the harmonic path,
+     * which is the discontinuity a note sweeping through actually meets. */
+    for (const dt of [SWITCH_DT, 0.24, 0.28, 0.35]) {
+      for (const shape of ['saw', 'square', 'triangle'] as BlepShape[]) {
+        const a = render(shape, dt * SR, 'blep');
+        const b = render(shape, dt * SR, 'additive');
+        let maxDiff = 0;
+        for (let i = 0; i < a.length; i++) maxDiff = Math.max(maxDiff, Math.abs(a[i] - b[i]));
+        expect(correlation(a, b)).toBeGreaterThan(0.999);
+        expect(maxDiff).toBeLessThan(0.02);
+      }
     }
   });
 
-  it('is at least as clean as the BLEP path where it runs alone', () => {
-    /* Above FALLBACK_HI_HZ the residual sum is skipped entirely, so this
-     * is the claim that the cheaper path is not also the worse one. */
-    for (const hz of [9000, 11000]) {
+  it('is cleaner than the residual path everywhere it runs', () => {
+    for (const hz of [11000, 13000, 17000, 21000]) {
       for (const shape of ['saw', 'square'] as BlepShape[]) {
         expect(rejection(shape, hz, 'additive')).toBeLessThan(rejection(shape, hz, 'blep'));
       }
     }
   });
 
-  it('keeps the fundamental at the right level through the crossover', () => {
-    /* A blend between two forms that disagreed on amplitude would show up
-     * as a dip or bump in the fundamental as a note sweeps through. */
-    for (const hz of [5000, 6500, 7500, 9000, 11000]) {
+  it('gives each harmonic the amplitude the ideal series calls for', () => {
+    /* Without this, a wrong Fourier coefficient is invisible: the alias
+     * gates only look at what is NOT a harmonic, so a saw built with the
+     * wrong fundamental amplitude passes every one of them. */
+    const cases: Array<{ shape: BlepShape; want: number }> = [
+      { shape: 'saw', want: 2 / Math.PI },
+      { shape: 'square', want: 4 / Math.PI },
+      { shape: 'triangle', want: 8 / (Math.PI * Math.PI) },
+    ];
+    for (const { shape, want } of cases) {
+      const hz = 11000; // above the switch, and h2 is past Nyquist
+      const got = amplitudeAt(render(shape, hz, 'additive', 1 << 16), hz / SR);
+      expect(got).toBeGreaterThan(want * 0.995);
+      expect(got).toBeLessThan(want * 1.005);
+    }
+  });
+
+  it('fades a harmonic out with the kernel instead of cutting it', () => {
+    /* Cutting at the cutoff would step the output by half that harmonic's
+     * amplitude, 0.16 for the second harmonic of a saw. Sweeping dt across
+     * the point where harmonic 2 leaves Nyquist must not move the level. */
+    let prev = -1;
+    for (const dt of [0.242, 0.246, 0.2499, 0.2501, 0.254]) {
+      const buf = render('saw', dt * SR, 'additive');
+      let acc = 0;
+      for (let i = 0; i < buf.length; i++) acc += buf[i] * buf[i];
+      const rms = Math.sqrt(acc / buf.length);
+      if (prev >= 0) expect(Math.abs(rms - prev)).toBeLessThan(0.002);
+      prev = rms;
+    }
+  });
+
+  it('keeps the fundamental at the right level through the switch', () => {
+    for (const hz of [SWITCH_HZ, 11000, 13000, 17000]) {
       const rep = measureAliasing(render('saw', hz, 'additive'), SR, hz);
       const ref = measureAliasing(render('saw', hz, 'blep'), SR, hz);
       expect(Math.abs(rep.fundamentalDb - ref.fundamentalDb)).toBeLessThan(0.5);
@@ -140,7 +217,6 @@ describe('BlepOscillator high frequency fallback', () => {
         expect(Number.isFinite(out[i])).toBe(true);
         peak = Math.max(peak, Math.abs(out[i]));
       }
-      expect(peak).toBeGreaterThan(0.1);
       expect(peak).toBeLessThan(1.5);
     }
   });

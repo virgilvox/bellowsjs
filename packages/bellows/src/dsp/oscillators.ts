@@ -24,39 +24,57 @@
  * THE HIGH FREQUENCY FALLBACK, and why it is off by default.
  *
  * The residual sum walks every edge lying within KERNEL_HALF samples of
- * the current phase, and the number of edges in that window is
- * 2 * KERNEL_HALF * dt + 1, so oscillator cost climbs linearly with
- * pitch. Measured here at 44100 Hz, a saw costs about 5.7 ns per sample
- * at A440 and about 25 ns at 7040 Hz. Because setFreq clamps dt at 0.49
- * the growth is bounded rather than open ended: the sum never spans more
- * than about 17 edges, which puts the worst case near six times the A440
- * cost. That bound, not the ratio against a very low note, is the number
- * a fixed polyphony budget has to be sized against.
+ * the current phase. The average count of those per sample is exactly
+ * 2 * KERNEL_HALF * dt, so cost climbs linearly with pitch: 0.32 edges at
+ * A440, 5.1 at 7040 Hz, 15.7 at the dt clamp of 0.49, where a single
+ * sample can span at most 16. That arithmetic is the durable number here.
+ * Wall-clock ns/sample is not: the same shipping class measured through
+ * two different benchmark harnesses gave 22.6 and 59.8 ns at 7040 Hz,
+ * because how much of this inlines depends on what else the caller made
+ * the JIT specialise. Quote the ratio, and measure both ends of it in one
+ * process, or the figure means nothing.
  *
- * Above roughly a sixth of the sample rate there is a better option than
- * paying that cost. A band limited saw at 7040 Hz has only two harmonics
- * under the kernel's 0.42 cutoff, so summing the harmonics directly is
- * both cheaper and exact. The two costs run in opposite directions (the
- * BLEP sum grows with dt, the harmonic sum shrinks as 1/dt) and they
- * cross near dt = 0.16. Measured, saw, 44100 Hz:
+ * Measured that way, saw, 44100 Hz: the default path peaks at 9.0x its
+ * A440 cost, at the top of the clamp. That bound, not the ratio against a
+ * very low note, is what a fixed polyphony budget has to be sized to. Note
+ * that a high lead is nowhere near the clamp: 7040 Hz costs about 3.7x
+ * A440, and the top of a piano is 4186 Hz.
  *
- *     hz     BLEP ns   additive ns    BLEP dB   additive dB
- *     5000      21.2          33.1      -87.3         -94.8
- *     7040      25.5          23.3      -86.6         -94.0
- *     9000      30.8          21.5      -81.0         -96.1
- *    11000      36.3          10.6      -89.8         -97.0
+ * Above dt = SWITCH_DT the harmonic sum is the better instrument. A band
+ * limited saw there has one or two harmonics left under Nyquist, so
+ * summing them directly is cheaper than walking sixteen edges, and it is
+ * also exact where the residual sum is not. Measured, saw:
  *
- * So above the crossover the harmonic sum wins on both axes at once,
- * which a kernel cap cannot do: capping the sum to four edges saves about
- * a fifth of the cost at 7040 Hz and gives up 39 dB of alias rejection,
- * and tapering the truncated kernel buys back only about 13 dB of that.
+ *      hz     residual ns   harmonic ns    residual dB   harmonic dB
+ *   11000            30.5          25.0          -89.8         -97.0
+ *   13000            38.7          24.5          -77.0         -98.1
+ *   17000            45.6          24.5          -81.0        -101.1
+ *   21609            56.4          24.9          -21.7        -101.6
  *
- * It is nonetheless opt in, through the highFreq option, because turning
- * it on changes rendered output above the crossover and this library
- * promises that a given seed reproduces a given render. The default keeps
- * the BLEP path for every dt, so the shipping code path is unchanged.
- * Callers who want the bounded cost ask for it, the same way the delay
- * effects take their capacity at construction.
+ * so the option takes the peak from 9.0x A440 to 5.2x and improves the
+ * top of the range rather than trading it away. A kernel cap cannot do
+ * that: capping the sum to four edges saves about a fifth of the cost at
+ * 7040 Hz and gives up 39 dB, and tapering the truncated kernel recovers
+ * only about 13 dB of that.
+ *
+ * Two things this design got wrong first, both worth stating because they
+ * are the failure modes of the idea rather than of the code. Crossfading
+ * between the paths across a transition band means evaluating BOTH across
+ * that band, which cost about twice the default over exactly the range it
+ * was meant to save in and left the peak where it was. And cutting the
+ * harmonics off at the kernel cutoff steps the output when one crosses,
+ * because the kernel is still passing half of a harmonic at its own
+ * cutoff: for the second harmonic of a saw that is a jump of 0.16. The
+ * switch is therefore hard, and every harmonic is scaled by the kernel's
+ * own measured response, so harmonics fade exactly as the residual path
+ * fades them and there is nothing left to fade between.
+ *
+ * It is opt in, through the highFreq option, because it changes rendered
+ * output above the switch and this library promises that a given seed
+ * reproduces a given render. The default keeps the residual path at every
+ * dt, so the shipping code path is unchanged. Callers who want the bounded
+ * cost ask for it, the same way the delay effects take their capacity at
+ * construction.
  */
 
 import { clamp } from '../types';
@@ -121,6 +139,56 @@ function besselI0(x: number): number {
 let stepTable: Float64Array | null = null;
 /** BLAMP residual for a unit slope change per sample, zero at both ends. */
 let rampTable: Float64Array | null = null;
+/** Raw kernel, kept so the response table can be derived from it on demand. */
+let kernel: Float64Array | null = null;
+
+/**
+ * Magnitude response of the bandlimiting kernel, sampled over [0, 0.5]
+ * cycles per sample and normalized to unity in the passband. This is what
+ * the BLEP path does to each harmonic, so it is what the harmonic sum has
+ * to do to stay the same waveform: 1.0 up to about 0.34, 0.79 at 0.40,
+ * 0.50 at the 0.42 cutoff, 0.21 at 0.44, and negligible past 0.48.
+ *
+ * Built lazily, because the integral costs about a thousand cosines per
+ * point and only the opt-in high frequency path ever reads it. A default
+ * oscillator never pays for this table.
+ */
+const RESP_LEN = 257;
+let respTable: Float64Array | null = null;
+
+function buildResponse(): void {
+  const h = kernel as Float64Array;
+  const n = TABLE_LEN;
+  const centre = (n - 1) >> 1;
+  const resp = new Float64Array(RESP_LEN);
+  /* The kernel is even in d, so the transform is real and the sum only
+   * needs one half of it. That removes every sine and halves the cosines. */
+  for (let k = 0; k < RESP_LEN; k++) {
+    const f = (0.5 * k) / (RESP_LEN - 1);
+    let acc = h[centre];
+    for (let i = centre + 1; i < n; i++) {
+      const d = i / TABLE_RES - KERNEL_HALF;
+      const w = i === n - 1 ? 0.5 : 1;
+      acc += 2 * w * h[i] * Math.cos(TWO_PI * f * d);
+    }
+    resp[k] = acc / TABLE_RES;
+  }
+  const dc = resp[0];
+  for (let k = 0; k < RESP_LEN; k++) resp[k] /= dc;
+  respTable = resp;
+}
+
+/** Kernel gain at f cycles per sample, linearly interpolated. */
+function kernelGain(f: number): number {
+  if (f <= 0) return 1;
+  if (f >= 0.5) return 0;
+  const table = respTable as Float64Array;
+  const pos = (f / 0.5) * (RESP_LEN - 1);
+  const i = Math.floor(pos);
+  if (i >= RESP_LEN - 1) return table[RESP_LEN - 1];
+  const frac = pos - i;
+  return table[i] + (table[i + 1] - table[i]) * frac;
+}
 
 function buildTables(): void {
   const n = TABLE_LEN;
@@ -157,6 +225,7 @@ function buildTables(): void {
   for (let i = 0; i < n; i++) ramp[i] -= (drift * i) / (n - 1);
   stepTable = step;
   rampTable = ramp;
+  kernel = h;
 }
 
 /**
@@ -191,20 +260,20 @@ function blampResidual(d: number): number {
 /* ------------------------------------------------------------------ */
 
 /**
- * dt below which the fallback contributes nothing. Sits under the
- * measured cost crossover (about dt 0.16) so the blend is complete
- * before the harmonic sum would ever be the more expensive of the two.
+ * dt at and above which the harmonic sum replaces the residual sum
+ * outright. The switch is hard rather than a crossfade: a crossfade has to
+ * evaluate both paths through the whole transition, which made the option
+ * cost about twice the default across the band it was supposed to be
+ * saving in, and with the kernel gain applied the two forms describe the
+ * same waveform closely enough that there is nothing to fade between.
  */
-const FALLBACK_LO_DT = 0.14;
-/** dt at and above which the harmonic sum runs alone. */
-const FALLBACK_HI_DT = 0.2;
+const SWITCH_DT = 0.22;
 /**
- * Harmonics the fallback can ever need. The count is floor(CUTOFF / dt)
- * and dt never goes below FALLBACK_LO_DT while the fallback is engaged,
- * so three is the true ceiling; the array is one longer so index k is
- * harmonic k and the zero slot stays unused.
+ * Harmonics the sum can ever need: those under Nyquist at the lowest dt
+ * that reaches the harmonic path, floor(0.5 / SWITCH_DT). The arrays are
+ * one longer so index n is harmonic n and the zero slot stays unused.
  */
-const MAX_HARMONICS = 4;
+const MAX_HARMONICS = 2;
 
 export class BlepOscillator {
   /**
@@ -221,14 +290,22 @@ export class BlepOscillator {
   private dt = 0;
   private pw = 0.5;
 
-  /* Fallback state. blend stays 0 for the whole of the default mode, and
-   * next() then runs exactly the code it ran before the fallback existed.
-   * The coefficient arrays are allocated once here so the audio path
-   * never does. */
+  /* Fallback state. `additive` stays false for the whole of the default
+   * mode, and next() then runs exactly the code it ran before the fallback
+   * existed. Every array is allocated here so the audio path never does.
+   *
+   * The series is kept in two layers. base* is the ideal waveform's
+   * coefficients, which depend on the shape and the pulse width and so
+   * survive a frequency change; the working coefficients are those times
+   * the kernel gain at that harmonic's frequency. Splitting them is what
+   * keeps setFreq free of transcendentals, which matters because
+   * engines/formant.ts calls setFreq once per sample to apply vibrato. */
   private readonly highFreq: BlepHighFreqMode;
-  private blend = 0;
+  private additive = false;
   private harmonics = 0;
-  private dc = 0;
+  private baseDc = 0;
+  private readonly baseCos = new Float64Array(MAX_HARMONICS + 1);
+  private readonly baseSin = new Float64Array(MAX_HARMONICS + 1);
   private readonly cosCoef = new Float64Array(MAX_HARMONICS + 1);
   private readonly sinCoef = new Float64Array(MAX_HARMONICS + 1);
 
@@ -236,62 +313,49 @@ export class BlepOscillator {
     this.sampleRate = sampleRate;
     this.highFreq = options?.highFreq ?? 'blep';
     if (stepTable === null) buildTables();
+    this.updateSeries();
   }
 
   setShape(shape: BlepShape): void {
     this.shape = shape;
-    this.updateFallback();
+    this.updateSeries();
   }
 
   setFreq(hz: number): void {
     this.dt = clamp(hz / this.sampleRate, 0, 0.49);
-    this.updateFallback();
+    this.updateBandLimit();
   }
 
   /** Pulse width for the square shape, clamped away from degenerate edges. */
   setPulseWidth(pw: number): void {
     this.pw = clamp(pw, 0.01, 0.99);
-    this.updateFallback();
+    this.updateSeries();
   }
 
   /**
-   * Recomputes how much of the output comes from the harmonic sum and
-   * what that sum contains. Called from the setters rather than from
-   * next(), so the per sample path never evaluates a transcendental to
-   * build a coefficient. Sine is excluded because it has no harmonics
-   * above the fundamental and therefore nothing to alias.
+   * Rebuilds the ideal waveform's Fourier coefficients. Depends on the
+   * shape and the pulse width only, so a frequency change does not
+   * touch it, which is what confines the transcendentals here to a
+   * shape or pulse width change. Sine is excluded from the fallback
+   * because it has no harmonics above the fundamental to alias.
    */
-  private updateFallback(): void {
-    if (this.highFreq !== 'additive' || this.shape === 'sine' || this.dt <= FALLBACK_LO_DT) {
-      this.blend = 0;
-      return;
-    }
-    const dt = this.dt;
-    this.blend =
-      dt >= FALLBACK_HI_DT ? 1 : (dt - FALLBACK_LO_DT) / (FALLBACK_HI_DT - FALLBACK_LO_DT);
-    /* Keep the same band limit the BLEP kernel imposes, so the two forms
-     * describe the same waveform and the blend has nothing to step over.
-     * At least one harmonic always survives: past dt 0.42 the fundamental
-     * itself is over the cutoff, and the BLEP path does not remove it
-     * either, so dropping it here would blend towards silence. */
-    this.harmonics = clamp(Math.floor(CUTOFF / dt), 1, MAX_HARMONICS);
-
-    const k = this.harmonics;
-    const cos = this.cosCoef;
-    const sin = this.sinCoef;
+  private updateSeries(): void {
+    if (this.highFreq !== 'additive') return;
+    const cos = this.baseCos;
+    const sin = this.baseSin;
     cos.fill(0);
     sin.fill(0);
-    this.dc = 0;
+    this.baseDc = 0;
     switch (this.shape) {
       case 'saw':
         // 2t - 1 has the series -(2/pi) * sum sin(2 pi n t) / n
-        for (let n = 1; n <= k; n++) sin[n] = -2 / (Math.PI * n);
+        for (let n = 1; n <= MAX_HARMONICS; n++) sin[n] = -2 / (Math.PI * n);
         break;
       case 'square': {
         // duty pw: mean 2pw - 1, then the standard pulse train coefficients
         const pw = this.pw;
-        this.dc = 2 * pw - 1;
-        for (let n = 1; n <= k; n++) {
+        this.baseDc = 2 * pw - 1;
+        for (let n = 1; n <= MAX_HARMONICS; n++) {
           cos[n] = (2 * Math.sin(TWO_PI * n * pw)) / (Math.PI * n);
           sin[n] = (2 * (1 - Math.cos(TWO_PI * n * pw))) / (Math.PI * n);
         }
@@ -299,10 +363,41 @@ export class BlepOscillator {
       }
       case 'triangle':
         // -1 at phase 0 rising to +1 at a half: odd cosines falling as 1/n^2
-        for (let n = 1; n <= k; n += 2) cos[n] = -8 / (Math.PI * Math.PI * n * n);
+        for (let n = 1; n <= MAX_HARMONICS; n += 2) cos[n] = (-8 / (Math.PI * Math.PI * n)) / n;
         break;
       default:
         break;
+    }
+    this.updateBandLimit();
+  }
+
+  /**
+   * Decides whether the harmonic sum runs at this dt, and if it does,
+   * applies the kernel's own gain to each harmonic. Matching the gain
+   * rather than cutting at the cutoff is what stops a harmonic vanishing
+   * mid sweep: at the cutoff the kernel is still passing half of it, so a
+   * hard cut would step the output by half that harmonic's amplitude,
+   * which for the second harmonic of a saw is 0.16.
+   *
+   * No transcendental runs here. engines/formant.ts calls setFreq once per
+   * sample for vibrato, so anything expensive on this path is a per sample
+   * cost on that engine.
+   */
+  private updateBandLimit(): void {
+    const dt = this.dt;
+    if (this.highFreq !== 'additive' || this.shape === 'sine' || dt < SWITCH_DT) {
+      this.additive = false;
+      return;
+    }
+    if (respTable === null) buildResponse();
+    this.additive = true;
+    /* Everything under Nyquist. The gain kills whatever the kernel would
+     * have killed, so nothing needs a second band limit here. */
+    this.harmonics = Math.min(MAX_HARMONICS, Math.floor(0.5 / dt));
+    for (let n = 1; n <= this.harmonics; n++) {
+      const g = kernelGain(n * dt);
+      this.cosCoef[n] = this.baseCos[n] * g;
+      this.sinCoef[n] = this.baseSin[n] * g;
     }
   }
 
@@ -311,13 +406,13 @@ export class BlepOscillator {
    * then an angle addition recurrence for the rest, so the count of
    * transcendentals does not grow with the harmonic count.
    */
-  private additive(t: number): number {
+  private harmonicSum(t: number): number {
     const th = TWO_PI * t;
     const c1 = Math.cos(th);
     const s1 = Math.sin(th);
     let c = c1;
     let s = s1;
-    let y = this.dc;
+    let y = this.baseDc;
     const k = this.harmonics;
     const cos = this.cosCoef;
     const sin = this.sinCoef;
@@ -362,13 +457,13 @@ export class BlepOscillator {
   next(): number {
     const t = this.phase;
     const dt = this.dt;
-    const blend = this.blend;
     let y: number;
-    if (blend >= 1) {
-      /* The residual sum is skipped outright here, which is where the
-       * saving comes from: blending against a BLEP value we then throw
-       * most of away would cost more than the path it replaces. */
-      y = this.additive(t);
+    if (this.additive) {
+      /* The residual sum is skipped outright, which is the whole of the
+       * saving. An earlier revision crossfaded the two paths across a
+       * transition band and so ran both, which cost about twice the
+       * default over exactly the band it was meant to be saving in. */
+      y = this.harmonicSum(t);
     } else {
       switch (this.shape) {
         case 'saw':
@@ -397,7 +492,6 @@ export class BlepOscillator {
           y = Math.sin(TWO_PI * t);
           break;
       }
-      if (blend > 0) y += (this.additive(t) - y) * blend;
     }
     this.phase += dt;
     if (this.phase >= 1) this.phase -= 1;

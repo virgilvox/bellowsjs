@@ -14,6 +14,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -143,8 +144,23 @@ for (const mode of ['up', 'down', 'updown', 'downup', 'order']) {
   }
 }
 
+/* Build the dumper here rather than expecting it to exist. test/parity/build
+ * is gitignored, so a fresh clone has nothing in it, and this script used to
+ * die with ENOENT on the very command HANDOFF.md documents as a harness.
+ * parity.mjs already compiles its own probe this way. */
+function buildDumper() {
+  const bin = join(HERE, 'build', 'tables');
+  mkdirSync(join(HERE, 'build'), { recursive: true });
+  execFileSync(
+    'c++',
+    ['-std=c++17', '-O2', '-I', join(PKG, 'src'), join(HERE, 'tables.cpp'), '-o', bin],
+    { stdio: ['ignore', 'inherit', 'inherit'] },
+  );
+  return bin;
+}
+
 /* Compare. */
-const cpp = execFileSync(join(HERE, 'build', 'tables')).toString().trimEnd().split('\n');
+const cpp = execFileSync(buildDumper()).toString().trimEnd().split('\n');
 const js = out;
 
 let mismatches = 0;
