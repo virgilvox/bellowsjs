@@ -43,6 +43,7 @@ Run all of them from `packages/bellows-embedded` unless noted.
 | `npm run parity` | 19 C++ modules match the TypeScript numerically | the `eq.h` three-band-mislabelled-as-port, the `StereoDelay` clamp bug |
 | `npm run tables` | euclid, scales, chords, notes, CA, arp, tempo map, MIDI compared EXACTLY | nothing yet, but it is the only thing that can see a wrong scale table |
 | `npm run fastmath` | every polynomial in `core/fastmath.h` against libm | `fm::Log2` wrong by 213 cents, inherited by every `Pow` |
+| `npm run memsafety` (and `memsafety:fastmath`) | ASan and UBSan over every buffer-owning class at 0.5x to 4x its template rate | the `Pluck::NoteOn` overflow. Nothing else could: parity compares numbers at one rate, and `check-header.sh` instantiates nothing |
 | `npm run size` | flash and RAM per sketch, `cortex-m7` or `cortex-m4` | the whole no-registry design argument |
 | `./tools/check-header.sh <h>` | one header compiles standalone, `-Wall -Wextra` | header hygiene; note it instantiates nothing |
 | `node tools/gen-tables.mjs --check` | generated headers match the TypeScript ParamSpecs | new `Eq6` class the moment it appeared |

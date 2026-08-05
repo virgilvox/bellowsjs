@@ -34,8 +34,38 @@ class Pluck {
     track_coef_ = fm::Exp(-1.0f / (0.05f * sample_rate));
   }
 
-  void NoteOn(float freq, float vel) {
+  /*
+   * The lowest note this instance can actually hold, which is kMinFreqHz
+   * only when Init() was handed the rate the class was sized for.
+   *
+   * kMaxPeriod comes from the TEMPLATE kSampleRate; the period a note needs
+   * is sr_ / freq, from the RUNTIME rate. Nothing in the type system makes
+   * the two agree, and both docs/HARDWARE.md and platform/README.md tell a
+   * caller to read the rate back from the SDK rather than assume it, which
+   * is exactly the path that produces a mismatch. Pluck<20, 48000> holds
+   * 2400 usable samples, so Init(192000) plus NoteOn(20) wants a
+   * 9600-sample period, and before this clamp existed it wrote 4792 floats
+   * past excite_[]: a real heap-buffer-overflow, ASan-confirmed, not a
+   * clamp.
+   *
+   * kMaxPeriod - 4 is the delay line's own usable range (DelayLine sets
+   * max_ = cap - 4), and at sr_ == kSampleRate it evaluates to exactly
+   * kMinFreqHz, so nothing moves at the design rate. Above it the note
+   * clamps sharp, which is what the delay line's read clamp already did on
+   * its own: the loop and the excitation now hit the same limit instead of
+   * one clamping while the other ran off the end.
+   *
+   * Public because a caller running at a rate the template did not choose
+   * has no other way to learn what its real bottom note is.
+   */
+  float MinFreq() const {
+    float cap = sr_ / static_cast<float>(kMaxPeriod - 4);
     float lo = static_cast<float>(kMinFreqHz);
+    return cap > lo ? cap : lo;
+  }
+
+  void NoteOn(float freq, float vel) {
+    float lo = MinFreq();
     float hi = sr_ / 8.0f;
     freq_ = freq < lo ? lo : (freq > hi ? hi : freq);
     gate_ = true;
@@ -47,6 +77,11 @@ class Pluck {
     float n = sr_ / freq_;
     int len = static_cast<int>(n + 0.5f);
     if (len < 2) len = 2;
+    /* The clamp above makes this unreachable, but the argument for that runs
+     * through a float division and a truncation. The comb tail below has
+     * carried the same guard since it was written; the fill loop should not
+     * be the one place the bound is only argued rather than enforced. */
+    if (len > static_cast<int>(kExciteLen)) len = kExciteLen;
     float type = p_.excite_type < 0.0f ? 0.0f : (p_.excite_type > 1.0f ? 1.0f : p_.excite_type);
     float v = vel < 0.0f ? 0.0f : (vel > 1.0f ? 1.0f : vel);
     float amp = 0.6f * v;

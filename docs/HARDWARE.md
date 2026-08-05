@@ -114,14 +114,14 @@ it. Measured, Cortex-M7:
 | sketch | default | `BELLOWS_FAST_MATH=1` | saved |
 | --- | --- | --- | --- |
 | `s1_kick` | 3760 B | 924 B | 75 % |
-| `s3_pluck` | 6552 B | 2276 B | 65 % |
+| `s3_pluck` | 6712 B | 2432 B | 63 % |
 | `s9g_tube` | 5000 B | 3020 B | 39 % |
 | `p1_drums` | 20856 B | 12908 B | 38 % |
 | `s9e_westcoast` | 16784 B | 11204 B | 33 % |
 | `s4_va` | 28576 B | 20664 B | 27 % |
 | `p2_poly8` | 30984 B | 22652 B | 26 % |
 | `s9f_formant` | 28344 B | 21028 B | 25 % |
-| `s5_all` | 35104 B | 26112 B | 25 % |
+| `s5_all` | 35152 B | 26164 B | 25 % |
 | `s9m_seq` | 5296 B | 5296 B | 0 % |
 
 The sequencing row is 0 percent and should be: it is integer and small-float work over const
@@ -430,8 +430,8 @@ anything the size report actually builds:
 | three piece kit | `s2_kit` | 28248 B | 1532 B |
 | kit plus EQ and a 250 ms delay | `p1_drums` | 20856 B | 98776 B |
 | 8 voice VA poly, EQ, 250 ms delay | `p2_poly8` | 30984 B | 100280 B |
-| 8 VA plus 8 `Pluck<80>` plus kit, EQ, delay | `p3_workstation` | 34768 B | 160408 B |
-| everything constructed and driven at once | `s5_all` | 35104 B | 223324 B |
+| 8 VA plus 8 `Pluck<80>` plus kit, EQ, delay | `p3_workstation` | 34824 B | 160408 B |
+| everything constructed and driven at once | `s5_all` | 35152 B | 223324 B |
 
 And the shipped examples, whose numbers come from the same logic headers the sketches compile,
 so they cannot drift from the code:
@@ -441,7 +441,7 @@ so they cannot drift from the code:
 | `01_OneKick` | 3776 B | 1100 B |
 | `02_DrumMachine` (bank plus euclid) | 29688 B | 1620 B |
 | `03_PolySynth` (`VoicePool<Va, 8>`) | 30408 B | 3872 B |
-| `04_ScalesAndTuning` | 7936 B | 30176 B |
+| `04_ScalesAndTuning` | 8064 B | 30176 B |
 | `05_MidiInstrument` | 30344 B | 3888 B |
 
 Against real boards, using the largest profile:
