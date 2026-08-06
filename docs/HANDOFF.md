@@ -436,6 +436,20 @@ that no local command could, which is the whole argument for it:
    reproducible on the host that measured them and approximately anywhere else. CI passes
    `--allow-host-drift`, bounded at 16 bytes, printing every allowance; a local run stays exact.
 
+**Read this before trusting a green tick.** CI is a control on PULL REQUESTS and nothing else.
+Pushing to `main` does not trigger it, established by measurement rather than by reading the
+file: the merge of PR #1 produced no run, the push after it produced no run, and a deliberate
+test push was watched for two minutes and produced no run. A `workflow_dispatch` on the same
+commit ran all six jobs green immediately, so the workflow, the triggers as written
+(`push: branches: [main]`), the default branch and the Actions permissions are all correct and
+the push event simply does not arrive.
+
+The mitigation is the workflow this project should want anyway: **every change to `main` goes
+through a pull request**, where CI does run, and `workflow_dispatch` exists for demanding a run
+on `main` directly. Do not read a quiet `main` as a passing `main`. If someone works out why the
+push event is dropped, that is worth knowing, but the PR route makes it a curiosity rather than
+a hole.
+
 Keep it that way. The gates are only controls while this runs.
 
 It went green on the sixth attempt, all six jobs. Two more things it found on the way, both
