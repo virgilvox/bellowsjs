@@ -179,12 +179,67 @@ The endgame from the research: keep bellows.live as the composition brain and pu
 - Tag, release, and add the library to both registries.
 - Wire `publint` into CI, which is the one CI gap left.
 
-## Decisions that are open, and that a fresh session should not make alone
+## Decisions, made
 
-1. **Arduino Library Manager route.** Mirror repo versus release zip. Affects how releases work forever.
-2. **Whether the C++ or the TypeScript becomes the source of truth long term.** Right now the TypeScript is, and the harnesses enforce it. The alternative (C++ core compiled to WASM for the browser) kills parity drift permanently but costs the tier 3 JavaScript story and a large part of the current test suite's ergonomics. That is a rewrite, not a port. `docs/HARDWARE.md` has the full comparison.
-3. **`SetupLog` is exported from the public index** and is an implementation detail. Trimming it (and possibly `VoicePool`) would keep the public surface honest, but it is a breaking change once released.
-4. **Whether `Eq3` stays.** It is a deliberate non-port that exists for size. It is currently marked `UNPORTED_BY_DESIGN` in the codegen so it does not pollute the orphan report. Fine, but it is a precedent: every non-port needs that treatment or the report becomes noise.
+These were open. They are decided now, on 2026-08-06. Each says what and why, so a later session
+can disagree with the reasoning rather than reopen the question from nothing.
+
+**Packaging and direction**
+
+1. **Arduino Library Manager: a mirror repository, not release zips.** The Manager indexes
+   repositories and not subdirectories, and a zip flow is manual forever, which is the same shape
+   of problem as a number nobody checks. A mirror can be pushed by CI from
+   `packages/bellows-embedded` on tag. PlatformIO consumes the subdirectory directly today and
+   needs nothing.
+2. **The TypeScript stays the source of truth.** Compiling the C++ to WASM would end parity drift
+   permanently, and it costs the tier 3 JavaScript story, most of the suite's ergonomics, and it
+   is a rewrite. The harnesses work: 34 parity rows, four of them exact, plus 318 value rows.
+   Revisit only if parity maintenance starts costing more than the harnesses save, which it does
+   not.
+3. **`SetupLog` and `VoicePool` come out of the public index at 0.2.0, with the barrel.** Both are
+   implementation details and removing them is breaking, so batch every breaking change into one
+   release rather than dripping them.
+4. **`Eq3` stays**, and `UNPORTED_BY_DESIGN` is the precedent: every deliberate non-port carries
+   that marker or the orphan report becomes noise nobody reads.
+
+**Behaviour, and these are the ones that change code**
+
+5. **The six buffer-owning classes clamp and REPORT.** Not throw, because an MCU builds
+   `-fno-exceptions` and has nothing to unwind to inside an audio callback, and not silently,
+   because that is the current defect. Each grows the accessor `Pluck::MinFreq()` already
+   demonstrates, so a caller who read its rate back from the SDK can ask what it actually got.
+   `BELLOWS_SAMPLE_RATE` must also reach `Pluck<>` and `StereoDelay<>`, which hardcode 48000 while
+   the flag's own documentation claims it sizes them.
+6. **The scale layer becomes tuning aware.** This is a bug fix and not a feature: `Tuning` is
+   correct, `degreeFreq` in tuning.ts already does the right thing, and it is called from
+   nowhere while `Scale.degreeToMidi` hardcodes a 12 semitone octave above it. Under 19-EDO the
+   documented degree workflow returns an octave of 1.549. Route `Bellows.freqOf` through
+   `degreeFreq`. It also happens to be the competitive gap against Tune.js.
+7. **Input validation policy, one rule everywhere:** reject non-finite at the setter and keep the
+   last good value, clamp out-of-range, and never throw on the audio path. Throw only from a
+   constructor, where there is a caller to catch it. This is already what the facade, the filters,
+   the envelopes and `VoicePool.setParam` do, so the work is making the stragglers match rather
+   than choosing a policy.
+8. **`render()` must not post structural messages at the live kernel** and `b.now()` must be
+   render aware. Exporting while playing currently rewrites the live mix, which is a defect and
+   not a design choice.
+9. **`b.rng(label)` returns a handle that resolves through the active context on every draw.**
+   The README and every doc page teach capturing a stream outside the clock callback, and that
+   pattern is not reproducible under `render()` today. The library's central promise is that a
+   seed reproduces a render, so the documented pattern has to be the one that works.
+10. **The setup log gets collapse keys for `createBus`, `registerBank`, `registerGrain` and
+    `defOp`, and there is a `removeBus`.** Unbounded growth in a log that `render()` replays is
+    the same leak `Instrument.dispose()` already fixed for channels.
+11. **Modal moves its rng draws to note-on**, so a retrigger cannot diverge from the JS stream.
+    Per-sample draws make the C++ and the TypeScript disagree by construction.
+12. **The worklet processor stops on dispose.** Returning true forever leaks a processor per
+    boot.
+
+**Deferred deliberately, with the trigger written down**
+
+13. **`core/register.ts` moving to a `composition/` layer waits for 0.2.0.** It is right, it is 22
+    of the repository's 26 upward imports, and it is a structural change to a package that
+    shipped 0.1.6 hours ago. Batch it with the barrel trim, which touches the same surface.
 
 ## The work queue, in the order I would take it
 
@@ -292,9 +347,10 @@ regenerating, which the release ritual now spells out. Everything else a command
 under `check-docs`, and what is not is listed in that file's header and at the point where
 HARDWARE.md promises reproduction.
 
-### Needs an owner decision, because it changes rendered output or package shape
+### Decided, not yet done
 
-Do not do these unasked.
+These were the owner-decision list. The calls are recorded above under "Decisions, made", so what
+is left here is work rather than a question. Ordered by what I would take first.
 
 - ~~The west coast fold chain runs at 1x with no antialiasing (129)~~ DONE, `95e1815`.
 - ~~The BLAMP table's drift-removal step is the wrong correction (237)~~ DONE, `c731a90`.
