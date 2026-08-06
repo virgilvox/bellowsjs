@@ -119,6 +119,11 @@ length.
 | Control only | RP2040, ESP32 classic, SAMD51, nRF52840 | a couple of voices at best |
 | Not viable | Uno, Nano, Uno R4 | no FPU, too little RAM. Use Mozzi. |
 
+This table is read off data sheets. It is about what a part could hold and not about what has
+been run, and **only Teensy and Daisy have a platform layer**: `src/bellows/platform/` contains
+`teensy.h` and `daisy.h` and nothing else. Targeting an ESP32 or an RP2350 means writing that
+layer first, whatever the row says. Nothing in any row has been measured on hardware.
+
 Needs C++17, which every current core for these parts provides. No exceptions, no RTTI, no STL
 containers, no heap.
 

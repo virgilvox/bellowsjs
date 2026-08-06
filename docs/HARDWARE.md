@@ -44,10 +44,18 @@ comparison below (five symbols summed by hand across two builds). Those still ro
 
 ## The short version
 
-Compute is not the constraint and never was. Code size is not the constraint either: the whole
-ported engine set is about 34 KB of flash, which fits in the Daisy Seed's 128 KB of internal
-flash with room to spare. The constraints are delay memory and, on non-M7 parts, double
-precision. Both are now build-time knobs.
+Code size is not the constraint: the whole ported engine set is about 34 KB of flash, which fits
+in the Daisy Seed's 128 KB of internal flash with room to spare. That is measured. The known
+constraints are delay memory and, on non-M7 parts, double precision, and both are build-time
+knobs.
+
+**"Compute is not the constraint" is an ASSUMPTION, and this document used to state it as a
+finding.** It rests on a host benchmark whose source is not in this tree and which appears on the
+not-reproducible list above, and the same oscillator measured 22.6 and 59.8 ns per sample through
+two different harnesses on one machine, so that figure carries no weight. Nothing has run on a
+board. The assumption is plausible on a 600 MHz Cortex-M7 with a double-precision FPU and it is
+much thinner on a 240 MHz single-precision part. Milestone 1 is what turns it into a fact, and
+`AudioProcessorUsageMax()` on a Teensy is an hour's work.
 
 ## Why the port is mostly already designed
 

@@ -539,6 +539,59 @@ to take on the board first.
 `s5_all` is the worst case on purpose. It constructs and drives every ported engine and effect at
 once, which no instrument does.
 
+## Can a given board run this, and the ESP32 question specifically
+
+Asked on 2026-08-06 and worth writing down, because the answer is three different questions that
+keep getting collapsed into one.
+
+**Will it fit?** Yes, and this part is measured. About 35 KB of flash and, once delay buffers are
+placed externally, about 31 KB of RAM. No board anyone would consider is short of that.
+
+**Will it keep up?** NOBODY KNOWS. Nothing has run on hardware. `docs/HARDWARE.md` used to open
+with "Compute is not the constraint and never was" as though it were a finding; it is an
+assumption resting on a host benchmark that is on that document's own not-reproducible list, and
+the same oscillator measured 22.6 and 59.8 ns per sample through two harnesses on one machine. It
+is now labelled there as an assumption. Treat it as plausible on a 600 MHz Cortex-M7 with a
+double-precision FPU and thin on a 240 MHz single-precision part.
+
+**Can you even target it?** For ESP32, no, not today, and this is the part the board table hides.
+`src/bellows/platform/` contains `teensy.h` and `daisy.h` and nothing else. The tier table in the
+embedded README lists ESP32-S3 and ESP32-P4 under "Most", but that table is read off data sheets
+and no code supports those parts: targeting one means writing the platform layer first. The
+README now says so.
+
+### What actually decides it, per part
+
+- **Double precision is the measured trap.** A `double` in an inner loop costs 1.07x on
+  Cortex-M7, where doubles are hardware, and **6.08x on a single-precision FPU**, where every
+  operation is a soft-float call. EVERY ESP32 is single precision. The tempo map and the theory
+  math are deliberately `double` to keep event timing bit-identical to the browser, which is fine
+  because they run at control rate; but `additive` and `harmonic` use double phase accumulators
+  at audio rate and must not be ported to a single-precision part without rework. They are
+  unported today, so this is a constraint on Milestone 4 rather than a present defect.
+- **The external-memory escape hatch may not transfer.** Moving delay buffers off-chip is what
+  takes RAM from 43 percent of a Daisy Seed to 6, but a delay line reads once PER SAMPLE. Daisy
+  SDRAM sits behind an H7 cache; ESP32 PSRAM is off-chip and weaker. Do not assume the Daisy
+  result carries to an ESP32 until someone measures it.
+- **Pitch, not voice count, is what will bite.** The BLEP residual walks `2 * KERNEL_HALF * dt`
+  edges per sample: 0.32 at A440, 5.1 at 7040 Hz. A high lead costs several times a bass note, so
+  the interesting measurement is polyphony at the TOP of the keyboard, not at A440.
+
+### My reading, and it is architecture and not measurement
+
+Labelled the way `docs/LANDSCAPE.md` labels things, so nobody inherits it as a fact.
+
+| part | read |
+| --- | --- |
+| Teensy 4.1, Daisy Seed (M7, 600 and 480 MHz, double-precision FPU, dual issue) | the designed targets, should be comfortable, UNPROVEN |
+| ESP32-P4 (RISC-V, about 400 MHz, FPU) | the most promising ESP32, still needs a platform layer |
+| ESP32-S3 (Xtensa LX7, 240 MHz, single precision) | plausible at modest polyphony. ESTIMATE, roughly a quarter to a fifth of a Teensy 4.1's throughput: 2.5x clock deficit plus a weaker FPU pipeline and no dual issue |
+| ESP32 classic | the README's "a couple of voices at best" is probably right |
+| ESP32-C3, C6 | no FPU. Do not. |
+
+An hour on a real Teensy with `AudioProcessorUsageMax()` replaces this entire table with numbers.
+That is Milestone 1, and it is blocked on nothing but a board existing.
+
 ## Verified end to end on 2026-08-05, after the fix pass
 
 The suites and the harnesses are not the product. The library ships to a browser and drives
