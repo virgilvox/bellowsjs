@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Manual trigger, so a green run can be demanded rather than waited for.
+  # Added while establishing that the push trigger fires at all: the first
+  # eleven runs were every one of them pull_request, and neither the merge of
+  # PR #1 nor the push after it produced a run on main.
+  workflow_dispatch:
 
 jobs:
   library:
