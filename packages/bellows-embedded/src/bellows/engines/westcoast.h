@@ -51,7 +51,7 @@ class WestCoast {
   }
 
   void Init(float sample_rate, const Params& p) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     p_ = p;
     osc_.Init(sample_rate);
     osc_.SetShape(BlepShape::kTriangle);

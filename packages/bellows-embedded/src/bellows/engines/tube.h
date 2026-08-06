@@ -25,6 +25,8 @@
  * they actually play.
  */
 #pragma once
+#include <math.h>
+
 #include "bellows/config.h"
 #include "bellows/core/fastmath.h"
 #include "bellows/core/prng.h"
@@ -55,15 +57,24 @@ class Tube {
   }
 
   void Init(float sample_rate, Rng* rng, const Params& p) {
-    sr_ = sample_rate;
+    /* Same guard Pluck::Init carries, and for the same reason: a rate that
+     * is not finite and positive reaches every coefficient below and comes
+     * back out as NaN audio on the mix bus. An SDK query that failed is how
+     * a caller gets here. Falls back to the rate this instance was sized
+     * for. */
+    sr_ = (sample_rate > 0.0f && isfinite(sample_rate)) ? sample_rate
+                                                        : static_cast<float>(kSampleRate);
     p_ = p;
     delay_.Init();
-    noise_.Init(sample_rate, NoiseColor::kWhite, rng);
-    env_.Init(sample_rate);
+    /* Everything below takes sr_, never the raw argument: guarding the member
+     * and then seeding the coefficients from the unguarded parameter leaves
+     * exactly the fault the guard was added for. */
+    noise_.Init(sr_, NoiseColor::kWhite, rng);
+    env_.Init(sr_);
     env_.Set(0.02f, 0.03f, 1.0f, 0.12f);
-    track_coef_ = fm::Exp(-1.0f / (kTrackTau * sample_rate));
+    track_coef_ = fm::Exp(-1.0f / (kTrackTau * sr_));
     /* 30 ms one shot cue for the legato transition, like the string bite */
-    scratch_coef_ = fm::Exp(-1.0f / (0.03f * sample_rate));
+    scratch_coef_ = fm::Exp(-1.0f / (0.03f * sr_));
   }
 
   void SetParams(const Params& p) { p_ = p; }

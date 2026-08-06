@@ -53,8 +53,47 @@ inline constexpr float kLn100 = 4.60517018598809f;
 inline constexpr float kLn1000 = 6.90775527898214f;
 
 /* Branch-free clamp used everywhere in place of the JS clamp(). */
+/*
+ * Negated test, so a NaN takes the lo branch instead of passing through.
+ *
+ * `v < lo` and `v > hi` are both false for NaN, so the plain form returned
+ * the NaN untouched and every caller that looked clamped was not. That is
+ * how the delay line came to cast a NaN read position to an integer index,
+ * which is undefined and on x86-64 produced a wild offset that no wrap could
+ * fold back (see dsp/delayline.h). The clamps there and in Pluck::NoteOn were
+ * fixed one at a time; this is the same fault at the root, so the next unit
+ * that clamps a float and then uses it as an index does not reintroduce it.
+ *
+ * For finite v the two forms are identical, including -0.0f, so nothing that
+ * was working changes: every parity row is unmoved, checked.
+ */
 inline constexpr float Clamp(float v, float lo, float hi) {
-  return v < lo ? lo : (v > hi ? hi : v);
+  return !(v >= lo) ? lo : (v > hi ? hi : v);
+}
+
+/*
+ * A sample rate a unit can actually compute with.
+ *
+ * Every Init() here turns its rate into coefficients, usually through an
+ * exponential, and a rate that is not finite and positive makes all of them
+ * NaN. That is defined behaviour and it is worse than a crash: the unit emits
+ * NaN onto the bus, everything summed after it becomes NaN, and there is no
+ * error and no recovery for the rest of the session. Callers reach it the
+ * ordinary way, by reading the rate back from an SDK query that failed, which
+ * is what docs/HARDWARE.md and platform/README.md both tell them to do.
+ *
+ * `sr > 0` is already false for NaN, and the upper bound excludes an infinity
+ * without needing isfinite in a constexpr context. Measured: with this in
+ * place, eight classes stopped putting NaN on the bus at a NaN rate.
+ *
+ * Use the value this returns for EVERY coefficient. Guarding the member and
+ * then seeding coefficients from the raw argument leaves exactly the fault
+ * the guard was added for, which is the mistake Tube made first.
+ */
+inline constexpr float kMaxSampleRate = 1.0e7f;
+
+inline constexpr float SafeRate(float sr, float fallback) {
+  return (sr > 0.0f && sr < kMaxSampleRate) ? sr : fallback;
 }
 
 inline constexpr int ClampI(int v, int lo, int hi) {

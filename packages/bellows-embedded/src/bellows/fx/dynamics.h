@@ -114,7 +114,7 @@ class Compressor {
   }
 
   void Init(float sample_rate, const Params& p) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(kSampleRate));
     dl_l_.Init();
     dl_r_.Init();
     crest_a_ = fm::Exp(-1.0f / (kCompCrestTc * sample_rate));
@@ -289,7 +289,7 @@ class Limiter {
   }
 
   void Init(float sample_rate, const Params& p) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(kSampleRate));
     dl_l_.Init();
     dl_r_.Init();
     tp_.Init();
@@ -478,7 +478,7 @@ class Gate {
   }
 
   void Init(float sample_rate, const Params& p) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     det_.Init(sample_rate, 0.0002f, 0.002f);
     SetParams(p);
     g_ = floor_lin_;

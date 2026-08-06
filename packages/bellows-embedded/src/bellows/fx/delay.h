@@ -37,7 +37,7 @@ class StereoDelayExt {
    */
   void Init(float sample_rate, float* buf_l, float* buf_r, uint32_t cap,
             const Params& p, float max_sec = 0.0f) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     const float ring_sec = static_cast<float>(cap - 4) / sample_rate;
     max_sec_ = (max_sec > 0.0f && max_sec < ring_sec) ? max_sec : ring_sec;
     line_l_.Init(buf_l, cap);

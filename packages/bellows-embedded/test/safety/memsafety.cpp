@@ -729,6 +729,42 @@ void CheckBringUpUnderRenderThread() {
  * sample was read, not that both reads happened to land on zeros. A run
  * against a silent line would pass for the wrong reason.
  */
+/*
+ * The two primitives in config.h, asserted directly.
+ *
+ * Both are defensive: with SafeRate in every Init(), no engine currently
+ * reaches Clamp with a NaN, so a mutation that reverts Clamp to the plain
+ * `v < lo` form passes every other check in this file. Measured, so it is
+ * worth stating plainly: the Clamp fix is a guard rail against the next unit
+ * that clamps a float and uses it as an index, not a fix for a live fault,
+ * and without this check nothing would notice it being undone.
+ */
+void CheckRateAndClampPrimitives() {
+  const float kFb = 48000.0f;
+  Check(bellows::SafeRate(44100.0f, kFb) == 44100.0f, "SafeRate passes a good rate",
+        bellows::SafeRate(44100.0f, kFb), 44100.0f);
+  Check(bellows::SafeRate(NAN, kFb) == kFb, "SafeRate rejects NaN", bellows::SafeRate(NAN, kFb), kFb);
+  Check(bellows::SafeRate(INFINITY, kFb) == kFb, "SafeRate rejects +inf",
+        bellows::SafeRate(INFINITY, kFb), kFb);
+  Check(bellows::SafeRate(0.0f, kFb) == kFb, "SafeRate rejects zero", bellows::SafeRate(0.0f, kFb), kFb);
+  Check(bellows::SafeRate(-44100.0f, kFb) == kFb, "SafeRate rejects a negative rate",
+        bellows::SafeRate(-44100.0f, kFb), kFb);
+
+  Check(bellows::Clamp(0.5f, 0.0f, 1.0f) == 0.5f, "Clamp passes a value in range",
+        bellows::Clamp(0.5f, 0.0f, 1.0f), 0.5f);
+  Check(bellows::Clamp(-1.0f, 0.0f, 1.0f) == 0.0f, "Clamp holds the floor",
+        bellows::Clamp(-1.0f, 0.0f, 1.0f), 0.0f);
+  Check(bellows::Clamp(2.0f, 0.0f, 1.0f) == 1.0f, "Clamp holds the ceiling",
+        bellows::Clamp(2.0f, 0.0f, 1.0f), 1.0f);
+  /* The one that matters: both comparisons are false for NaN, so the plain
+   * form returns it untouched and every caller that looks clamped is not. */
+  Check(bellows::Clamp(NAN, 0.0f, 1.0f) == 0.0f, "Clamp(NaN) takes the floor",
+        bellows::Clamp(NAN, 0.0f, 1.0f), 0.0f);
+  Check(bellows::Clamp(-0.0f, 0.0f, 1.0f) == 0.0f, "Clamp leaves -0.0 alone",
+        bellows::Clamp(-0.0f, 0.0f, 1.0f), 0.0f);
+  printf("  ok %-14s SafeRate and Clamp reject what they should\n", "config.h");
+}
+
 void CheckDelayClamps() {
   constexpr uint32_t kCap = 64;
   auto* buf = new float[kCap];
@@ -784,6 +820,24 @@ void DriveVoice(V* v, const char* name, float rate) {
       v->NoteOn(kFreqs[f], vel);
       v->Process(g_l, g_r, 7, 63);
       v->Process(g_l, g_r, 63, kBlock);
+      /*
+       * A voice handed a NaN pitch must not put NaN into the mix bus.
+       *
+       * The sanitizers cannot see this on their own: emitting NaN is
+       * perfectly defined, it just ruins every voice summed after it and
+       * every effect downstream, silently and for the rest of the session.
+       * It was reachable because bellows::Clamp used `v < lo`, false for
+       * NaN, so a NaN frequency walked through the clamp untouched. Tube was
+       * the live case, contained only because it reads its line linearly.
+       */
+      for (int b = 0; b < kBlock; ++b) {
+        if (!isfinite(g_l[b]) || !isfinite(g_r[b])) {
+          printf("  FAIL %s emitted a non-finite sample at rate %g, freq %g\n", name,
+                 static_cast<double>(rate), static_cast<double>(kFreqs[f]));
+          g_failures++;
+          b = kBlock;
+        }
+      }
     }
   }
   printf("  ok %-14s rate=%-8.0f blocks=%d\n", name, rate, blocks);
@@ -800,6 +854,16 @@ void DriveFx(FX* fx, const char* name, float rate, const P& lo, const P& hi) {
     }
     FillInput(99);
     fx->Process(g_l, g_r, 11, 77);
+    /* Same rule as the voices: defined behaviour is not enough, a NaN on the
+     * bus ruins everything summed after it. */
+    for (int b = 11; b < 77; ++b) {
+      if (!isfinite(g_l[b]) || !isfinite(g_r[b])) {
+        printf("  FAIL %s emitted a non-finite sample at rate %g\n", name,
+               static_cast<double>(rate));
+        g_failures++;
+        b = 77;
+      }
+    }
   }
   printf("  ok %-14s rate=%-8.0f\n", name, rate);
 }
@@ -1072,6 +1136,7 @@ int main() {
   CheckBringUpUnderRenderThread();
 
   printf("delay line clamps\n");
+  CheckRateAndClampPrimitives();
   CheckDelayClamps();
   for (int i = 0; i < kNumRates; ++i) RunRate(kRates[i]);
   if (g_failures != 0) {

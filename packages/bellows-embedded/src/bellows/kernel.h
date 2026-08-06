@@ -197,7 +197,7 @@ class Kernel {
   using ParamFn = void (*)(void* ctx, uint8_t target, uint16_t param, float value);
 
   void Init(float sample_rate) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     frame_ = 0;
     head_ = 0;
     count_ = 0;

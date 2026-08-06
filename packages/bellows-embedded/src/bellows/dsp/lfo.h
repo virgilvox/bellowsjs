@@ -29,7 +29,7 @@ static_assert(kLfoDefaultSeed == 0x3ffd21a2u, "the default LFO stream is rng('lf
 class Lfo {
  public:
   void Init(float sample_rate, Rng* rng = nullptr) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     /* A null Rng used to mean held_ = 0 forever, so kSampleHold produced a
      * constant and Tremolo (whose Init defaults the Rng to nullptr) went
      * silent as a modulator: a fixed gain of 1 - depth/2, and AutoPan a

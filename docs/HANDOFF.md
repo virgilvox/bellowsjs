@@ -419,7 +419,7 @@ recorded anywhere else, so here it is. Flash on Cortex-M7, measured against the 
 
 | sketch | before | now | delta | why |
 | --- | --- | --- | --- | --- |
-| `s5_all` | 35104 | 35168 | +64 | NaN guards in the delay line, plate, dynamics and fastmath |
+| `s5_all` | 35104 | 35096 | +64 | NaN guards in the delay line, plate, dynamics and fastmath |
 | `s3_pluck` | 6552 | 6728 | +176 | the `MinFreq` clamp and the excitation bound |
 | `s9e_westcoast` | 16784 | 17656 | +872 | the 4x fold oversampler |
 

@@ -101,14 +101,14 @@ These are measured decisions, not style preferences.
    one: 32 KB of `Float64Array` built at module load in JS, 16 KB of const `float` in flash here.
 
 7. **One header per concept, and headers include only what they use.** This is why
-   `engines/pluck.h` costs 6728 B and `engines/va.h` costs 28576 B: pluck does not pull in the
+   `engines/pluck.h` costs 6728 B and `engines/va.h` costs 28640 B: pluck does not pull in the
    BLEP tables. (Both were written as "6.6 KB" and "28.5 KB" and both went stale in the third
    digit, which is why the sketch figures are quoted in bytes now: a byte count is checkable and
    a rounded one is an opinion about which kilobyte you meant.)
 
 ## Where the flash actually goes
 
-Symbol breakdown of the VA voice sketch, 28576 bytes of flash. Counted with `arm-none-eabi-nm
+Symbol breakdown of the VA voice sketch, 28640 bytes of flash. Counted with `arm-none-eabi-nm
 -S -C` over the elf the size report links, deduped by address (newlib aliases several helpers,
 `__adddf3` and `__aeabi_dadd` being one symbol under two names) and restricted to code and
 rodata. The split is by a rule a script applies rather than by eye: the two residual tables by
@@ -119,10 +119,10 @@ whatever is left, which is newlib.
 | --- | --- | --- |
 | residual tables, `kBlepStep` plus `kBlepRamp` | 16392 | 57 % |
 | newlib, libm and libc together | 8630 | 30 % |
-| every other `bellows::` symbol | 2632 | 9 % |
+| every other `bellows::` symbol | 2696 | 9 % |
 | the sketch's own `main` | 552 | 2 % |
 
-Those four sum to 28206 of the 28576 the size report prints. The 370 byte remainder is unsized
+Those four sum to 28270 of the 28640 the size report prints. The 370 byte remainder is unsized
 symbols plus the part of `.text` the symbol table does not attribute, and it is left explicit
 rather than folded into a row.
 
@@ -159,13 +159,13 @@ it. Measured, Cortex-M7:
 | --- | --- | --- | --- |
 | `s1_kick` | 3760 B | 936 B | 75 % |
 | `s3_pluck` | 6728 B | 2468 B | 63 % |
-| `s9g_tube` | 5000 B | 3028 B | 39 % |
-| `p1_drums` | 20856 B | 12856 B | 38 % |
+| `s9g_tube` | 5096 B | 3124 B | 38 % |
+| `p1_drums` | 20808 B | 12884 B | 38 % |
 | `s9e_westcoast` | 17656 B | 12088 B | 31 % |
-| `s4_va` | 28576 B | 20672 B | 27 % |
-| `p2_poly8` | 30984 B | 22660 B | 26 % |
-| `s9f_formant` | 28368 B | 21048 B | 25 % |
-| `s5_all` | 35168 B | 26176 B | 25 % |
+| `s4_va` | 28640 B | 20728 B | 27 % |
+| `p2_poly8` | 31136 B | 22800 B | 26 % |
+| `s9f_formant` | 28368 B | 21044 B | 25 % |
+| `s5_all` | 35096 B | 26176 B | 25 % |
 | `s9m_seq` | 5296 B | 5296 B | 0 % |
 
 The sequencing row is 0 percent and should be: it is integer and small-float work over const
@@ -274,13 +274,13 @@ it, so these are real costs and not a floor. Reproduce with `./tools/size-report
 | Module | flash | RAM | notes |
 | --- | --- | --- | --- |
 | `theory/` (scales, chords, tuning, notes) | 2624 B | 116 B | the differentiator, and it is nearly free |
-| `fx/dynamics` | 4048 B | 10016 B | compressor, limiter lookahead line |
-| `fx/modfx` | 4928 B | 17712 B | chorus, flanger, tremolo, autopan, ringmod |
-| `engines/tube` | 5000 B | 2460 B | `Tube<80>` bore |
+| `fx/dynamics` | 3928 B | 10016 B | compressor, limiter lookahead line |
+| `fx/modfx` | 4976 B | 17712 B | chorus, flanger, tremolo, autopan, ringmod |
+| `engines/tube` | 5096 B | 2460 B | `Tube<80>` bore |
 | `seq/` (euclid, arp, CA, lsystem, tempomap) | 5296 B | 900 B | fixed capacity, no allocation |
 | `engines/fm` | 5384 B | 1536 B | SineOsc only, so no BLEP tables |
 | `fx/saturator` | 5568 B | 10136 B | with the oversampler |
-| `fx/plate` | 5752 B | 156736 B | Dattorro tank, the RAM is the tank |
+| `fx/plate` | 5824 B | 156736 B | Dattorro tank, the RAM is the tank |
 | `engines/modal` | 5944 B | 1584 B | five material tables in flash |
 | `kernel` | 6208 B | 2492 B | event queue plus block splitting |
 | `engines/westcoast` | 17656 B | 2564 B | BLEP tables dominate |
@@ -307,10 +307,10 @@ four-way rule as the VA table above:
 | --- | --- | --- |
 | `kBlepStep` and `kBlepRamp` residual tables | 16392 | 47 % |
 | newlib, libm and libc together | 10002 | 28 % |
-| every line of bellows DSP | 5704 | 16 % |
-| the sketch's own `main` | 2560 | 7 % |
+| every line of bellows DSP | 5118 | 15 % |
+| the sketch's own `main` | 3076 | 9 % |
 
-Those four sum to 34658 of the 35168 bytes the size report prints. The 510 byte gap is unsized
+Those four sum to 34588 of the 35096 bytes the size report prints. The 508 byte gap is unsized
 symbols plus the part of `.data` that the symbol-type filter does not see, and it is left
 explicit rather than absorbed into one of the rows, because absorbing it is how the previous
 version of this table ended up claiming 35 percent for the DSP.
@@ -356,7 +356,7 @@ without calling the helper.
 
 The engines whose shape is fixed at construction now call the helpers, and that is where the
 saving actually lands: `s9e_westcoast` went 27064 to 17656 bytes and
-`p1_drums` 29448 to 20856, each keeping only the table it reads. A program that
+`p1_drums` 29448 to 20808, each keeping only the table it reads. A program that
 mixes both styles, like `s5_all`, pays about 150 bytes for carrying the two dispatch paths, which
 is the honest cost of the choice being per call site rather than global.
 
@@ -478,10 +478,10 @@ anything the size report actually builds:
 | kick only | `s1_kick` | 3760 B | 1100 B |
 | kick only, `BELLOWS_FAST_MATH=1` | `s1_kick` with the flag | 936 B | 1084 B |
 | three piece kit | `s2_kit` | 28248 B | 1532 B |
-| kit plus EQ and a 250 ms delay | `p1_drums` | 20856 B | 98776 B |
-| 8 voice VA poly, EQ, 250 ms delay | `p2_poly8` | 30984 B | 100280 B |
-| 8 VA plus 8 `Pluck<80>` plus kit, EQ, delay | `p3_workstation` | 34848 B | 160408 B |
-| everything constructed and driven at once | `s5_all` | 35168 B | 223324 B |
+| kit plus EQ and a 250 ms delay | `p1_drums` | 20808 B | 98776 B |
+| 8 voice VA poly, EQ, 250 ms delay | `p2_poly8` | 31136 B | 100280 B |
+| 8 VA plus 8 `Pluck<80>` plus kit, EQ, delay | `p3_workstation` | 34904 B | 160408 B |
+| everything constructed and driven at once | `s5_all` | 35096 B | 223324 B |
 
 And the shipped examples, whose numbers come from the same logic headers the sketches compile,
 so they cannot drift from the code:
@@ -489,10 +489,10 @@ so they cannot drift from the code:
 | Example | flash | RAM |
 | --- | --- | --- |
 | `01_OneKick` | 3776 B | 1100 B |
-| `02_DrumMachine` (bank plus euclid) | 29688 B | 1620 B |
-| `03_PolySynth` (`VoicePool<Va, 8>`) | 30408 B | 3876 B |
+| `02_DrumMachine` (bank plus euclid) | 30120 B | 1620 B |
+| `03_PolySynth` (`VoicePool<Va, 8>`) | 30280 B | 3876 B |
 | `04_ScalesAndTuning` | 8096 B | 30176 B |
-| `05_MidiInstrument` | 30336 B | 3888 B |
+| `05_MidiInstrument` | 30616 B | 3888 B |
 
 Against real boards, using the largest profile:
 

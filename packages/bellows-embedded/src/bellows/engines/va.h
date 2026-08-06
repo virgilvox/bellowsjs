@@ -35,7 +35,7 @@ class Va {
   }
 
   void Init(float sample_rate, Rng* rng, const Params& p) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     rng_ = rng;
     p_ = p;
     osc1_.Init(sample_rate);
