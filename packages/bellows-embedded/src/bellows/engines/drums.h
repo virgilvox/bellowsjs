@@ -28,7 +28,7 @@ class Kick {
   void Init(float sample_rate) { Params d; Init(sample_rate, d); }
 
   void Init(float sample_rate, const Params& p) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     p_ = p;
     amp_.Init(sample_rate);
     pitch_.Init(sample_rate);
@@ -154,7 +154,7 @@ class Hat {
   void Init(float sample_rate) { Params d; Init(sample_rate, d); }
 
   void Init(float sample_rate, const Params& p) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     p_ = p;
     for (int i = 0; i < 6; ++i) {
       oscs_[i].Init(sample_rate);

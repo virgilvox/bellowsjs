@@ -14,7 +14,7 @@ enum class SvfMode { kLp, kHp, kBp, kNotch, kPeak, kAllpass, kBell, kLowShelf, k
 class Svf {
  public:
   void Init(float sample_rate) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     Update();
   }
 
@@ -92,7 +92,7 @@ class Svf {
 class LadderFilter {
  public:
   void Init(float sample_rate) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     Set(1000.0f, 0.0f);
   }
 
@@ -129,7 +129,7 @@ class LadderFilter {
 class OnePole {
  public:
   void Init(float sample_rate) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     SetLowpass(1000.0f);
   }
   void SetLowpass(float hz) { a_ = Coef(hz); hp_ = false; }

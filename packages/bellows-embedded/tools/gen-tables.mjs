@@ -427,13 +427,13 @@ function unitBlock(kind, def, port) {
   return out.join('\n');
 }
 
-async function generateParamsHeader() {
+async function generateParamsHeader(check = false) {
   if (!existsSync(TS_DIST)) {
     throw new Error(
       `${relative(REPO, TS_DIST)} not found. Run: npm run build -w packages/bellows`,
     );
   }
-  await warnIfDistStale();
+  await warnIfDistStale(check);
   const lib = await import(pathToFileURL(TS_DIST).href);
   lib.registerBuiltins();
   const defs = {
@@ -517,7 +517,22 @@ async function generateParamsHeader() {
  * week's params. mtimes are not reliable in a fresh CI checkout, so this
  * warns and keeps going rather than failing.
  */
-async function warnIfDistStale() {
+/*
+ * Refuse to report on a stale bundle under --check.
+ *
+ * This used to print a warning and then read the stale dist anyway, which
+ * makes the check worse than absent: it answers a question it did not ask.
+ * Measured on 2026-08-06, correcting the BLAMP construction in
+ * src/dsp/oscillators.ts and then running `node tools/gen-tables.mjs --check`
+ * still printed `ok src/bellows/dsp/blep_tables.h`, because the bundle it
+ * compared against predated the fix. A gate that says ok while looking at
+ * last week's input is the thing docs/AUDIT.md finding 11 is about.
+ *
+ * A plain run still only warns, because regenerating against a stale bundle
+ * is a normal thing to do mid-edit and the writer sees the diff. It is
+ * --check, the mode CI and a reviewer trust, that has to be fatal.
+ */
+async function distIsStale() {
   let newest = 0;
   const walk = async (dir) => {
     for (const ent of await readdir(dir, { withFileTypes: true })) {
@@ -529,15 +544,27 @@ async function warnIfDistStale() {
   try {
     await walk(join(TS_PKG, 'src'));
     const built = (await stat(TS_DIST)).mtimeMs;
-    if (newest > built) {
-      process.stderr.write(
-        'warning: packages/bellows/src is newer than dist/bellows.js. ' +
-          'Run: npm run build -w packages/bellows\n',
-      );
-    }
+    return newest > built;
   } catch {
-    /* mtimes are advisory, never fatal */
+    /* No dist at all, or an unreadable tree: the import below reports it. */
+    return false;
   }
+}
+
+async function warnIfDistStale(check) {
+  if (!(await distIsStale())) return;
+  const msg =
+    'packages/bellows/src is newer than dist/bellows.js. ' +
+    'Run: npm run build -w packages/bellows';
+  if (check) {
+    process.stderr.write(
+      `error: ${msg}\n` +
+        '       --check refuses to compare against a stale bundle: it would ' +
+        'report on the\n       previous build and call it ok.\n',
+    );
+    process.exit(2);
+  }
+  process.stderr.write(`warning: ${msg}\n`);
 }
 
 /* ------------------------------------------------------------------ */
@@ -575,7 +602,7 @@ async function main() {
     ok = (await emit('src/bellows/dsp/blep_tables.h', generateBlepHeader(), check)) && ok;
   }
   if (only === 'all' || only === 'params') {
-    ok = (await emit('src/bellows/params.gen.h', await generateParamsHeader(), check)) && ok;
+    ok = (await emit('src/bellows/params.gen.h', await generateParamsHeader(check), check)) && ok;
   }
   if (!ok) {
     process.stderr.write('\ngenerated output is out of date. Run: node tools/gen-tables.mjs\n');

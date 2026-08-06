@@ -16,10 +16,10 @@ against a fixed voice budget. See `00_BringUp/README.md`.
 | example | adds | flash | RAM |
 | --- | --- | --- | --- |
 | 01_OneKick | one voice, one audio callback | 3776 B | 1100 B |
-| 02_DrumMachine | a compile-time Bank, euclidean patterns | 29688 B | 1620 B |
-| 03_PolySynth | VoicePool, a swept filter | 30408 B | 3876 B |
+| 02_DrumMachine | a compile-time Bank, euclidean patterns | 30120 B | 1620 B |
+| 03_PolySynth | VoicePool, a swept filter | 30280 B | 3876 B |
 | 04_ScalesAndTuning | the theory layer, 12-EDO against 19-EDO | 8096 B | 30176 B |
-| 05_MidiInstrument | MIDI byte parsing into a voice pool | 30336 B | 3888 B |
+| 05_MidiInstrument | MIDI byte parsing into a voice pool | 30616 B | 3888 B |
 
 Cortex-M7 at `-Os` with `--gc-sections`, library only: no Arduino core and
 no audio library, so these are the bellows half of the binary and nothing

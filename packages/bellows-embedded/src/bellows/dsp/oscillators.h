@@ -12,7 +12,7 @@ enum class BlepShape { kSaw, kSquare, kTriangle, kSine };
 
 class BlepOsc {
  public:
-  void Init(float sample_rate) { sr_ = sample_rate; }
+  void Init(float sample_rate) { sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE)); }
   void SetShape(BlepShape s) { shape_ = s; }
   void SetFreq(float hz) {
     float d = hz / sr_;
@@ -148,7 +148,7 @@ class BlepOsc {
 
 class SineOsc {
  public:
-  void Init(float sample_rate) { sr_ = sample_rate; }
+  void Init(float sample_rate) { sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE)); }
   void SetFreq(float hz) {
     float d = hz / sr_;
     dt_ = d < 0.0f ? 0.0f : (d > 0.5f ? 0.5f : d);

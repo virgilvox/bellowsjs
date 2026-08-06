@@ -104,7 +104,7 @@ class Modal {
   }
 
   void Init(float sample_rate, Rng* rng, const Params& p) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     rng_ = rng;
     p_ = p;
     track_coef_ = fm::Exp(-1.0f / (kTrackTau * sample_rate));

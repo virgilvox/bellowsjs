@@ -78,7 +78,7 @@ class Formant {
   }
 
   void Init(float sample_rate, Rng* rng, const Params& p) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     p_ = p;
     osc_.Init(sample_rate);
     noise_.Init(sample_rate, NoiseColor::kWhite, rng);

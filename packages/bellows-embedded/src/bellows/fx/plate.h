@@ -193,7 +193,7 @@ class PlateExt {
   bool Init(float sample_rate, float* buf, uint32_t buf_len, uint32_t predelay_ms,
             const Params& p) {
     namespace pd = plate_detail;
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     max_predelay_ = static_cast<float>(predelay_ms) * 0.001f;
     ready_ = false;
     /* Every one of the thirteen lengths below is scaled by this integer

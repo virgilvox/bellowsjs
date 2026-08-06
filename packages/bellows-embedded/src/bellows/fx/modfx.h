@@ -35,7 +35,7 @@ namespace detail {
  * fm::Sin, so the whole file honours one math switch. */
 class SineCarrier {
  public:
-  void Init(float sample_rate) { sr_ = sample_rate; }
+  void Init(float sample_rate) { sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE)); }
   /* Fixed point phase for the same reason Lfo uses it: see the note on
    * PhaseIncrement in config.h. The carrier runs at audio rate here, so a
    * drifting accumulator costs more than it does on a control rate Lfo. */

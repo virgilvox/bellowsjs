@@ -44,16 +44,16 @@ the comparison.
 | `Kick` + `Snare` + `Hat` | 28248 B | 1532 B |
 | `Pluck<80>` (80 Hz lowest note) | 6840 B | 8388 B |
 | `Pluck<20>` (20 Hz lowest note) | 6728 B | 29988 B |
-| `Va` | 28576 B | 1376 B |
-| `Eq3` | 6984 B | 1392 B |
+| `Va` | 28640 B | 1376 B |
+| `Eq3` | 7072 B | 1392 B |
 | `StereoDelay<100>` | 1768 B | 39584 B |
 | `StereoDelay<500>` | 1760 B | 193184 B |
 | `theory/` (scales, chords, tunings, notes) | 2624 B | 116 B |
 | `seq/` (euclid, arp, CA, lsystem, tempomap) | 5296 B | 900 B |
 | `Fm` | 5384 B | 1536 B |
-| `Plate` | 5752 B | 156736 B |
+| `Plate` | 5824 B | 156736 B |
 | `kernel` | 6208 B | 2492 B |
-| everything, constructed and driven | 35168 B | 223324 B |
+| everything, constructed and driven | 35096 B | 223324 B |
 
 Run `./tools/size-report.sh` to reproduce it, or `./tools/check-header.sh bellows/engines/va.h`
 for one module.

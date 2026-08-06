@@ -11,7 +11,7 @@ class Adsr {
   enum class Stage { kIdle, kAttack, kDecay, kSustain, kRelease };
 
   void Init(float sample_rate) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     Set(0.01f, 0.1f, 0.7f, 0.2f);
   }
 
@@ -69,7 +69,7 @@ class Adsr {
 
 class ExpDecay {
  public:
-  void Init(float sample_rate) { sr_ = sample_rate; }
+  void Init(float sample_rate) { sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE)); }
   void SetTime(float sec) {
     coef_ = sec <= 0.0f ? 0.0f : fm::Exp(-6.90775527898214f / (sec * sr_));
   }

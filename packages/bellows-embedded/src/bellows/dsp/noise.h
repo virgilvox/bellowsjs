@@ -12,7 +12,7 @@ enum class NoiseColor { kWhite, kPink, kBrown, kVelvet, kCrackle };
 class NoiseGen {
  public:
   void Init(float sample_rate, NoiseColor color, Rng* rng) {
-    sr_ = sample_rate;
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
     color_ = color;
     rng_ = rng;
     velvet_p_ = 2000.0f / sample_rate;
