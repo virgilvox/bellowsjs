@@ -4,7 +4,14 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 
 ## Where things stand
 
-- `bellowsjs@0.1.6` is published on npm, tagged `v0.1.6`. See `CHANGELOG.md`: it is a safety release, and the SFZ hardening in it fixes a real denial of service on untrusted input in a browser. **`main` is NOT current**: all of this work is on `milestone-2-and-bringup`, open as PR #1. `packages/bellows-embedded` is at 0.1.0 and is not published anywhere yet.
+- `bellowsjs@0.1.6` is published on npm, tagged `v0.1.6`, and `main` IS current: PR #1 merged on
+  2026-08-06. See `CHANGELOG.md`; it is a safety release, and the SFZ hardening in it fixes a real
+  denial of service on untrusted input in a browser. bellows.live is redeployed from it and was
+  checked serving real audio, not just a 200.
+- **`packages/bellows-embedded` is published nowhere.** It is `private: true`, so it is not on npm
+  and is not meant to be, and it is in neither the Arduino Library Manager nor the PlatformIO
+  registry. Today the only way to consume it is to point PlatformIO at the subdirectory by hand.
+  That is Milestone 6 and it has not started.
 - Library test suite: 85 files, 1273 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`, `vue-tsc`) and was verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples.
@@ -47,7 +54,7 @@ Run all of them from `packages/bellows-embedded` unless noted.
 | `npm run size` | flash and RAM per sketch, `cortex-m7` or `cortex-m4` | the whole no-registry design argument |
 | `./tools/check-header.sh <h>` | one header compiles standalone, `-Wall -Wextra` | header hygiene; note it instantiates nothing |
 | `node tools/gen-tables.mjs --check` | generated headers match the TypeScript ParamSpecs | new `Eq6` class the moment it appeared |
-| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md` and `docs/ENGINEERING.md`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath` and `vitest list`: 364 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
+| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md` and `docs/ENGINEERING.md`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath` and `vitest list`: 367 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
 | `npx vitest run test/integration/engine-tuning.test.ts` | every pitched engine plays the note it was given, to 2 cents | proves the fractional-delay tuning is real: an integer-rounded loop is 28 cents flat at E7 |
 | `npx vitest run test/integration/nan-safety.test.ts` | one NaN parameter cannot break the audio graph | 10 parameters threw inside `process()` and 191 poisoned the output before it existed |
 
@@ -175,7 +182,7 @@ The endgame from the research: keep bellows.live as the composition brain and pu
 
 ### Milestone 6: publish
 
-- Decide the Arduino Library Manager route: a mirror repository containing only `packages/bellows-embedded`, or a release-zip submission. The Manager indexes repositories, not subdirectories. PlatformIO can consume the subdirectory directly today.
+- The Arduino Library Manager route is DECIDED, see "Decisions, made" above: a mirror repository holding only `packages/bellows-embedded`, pushed by CI on tag, because the Manager indexes repositories and not subdirectories and a release-zip flow stays manual forever. PlatformIO can consume the subdirectory directly today and needs nothing.
 - Tag, release, and add the library to both registries.
 - Wire `publint` into CI, which is the one CI gap left.
 
@@ -504,6 +511,30 @@ about a quarter of a Daisy Seed's internal flash and a fifth of that with fast m
 what binds. The delay buffers are still 86 percent of what `s5_all` uses, which is why `int16`
 delay storage is first on the strategic list: it is the largest lever left on the only number
 that has ever been tight.
+
+**RAM only binds if you keep the buffers in internal memory, and both target boards have somewhere
+else to put them.** This is the most useful thing about the delay line and it was not written down
+anywhere: `DelayLineExt` takes caller-provided storage precisely so the placement is the
+application's choice, `DMAMEM` or `EXTMEM` on Teensy, `DSY_SDRAM_BSS` on Daisy. The arithmetic
+that follows is worth having in front of you before optimising anything:
+
+| | flash | SRAM |
+| --- | --- | --- |
+| `s5_all`, buffers in internal SRAM | 35096 B | 223324 B, 43 % of a Daisy Seed |
+| `s5_all`, buffers placed externally | 35096 B | about 31 KB, 6 % of a Daisy Seed |
+
+A Daisy Seed has 64 MB of SDRAM and a Teensy 4.1 takes soldered PSRAM to 16 MB, so on either
+board the whole ported engine set costs about 31 KB of the scarce memory once the buffers move.
+`int16` storage is still worth doing, because it halves the buffers wherever they live and not
+every board has external memory, but the framing "RAM is 43 percent" describes one placement
+choice rather than a property of the library.
+
+**What none of this tells you is how many voices will actually run.** Every figure above is from
+the linker. CPU has never been measured on hardware, so flash and RAM say what FITS and nothing
+says what KEEPS UP. The one durable CPU fact is arithmetic rather than measurement: the BLEP
+residual walks `2 * KERNEL_HALF * dt` edges per sample, 0.32 at A440 and 5.1 at 7040 Hz, so a
+high lead costs several times a bass note and polyphony at the top of the keyboard is the number
+to take on the board first.
 
 `s5_all` is the worst case on purpose. It constructs and drives every ported engine and effect at
 once, which no instrument does.

@@ -798,6 +798,19 @@ const PROSE = [
     re: /went 1204 to (\d+) bytes of RAM/,
     gets: [() => value('s9e_westcoast', 'ram')],
   },
+  /* The internal-against-external placement table. Restating s5_all here was
+   * a deliberate exception to "reference, do not duplicate", because the
+   * whole point is the contrast between the two rows, so it is checked. */
+  {
+    doc: 'docs/HANDOFF.md',
+    re: /`s5_all`, buffers in internal SRAM \| (\d+) B \| (\d+) B/,
+    gets: [() => value('s5_all', 'flash'), () => value('s5_all', 'ram')],
+  },
+  {
+    doc: 'docs/HANDOFF.md',
+    re: /`s5_all`, buffers placed externally \| (\d+) B/,
+    gets: [() => value('s5_all', 'flash')],
+  },
   /* The suite shape. Two documents used to state it and neither could
    * check it; the second audit found KICKOFF quoting 80 files and 1146
    * tests against HANDOFF's 81 and 1173, and both were behind the tree. */

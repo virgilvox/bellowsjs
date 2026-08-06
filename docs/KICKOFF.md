@@ -86,7 +86,7 @@ TRAPS THAT WILL BITE YOU, in the order they are likely to
    DSP. This has already happened once. CI would catch it if CI ran.
 2. Every documented number rots. A change moves a sketch and the tables quoting it are left
    behind; that happened four times in one session, and a second audit then found sixteen more.
-   node tools/check-docs.mjs --check is the control, and it now covers 364 figures across
+   node tools/check-docs.mjs --check is the control, and it now covers 367 figures across
    docs/HARDWARE.md, the embedded README, examples/README.md, docs/HANDOFF.md, docs/ENGINEERING.md
    and this file, against the size report, the sketch symbol tables, parity, tables, fastmath and
    vitest list.
