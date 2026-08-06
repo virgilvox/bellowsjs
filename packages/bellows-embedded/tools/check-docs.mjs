@@ -775,6 +775,29 @@ const PROSE = [
     re: /takes the kick from (\d+) to (\d+) bytes/,
     gets: [() => value('s1_kick', 'flash'), () => value('s1_kick', 'flashFm')],
   },
+  /* The cost of the 2026-08-05 correctness work. The "before" column is
+   * history and cannot be checked; the "now" column is what rots, so it is
+   * the only capture group in each. */
+  {
+    doc: 'docs/HANDOFF.md',
+    re: /\| `s5_all` \| 35104 \| (\d+) \|/,
+    gets: [() => value('s5_all', 'flash')],
+  },
+  {
+    doc: 'docs/HANDOFF.md',
+    re: /\| `s3_pluck` \| 6552 \| (\d+) \|/,
+    gets: [() => value('s3_pluck', 'flash')],
+  },
+  {
+    doc: 'docs/HANDOFF.md',
+    re: /\| `s9e_westcoast` \| 16784 \| (\d+) \|/,
+    gets: [() => value('s9e_westcoast', 'flash')],
+  },
+  {
+    doc: 'docs/HANDOFF.md',
+    re: /went 1204 to (\d+) bytes of RAM/,
+    gets: [() => value('s9e_westcoast', 'ram')],
+  },
   /* The suite shape. Two documents used to state it and neither could
    * check it; the second audit found KICKOFF quoting 80 files and 1146
    * tests against HANDOFF's 81 and 1173, and both were behind the tree. */

@@ -47,7 +47,7 @@ Run all of them from `packages/bellows-embedded` unless noted.
 | `npm run size` | flash and RAM per sketch, `cortex-m7` or `cortex-m4` | the whole no-registry design argument |
 | `./tools/check-header.sh <h>` | one header compiles standalone, `-Wall -Wextra` | header hygiene; note it instantiates nothing |
 | `node tools/gen-tables.mjs --check` | generated headers match the TypeScript ParamSpecs | new `Eq6` class the moment it appeared |
-| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md` and `docs/ENGINEERING.md`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath` and `vitest list`: 360 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
+| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md` and `docs/ENGINEERING.md`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath` and `vitest list`: 364 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
 | `npx vitest run test/integration/engine-tuning.test.ts` | every pitched engine plays the note it was given, to 2 cents | proves the fractional-delay tuning is real: an integer-rounded loop is 28 cents flat at E7 |
 | `npx vitest run test/integration/nan-safety.test.ts` | one NaN parameter cannot break the audio graph | 10 parameters threw inside `process()` and 191 poisoned the output before it existed |
 
@@ -397,6 +397,46 @@ loosest allowance. A local run is exact. Every allowance is printed and counted 
 **Next action on this branch: merge PR #1.** The site builds from `main` (`.do/app.yaml`), so
 bellows.live is still serving pre-audit code until that happens, and the deploy step of the
 release ritual has deliberately not been run for that reason.
+
+## What actually fits on hardware, and where the room came from
+
+Two part answer, and the parts point in opposite directions.
+
+**The room was made by the size pass, not by the correctness work.** Two changes account for
+nearly all of it, both written up with their tables in `docs/HARDWARE.md` under "Making it
+smaller", which `check-docs` verifies. Do not restate those figures here, read them there.
+
+- **Exact delay sizing** took `s5_all` from 300144 to 223324 bytes of RAM: 76820 bytes, 25.6
+  percent, off the constraint that actually binds. Bit identical output, so no parity row moved.
+- **Routing every transcendental through `fm::`** made `BELLOWS_FAST_MATH=1` real. It had been
+  documented for months as the flash-for-accuracy trade and saved essentially nothing on any
+  sketch with an oscillator, because the oscillators still called libm. It now takes 26 to 75
+  percent off, depending on the sketch.
+
+**The correctness work since has cost space rather than saved it.** Small, but not zero, and not
+recorded anywhere else, so here it is. Flash on Cortex-M7, measured against the start of the
+2026-08-05 session:
+
+| sketch | before | now | delta | why |
+| --- | --- | --- | --- | --- |
+| `s5_all` | 35104 | 35168 | +64 | NaN guards in the delay line, plate, dynamics and fastmath |
+| `s3_pluck` | 6552 | 6728 | +176 | the `MinFreq` clamp and the excitation bound |
+| `s9e_westcoast` | 16784 | 17656 | +872 | the 4x fold oversampler |
+
+The west coast voice also went 1204 to 2564 bytes of RAM, and that one is worth watching: most of
+the increase is the oversampler's scratch rather than its filter state, so it is per voice today
+and could be shared across a pool. At eight voice polyphony that is roughly 10 KB that does not
+have to be spent.
+
+**Where that leaves the two boards** is the capacity table in `docs/HARDWARE.md`, also checked.
+The short version: flash has never been the binding constraint on either target, `s5_all` uses
+about a quarter of a Daisy Seed's internal flash and a fifth of that with fast math, and RAM is
+what binds. The delay buffers are still 86 percent of what `s5_all` uses, which is why `int16`
+delay storage is first on the strategic list: it is the largest lever left on the only number
+that has ever been tight.
+
+`s5_all` is the worst case on purpose. It constructs and drives every ported engine and effect at
+once, which no instrument does.
 
 ## Verified end to end on 2026-08-05, after the fix pass
 
