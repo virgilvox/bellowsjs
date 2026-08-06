@@ -90,6 +90,63 @@ describe('westcoast engine', () => {
     expect(voice.active).toBe(false);
   });
 
+  /*
+   * The fold chain runs at 4x, and this is the gate on it.
+   *
+   * `foldback` is a periodic triangle wrap, so every fold is an
+   * infinite-slope corner and each stage multiplies the harmonic count
+   * again. At the base rate that aliased badly: measured at the shipped
+   * default, alias energy against harmonic energy was -47.0 dB at 110 Hz and
+   * -10.6 dB at 1760 Hz, so at the top of the range a fifth of the output
+   * was alias.
+   *
+   * Test frequencies are bin exact on purpose. A first pass at this
+   * measurement used round frequencies, and the rectangular-window leakage
+   * from harmonics that do not land on a bin swamped the alias term: it
+   * reported that 16x oversampling was no better than none, which is wrong.
+   * Every harmonic has to land on a bin for the split below to mean anything.
+   *
+   * Gates are set about 8 dB below the measured figures, which is far tighter
+   * than the 23 to 29 dB the fix actually bought.
+   */
+  it('rejects fold aliasing at the shipped default', () => {
+    const N = 16384;
+    const binHz = SR / N;
+    /* bin, measured alias-to-harmonic in dB after the fix, gate */
+    const cases: Array<[number, number, number]> = [
+      [41, -72.8, -64],
+      [163, -53.1, -45],
+      [654, -34.6, -26],
+    ];
+    for (const [bin, measured, gate] of cases) {
+      const freq = bin * binHz;
+      const { l } = renderVoice(westcoastEngine, {
+        sampleRate: SR,
+        freq,
+        seconds: 0.75,
+        gate: 0.75,
+        params: { foldAmount: 0.35, foldStages: 2, foldEnv: 0, lpgColor: 0, lpgDecay: 5, level: 1 },
+      });
+      const mag = magSpectrum(l, l.length - N, N);
+      let harm = 0;
+      let alias = 0;
+      for (let k = 2; k < mag.length; k++) {
+        const e = mag[k] * mag[k];
+        const nearest = Math.round((k * binHz) / freq);
+        if (nearest >= 1 && Math.abs(k * binHz - nearest * freq) < 3.5 * binHz) harm += e;
+        else alias += e;
+      }
+      const db = 10 * Math.log10(alias / harm);
+      expect(db).toBeLessThan(gate);
+      /* Not vacuous: silence would make this ratio meaningless, so the
+       * harmonic energy has to be real. */
+      expect(harm).toBeGreaterThan(1e-6);
+      /* And the measurement should not have drifted far from what the gate
+       * was set from. */
+      expect(Math.abs(db - measured)).toBeLessThan(12);
+    }
+  });
+
   it('is finite, bounded, and deterministic', () => {
     const a = renderVoice(westcoastEngine, {
       seconds: 0.8,

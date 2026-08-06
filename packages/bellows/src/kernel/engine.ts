@@ -26,18 +26,35 @@ class Ramp {
   private step = 0;
   private readonly rate: number;
 
+  /*
+   * Non-finite values are rejected at every entry point, including the
+   * initial one, and the last good value stays put. This ramp is recursive
+   * and unrecoverable once poisoned: step = (NaN - v) * rate is NaN,
+   * `this.step !== 0` is TRUE for NaN, both landing comparisons are false, so
+   * next() assigns v = NaN, and every later set() recomputes
+   * step = (good - NaN) * rate = NaN. It backs channel gain, channel pan,
+   * per-bus send levels, bus return level and master gain, so one
+   * masterGain(NaN) used to silence the whole output for the life of the
+   * page with no error, no 'error' reply and nothing on the console, and
+   * panic did not clear it either. Same policy as VoicePool.setParam and the
+   * dsp setters: a non-finite value is a caller error, so keep the last good
+   * one. Costs nothing per sample; next() is untouched.
+   */
   constructor(sampleRate: number, initial: number, timeSec = 0.02) {
-    this.v = initial;
-    this.target = initial;
+    const v = Number.isFinite(initial) ? initial : 0;
+    this.v = v;
+    this.target = v;
     this.rate = 1 / Math.max(1, sampleRate * timeSec);
   }
 
   set(target: number): void {
+    if (!Number.isFinite(target)) return;
     this.target = target;
     this.step = (target - this.v) * this.rate;
   }
 
   snap(v: number): void {
+    if (!Number.isFinite(v)) return;
     this.v = v;
     this.target = v;
     this.step = 0;
@@ -105,6 +122,30 @@ class Bus {
   }
 }
 
+/**
+ * One in-flight parameter ramp. The table is fixed size and preallocated,
+ * because claiming a ramp happens on the audio path and the audio path does
+ * not allocate.
+ */
+interface ParamRampSlot {
+  active: boolean;
+  /** channel id */
+  target: number;
+  /** interned param index */
+  param: number;
+  from: number;
+  to: number;
+  startFrame: number;
+  endFrame: number;
+}
+
+/**
+ * How many parameters may ramp at once. Automation is sparse in practice: a
+ * filter sweep here, a detune glide there. Past this the kernel degrades to
+ * immediate jumps rather than growing the table mid-render.
+ */
+const RAMP_SLOTS = 32;
+
 export interface KernelOptions {
   blockSize?: number;
   /**
@@ -136,6 +177,9 @@ export class KernelEngine {
   private localEngines = new Map<string, EngineDef>();
   private localEffects = new Map<string, { id: string; create(sampleRate: number, params: Record<string, number>): Effect }>();
   private opts: KernelOptions;
+  private ramps: ParamRampSlot[] = [];
+  /** Cached count so a render with no automation skips the ramp pass entirely. */
+  private activeRamps = 0;
 
   peakL = 0;
   peakR = 0;
@@ -149,6 +193,9 @@ export class KernelEngine {
     this.mixL = new Float32Array(this.blockSize);
     this.mixR = new Float32Array(this.blockSize);
     this.opts = opts;
+    for (let i = 0; i < RAMP_SLOTS; i++) {
+      this.ramps.push({ active: false, target: 0, param: 0, from: 0, to: 0, startFrame: 0, endFrame: 0 });
+    }
   }
 
   get currentFrame(): number {
@@ -190,6 +237,9 @@ export class KernelEngine {
       }
       case 'removeChannel':
         this.channels.delete(msg.id);
+        // A ramp outlives its channel otherwise, and would keep looking up a
+        // pool that is gone.
+        this.clearRamps(msg.id);
         break;
       case 'channelFx': {
         const c = this.channels.get(msg.id);
@@ -204,7 +254,14 @@ export class KernelEngine {
       }
       case 'channelParam': {
         const c = this.channels.get(msg.id);
-        if (c) c.pool.setParam(msg.name, msg.value);
+        if (!c) break;
+        // Same rule as the Param event: setting a parameter by hand cancels
+        // any ramp still moving it.
+        if (this.activeRamps > 0) {
+          const idx = paramIndex.get(msg.name);
+          if (idx !== undefined) this.clearRamps(msg.id, idx);
+        }
+        c.pool.setParam(msg.name, msg.value);
         break;
       }
       case 'channelGain': {
@@ -286,6 +343,9 @@ export class KernelEngine {
         for (const c of this.channels.values()) c.pool.allNotesOff();
         this.events.length = 0;
         this.eventHead = 0;
+        // Panic means stop moving, so parameters freeze where they are rather
+        // than continuing toward a destination nobody is listening for.
+        this.clearRamps();
         break;
     }
   }
@@ -342,13 +402,127 @@ export class KernelEngine {
         c.pool.noteOff(e.a);
         break;
       case EventKind.Param:
+        // An explicit set outranks automation: without this the ramp would
+        // overwrite the value again at the next block boundary.
+        if (this.activeRamps > 0) this.clearRamps(e.target, e.a);
         c.pool.setParam(paramNameOf(e), e.b);
         break;
+      case EventKind.ParamRamp: {
+        // e.b is the destination, e.c the ramp length in seconds. The ramp
+        // starts here, from whatever the parameter reads right now.
+        const name = paramNameOf(e);
+        const current = c.pool.getParam(name);
+        // Number.isFinite as well as `> 0`: `e.c > 0` already rejects NaN,
+        // but Infinity passed and then wedged a slot for good. endFrame
+        // becomes startFrame + Math.round(Infinity) = Infinity, so
+        // `frame >= s.endFrame` never fires and the slot is never freed,
+        // while t = (frame - start) / Infinity is 0 so the parameter never
+        // moves either. Thirty-two of those exhaust RAMP_SLOTS and silently
+        // downgrade every later ramp on this kernel to an immediate jump.
+        // Reachable as rampParam(name, value, { seconds: 1 / 0 }).
+        if (
+          e.c > 0 &&
+          Number.isFinite(e.c) &&
+          current !== undefined &&
+          this.startRamp(e.target, e.a, current, e.b, e.c)
+        ) {
+          break;
+        }
+        // Immediate fallback, for three cases: a duration that is not a
+        // positive finite number of seconds (c <= 0 is the documented
+        // meaning), a parameter with no known current value to interpolate
+        // from, or every ramp slot busy.
+        // Landing early beats dropping the automation on the floor.
+        this.clearRamps(e.target, e.a);
+        c.pool.setParam(name, e.b);
+        break;
+      }
       case EventKind.AllNotesOff:
         c.pool.allNotesOff();
         break;
       default:
         break;
+    }
+  }
+
+  /* ---------------- param ramps ---------------- */
+
+  /**
+   * Claim or retarget a ramp slot. Returns false when the table is full, which
+   * is the caller's cue to apply the destination immediately.
+   */
+  private startRamp(target: number, param: number, from: number, to: number, seconds: number): boolean {
+    const startFrame = this.frame;
+    const endFrame = startFrame + Math.max(1, Math.round(seconds * this.sampleRate));
+    // A second ramp on the same channel and parameter would fight the first,
+    // two setParam calls per block with neither winning. Retarget instead: the
+    // new ramp picks up from where the old one had got to.
+    for (const s of this.ramps) {
+      if (s.active && s.target === target && s.param === param) {
+        s.from = from;
+        s.to = to;
+        s.startFrame = startFrame;
+        s.endFrame = endFrame;
+        return true;
+      }
+    }
+    for (const s of this.ramps) {
+      if (s.active) continue;
+      s.active = true;
+      s.target = target;
+      s.param = param;
+      s.from = from;
+      s.to = to;
+      s.startFrame = startFrame;
+      s.endFrame = endFrame;
+      this.activeRamps++;
+      return true;
+    }
+    return false;
+  }
+
+  /** Free ramp slots: all of them, one channel's, or one channel parameter's. */
+  private clearRamps(target?: number, param?: number): void {
+    if (this.activeRamps === 0) return;
+    for (const s of this.ramps) {
+      if (!s.active) continue;
+      if (target !== undefined && s.target !== target) continue;
+      if (param !== undefined && s.param !== param) continue;
+      s.active = false;
+      this.activeRamps--;
+    }
+  }
+
+  /**
+   * Step every active ramp one block forward.
+   *
+   * Block granularity, not per sample, is deliberate. setParam on most engines
+   * recomputes filter coefficients, wavetable phase increments, and envelope
+   * rates, so calling it per sample per ramp would cost far more than the
+   * audio it improves. One update per block is 2.7 ms at 48k with 128 frames,
+   * below the ear's resolution for parameter movement. Gain and pan, where
+   * stepping matters, already have their own per-sample Ramp.
+   */
+  private advanceRamps(frame: number): void {
+    for (const s of this.ramps) {
+      if (!s.active) continue;
+      const c = this.channels.get(s.target);
+      if (!c) {
+        s.active = false;
+        this.activeRamps--;
+        continue;
+      }
+      const name = paramNames[s.param] ?? '';
+      if (frame >= s.endFrame) {
+        // Land exactly on the destination, never on the last interpolated step.
+        c.pool.setParam(name, s.to);
+        s.active = false;
+        this.activeRamps--;
+        continue;
+      }
+      if (frame <= s.startFrame) continue;
+      const t = (frame - s.startFrame) / (s.endFrame - s.startFrame);
+      c.pool.setParam(name, s.from + (s.to - s.from) * t);
     }
   }
 
@@ -362,6 +536,11 @@ export class KernelEngine {
     const N = this.blockSize;
     const blockStart = this.frame;
     const blockEndTime = (blockStart + N) / this.sampleRate;
+
+    // Parameter automation moves once per block, before the block renders.
+    // With nothing ramping this is a single integer compare and the render
+    // path is exactly what it was before ramps existed.
+    if (this.activeRamps > 0) this.advanceRamps(blockStart);
 
     // clear scratches
     for (const c of this.channels.values()) {

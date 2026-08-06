@@ -72,6 +72,43 @@ describe('DelayLine', () => {
     expect(dl.readCubic(4.5)).toBe(0);
   });
 
+  it('throws rather than spinning on a capacity the ring cannot express', () => {
+    // The power-of-two round-up used a 32-bit shift, so from 2^30 - 3 up it
+    // ran n = 2^30, -2147483648, 0, 0, ... and every one of those is below
+    // maxSamples + 4. It never allocated, so it never threw either: an
+    // unkillable spin on whatever thread called it. DelayLine is public API,
+    // so a user sizing a line from a bad computation reaches this directly.
+    const timed = (maxSamples: number) => {
+      const t0 = Date.now();
+      let threw = false;
+      try {
+        new DelayLine(maxSamples);
+      } catch {
+        threw = true;
+      }
+      return { threw, ms: Date.now() - t0 };
+    };
+    for (const n of [2 ** 30 - 3, 2 ** 30, 2 ** 31, Number.MAX_SAFE_INTEGER]) {
+      const r = timed(n);
+      expect(r.threw).toBe(true);
+      expect(r.ms).toBeLessThan(1000);
+    }
+    // still rejects what it always rejected
+    expect(() => new DelayLine(0)).toThrow();
+    expect(() => new DelayLine(NaN)).toThrow();
+    expect(() => new DelayLine(Infinity)).toThrow();
+  });
+
+  it('still accepts the largest capacity below the bound', () => {
+    // 2^20 - 4 rounds to 2^20 exactly, the same arithmetic the rejected sizes
+    // take, so this is the non-vacuity half: the guard rejects by size and
+    // not by rounding up at all.
+    const dl = new DelayLine(2 ** 20 - 4);
+    expect(dl.maxDelay).toBe(2 ** 20 - 4);
+    dl.write(1);
+    expect(dl.readInt(0)).toBe(1);
+  });
+
   it('clamps out-of-range delays instead of reading garbage', () => {
     const dl = new DelayLine(8);
     for (let i = 0; i < 100; i++) dl.write(i);

@@ -16,7 +16,7 @@
 
 import type { EngineDef, NamedRng, ParamSpec, Voice } from '../types';
 import { clamp } from '../types';
-import { BlepOscillator } from '../dsp/oscillators';
+import { BlepOscillator, blepOptionsFromParams } from '../dsp/oscillators';
 import { NoiseGen } from '../dsp/noise';
 import { Lfo } from '../dsp/lfo';
 import { Svf } from '../dsp/filters';
@@ -70,7 +70,7 @@ class FormantVoice implements Voice {
 
   constructor(sampleRate: number, params: Record<string, number>, rng: NamedRng) {
     this.sr = sampleRate;
-    this.osc = new BlepOscillator(sampleRate);
+    this.osc = new BlepOscillator(sampleRate, blepOptionsFromParams(params));
     this.noise = new NoiseGen(sampleRate, 'white', rng);
     this.vibrato = new Lfo(sampleRate, rng.fork('vibrato'));
     this.vibrato.setShape('sine');

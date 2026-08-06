@@ -14,11 +14,14 @@ export const booting = ref(false);
 let bootPromise: Promise<Bellows> | null = null;
 
 /*
- * Bellows.dispose() tears down the kernel node but never closes the
- * AudioContext, and browsers cap how many contexts a page can hold.
- * Keep one context for the life of the page and hand it back to every
- * reboot; the worklet module blob URL is memoized in the library, so
- * addModule on the same context resolves from the module map.
+ * Browsers cap how many AudioContexts a page can hold, so the workbench
+ * keeps one for the life of the page and hands it back to every reboot;
+ * the worklet module blob URL is memoized in the library, so addModule on
+ * the same context resolves from the module map.
+ *
+ * Bellows.dispose() closes a context that boot created, which would kill
+ * the one we are holding on the first reforge. closeContextOnDispose false
+ * tells it the context outlives the instance.
  */
 let keptContext: AudioContext | null = null;
 
@@ -34,6 +37,7 @@ export async function ensureBellows(seed?: string): Promise<Bellows> {
   bootPromise = Bellows.boot({
     seed: seed ?? 'workbench',
     context: keptContext ?? undefined,
+    closeContextOnDispose: false,
   }).then((b) => {
     keptContext = b.ctx;
     bellows.value = b;

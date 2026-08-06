@@ -1,0 +1,42 @@
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+Rng	KEYWORD1
+DelayLine	KEYWORD1
+DelayLineExt	KEYWORD1
+Svf	KEYWORD1
+LadderFilter	KEYWORD1
+OnePole	KEYWORD1
+DcBlocker	KEYWORD1
+Adsr	KEYWORD1
+ExpDecay	KEYWORD1
+Smoother	KEYWORD1
+NoiseGen	KEYWORD1
+BlepOsc	KEYWORD1
+SineOsc	KEYWORD1
+Kick	KEYWORD1
+Snare	KEYWORD1
+Hat	KEYWORD1
+Pluck	KEYWORD1
+Va	KEYWORD1
+StereoDelay	KEYWORD1
+Eq3	KEYWORD1
+VoicePool	KEYWORD1
+Bank	KEYWORD1
+Tuning	KEYWORD1
+Scale	KEYWORD1
+TempoMap	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+Init	KEYWORD2
+Process	KEYWORD2
+NoteOn	KEYWORD2
+NoteOff	KEYWORD2
+SetParams	KEYWORD2
+Active	KEYWORD2
+Reset	KEYWORD2
+Euclid	KEYWORD2
+FreqOf	KEYWORD2
+ParseNote	KEYWORD2

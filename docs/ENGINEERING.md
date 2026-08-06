@@ -54,8 +54,29 @@ Chromium is the only full-stack engine (AAC encode, setSinkId, relaxed SIMD, Web
 
 ## 2. DSP algorithm choices (formulas and constants to implement)
 
+This section is the research brief that drove the first implementation, and it is dated 2026-07.
+Three of its specifications were not what shipped, and in two of those cases the code rejected
+the specification on a measurement. Each one now carries an AS BUILT note naming the file that
+decides. Where a note and this text disagree, the note is the code and this text is the proposal
+it came from; do not implement from the proposal without reading the note first, because one of
+them (2.1) is a change the project has already tried and measured as worse.
+
 ### 2.1 Oscillators: polyBLEP/polyBLAMP
 Default: **2-point polyBLEP** for saw/square (adequate to ~fs/8–fs/6 fundamentals); **4-point** (integrated cubic B-spline, Nam/Välimäki/Smith/Abel Table VII) as a quality tier for high fundamentals / no oversampling.
+
+**AS BUILT (`src/dsp/oscillators.ts`): neither, and deliberately.** The polynomial residuals below
+are in the file's history, not in its code. A 2-point residual attenuates what folds from just
+above Nyquist by about 9 dB and the 4-point one by about 18 dB, and the 4-point version was
+measured at about -37 dB of alias rejection against the -86.6 dB the shipping kernel holds, which
+is short of the 40 dB budget the spectrum gates enforce. What ships is a tabulated residual: the
+integral of a Kaiser windowed sinc, `KERNEL_HALF = 16` so it spans 32 samples, `TABLE_RES = 64`
+points per sample, `CUTOFF = 0.42`, `KAISER_BETA = 6`, built once per module and shared by every
+instance. The BLAMP residual is the integral of the same kernel.
+`test/dsp-osc/blep-frequency.test.ts` sweeps 55 Hz to 19 kHz with per-frequency floors set from
+measurement and is the gate that would fail first if anyone swapped it back; `docs/HARDWARE.md`
+under "Measured and deliberately not taken" carries the same conclusion for the C++ port, where
+the two tables are 16 KB of flash, the single largest thing in a VA sketch. Do not "simplify"
+this to polyBLEP: it has been tried, measured and rejected twice.
 
 2-point residual (`dt = f0/fs`):
 - after step, `t = phase/dt ∈ [0,1)`: `r = 2t − t² − 1`
@@ -112,6 +133,19 @@ u = (x − k·S)/(1 + k·G⁴)      // k = 4·res; self-osc at k=4
 ```
 Optional input gain `(1 + α·k)` for bass-loss compensation. Nonlinear: tanh on previous-sample states (cheap) or 1–2 Newton iterations.
 
+**AS BUILT (`src/dsp/filters.ts`, `LadderFilter`): neither tier.** None of the six constants above
+appears in the source. What ships is one tier: four one-pole stages with `tanh` in each, run at
+2x the sample rate, `g = 1 - exp(-2 pi fc / (2 fs))`, `k = 4 * clamp(resonance, 0, 1.05)`, a
+half-input compensation term `s4 - 0.5 x` in the feedback so resonance does not gut the passband,
+and a `tanh` on the drive. There are no tuning polynomials, no `V_T`, no half-sample feedback
+delay and no algebraic ZDF solve. The 2x rate is a zero-order hold with the second sub-sample
+taken as the output, so it buys integration stability rather than alias rejection. One consequence
+is worth stating because it has been raised as a defect twice and refuted twice (see the end of
+`docs/AUDIT-2.md`): four cascaded identical one-poles put the composite -3 dB corner at
+`0.435 * fc`, so the `cutoff` parameter is a control law rather than a calibrated Hz reading, and
+that is the shipped and gated behaviour. If you ever do implement a tier from the spec above, it
+changes the golden render and every va parity row, so it is a decision and not a cleanup.
+
 ### 2.4 Reverb: FDN (algorithmic) + Dattorro plate (preset character)
 **FDN:** N = 8 default (N = 16 "lush" tier). Feedback matrix: **Householder** `out_i = in_i − (2/N)Σin_j` (O(N)) in the loop; **Hadamard** (fast Walsh–Hadamard butterfly) in 2–4 series input-diffuser stages (short delays + random polarity flips, Signalsmith style). Delay lengths mutually prime, exponentially spread over 30–100 ms (e.g. @48k: 1447, 1913, 2477, 3089, 3559, 4127, 4691, 5233). Decay: `g_i = 10^(−3·M_i/(fs·T60))`; frequency-dependent decay via one-pole LPF *inside* each feedback path (Jot): `g_i(1−a_i)/(1−a_i z⁻¹)`: DC gain sets low T60, pole sets HF T60. Tone EQ outside the loop.
 
@@ -121,6 +155,18 @@ Optional input gain `(1 + α·k)` for bass-loss compensation. Nonlinear: tanh on
 **YIN:** CMNDF `d'(τ) = d(τ)·τ/Σ_{j≤τ}d(j)`, `d'(0)=1`; threshold **0.10–0.15**; first local minimum below threshold else global min; parabolic interpolation over (τ−1,τ,τ+1); unvoiced if dip > ~0.3–0.5. Window 1024–2048 @ 44.1k, hop W/2–W/4.
 **MPM (default for monophonic realtime):** NSDF via FFT autocorrelation; key maxima between positive-going zero crossings; pick first key max ≥ **0.93**·n_max; clarity = peak value, voiced when > ~0.8–0.9. Window 2048, hop 256–1024.
 **Onsets: spectral flux:** L1 half-wave-rectified magnitude difference with log compression `log(1+γ|X|)`, γ ≈ 1–20; 2048-sample Hann window @ 44.1k, **hop 441 (10 ms)**. Peak picking (Dixon): local max over ±3 frames AND ≥ mean(SF[n−9…n+3]) + δ AND ≥ 30–50 ms since last onset. Optional adaptive threshold `δ + median(SF[n−M…n+M])`, M ≈ 5–10; SuperFlux ±1–2-bin frequency max-filter for vibrato robustness.
+
+**AS BUILT.** YIN, MPM, the BS.1770 K-weighting prototypes, the Cytomic SVF tick, the Dattorro
+lengths and diffuser gains and the phase-vocoder spec above all match the code; YIN's 0.1
+threshold, MPM's 0.93 key-maximum ratio and the vocoder's N = 2048 with Ha = N/4 were re-read out
+of the source while this note was written. The onset detector does not match. `src/analysis/onset.ts` uses a 1024-sample Hann frame with a hop of 256
+(5.8 ms at 44.1k), computes flux as a plain half-wave-rectified magnitude difference with no log
+compression at all, normalises it by the bin count, and picks peaks the "optional" way rather
+than the Dixon way: a three-frame local maximum above `1.5 * median` of the trailing 21 frames
+plus a floor of 0.01, with a 0.08 s refractory period. Frame size, hop, median window,
+multiplier, floor and refractory are all constructor options, so the defaults are the claim here,
+not a limit. No SuperFlux frequency max-filter. `estimateTempo` folds candidates into
+[75, 150) bpm, so 60 and 240 bpm both report 120, which is a property of the fold and not a bug.
 
 ### 2.6 Loudness: EBU R128 / BS.1770
 K-weighting = 2 biquads **specified at 48 kHz**:

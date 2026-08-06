@@ -1,0 +1,134 @@
+/* Transcription of src/dsp/delayline.ts.
+ *
+ * Two forms. DelayLine<N> owns its buffer in .bss. DelayLineExt takes
+ * caller-provided storage, so the user decides placement (DMAMEM, EXTMEM,
+ * DSY_SDRAM_BSS). Nothing here allocates.
+ *
+ * The buffer is sized exactly, not rounded up to a power of two.
+ *
+ * Rounding up is the usual trick because it makes the wrap a bitwise AND,
+ * and it is what this file used to do. It is also the single largest
+ * consumer of RAM in the whole library, and the rounding wastes up to 49
+ * percent of it: a 500 ms stereo delay at 48 kHz needs 24004 samples per
+ * side and a power-of-two ring gives it 32768, so 262144 bytes are
+ * reserved to hold 192032 bytes of audio. Across the plate tank, the
+ * chorus and flanger lines, the pluck loop and the tube bore, that
+ * rounding was costing more than every table in the library put together.
+ *
+ * Exact sizing costs one conditional add per index formed, so one for an
+ * integer read and four for a cubic read, in place of the AND. Every index
+ * lies in [-cap, cap-1]: reads clamp the delay to max_ = cap - 4 and
+ * ReadCubic reaches two samples further back, and the lower end is reached
+ * only in the degenerate cap = 4 case, where ReadCubic's floor clamp of 1
+ * outruns a max_ of 0. Wrap(-cap) is 0, so a single add still covers it,
+ * with exactly one index to spare. No modulo, no loop, no division.
+ *
+ * The samples it returns are unchanged. The ring holds the same history at
+ * the same offsets and only the modulus differs, so this is a pure memory
+ * change and the parity rows should not move at all. */
+#pragma once
+#include <stdint.h>
+
+namespace bellows {
+
+class DelayLineExt {
+ public:
+  /* cap is exact. It no longer has to be a power of two. */
+  void Init(float* buf, uint32_t cap) {
+    buf_ = buf;
+    cap_ = cap;
+    /* Saturating, not wrapping. max_ is unsigned and cap - 4 underflows to
+     * 4294967295 for a cap below four, which would defeat the upper clamp in
+     * every read and let the caller index anywhere. The old mask folded that
+     * back harmlessly; exact sizing does not. */
+    max_ = cap >= 4 ? cap - 4 : 0;
+    w_ = 0;
+    Clear();
+  }
+
+  void Clear() {
+    for (uint32_t i = 0; i < cap_; ++i) buf_[i] = 0.0f;
+    w_ = 0;
+  }
+
+  inline void Write(float x) {
+    buf_[w_] = x;
+    if (++w_ == static_cast<int32_t>(cap_)) w_ = 0;
+  }
+
+  inline float ReadInt(int32_t d) const {
+    if (d < 0) d = 0;
+    else if (d > static_cast<int32_t>(max_) + 2) d = max_ + 2;
+    return buf_[Wrap(w_ - 1 - d)];
+  }
+
+  inline float ReadLinear(float d) const {
+    /* Negated test, not `d < 0`, so NaN takes the branch. See ReadCubic. */
+    if (!(d >= 0.0f)) d = 0.0f;
+    else if (d > static_cast<float>(max_)) d = static_cast<float>(max_);
+    int32_t di = static_cast<int32_t>(d);
+    float f = d - static_cast<float>(di);
+    float a = buf_[Wrap(w_ - 1 - di)];
+    float b = buf_[Wrap(w_ - 2 - di)];
+    return a + f * (b - a);
+  }
+
+  inline float ReadCubic(float d) const {
+    /* `!(d >= 1)` rather than `d < 1` so that a NaN delay takes the floor
+     * branch: both `<` and `>` are false for NaN, so the plain form let it
+     * through untouched and static_cast<int32_t>(NaN) is undefined. On
+     * x86-64 it is INT_MIN, base = w_ - 1 - INT_MIN overflows, and a single
+     * conditional add cannot fold the result back into the buffer: measured,
+     * a Pluck<20,48000> handed NoteOn(NAN, 1) segfaulted (exit 139) built
+     * -target x86_64-apple-macos11, while arm64 saturated the cast to 0 and
+     * only emitted NaN. The clamp is where this belongs because every engine
+     * reaching a delay line through a computed read position is exposed, not
+     * just the one that was found. For finite d the two forms are identical,
+     * including -0.0f, so no parity row moves. */
+    if (!(d >= 1.0f)) d = 1.0f;
+    else if (d > static_cast<float>(max_)) d = static_cast<float>(max_);
+    int32_t di = static_cast<int32_t>(d);
+    float f = d - static_cast<float>(di);
+    int32_t base = static_cast<int32_t>(w_) - 1 - di;
+    float y0 = buf_[Wrap(base + 1)];
+    float y1 = buf_[Wrap(base)];
+    float y2 = buf_[Wrap(base - 1)];
+    float y3 = buf_[Wrap(base - 2)];
+    float c1 = 0.5f * (y2 - y0);
+    float c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3;
+    float c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
+    return ((c3 * f + c2) * f + c1) * f + y1;
+  }
+
+  uint32_t MaxDelay() const { return max_; }
+
+ private:
+  /* One conditional add in place of the mask. See the note at the top for
+   * why a single add is always sufficient here. */
+  inline uint32_t Wrap(int32_t i) const {
+    return static_cast<uint32_t>(i < 0 ? i + static_cast<int32_t>(cap_) : i);
+  }
+
+  float* buf_ = nullptr;
+  uint32_t cap_ = 0;
+  uint32_t max_ = 0;
+  int32_t w_ = 0;
+};
+
+/* Owning form. kSamples of usable delay, plus the four the cubic read
+ * reaches past, and not one word more. */
+template <uint32_t kSamples>
+class DelayLine : public DelayLineExt {
+ public:
+  static constexpr uint32_t kCap = kSamples + 4;
+  /* Below this the reads have no room to interpolate and the clamps stop
+   * meaning anything. Every user in the tree is orders of magnitude above
+   * it; the check is here so a future one cannot slip under. */
+  static_assert(kSamples >= 4, "DelayLine needs at least four samples of delay");
+  void Init() { DelayLineExt::Init(store_, kCap); }
+
+ private:
+  float store_[kCap];
+};
+
+}  // namespace bellows

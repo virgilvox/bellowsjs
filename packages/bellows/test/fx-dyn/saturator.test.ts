@@ -168,6 +168,92 @@ describe('saturator', () => {
     }
   });
 
+  /*
+   * The curve param selects between four shapers, and nothing used to
+   * measure what three of them do. The gates around it all survive the
+   * curves being swapped or replaced outright: updateComp() renormalises
+   * RMS after any shaper change, so a curve replaced by x * drive stays
+   * finite, stays audible and stays deterministic. The golden render uses
+   * the default curve 0, so it does not see the other three either.
+   *
+   * A shaper is identified here by what it does to a bin-exact sine, which
+   * is the thing the dispatch is actually choosing between:
+   *
+   *   tanh      odd, harmonics falling away smoothly
+   *   softClip  odd, and below its clip point a cubic makes h3 and nothing
+   *             else, so h5 separates it from tanh
+   *   foldback  identity while inside range, so transparent at drive 2, and
+   *             the most violent of the four once it folds
+   *   chebyshev the only one with even harmonics at all
+   *
+   * Values measured, not derived. Tolerances are far tighter than the gaps
+   * between curves (the smallest is h3 at drive 2, 0.067 against 0.111) and
+   * far looser than the run-to-run variation, which is zero.
+   */
+  const F0_BIN = 240;
+  const HF0 = (F0_BIN * SR) / N;
+
+  /** Harmonics 2..7 of a 0.5-amplitude sine, relative to the fundamental. */
+  function harmonics(curve: number, drive: number): number[] {
+    const fx = saturatorDef.create(SR, { drive, curve, tone: 0, output: 0, mix: 1 });
+    const n = N * 3;
+    const l = sineBuf(n, HF0, SR, 0.5);
+    const r = l.slice();
+    processBlocks(fx, l, r);
+    const f = toneMag(l, n - N, N, HF0, SR);
+    const out: number[] = [];
+    for (let m = 2; m <= 7; m++) out.push(toneMag(l, n - N, N, m * HF0, SR) / f);
+    return out;
+  }
+
+  const h = (v: number[], m: number): number => v[m - 2];
+
+  it('curve 3 is the Chebyshev shaper and its harmonics are CHEBY_COEFFS', () => {
+    /*
+     * At drive 2 a half-scale sine reaches the shaper at full scale, where
+     * T_n(cos x) = cos(n x) exactly, so harmonic n comes out at coeff n-1.
+     * That makes this a direct reading of CHEBY_COEFFS = [0.5, 0.25, 0.15,
+     * 0.08, 0.04], normalised by the first: the only constrained test of
+     * those numbers in either language.
+     *
+     * Only the ratios are observable. Scaling every coefficient by the same
+     * factor scales the shaper output by it, and updateComp() divides it
+     * straight back out, so the overall level genuinely carries no
+     * information about the coefficients.
+     */
+    const v = harmonics(3, 2);
+    expect(h(v, 2)).toBeCloseTo(0.25 / 0.5, 3);
+    expect(h(v, 3)).toBeCloseTo(0.15 / 0.5, 3);
+    expect(h(v, 4)).toBeCloseTo(0.08 / 0.5, 3);
+    expect(h(v, 5)).toBeCloseTo(0.04 / 0.5, 3);
+    /* T5 is the last coefficient, so nothing should reach h6. */
+    expect(h(v, 6)).toBeLessThan(1e-4);
+  });
+
+  it('each curve index selects the shaper it claims to', () => {
+    const d2 = [0, 1, 2, 3].map((c) => harmonics(c, 2));
+    const d6 = [0, 1, 2, 3].map((c) => harmonics(c, 6));
+
+    /* Only the Chebyshev curve is not an odd function. */
+    for (const c of [0, 1, 2]) expect(h(d2[c], 2)).toBeLessThan(1e-4);
+    expect(h(d2[3], 2)).toBeGreaterThan(0.4);
+
+    /* tanh: h3 0.0668 and h5 0.00556, both well away from zero. */
+    expect(h(d2[0], 3)).toBeCloseTo(0.0668, 3);
+    expect(h(d2[0], 5)).toBeCloseTo(0.00556, 4);
+
+    /* softClip: nearly twice the h3 and, below the clip point, no h5. */
+    expect(h(d2[1], 3)).toBeCloseTo(0.1111, 3);
+    expect(h(d2[1], 5)).toBeLessThan(1e-4);
+
+    /* foldback: inside range at drive 2, so it passes the sine through. */
+    expect(h(d2[2], 3)).toBeLessThan(1e-4);
+    /* and once folding it makes more h3 than fundamental, which no other
+     * curve here comes close to. */
+    expect(h(d6[2], 3)).toBeGreaterThan(1.0);
+    for (const c of [0, 1, 3]) expect(h(d6[c], 3)).toBeLessThan(0.4);
+  });
+
   it('is deterministic', () => {
     const run = (): Float32Array => {
       const fx = saturatorDef.create(SR, { drive: 6, curve: 3, tone: -0.3, mix: 0.7 });

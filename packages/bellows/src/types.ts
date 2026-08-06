@@ -174,8 +174,25 @@ export function ftom(freq: number): number {
   return 69 + 12 * Math.log2(freq / 440);
 }
 
+/**
+ * Clamp to [lo, hi], and send NaN to `lo` rather than through.
+ *
+ * The comparison order is the whole point. Written as `v < lo ? lo : v > hi
+ * ? hi : v`, both tests are false for NaN and the NaN falls out of the
+ * expression untouched, which is what used to happen. One NaN reaching a
+ * parameter then poisoned everything downstream of it: measured across the
+ * shipping engines, a single NaN parameter produced non-finite audio in 191
+ * parameters across 18 engines, and threw a TypeError inside `process()` in
+ * 10 parameters across 4, which in an AudioWorklet kills the processor for
+ * the life of the page. A UI slider that reads an empty text field is
+ * enough to do it.
+ *
+ * Written this way the NaN fails the first test and lands on `lo`, which is
+ * the safe end of every parameter range in this library. Finite inputs are
+ * unaffected, so no rendered output changes.
+ */
 export function clamp(v: number, lo: number, hi: number): number {
-  return v < lo ? lo : v > hi ? hi : v;
+  return v >= lo ? (v <= hi ? v : hi) : lo;
 }
 
 export function dbToGain(db: number): number {

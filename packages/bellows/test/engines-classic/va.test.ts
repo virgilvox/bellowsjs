@@ -11,6 +11,28 @@ describe('va engine', () => {
     expect(peak(l)).toBeLessThan(1.5);
   });
 
+  it('reaches the bounded high frequency option and leaves the musical range alone', () => {
+    /* boundedHighFreq swaps the BLEP residual sum for a harmonic sum above
+     * the crossover in dsp/oscillators.ts. It has to be reachable from an
+     * engine to be worth anything, and it has to change nothing at a pitch
+     * anyone actually plays. */
+    const plain = render(vaEngine, { freq: 220, seed: 'va/hf' });
+    const bounded = render(vaEngine, { freq: 220, params: { boundedHighFreq: 1 }, seed: 'va/hf' });
+    expect(maxDiff(plain.l, bounded.l)).toBe(0);
+    expect(maxDiff(plain.r, bounded.r)).toBe(0);
+
+    /* Above SWITCH_DT (0.22, so 9702 Hz at 44100) the two oscillators take
+     * the harmonic path. The sub oscillator runs an octave down and stays
+     * on the residual path, which is the point: the switch is per
+     * oscillator and per pitch, not per voice. */
+    const highPlain = render(vaEngine, { freq: 12000, seed: 'va/hf' });
+    const highBounded = render(vaEngine, { freq: 12000, params: { boundedHighFreq: 1 }, seed: 'va/hf' });
+    expect(maxDiff(highPlain.l, highBounded.l)).toBeGreaterThan(0);
+    expect(hasBadSamples(highBounded.l)).toBe(false);
+    expect(peak(highBounded.l)).toBeGreaterThan(0.03);
+    expect(peak(highBounded.l)).toBeLessThan(1.5);
+  });
+
   it('is deterministic per seed', () => {
     const params = { drift: 0.5, detune: 12 };
     const a = render(vaEngine, { params, seed: 'va/seed' });

@@ -1,0 +1,23 @@
+{
+  "name": "Bellows",
+  "version": "0.1.0",
+  "description": "Header-only audio synthesis, music theory, and sequencing for 32-bit microcontrollers. The DSP core of bellowsjs, with no allocation and no global registry: include one header and you link one engine.",
+  "keywords": ["audio", "synthesis", "dsp", "music-theory", "sequencer", "teensy", "daisy", "rp2350", "esp32"],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/virgilvox/bellowsjs.git"
+  },
+  "homepage": "https://bellows.live",
+  "headers": ["Bellows.h"],
+  "frameworks": ["arduino", "*"],
+  "platforms": ["teensy", "ststm32", "raspberrypi", "espressif32", "native"],
+  "build": {
+    "srcDir": "src",
+    "includeDir": "src",
+    "flags": ["-std=gnu++17"]
+  },
+  "export": {
+    "exclude": ["test", "tools"]
+  }
+}

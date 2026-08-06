@@ -10,16 +10,34 @@ import {
   parseChord,
   romanToChord,
 } from '../../src/theory/chords';
-import { Scale } from '../../src/theory/scales';
+import { SCALES, Scale } from '../../src/theory/scales';
 
 describe('CHORD_TYPES', () => {
   it('covers the required set', () => {
     const required = [
       'maj', 'min', 'dim', 'aug', 'sus2', 'sus4', 'maj7', 'm7', '7', 'dim7',
       'm7b5', 'mMaj7', 'maj9', 'm9', '9', 'add9', '6', 'm6', '11', '13',
-      '7b9', '7#9', '7#11', 'aug7',
+      '7b9', '7#9', '7#11', 'aug7', 'maj7#5',
     ];
     for (const key of required) expect(CHORD_TYPES[key], key).toBeDefined();
+  });
+
+  it('has the augmented major seventh, which harmonic minor produces', () => {
+    expect(CHORD_TYPES['maj7#5']).toEqual([0, 4, 8, 11]);
+    const sevenths = diatonicSevenths(new Scale('C', 'harmonic minor'));
+    expect(sevenths.map((c) => c.type)).toEqual([
+      'mMaj7', 'm7b5', 'maj7#5', 'm7', '7', 'maj7', 'dim7',
+    ]);
+    expect(sevenths[2].midi(4)).toEqual([63, 67, 71, 74]);
+    expect(detectChord([0, 4, 8, 11])).toBe('Cmaj7#5');
+    expect(parseChord('Cmaj7#5').type).toBe('maj7#5');
+    expect(chordName(parseChord('Cmaj7#5'))).toBe('Cmaj7#5');
+  });
+
+  it('adding it did not move the neighbouring detections', () => {
+    expect(detectChord([0, 4, 8, 10])).toBe('Caug7');
+    expect(detectChord([0, 4, 7, 11])).toBe('Cmaj7');
+    expect(detectChord([0, 4, 8])).toBe('Caug');
   });
 
   it('every type starts at the root', () => {
@@ -164,6 +182,87 @@ describe('roman numerals', () => {
   it('marks chromatic roots with accidentals', () => {
     expect(chordToRoman(parseChord('Bb'), cMajor)).toBe('bVII');
     expect(chordToRoman(parseChord('Db'), cMajor)).toBe('bII');
+  });
+
+  it('spells chromatic roots by the line of fifths, sharp side included', () => {
+    // The raised fourth is the one sharp side of a major key: F# is six
+    // fifths up from C and Gb six down, and practice takes the sharp.
+    const all = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+    expect(all.map((n) => chordToRoman(parseChord(n), cMajor))).toEqual([
+      'I', 'bII', 'II', 'bIII', 'III', 'IV', '#IV', 'V', 'bVI', 'VI', 'bVII', 'VII',
+    ]);
+    // Same scale a fifth up: the sharp lands on the new fourth degree.
+    const gMajor = new Scale('G', 'major');
+    expect(chordToRoman(parseChord('C#'), gMajor)).toBe('#IV');
+    expect(chordToRoman(parseChord('F#'), gMajor)).toBe('VII');
+    // Against a natural minor the raised sixth and seventh are sharps, not
+    // a second flat spelling of degrees the scale already lowers.
+    const aMinor = new Scale('A', 'minor');
+    expect(chordToRoman(parseChord('F#dim'), aMinor)).toBe('#vio');
+    expect(chordToRoman(parseChord('G#dim'), aMinor)).toBe('#viio');
+    expect(chordToRoman(parseChord('Bb'), aMinor)).toBe('bII');
+  });
+
+  it('analyses every shipped scale, including those past seven degrees', () => {
+    const numeralOf = (s: string) => /^[b#]?([ivxlIVXL]+)/.exec(s)![1].toUpperCase();
+    let analysed = 0;
+    for (const name of Object.keys(SCALES)) {
+      const scale = new Scale('C', name);
+      const numerals = diatonicTriads(scale).map((ch) => chordToRoman(ch, scale));
+      expect(numerals, name).toHaveLength(scale.length);
+      analysed += numerals.length;
+    }
+    // 34 scale entries, 232 degrees between them, none of which may throw.
+    expect(analysed).toBe(232);
+
+    const bebop = new Scale('C', 'bebop dominant');
+    expect(diatonicTriads(bebop).map((ch) => numeralOf(chordToRoman(ch, bebop)))).toEqual([
+      'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII',
+    ]);
+    const chromatic = new Scale('C', 'chromatic');
+    expect(diatonicTriads(chromatic).map((ch) => numeralOf(chordToRoman(ch, chromatic)))).toEqual([
+      'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII',
+    ]);
+    expect(romanToChord('VIII', bebop).root).toBe(11);
+    expect(romanToChord('XII', chromatic).root).toBe(11);
+    expect(() => romanToChord('XIII', chromatic)).toThrow(/out of range/);
+    expect(() => romanToChord('IIII', chromatic)).toThrow(/invalid roman numeral/);
+    expect(() => romanToChord('VV', chromatic)).toThrow(/invalid roman numeral/);
+  });
+
+  it('says what is actually wrong when no degree is within a semitone', () => {
+    // hirajoshi is 0 2 3 7 8: F sits two semitones from either neighbour.
+    const hira = new Scale('C', 'hirajoshi');
+    let message = '';
+    try {
+      chordToRoman(parseChord('F'), hira);
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message).toBe('chord root is not a scale degree or a semitone from one: 5');
+  });
+
+  it('round trips every chromatic root it can name, in every shipped scale', () => {
+    let checked = 0;
+    for (const name of Object.keys(SCALES)) {
+      const scale = new Scale('C', name);
+      for (let pc = 0; pc < 12; pc++) {
+        const ch = chord(pc, 'maj');
+        let numeral: string;
+        try {
+          numeral = chordToRoman(ch, scale);
+        } catch {
+          continue; // gap wider than a semitone, covered by the test above
+        }
+        const back = romanToChord(numeral, scale);
+        expect(back.root, name + ' ' + numeral).toBe(pc);
+        expect(back.type, name + ' ' + numeral).toBe('maj');
+        checked++;
+      }
+    }
+    // 34 scales x 12 roots, less the 6 the four Japanese pentatonics cannot
+    // spell with a single accidental.
+    expect(checked).toBe(402);
   });
 
   it('round trips diatonic sevenths through roman numerals', () => {

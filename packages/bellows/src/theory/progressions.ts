@@ -59,7 +59,10 @@ export class ChordWalker {
 }
 
 export interface ProgressionOptions {
-  /** End with a cadence: dominant-function penultimate, tonic last. Default true. */
+  /**
+   * End with a cadence: dominant-function penultimate, tonic last. Two
+   * bars is the exception, see buildProgression. Default true.
+   */
   cadence?: boolean;
 }
 
@@ -67,6 +70,12 @@ export interface ProgressionOptions {
  * Generate one scale degree per bar, starting on the tonic. With cadence
  * enabled (the default) the last two bars are biased to close the phrase:
  * IV, V, or viio into I.
+ *
+ * Two bars cannot hold that shape, because bar 0 is the tonic already and
+ * the one remaining bar is both the penultimate and the last. It gets the
+ * dominant-function chord, making the pair a half cadence. The earlier
+ * arrangement let the tonic branch win instead and returned [0, 0], a
+ * progression with no motion in it at all.
  */
 export function buildProgression(rng: NamedRng, bars: number, options: ProgressionOptions = {}): number[] {
   if (bars <= 0) return [];
@@ -74,12 +83,12 @@ export function buildProgression(rng: NamedRng, bars: number, options: Progressi
   const walker = new ChordWalker(rng);
   const out: number[] = [0];
   for (let i = 1; i < bars; i++) {
-    if (cadence && i === bars - 1) {
-      out.push(0);
-    } else if (cadence && i === bars - 2) {
+    if (cadence && (i === bars - 2 || bars === 2)) {
       const d = rng.weighted(CADENCE_WEIGHTS);
       out.push(d);
       walker.reset(d);
+    } else if (cadence && i === bars - 1) {
+      out.push(0);
     } else {
       out.push(walker.step());
     }

@@ -1,0 +1,162 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  library:
+    name: library (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: typecheck
+        run: npx tsc --noEmit
+        working-directory: packages/bellows
+      - name: test
+        run: npm test
+        working-directory: packages/bellows
+      - name: worklet bundle is in sync with source
+        working-directory: packages/bellows
+        # The worklet ships as a checked-in generated string. If it drifts from
+        # the source, realtime playback runs stale DSP while offline render runs
+        # the new code, which is the worst kind of bug to chase.
+        run: |
+          node scripts/gen-worklet.mjs
+          git diff --exit-code -- src/kernel/worklet-code.gen.ts
+      - name: golden renders were not regenerated
+        run: git diff --exit-code -- packages/bellows/test/golden/
+      - name: build
+        run: npm run build
+        working-directory: packages/bellows
+
+  workbench:
+    name: workbench build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/bellows
+      - run: npm run build -w apps/workbench
+
+  embedded:
+    name: embedded size report (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [cortex-m7, cortex-m4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # check-docs no longer reads only the size report: it also runs the
+      # parity, value-table and fastmath harnesses, so this job needs the
+      # workspace installed as well as a cross compiler.
+      - run: npm ci
+      - name: install the toolchain the documents were measured with
+        # PlatformIO's Teensy build of GCC 11.3.1, not ARM's own release of the
+        # same version. They are not interchangeable: the first CI run used
+        # ARM's and came back 8 bytes high on s6_registry, s2_kit, p1_drums and
+        # p3_workstation, and moved the newlib rows in the symbol breakdown.
+        # This is also the compiler that builds the actual Teensy firmware, so
+        # it is the one the size tables should describe. size-report.sh finds it
+        # under ~/.platformio/packages when it is not on PATH.
+        run: |
+          pip install --quiet platformio
+          pio pkg install --global --tool "platformio/toolchain-gccarmnoneeabi-teensy@1.110301.0"
+      - name: size report
+        working-directory: packages/bellows-embedded
+        # Doubles as the compile check for every header: a sketch that does not
+        # build fails the job.
+        run: ./tools/size-report.sh ${{ matrix.target }}
+      - name: every header compiles standalone
+        working-directory: packages/bellows-embedded
+        run: |
+          set -e
+          for h in $(cd src && find bellows -name '*.h' | sort); do
+            ./tools/check-header.sh "$h"
+          done
+      - name: documented figures match the size report
+        # cortex-m7 only, because that is the target docs/HARDWARE.md quotes.
+        # Four separate times in one working session a change moved a sketch
+        # and the tables quoting it were left behind, each caught by hand
+        # afterwards by whoever happened to look. This is the control.
+        if: matrix.target == 'cortex-m7'
+        working-directory: packages/bellows-embedded
+        # --allow-host-drift because the documents were measured on macOS and
+        # this runner is Linux: the same toolchain package version comes back
+        # 8 bytes heavier on four sketches. Bounded at 16 bytes and every
+        # allowance is printed, so it cannot hide the hundreds-to-thousands of
+        # bytes this gate exists to catch. A local run is still byte exact.
+        run: node tools/check-docs.mjs --check --allow-host-drift
+
+  parity:
+    name: C++ against TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: fastmath accuracy gates
+        working-directory: packages/bellows-embedded
+        # BELLOWS_FAST_MATH swaps libm for polynomials. A wrong polynomial
+        # still compiles, still runs fast, and still makes sound, so the only
+        # way to know it is right is to measure it. An early Log2 here was out
+        # by 213 cents and nothing caught it.
+        run: |
+          mkdir -p test/parity/build
+          npm run --silent fastmath
+      - name: value parity for the modules that make no sound
+        working-directory: packages/bellows-embedded
+        # Scales, chords, euclid, arp, CA, tempo map and MIDI parsing. A wrong
+        # table here plays a confident, plausible, wrong note and no audio
+        # test can hear it, so these compare exactly.
+        run: |
+          mkdir -p test/parity/build
+          c++ -std=c++17 -O2 -Wall -Wextra -I src test/parity/tables.cpp -o test/parity/build/tables
+          npm run tables:check
+      - name: build the TypeScript bundle the codegen reads
+        # gen-tables.mjs reads packages/bellows/dist/bellows.js, which is
+        # gitignored and which nothing else in this job produces. Without
+        # this step the next one exits 2 on any clean checkout. It has never
+        # been caught because this workflow has never run: it is not on the
+        # default branch, so GitHub has never scheduled it.
+        run: npm run build -w packages/bellows
+      - name: generated headers are in sync with the TypeScript
+        working-directory: packages/bellows-embedded
+        run: node tools/gen-tables.mjs --check
+      - name: memory safety, ASan and UBSan over the buffer-owning classes
+        working-directory: packages/bellows-embedded
+        # Added after the Pluck::NoteOn overflow and four undefined float-to-int
+        # casts that no other gate could see: parity compares numbers at one
+        # rate and check-header.sh instantiates nothing.
+        run: |
+          npm run memsafety
+          npm run memsafety:fastmath
+      - name: parity gates
+        working-directory: packages/bellows-embedded
+        # Renders the same note from both implementations and diffs them. The
+        # PRNG gate is exact; the rest are tolerance based, because the JS
+        # computes in double and the C++ in float. This is the thing that
+        # catches a port drifting away from the source of truth.
+        run: npm run parity:check

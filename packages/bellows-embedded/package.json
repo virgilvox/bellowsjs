@@ -1,0 +1,17 @@
+{
+  "name": "bellows-embedded",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Header-only C++ port of the bellows DSP core for 32-bit microcontrollers. Not published to npm; distributed through the Arduino Library Manager and PlatformIO registry.",
+  "scripts": {
+    "gen:tables": "node tools/gen-tables.mjs",
+    "size": "./tools/size-report.sh",
+    "parity": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/parity.mjs",
+    "parity:check": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/parity.mjs --check",
+    "fastmath": "mkdir -p test/parity/build && c++ -std=c++17 -O2 -Wall -Wextra -DBELLOWS_FAST_MATH=1 -I src test/parity/fastmath_test.cpp -o test/parity/build/fastmath && test/parity/build/fastmath",
+    "memsafety": "mkdir -p test/safety/build && c++ -std=c++17 -O1 -g -Wall -Wextra -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -I src test/safety/memsafety.cpp -o test/safety/build/memsafety && test/safety/build/memsafety",
+    "memsafety:fastmath": "mkdir -p test/safety/build && c++ -std=c++17 -O1 -g -Wall -Wextra -DBELLOWS_FAST_MATH=1 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -I src test/safety/memsafety.cpp -o test/safety/build/memsafety_fm && test/safety/build/memsafety_fm",
+    "tables": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/tables.mjs",
+    "tables:check": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/tables.mjs --check"
+  }
+}

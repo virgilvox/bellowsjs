@@ -12,6 +12,26 @@
  * lowpasses shorten the decay of highs (damp, in Hz), slow sine Lfos
  * wobble the read positions a few samples (chorus) to break up metallic
  * ringing, and four serial allpasses diffuse the input.
+ *
+ * Construction-time capacity option, read from the params record passed
+ * to create() and used only in the constructor:
+ *
+ *   fdn  maxSize, default 3 (SIZE_MAX)
+ *
+ * Why it exists: the eight lines have to be long enough for the largest
+ * size the instance will ever be set to, and a DelayLine rounds up to a
+ * power of two and never reallocates. Sizing every line for size 3 when
+ * the patch stays at size 1 spends 208 KB on the eight lines where 80 KB
+ * would do, 278 KB against 150 KB per instance once the predelay line
+ * and the diffusers are counted. maxSize sizes the lines for the range
+ * the patch actually uses.
+ *
+ * Why it is not a ParamSpec: a ParamSpec declares a runtime-settable
+ * control and earns a UI knob, and the ring buffers cannot be resized
+ * while the tail is sounding. So maxSize stays out of FDN_PARAMS and
+ * setParam ignores it (the switch default already does). The size param
+ * clamps to the constructed maximum instead, so asking for a room
+ * larger than the buffers degrades to the largest they hold.
  */
 
 import type { Effect, EffectDef, ParamSpec } from '../types';
@@ -33,6 +53,20 @@ const MOD_SAMPLES = 5;
 const MOD_HZ = [0.53, 0.71, 0.89, 1.07, 1.19, 0.61, 0.97, 1.31];
 const SIZE_MAX = 3;
 const PREDELAY_MAX = 0.25;
+/**
+ * Bounds on the requested line capacity. The floor matches the size
+ * param's own minimum so the smallest room stays reachable, the ceiling
+ * stops a typo from asking the worklet for an enormous allocation.
+ */
+const CAP_SIZE_MIN = 0.25;
+const CAP_SIZE_MAX = 8;
+
+/** Resolve the construction-time size capacity, falling back to the default. */
+function capSize(params: Record<string, number>, fallback: number): number {
+  const v = params.maxSize;
+  if (v === undefined || !Number.isFinite(v)) return fallback;
+  return clamp(v, CAP_SIZE_MIN, CAP_SIZE_MAX);
+}
 
 const FDN_PARAMS: ParamSpec[] = [
   { name: 'size', min: 0.25, max: SIZE_MAX, default: 1 },
@@ -98,6 +132,8 @@ function nearestPrime(n: number): number {
 
 class FdnReverb implements Effect {
   private readonly sampleRate: number;
+  /** Largest size this instance's lines can hold. Fixed at construction. */
+  private readonly maxSize: number;
   private readonly lines: DelayLine[] = [];
   private readonly damps: OnePole[] = [];
   private readonly lfos: Lfo[] = [];
@@ -115,8 +151,9 @@ class FdnReverb implements Effect {
 
   constructor(sampleRate: number, params: Record<string, number>) {
     this.sampleRate = sampleRate;
+    this.maxSize = capSize(params, SIZE_MAX);
     for (let i = 0; i < N; i++) {
-      const cap = Math.ceil((BASE_MS[i] / 1000) * sampleRate * SIZE_MAX) + 64;
+      const cap = Math.ceil((BASE_MS[i] / 1000) * sampleRate * this.maxSize) + 64;
       this.lines.push(new DelayLine(cap));
       this.damps.push(new OnePole(sampleRate));
       const lfo = new Lfo(sampleRate);
@@ -150,7 +187,7 @@ class FdnReverb implements Effect {
   setParam(name: string, value: number): void {
     switch (name) {
       case 'size':
-        this.size = clamp(value, 0.25, SIZE_MAX);
+        this.size = clamp(value, 0.25, this.maxSize);
         this.updateLengths();
         break;
       case 'decay':

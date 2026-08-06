@@ -7,6 +7,30 @@
  * interpolator, so a time change glides like varispeed instead of
  * clicking. Feedback paths are read before the write of the current
  * sample, giving each loop its natural one-period latency.
+ *
+ * Construction-time capacity option, read from the params record passed
+ * to create() and used only in the constructor:
+ *
+ *   delay      maxSeconds, default 4 (DELAY_MAX_SEC)
+ *   tapeDelay  maxSeconds, default 2 (TAPE_MAX_SEC)
+ *   multitap   maxSeconds, default 2 (MULTITAP_MAX_SEC)
+ *
+ * Why it exists: a DelayLine rounds its capacity up to a power of two
+ * and never reallocates, so the maximum time decides the allocation for
+ * the life of the instance. A default stereo delay holds two lines of
+ * 262144 floats, 2 MB, whether the patch asks for four seconds or a
+ * quarter second. Passing maxSeconds sizes the rings for what the patch
+ * actually uses, which is what makes these effects fit on a small
+ * memory budget.
+ *
+ * Why it is not a ParamSpec: a ParamSpec declares a runtime-settable
+ * control and earns a UI knob, and changing a ring buffer's size while
+ * it is sounding cannot work, the history would have to be thrown away
+ * or resampled mid-signal. So maxSeconds stays out of the spec arrays
+ * and setParam ignores it (the switch default already does). The
+ * runtime time params clamp to the constructed maximum instead, so a
+ * time longer than the buffer degrades to the longest the buffer holds
+ * rather than reading whatever is behind the write head.
  */
 
 import type { Effect, EffectDef, ParamSpec, Rng } from '../types';
@@ -20,6 +44,21 @@ import { Lfo } from '../dsp/lfo';
 /** Apply spec defaults, then caller overrides, through setParam. */
 function applyParams(fx: Effect, specs: ParamSpec[], params: Record<string, number>): void {
   for (const s of specs) fx.setParam(s.name, params[s.name] ?? s.default);
+}
+
+/**
+ * Bounds on the requested capacity. The floor keeps the shortest useful
+ * echo readable after the cubic kernel takes its margin, the ceiling
+ * stops a typo from asking the worklet for hundreds of megabytes.
+ */
+const CAP_SEC_MIN = 0.01;
+const CAP_SEC_MAX = 60;
+
+/** Resolve the construction-time seconds capacity, falling back to the default. */
+function capSeconds(params: Record<string, number>, fallback: number): number {
+  const v = params.maxSeconds;
+  if (v === undefined || !Number.isFinite(v)) return fallback;
+  return clamp(v, CAP_SEC_MIN, CAP_SEC_MAX);
 }
 
 /**
@@ -67,6 +106,8 @@ const DELAY_PARAMS: ParamSpec[] = [
 
 class StereoDelay implements Effect {
   private readonly sampleRate: number;
+  /** Longest time this instance's rings can hold. Fixed at construction. */
+  private readonly maxSeconds: number;
   private readonly lineL: DelayLine;
   private readonly lineR: DelayLine;
   private readonly dampL: OnePole;
@@ -81,7 +122,8 @@ class StereoDelay implements Effect {
 
   constructor(sampleRate: number, params: Record<string, number>) {
     this.sampleRate = sampleRate;
-    const cap = Math.ceil(DELAY_MAX_SEC * sampleRate) + 8;
+    this.maxSeconds = capSeconds(params, DELAY_MAX_SEC);
+    const cap = Math.ceil(this.maxSeconds * sampleRate) + 8;
     this.lineL = new DelayLine(cap);
     this.lineR = new DelayLine(cap);
     this.dampL = new OnePole(sampleRate);
@@ -96,11 +138,11 @@ class StereoDelay implements Effect {
   setParam(name: string, value: number): void {
     switch (name) {
       case 'timeL':
-        this.timeL = clamp(value, 0.001, DELAY_MAX_SEC);
+        this.timeL = clamp(value, 0.001, this.maxSeconds);
         this.smL.setTarget(this.timeL * this.sampleRate);
         break;
       case 'timeR':
-        this.timeR = clamp(value, 0.001, DELAY_MAX_SEC);
+        this.timeR = clamp(value, 0.001, this.maxSeconds);
         this.smR.setTarget(this.timeR * this.sampleRate);
         break;
       case 'feedback':
@@ -218,6 +260,8 @@ class TapeHead {
 
 class TapeDelay implements Effect {
   private readonly sampleRate: number;
+  /** Longest time this instance's heads can hold. Fixed at construction. */
+  private readonly maxSeconds: number;
   private readonly headL: TapeHead;
   private readonly headR: TapeHead;
   private readonly sm: Smoother;
@@ -234,7 +278,11 @@ class TapeDelay implements Effect {
 
   constructor(sampleRate: number, params: Record<string, number>) {
     this.sampleRate = sampleRate;
-    const cap = Math.ceil((TAPE_MAX_SEC + WOW_DEPTH_SEC + FLUTTER_DEPTH_SEC) * sampleRate) + 8;
+    this.maxSeconds = capSeconds(params, TAPE_MAX_SEC);
+    // Wow and flutter push the read head past the nominal time, so the
+    // ring has to hold their full depth on top of it.
+    const cap =
+      Math.ceil((this.maxSeconds + WOW_DEPTH_SEC + FLUTTER_DEPTH_SEC) * sampleRate) + 8;
     this.headL = new TapeHead(sampleRate, cap);
     this.headR = new TapeHead(sampleRate, cap);
     // Tape time changes slew slowly, that is most of the charm.
@@ -252,7 +300,7 @@ class TapeDelay implements Effect {
   setParam(name: string, value: number): void {
     switch (name) {
       case 'time':
-        this.time = clamp(value, 0.005, TAPE_MAX_SEC);
+        this.time = clamp(value, 0.005, this.maxSeconds);
         this.sm.setTarget(this.time * this.sampleRate);
         break;
       case 'feedback':
@@ -342,6 +390,8 @@ const MULTITAP_PARAMS: ParamSpec[] = [
 
 class MultitapDelay implements Effect {
   private readonly sampleRate: number;
+  /** Longest tap time this instance's rings can hold. Fixed at construction. */
+  private readonly maxSeconds: number;
   private readonly lineL: DelayLine;
   private readonly lineR: DelayLine;
   private readonly smoothers: Smoother[] = [];
@@ -353,7 +403,8 @@ class MultitapDelay implements Effect {
 
   constructor(sampleRate: number, params: Record<string, number>) {
     this.sampleRate = sampleRate;
-    const cap = Math.ceil(MULTITAP_MAX_SEC * sampleRate) + 8;
+    this.maxSeconds = capSeconds(params, MULTITAP_MAX_SEC);
+    const cap = Math.ceil(this.maxSeconds * sampleRate) + 8;
     this.lineL = new DelayLine(cap);
     this.lineR = new DelayLine(cap);
     for (let k = 0; k < TAP_COUNT; k++) this.smoothers.push(new Smoother(sampleRate, 0.1));
@@ -368,7 +419,7 @@ class MultitapDelay implements Effect {
     if (name.length === 5 && name.startsWith('time')) {
       const k = name.charCodeAt(4) - 49; // '1' is 49
       if (k >= 0 && k < TAP_COUNT) {
-        this.times[k] = clamp(value, 0.001, MULTITAP_MAX_SEC);
+        this.times[k] = clamp(value, 0.001, this.maxSeconds);
         this.smoothers[k].setTarget(this.times[k] * this.sampleRate);
         return;
       }

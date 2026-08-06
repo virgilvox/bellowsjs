@@ -13,6 +13,7 @@ import type { EngineDef, EffectDef, NamedRng, TimeValue, KernelEvent } from './t
 import { EventKind, mtof, clamp } from './types';
 import { rng } from './core/prng';
 import { registerEngine, registerEffect } from './core/registry';
+import { SetupLog } from './kernel/setuplog';
 import { Scheduler, type TickCallback } from './core/scheduler';
 import { Transport } from './seq/transport';
 import { parseTime, DEFAULT_METER, type Meter } from './seq/time';
@@ -38,6 +39,12 @@ export interface BootOptions {
   masterGain?: number;
   bpm?: number;
   meter?: Meter;
+  /**
+   * Whether dispose() closes the AudioContext. Defaults to true when boot
+   * created the context and false when the caller passed one. Set it false
+   * to keep a boot-created context alive for a later reboot.
+   */
+  closeContextOnDispose?: boolean;
 }
 
 export interface NoteOptions {
@@ -89,7 +96,7 @@ export class Bellows {
 
   private kernel: KernelNode;
   private scheduler: Scheduler;
-  private setup: KernelMessage[] = [];
+  private setup = new SetupLog();
   private transportOps: TransportOp[] = [];
   private subs: Array<{ subdivision: number; cb: TickCallback }> = [];
   private liveRng = new Map<string, NamedRng>();
@@ -101,7 +108,9 @@ export class Bellows {
   private internedParams = new Map<string, number>();
   private localDefs: Array<{ kind: 'engine' | 'effect'; code: string }> = [];
   private lastMeter: MeterFrame | null = null;
-  private disposed = false;
+  private gone = false;
+  /** Deferred channel removals, so dispose() can cancel them. */
+  private pendingRemovals = new Set<ReturnType<typeof setTimeout>>();
   /** last kernel error messages, newest last */
   readonly kernelErrors: string[] = [];
   /** when set, receives kernel errors instead of console.error */
@@ -111,9 +120,13 @@ export class Bellows {
 
   tuning: Tuning = Tuning.edo(12);
 
-  private constructor(ctx: AudioContext, kernel: KernelNode, opts: BootOptions) {
+  /** boot() made the context, so dispose() is the one allowed to close it */
+  private ownsContext: boolean;
+
+  private constructor(ctx: AudioContext, kernel: KernelNode, opts: BootOptions, ownsContext = false) {
     this.ctx = ctx;
     this.kernel = kernel;
+    this.ownsContext = ownsContext;
     this.seed = opts.seed ?? 'bellows-' + bootCount++;
     this.initialBpm = opts.bpm ?? 120;
     this.initialMeter = opts.meter ?? DEFAULT_METER;
@@ -141,6 +154,7 @@ export class Bellows {
 
   static async boot(opts: BootOptions = {}): Promise<Bellows> {
     registerBuiltins();
+    const ownsContext = opts.closeContextOnDispose ?? opts.context === undefined;
     const ctx = opts.context ?? new AudioContext({ latencyHint: 'interactive' });
     if (ctx.state === 'suspended') {
       // resume() never settles when there is no user activation; racing a
@@ -153,18 +167,58 @@ export class Bellows {
       }
     }
     const kernel = await createKernelNode(ctx, { workletUrl: opts.workletUrl });
-    return new Bellows(ctx, kernel, opts);
+    return new Bellows(ctx, kernel, opts, ownsContext);
   }
 
   /* ------------------------------------------------------------ */
   /* plumbing                                                      */
   /* ------------------------------------------------------------ */
 
-  /** Post a structural message: applied live and recorded for offline replay. */
+  /**
+   * Post a structural message: applied live and recorded for offline replay.
+   * The recording collapses repeated setters (see SetupLog) so a piece that
+   * moves a param every bar does not grow its setup stream forever.
+   */
   private post(msg: KernelMessage, transfer?: Transferable[]): void {
-    this.setup.push(msg);
+    this.setup.record(msg);
     // transfers would detach the recorded copy, so bank payloads post a clone
     this.kernel.post(msg, transfer);
+  }
+
+  /** Recorded setup message count. Exposed so growth is testable. */
+  get setupSize(): number {
+    return this.setup.size;
+  }
+
+  /**
+   * Tear down a channel: free its voice pool in the kernel and drop it from
+   * the setup stream so an offline render does not rebuild it. Reached only
+   * through Instrument.dispose().
+   *
+   * removeChannel deletes the voice pool outright, so anything still sounding
+   * is cut mid-sample. Held notes are released first, and releaseSeconds
+   * defers the removal so a tail can decay instead of clicking. The timer runs
+   * on the main thread because the channel only has to survive until it is
+   * silent, which is not a sample-accurate deadline.
+   *
+   * @internal
+   */
+  disposeChannel(id: number, releaseSeconds = 0): void {
+    // Posted straight to the kernel, never recorded: an offline replay should
+    // not build the channel and then tear it down again.
+    this.setup.forgetChannel(id);
+    if (releaseSeconds > 0) {
+      this.postEvents([
+        { time: this.ctx.currentTime, kind: EventKind.AllNotesOff, target: id, a: 0, b: 0, c: 0 },
+      ]);
+      const timer = setTimeout(() => {
+        this.pendingRemovals.delete(timer);
+        if (!this.gone) this.kernel.post({ type: 'removeChannel', id });
+      }, releaseSeconds * 1000);
+      this.pendingRemovals.add(timer);
+      return;
+    }
+    this.kernel.post({ type: 'removeChannel', id });
   }
 
   private postEvents(events: KernelEvent[]): void {
@@ -179,9 +233,16 @@ export class Bellows {
     return this.renderCtx ? this.renderCtx.transport : this.transport;
   }
 
-  /** Current engine time in seconds. */
+  /**
+   * Current engine time in seconds. During render() this is the tick time of
+   * the callback being re-run, the same value untimed calls resolve to, which
+   * makes it a fourth replay invariant alongside the three in HANDOFF item 3.
+   * Without the branch a callback written `inst.note(n, { at: b.now() + 0.1 })`
+   * stamps live wall-clock times into renderCtx.events during a replay and
+   * every note in the export lands at roughly the same instant.
+   */
   now(): number {
-    return this.ctx.currentTime;
+    return this.renderCtx ? this.renderCtx.now : this.ctx.currentTime;
   }
 
   /** A named random stream forked off the piece seed. Deterministic per seed. */
@@ -433,13 +494,19 @@ export class Bellows {
     this.postEvents([{ time: t, kind: EventKind.NoteOff, target: channel, a: noteId, b: 0, c: 0 }]);
   }
 
-  paramEvent(channel: number, name: string, value: number, at?: number): void {
+  /** Intern a param name once, telling the kernel the index it answers to. */
+  private paramIndex(name: string): number {
     let idx = this.internedParams.get(name);
     if (idx === undefined) {
       idx = internParam(name);
       this.internedParams.set(name, idx);
       this.post({ type: 'internParam', name, index: idx });
     }
+    return idx;
+  }
+
+  paramEvent(channel: number, name: string, value: number, at?: number): void {
+    const idx = this.paramIndex(name);
     if (at === undefined && !this.renderCtx) {
       this.post({ type: 'channelParam', id: channel, name, value });
       return;
@@ -448,6 +515,26 @@ export class Bellows {
     // is when the live call would have taken effect
     const t = at ?? (this.renderCtx ? this.renderCtx.now : 0);
     this.postEvents([{ time: t, kind: EventKind.Param, target: channel, a: idx, b: value, c: 0 }]);
+  }
+
+  /**
+   * Glide a param to a value over a span of time. Always an event, never a
+   * recorded setter: a ramp is a move through time, so replaying it as a
+   * final value would lose the shape.
+   */
+  rampParamEvent(
+    channel: number,
+    name: string,
+    value: number,
+    over: TimeValue | { seconds: number },
+    at?: number,
+  ): void {
+    const idx = this.paramIndex(name);
+    const t = at ?? (this.renderCtx ? this.renderCtx.now : this.ctx.currentTime + 0.005);
+    const seconds = this.durationSeconds(over, t);
+    this.postEvents([
+      { time: t, kind: EventKind.ParamRamp, target: channel, a: idx, b: value, c: seconds },
+    ]);
   }
 
   structural(msg: KernelMessage): void {
@@ -512,7 +599,7 @@ export class Bellows {
       }
 
       const events = this.renderCtx.events;
-      const setup = this.setup.filter((m) => m.type !== 'events');
+      const setup = this.setup.messages.filter((m) => m.type !== 'events');
       const rendered = renderOffline([...setup, { type: 'events', events }], {
         seconds,
         sampleRate,
@@ -528,13 +615,32 @@ export class Bellows {
     }
   }
 
+  /** True once dispose() has run. Everything below it is torn down. */
+  get disposed(): boolean {
+    return this.gone;
+  }
+
   dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
+    if (this.gone) return;
+    this.gone = true;
     if (this.timer) clearInterval(this.timer);
+    for (const t of this.pendingRemovals) clearTimeout(t);
+    this.pendingRemovals.clear();
     this.scheduler.clear();
+    this.transport.stop();
     this.kernel.dispose();
     this.analyser.disconnect();
+    // browsers cap live AudioContexts per page (around six), so a boot that
+    // made its own context has to give it back. A caller supplied context is
+    // theirs: leave it running.
+    if (this.ownsContext) {
+      try {
+        const closing = this.ctx.close();
+        if (closing && typeof closing.catch === 'function') closing.catch(() => {});
+      } catch {
+        // some hosts throw on closing an already closed context
+      }
+    }
   }
 }
 
@@ -543,64 +649,110 @@ export class Bellows {
 /* ------------------------------------------------------------ */
 
 export class Instrument {
+  private gone = false;
+
   constructor(private b: Bellows, readonly channel: number) {}
+
+  /** True once dispose() has run. A disposed handle ignores everything. */
+  get disposed(): boolean {
+    return this.gone;
+  }
 
   /** Play a note. NoteValue: midi number, 'C#4', { hz }, or { degree, octave }. */
   note(note: NoteValue, opts: NoteOptions = {}, scale?: Scale): this {
+    if (this.gone) return this;
     this.b.noteEvents(this.channel, note, opts, scale);
     return this;
   }
 
   chord(notes: NoteValue[], opts: NoteOptions = {}): this {
+    if (this.gone) return this;
     for (const n of notes) this.b.noteEvents(this.channel, n, opts);
     return this;
   }
 
-  /** Sustain a note; returns an id for off(). */
+  /** Sustain a note; returns an id for off(). Disposed: returns -1. */
   on(note: NoteValue, vel = 0.8, at?: number): number {
+    if (this.gone) return -1;
     return this.b.noteOnEvent(this.channel, note, vel, at);
   }
 
   off(noteId: number, at?: number): this {
+    if (this.gone) return this;
     this.b.noteOffEvent(this.channel, noteId, at);
     return this;
   }
 
   /** Set an engine parameter, immediately or at a scheduled time. */
   param(name: string, value: number, at?: number): this {
+    if (this.gone) return this;
     this.b.paramEvent(this.channel, name, value, at);
+    return this;
+  }
+
+  /**
+   * Glide a parameter to a value over a span of time, starting at `at` (or
+   * now) from wherever the parameter currently sits. `over` takes beats,
+   * notation like '4n', or { seconds }.
+   */
+  rampParam(name: string, value: number, over: TimeValue | { seconds: number }, at?: number): this {
+    if (this.gone) return this;
+    this.b.rampParamEvent(this.channel, name, value, over, at);
     return this;
   }
 
   /** Replace this instrument's insert chain. */
   fx(...fx: FxInput[]): this {
+    if (this.gone) return this;
     this.b.structural({ type: 'channelFx', id: this.channel, chain: normalizeFx(fx) });
     return this;
   }
 
   fxParam(fxIndex: number, name: string, value: number): this {
+    if (this.gone) return this;
     this.b.structural({ type: 'fxParam', channelId: this.channel, fxIndex, name, value });
     return this;
   }
 
   send(bus: BusHandle, level: number): this {
+    if (this.gone) return this;
     this.b.structural({ type: 'send', channelId: this.channel, busId: bus.id, level });
     return this;
   }
 
   gain(value: number): this {
+    if (this.gone) return this;
     this.b.structural({ type: 'channelGain', id: this.channel, gain: value });
     return this;
   }
 
   pan(value: number): this {
+    if (this.gone) return this;
     this.b.structural({ type: 'channelPan', id: this.channel, pan: value });
     return this;
   }
 
   allOff(): this {
+    if (this.gone) return this;
     this.b.postAllOff(this.channel);
     return this;
+  }
+
+  /**
+   * Free the channel: the kernel drops its voice pool, and the setup stream
+   * forgets it so an offline render does not rebuild it. Idempotent, and a
+   * disposed handle goes inert rather than throwing, since a hot swap can
+   * easily leave a stale reference in a closure.
+   *
+   * Dropping the pool cuts anything still sounding mid-sample. Pass
+   * releaseSeconds to release held notes and defer the removal by that long,
+   * which is what a hot swap wants: the outgoing engine rings out while the
+   * incoming one plays.
+   */
+  dispose(opts: { releaseSeconds?: number } = {}): void {
+    if (this.gone) return;
+    this.gone = true;
+    this.b.disposeChannel(this.channel, opts.releaseSeconds ?? 0);
   }
 }
 
