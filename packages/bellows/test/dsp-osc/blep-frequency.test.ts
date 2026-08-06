@@ -62,26 +62,36 @@ function amplitudeAt(buf: Float32Array, cyclesPerSample: number): number {
   return (2 * Math.hypot(re, im)) / buf.length;
 }
 
-/* Measured floors, dB below the fundamental. Triangle is allowed to fall
- * off with pitch because its harmonics drop as 1/n^2, so what little is
- * left to alias sits close to the noise floor by the top of the range. */
+/*
+ * Measured floors, dB below the fundamental, with about 10 dB of margin.
+ *
+ * The triangle floors used to slope from -85 down to -24 across the band,
+ * with a comment explaining that its harmonics drop as 1/n^2 so there is
+ * little left to alias. That explanation was wrong and it was covering a
+ * defect: the BLAMP table's drift-removal step left a step discontinuity at
+ * the centre of the kernel. With that corrected the triangle holds -77 to
+ * -110 dB everywhere, at or better than the saw and the square, and these
+ * floors are set from that. A sloping floor is exactly the shape a bug of
+ * this kind hides behind, so if one reappears, suspect the table before
+ * writing the slope back in.
+ */
 const FLOORS: Array<{ hz: number; saw: number; square: number; triangle: number }> = [
   { hz: 55, saw: -84, square: -84, triangle: -85 },
-  { hz: 110, saw: -93, square: -93, triangle: -93 },
+  { hz: 110, saw: -93, square: -93, triangle: -94 },
   { hz: 220, saw: -88, square: -88, triangle: -88 },
   { hz: 440, saw: -84, square: -84, triangle: -84 },
-  { hz: 880, saw: -88, square: -91, triangle: -79 },
-  { hz: 1760, saw: -82, square: -88, triangle: -67 },
-  { hz: 2637, saw: -80, square: -80, triangle: -60 },
-  { hz: 3520, saw: -75, square: -75, triangle: -55 },
-  { hz: 5000, saw: -77, square: -77, triangle: -49 },
-  { hz: 7040, saw: -76, square: -79, triangle: -46 },
-  { hz: 9000, saw: -71, square: -71, triangle: -39 },
-  { hz: 11000, saw: -79, square: -79, triangle: -37 },
-  { hz: 13000, saw: -67, square: -80, triangle: -36 },
-  { hz: 15000, saw: -70, square: -79, triangle: -35 },
-  { hz: 17000, saw: -71, square: -78, triangle: -34 },
-  { hz: 19000, saw: -63, square: -73, triangle: -24 },
+  { hz: 880, saw: -88, square: -91, triangle: -100 },
+  { hz: 1760, saw: -82, square: -88, triangle: -94 },
+  { hz: 2637, saw: -80, square: -80, triangle: -87 },
+  { hz: 3520, saw: -75, square: -75, triangle: -88 },
+  { hz: 5000, saw: -77, square: -77, triangle: -85 },
+  { hz: 7040, saw: -76, square: -79, triangle: -84 },
+  { hz: 9000, saw: -71, square: -71, triangle: -81 },
+  { hz: 11000, saw: -79, square: -79, triangle: -86 },
+  { hz: 13000, saw: -67, square: -80, triangle: -83 },
+  { hz: 15000, saw: -70, square: -79, triangle: -81 },
+  { hz: 17000, saw: -71, square: -78, triangle: -79 },
+  { hz: 19000, saw: -63, square: -73, triangle: -67 },
 ];
 
 describe('BlepOscillator alias rejection across the band', () => {

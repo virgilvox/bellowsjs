@@ -114,6 +114,25 @@ function besselI0(x) {
   return sum;
 }
 
+/*
+ * WARNING, and it has already cost something.
+ *
+ * This is a hand copy of buildTables() in
+ * packages/bellows/src/dsp/oscillators.ts, not a call into it, because the
+ * library does not export its residual tables. So the emitted header's own
+ * claim, "Generated from src/dsp/oscillators.ts", is not literally true, and
+ * `--check` compares this copy against the header it wrote from the same
+ * copy. It cannot see the library at all.
+ *
+ * Measured consequence: the BLAMP construction was corrected in the
+ * TypeScript and `node tools/gen-tables.mjs --check` still reported
+ * `ok src/bellows/dsp/blep_tables.h`, because this copy still had the old
+ * one. The C++ triangle would have kept a defect the TypeScript had just
+ * shed, and the drift check would have said everything was fine.
+ *
+ * If you change either copy, change both, and prefer making the library
+ * export the tables so this one can go away.
+ */
 function buildTables() {
   const n = TABLE_LEN;
   const h = new Float64Array(n);
@@ -134,19 +153,23 @@ function buildTables() {
     step[i] = acc;
   }
   for (let i = 0; i < n; i++) step[i] /= acc;
-  // blamp residual: integral of (step - unit step), drift removed
+  /*
+   * blamp residual: the integral of (step - unit step), with the unit step
+   * integrated ANALYTICALLY per cell. Must stay identical to buildTables()
+   * in packages/bellows/src/dsp/oscillators.ts, and see the warning above
+   * this function about why that is a hazard rather than a convenience.
+   */
   const ramp = new Float64Array(n);
+  const cell = 1 / TABLE_RES;
   let acc2 = 0;
   for (let i = 1; i < n; i++) {
     const d0 = (i - 1) / TABLE_RES - KERNEL_HALF;
     const d1 = i / TABLE_RES - KERNEL_HALF;
-    const r0 = step[i - 1] - (d0 >= 0 ? 1 : 0);
-    const r1 = step[i] - (d1 >= 0 ? 1 : 0);
-    acc2 += (r0 + r1) / (2 * TABLE_RES);
+    const sInt = ((step[i - 1] + step[i]) / 2) * cell;
+    const uInt = d1 <= 0 ? 0 : d0 >= 0 ? cell : d1;
+    acc2 += sInt - uInt;
     ramp[i] = acc2;
   }
-  const drift = ramp[n - 1];
-  for (let i = 0; i < n; i++) ramp[i] -= (drift * i) / (n - 1);
   return { step, ramp };
 }
 
