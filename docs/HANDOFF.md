@@ -296,11 +296,40 @@ HARDWARE.md promises reproduction.
 
 Do not do these unasked.
 
-- The west coast fold chain runs at 1x with no antialiasing (129). Moves the golden render.
-- The BLAMP table's drift-removal step is the wrong correction (237). Moves the golden render.
-- The string waveguide is up to 23 cents flat below about 165 Hz (37). Measured again during
-  re-verification: -23.17 cents at 41 Hz, -11.54 at 82, -3.94 at 220, -0.07 at 440. Both pitch
-  gates sit at 220 and 440, so they are blind to it by construction.
+- ~~The west coast fold chain runs at 1x with no antialiasing (129)~~ DONE, `95e1815`.
+- ~~The BLAMP table's drift-removal step is the wrong correction (237)~~ DONE, `c731a90`.
+
+**And a correction to how these three were filed.** All three were listed here as changing
+rendered output and moving the golden render. Two of them do neither: the fixture piece drives
+va, fm, kick and pluck, so west coast is not in it at all, and va's oscillators are not
+triangles so nothing in the piece reads the BLAMP table. Both fixes landed with
+`test/golden/piece-a.f32` untouched. Check what the fixture actually contains before assuming a
+DSP change is gated behind it.
+- **The string waveguide is up to 23 cents flat below about 165 Hz (37), and the obvious fix is
+  the wrong one.** Measured: -23.14 cents at 41.2 Hz, -17.30 at 55, -11.36 at 82.4, -7.70 at 110,
+  -4.34 at 165, -2.30 at 220, +0.76 at 440. Both pitch gates sit at 220 and 440, so they are
+  blind to it by construction.
+
+  The finding blames the dc blocker, whose phase lead is compensated only at f0, and it is right
+  about the mechanism. It is wrong that weakening the blocker fixes it. Measured by sweeping the
+  blocker coefficient, tuning error in cents at 41.2 / 110 / 440 Hz:
+
+  | dc coefficient | 41.2 Hz | 110 Hz | 440 Hz |
+  | --- | --- | --- | --- |
+  | 0.0005, shipping | -23.14 | -7.70 | +0.76 |
+  | 0.0001 | -4.65 | -1.59 | +8.84 |
+  | 0.00002 | -0.87 | -0.03 | +15.72 |
+
+  The bass comes good and the treble falls apart, because the blocker's phase lead was partly
+  CANCELLING the error from the four dispersion allpasses and the damping pole, which are
+  compensated at f0 only as well. Trading 23 cents flat at 41 Hz for 16 cents sharp at 440 is a
+  worse instrument, and 440 is the pitch anyone actually plays.
+
+  So this needs the third remedy the finding lists and not the first: a tuning allpass whose
+  group delay is flat across the harmonic band, replacing the single-frequency `readDelay`
+  compensation entirely. That is a redesign of the loop's tuning, not a coefficient change, and
+  it should be done with the measurement above as its acceptance test. Attempted and deliberately
+  not shipped on 2026-08-05, because a half fix here is worse than the defect.
 - The bow position comb delay is twice the physical value (123).
 - `b.render()` is not reproducible for the rng pattern the README and every doc page teach (55).
   A real fix changes what render emits for every piece written the documented way.
