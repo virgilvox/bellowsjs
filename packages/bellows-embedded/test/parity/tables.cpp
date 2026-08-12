@@ -12,6 +12,7 @@
 #include "bellows/seq/euclid.h"
 #include "bellows/seq/arp.h"
 #include "bellows/seq/automata.h"
+#include "bellows/seq/lsystem.h"
 #include "bellows/seq/tempomap.h"
 #include "bellows/theory/scales.h"
 #include "bellows/theory/chords.h"
@@ -89,6 +90,68 @@ int main() {
     printf("arp %s ", kModeName[m]);
     for (int i = 0; i < 12; ++i) printf("%d ", static_cast<int>(a.Next()));
     printf("\n");
+  }
+  /*
+   * L-systems. Every other ported seq/ module was compared here from the
+   * start and this one was not, so the rewrite was carried, built into
+   * s9m_seq and quoted in the size tables without ever being diffed
+   * against its source of truth. A rewrite that diverges is silent in
+   * exactly the way this file exists to catch.
+   *
+   * kMaxLen is 512 so nothing below truncates. Truncation is a C++-only
+   * behaviour with no JS counterpart, so it is not a parity question and
+   * is not asked here.
+   */
+  {
+    struct Case {
+      const char* name;
+      const char* axiom;
+      const char* syms;
+      const char* reps[3];
+      int rules;
+      int gens;
+    };
+    static const Case kCases[] = {
+        /* Algae, the system whose whole point is that the generation is
+         * built from the old string and never from itself. Lengths follow
+         * Fibonacci only if the rewrite is parallel. */
+        {"algae", "A", "AB", {"AB", "A", nullptr}, 2, 8},
+        /* Two rules that feed each other, so an order-dependent rewrite
+         * diverges within two generations. */
+        {"cross", "AB", "AB", {"BA", "AAB", nullptr}, 2, 5},
+        /* Symbols with no rule pass through, including brackets. */
+        {"through", "A[B]C+A", "A", {"AB", nullptr, nullptr}, 1, 4},
+        /* An empty replacement erases its symbol. */
+        {"erase", "ABABA", "AB", {"AB", "", nullptr}, 2, 4},
+        /* Koch-style turtle string, the classic growth shape. */
+        {"koch", "F", "F", {"F+F-F-F+F", nullptr, nullptr}, 1, 3},
+    };
+    for (const Case& c : kCases) {
+      for (int g = 0; g <= c.gens; ++g) {
+        bellows::LSystem<512, 8> ls;
+        ls.Init();
+        ls.SetAxiom(c.axiom);
+        for (int r = 0; r < c.rules; ++r) ls.AddRule(c.syms[r], c.reps[r]);
+        const bool ok = ls.Grow(g);
+        printf("lsys %s %d %d %d %s\n", c.name, g, ok ? 1 : 0, ls.Length(), ls.Result());
+      }
+    }
+    /* MapToDegrees, including the rest sentinel and skipped structure. */
+    {
+      bellows::LSystem<512, 8> ls;
+      ls.Init();
+      ls.SetAxiom("A");
+      ls.AddRule('A', "AB[C]");
+      ls.AddRule('B', "A-C");
+      ls.Grow(4);
+      static const char kSyms[] = "ABC";
+      static const int8_t kDegrees[] = {0, 2, bellows::kRestDegree};
+      int8_t out[512];
+      const int n = bellows::MapToDegrees(ls.Result(), kSyms, kDegrees, out, 512);
+      printf("lsysdeg %d ", n);
+      for (int i = 0; i < n; ++i) printf("%d ", static_cast<int>(out[i]));
+      printf("\n");
+    }
   }
   /* Tempo map: the closed form beat/second conversion, including a ramp. */
   {

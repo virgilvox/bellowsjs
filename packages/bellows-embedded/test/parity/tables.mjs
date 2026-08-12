@@ -42,6 +42,7 @@ const { SCALES } = await import(join(SRC, 'theory/scales.ts'));
 const { CHORD_TYPES } = await import(join(SRC, 'theory/chords.ts'));
 const { parseNote, noteName } = await import(join(SRC, 'theory/notes.ts'));
 const { ElementaryCA } = await import(join(SRC, 'seq/automata.ts'));
+const { lsystem, mapToDegrees } = await import(join(SRC, 'seq/lsystem.ts'));
 const { Arpeggiator } = await import(join(SRC, 'seq/arp.ts'));
 const { TempoMap } = await import(join(SRC, 'seq/tempomap.ts'));
 const { parseMidiMessage } = await import(join(SRC, 'io/webmidi.ts'));
@@ -100,6 +101,45 @@ for (const mode of ['up', 'down', 'updown', 'downup', 'order']) {
   const seq = [];
   for (let i = 0; i < 12; i++) seq.push(a.next());
   out.push(`arp ${mode} ${seq.join(' ')} `);
+}
+
+/*
+ * L-systems. Every other ported seq/ module was compared here from the
+ * start and this one was not, so the rewrite was carried, built into
+ * s9m_seq and quoted in the size tables without ever being diffed
+ * against its source of truth. A rewrite that diverges plays a
+ * confident, plausible, wrong sequence and no audio test can hear it.
+ *
+ * Only the deterministic form is compared, for the reason the arp rows
+ * give above: the stochastic rule draws from an rng, and there the two
+ * sides genuinely differ. Rng::Next() rounds the uint32 to float before
+ * scaling and the JS keeps it in double, so a weighted draw that lands
+ * near a boundary can pick different branches. That is the same rounding
+ * the fxin rows in parity.mjs exist to pin, and it is a property of the
+ * generator rather than of the L-system.
+ *
+ * kMaxLen on the C++ side is 512 so nothing here truncates. Truncation
+ * is a C++-only behaviour with no JS counterpart, so it is not a parity
+ * question and is not asked.
+ */
+const LSYS_CASES = [
+  { name: 'algae', axiom: 'A', rules: { A: 'AB', B: 'A' }, gens: 8 },
+  { name: 'cross', axiom: 'AB', rules: { A: 'BA', B: 'AAB' }, gens: 5 },
+  { name: 'through', axiom: 'A[B]C+A', rules: { A: 'AB' }, gens: 4 },
+  { name: 'erase', axiom: 'ABABA', rules: { A: 'AB', B: '' }, gens: 4 },
+  { name: 'koch', axiom: 'F', rules: { F: 'F+F-F-F+F' }, gens: 3 },
+];
+for (const c of LSYS_CASES) {
+  for (let g = 0; g <= c.gens; g++) {
+    const r = lsystem(c.axiom, c.rules, g);
+    out.push(`lsys ${c.name} ${g} 1 ${r.length} ${r}`);
+  }
+}
+{
+  const r = lsystem('A', { A: 'AB[C]', B: 'A-C' }, 4);
+  /* -128 is kRestDegree in the C++, standing in for the JS null. */
+  const degs = mapToDegrees(r, { A: 0, B: 2, C: null }).map((d) => (d === null ? -128 : d));
+  out.push(`lsysdeg ${degs.length} ${degs.join(' ')} `);
 }
 
 /* Tempo map, the closed form integral. */

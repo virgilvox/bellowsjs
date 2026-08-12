@@ -100,6 +100,60 @@ describe('LoudnessMeter integrated', () => {
     expect(meterFor(buf).integrated()).toBe(-Infinity);
   });
 
+  /*
+   * The test above names -70 and cannot see it. Its signal is amplitude
+   * 1e-5, about -100 LUFS, so any threshold anywhere in a 100 dB window
+   * passes it: moving ABS_GATE to -60 left the whole suite green. The
+   * neighbouring gap test uses digital silence, which is -Infinity and is
+   * dropped by every threshold. REL_GATE was uncovered the same way.
+   *
+   * These two are the constants that define gated integrated loudness in
+   * BS.1770, so the module is only as correct as they are. Both are
+   * gated here from either side, on programs placed a few dB apart across
+   * the threshold, so a move in either direction shows up.
+   *
+   * The same vacuity was found and fixed in the parity harness for the
+   * limiter's ceiling: "the row read 5.5e-8 and a 0.1 percent ceiling
+   * change did not move it at all, because the limiter never engaged."
+   */
+
+  /** Amplitude of a mono 997 Hz sine at a target loudness. Full scale is -3.01 LUFS. */
+  const ampFor = (lufs: number): number => Math.pow(10, (lufs + 3.01) / 20);
+  const steady = (lufs: number): Float32Array => sine(997, SR, 4 * SR, ampFor(lufs));
+
+  it('puts the absolute gate at -70 LUFS and not somewhere else', () => {
+    /* Measured: the boundary sits between these two and nowhere else in
+     * the range. -68 survives the gate and reads back its own level; -71
+     * is dropped entirely. Raising the gate to -60 turns the first into
+     * -Infinity; lowering it to -80 turns the second into a number. */
+    expect(meterFor(steady(-68)).integrated()).toBeCloseTo(-68, 1);
+    expect(meterFor(steady(-71)).integrated()).toBe(-Infinity);
+  });
+
+  it('puts the relative gate 10 LU under the absolute-gated mean', () => {
+    /*
+     * Four seconds at -20 LUFS followed by four seconds at a quiet level,
+     * so the absolute-gated mean is about -22.7 and the relative threshold
+     * about -32.7. A quiet part at -32 is inside it and pulls the
+     * integrated value down to the mean of both; a quiet part at -33 is
+     * outside it and leaves the loud part alone.
+     *
+     * Measured, and the two answers are 2.5 dB apart, which is far wider
+     * than the run to run variation (zero) and far narrower than the
+     * 2 LU move either mutation makes.
+     */
+    const program = (quietLufs: number): Float32Array => {
+      const loud = steady(-20);
+      const quiet = steady(quietLufs);
+      const buf = new Float32Array(loud.length + quiet.length);
+      buf.set(loud, 0);
+      buf.set(quiet, loud.length);
+      return buf;
+    };
+    expect(meterFor(program(-32)).integrated()).toBeCloseTo(-22.74, 1);
+    expect(meterFor(program(-33)).integrated()).toBeCloseTo(-20.16, 1);
+  });
+
   it('is -Infinity before any gating block exists', () => {
     const m = new LoudnessMeter(SR, 1);
     expect(m.integrated()).toBe(-Infinity);
