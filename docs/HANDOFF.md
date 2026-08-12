@@ -9,8 +9,13 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
   listing what changed for a user (a new `rotatePattern` export, input ceilings on the WAV and
   MIDI parsers, three fixes). Publishing 0.1.7 is a decision nobody has made yet.
   0.1.6 itself was a safety release: the SFZ hardening in it fixes a real denial of service on
-  untrusted input in a browser. bellows.live redeploys from `main` on push and was checked
-  serving real audio, not just a 200.
+  untrusted input in a browser.
+- **bellows.live is behind `main` too, and does not catch up on its own.** The app pulls the
+  public repo with a plain `git.repo_clone_url`, so there is no deploy-on-push: verified, the
+  active deployment is from 2026-08-06 with cause `manual`. Shipping site changes takes
+  `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d` after the push. See
+  "Deployment (bellows.live)" below, which has said this all along; an earlier draft of this
+  line said the opposite and was wrong.
 - **`packages/bellows-embedded` is published nowhere.** It is `private: true`, so it is not on npm
   and is not meant to be, and it is in neither the Arduino Library Manager nor the PlatformIO
   registry. Today the only way to consume it is to point PlatformIO at the subdirectory by hand.
