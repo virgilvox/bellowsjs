@@ -11,7 +11,7 @@
 
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import { Bellows } from '../../src/bellows';
-import { registerBuiltins } from '../../src/core/register';
+import { registerBuiltins } from '../../src/register';
 import { FakeAudioContext, installFakeAudio } from './fake-context';
 
 const live: Bellows[] = [];

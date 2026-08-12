@@ -135,3 +135,38 @@ describe('TempoMap validation', () => {
     expect(() => new TempoMap(0)).toThrow();
   });
 });
+
+/*
+ * K_EPS is the slope below which a ramp is treated as a constant tempo,
+ * and it decides which of two formulas runs. Raising it from 1e-9 to 1e-3
+ * passed the whole suite, because every ramp tested here is steep enough
+ * that 1e-3 is still tiny next to it. A slow ramp is where the two
+ * formulas separate.
+ */
+describe('the ramp/constant crossover', () => {
+  it('integrates a very slow ramp rather than flattening it', () => {
+    /*
+     * A tenth of a millibeat per beat: k is 1e-7, four orders above
+     * K_EPS, so the closed form has to run. Measured, 1000 beats at
+     * 120 bpm rising by 1e-4: 499.999791720 s against the exact
+     * (60/k) ln((t0 + k db) / t0) = 499.999791737, and against 500.0
+     * exactly if the flat shortcut is taken. A K_EPS of 1e-3 takes it.
+     */
+    const tm = new TempoMap(120);
+    tm.rampTo(1000, 120.0001);
+    const t = tm.beatToSeconds(1000);
+    expect(t).toBeCloseTo(499.99979174, 6);
+    expect(500 - t).toBeGreaterThan(1e-4);
+  });
+
+  it('takes the constant-tempo shortcut when the slope really is zero', () => {
+    /* k is exactly 0 here and the closed form divides by it. The shortcut
+     * is not an optimisation, it is what keeps this finite. */
+    const tm = new TempoMap(120);
+    tm.rampTo(1000, 120);
+    const t = tm.beatToSeconds(1000);
+    expect(Number.isFinite(t)).toBe(true);
+    expect(t).toBeCloseTo(500, 9);
+    expect(tm.secondsToBeat(500)).toBeCloseTo(1000, 6);
+  });
+});

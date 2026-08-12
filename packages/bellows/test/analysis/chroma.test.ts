@@ -51,6 +51,50 @@ describe('chromaFromSpectrum', () => {
     expect(chroma[3]).toBeLessThan(0.1);
   });
 
+  /*
+   * The test above uses 40 Hz against a 60 Hz cut, so it cannot see the cut
+   * move: raising MIN_HZ to 120 passed the whole suite, and so did dropping
+   * MAX_HZ from 5000 to 2000. Both edges need a tone on each side of them.
+   *
+   * The shape is the same as the rumble test: a loud tone whose pitch class
+   * differs from a quiet reference at A4. Inside the band the loud tone
+   * wins the normalised chroma; outside it, the quiet A survives alone.
+   * Measured, both directions.
+   */
+  it('counts a tone just above the low cut and drops one just below', () => {
+    const probe = (loudHz: number): Float32Array => {
+      const buf = new Float32Array(32768);
+      addSine(buf, loudHz, SR, 0.9);
+      addSine(buf, 440, SR, 0.05);
+      return chromaFromSpectrum(magSpectrum(buf, 32768), SR);
+    };
+    /* C2 at 65.41 Hz is inside the band, pitch class 0. */
+    const inside = probe(65.41);
+    expect(inside[0]).toBeCloseTo(1, 2);
+    expect(inside[9]).toBeLessThan(0.1);
+    /* G#1 at 51.91 Hz is outside it, pitch class 8, and the quiet A wins. */
+    const outside = probe(51.91);
+    expect(outside[9]).toBeCloseTo(1, 2);
+    expect(outside[8]).toBeLessThan(0.1);
+  });
+
+  it('counts a tone just below the high cut and drops one just above', () => {
+    const probe = (loudHz: number): Float32Array => {
+      const buf = new Float32Array(32768);
+      addSine(buf, loudHz, SR, 0.9);
+      addSine(buf, 440, SR, 0.05);
+      return chromaFromSpectrum(magSpectrum(buf, 32768), SR);
+    };
+    /* D8 at 4698.6 Hz is inside, pitch class 2. */
+    const inside = probe(4698.6);
+    expect(inside[2]).toBeCloseTo(1, 2);
+    expect(inside[9]).toBeLessThan(0.1);
+    /* E8 at 5274 Hz is outside, pitch class 4, and the quiet A wins. */
+    const outside = probe(5274);
+    expect(outside[9]).toBeCloseTo(1, 2);
+    expect(outside[4]).toBeLessThan(0.1);
+  });
+
   it('reuses the out array without allocation', () => {
     const buf = toneCluster([69], 0.25, 1);
     const mag = magSpectrum(buf, 8192);

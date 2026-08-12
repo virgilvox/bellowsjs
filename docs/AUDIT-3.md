@@ -5,41 +5,52 @@ Whole-repository audit, 2026-08-11, at commit 59a5093. Companion to `docs/AUDIT.
 
 Unlike audit 2, this pass was run by one reader with instruments rather than by a fleet of
 agents, and it leans on measurement wherever measurement was available: a heap probe for the
-allocation rule, an FFT sweep for the alias claim, a mutation harness for the gates, and a
-render-and-diff for every mutant that survived. Where a finding rests on reading rather than
-on a number, it says so.
+allocation rule, an FFT sweep for the alias claim, forty mutations run against the whole
+suite, and a render-and-diff for every mutant that survived. Where a finding rests on reading
+rather than on a number, it says so.
 
-Nothing here blocks. The shipped library is correct as far as this pass could push it: the
-suite passes, the embedded harnesses pass, `bellowsjs@0.1.6` resolves and every one of its 218
-exports is defined. What the pass found is mostly missing gates around code that is currently
-right, plus one number on the front page of the npm listing that is wrong.
+Round one found mostly missing gates around code that was right, plus one wrong number on the
+front page of the npm listing. Round two instrumented what round one had only read, and that
+turned up the one thing here that was actually broken in the shipped product: `b.rotate` was
+the array function in the published package and the pattern combinator on bellows.live,
+because two modules exported the name and the two builds resolved it differently.
+
+Three of round two's findings came from catching this audit's own instruments lying. A worklet
+harness froze the context clock and two of its tests passed anyway; a module-cache hit reported
+0 of 96 signals differing when the real answer was 22; and a botched edit deleted a regex
+declaration, so a "killed" verdict was really a ReferenceError. Each is recorded where it
+happened, because the same failure in a gate is what this document is about.
 
 ## Status
 
-Findings 1 to 5 are **fixed**, in the same session, and each fix was verified by re-running
-the mutation that motivated it. No library source changed: the alias number was wrong in the
-documents and not in the DSP, and the other four were missing tests.
+Two rounds. The first raised 13 findings and fixed 5. The second went back over
+everything the first pass had not instrumented, and found that two of the remaining
+findings were hiding a shipped divergence: `b.rotate` was a different function in the
+published package than on bellows.live. Everything is fixed now.
 
 | # | What | State |
 | --- | --- | --- |
 | 1 | README alias claim | fixed in 4 places, measured |
-| 2 | Event placement not gated | 2 tests added, kills round to floor and round to ceil |
-| 3 | BS.1770 gate thresholds not gated | 2 tests added, kills all four one-step moves |
-| 4 | Sampler interpolator not gated | 2 tests added, kills all three tap misalignments |
-| 5 | `lsystem.h` not compared | 30 parity rows added, kills in-place rewrite and short copy |
-| 6 | Workbench builds against source, not `dist` | open |
-| 7 | `vue-tsc` installed and never run | open |
-| 8 | `src/index.ts` imported by no test | open |
-| 9 | `core/register.ts` imports upward | open |
-| 10 | Input ceilings on SFZ only | open |
-| 11 | MIDI time-signature denominator can be negative | open |
-| 12 | Eight dev-tooling advisories | open |
-| 13 | `splice` on the audio thread | noted, rule holds as written |
+| 2 | Event placement not gated | 2 tests, kills round to floor and to ceil |
+| 3 | BS.1770 gate thresholds not gated | 2 tests, kills all four one-step moves |
+| 4 | Sampler interpolator not gated | 2 tests, kills all three tap misalignments |
+| 5 | `lsystem.h` not compared | 30 parity rows, kills 2 rewrite mutations |
+| 6 | Site and package are different artefacts | artefact gated by test instead, measured why |
+| 7 | `vue-tsc` installed and never run | in the build script, in CI, and its own script |
+| 8 | `src/index.ts` imported by no test | `package.test.ts`, 14 tests |
+| 9 | `core/register.ts` imports upward | moved to `src/register.ts`, `layering.test.ts` gates it |
+| 10 | Input ceilings on SFZ only | MIDI and WAV capped from measurement, SF2 measured |
+| 11 | MIDI denominator can be negative | fixed, 4 tests |
+| 12 | Eight dev-tooling advisories | vitest 4, zero advisories, build byte-identical |
+| 13 | `splice` on the audio thread | `copyWithin` and a length assignment |
+| 14 | `rotate` is two different functions | **found in round two**, fixed, gated both ways |
+| 15 | Realtime never compared to offline | **found in round two**, now bit-exact, 9 tests |
+| 16 | Shelf corner frequency not gated | **found in round two**, 2 tests, an octave of error |
+| 17 | Six analysis constants not gated | **found in round two**, 6 tests, both sides each |
+| 18 | `yin(buf, sr, NaN)` goes deaf silently | **found in round two**, fixed |
 
-The suite went from 1273 to 1279 tests, and the value-parity harness from 318 rows to 348.
-Findings 6 through 13 are left as recorded rather than fixed: 6, 7 and 9 change build or
-module layout and belong with the 0.2.0 architecture work, and 10 through 13 want a decision
-about policy rather than a patch.
+The suite went from 1273 tests in 85 files to 1330 in 88, and the value-parity harness
+from 318 rows to 348. `npm audit` went from 8 advisories to none.
 
 ## What was measured, and what came back clean
 
@@ -374,3 +385,143 @@ Raised during the pass and then withdrawn, so nobody re-raises them:
   never unmounts.
 - **Banned phrasing in `docs/BOWED-STRINGS.md` and `docs/ENGINEERING.md`.** Both are research
   briefs written before the style rule applied to them, and both predate the code they describe.
+
+## Round two
+
+Round one instrumented the gates and read the rest. Round two instrumented the rest.
+
+### 14. `rotate` was a different function in the package than on the site
+
+`packages/bellows/src/index.ts`
+
+`seq/euclid` exports `rotate(arr, n)` and `seq/pattern` exports `rotate(p, n)`. The barrel
+took the first by name and the second through `export * from './seq/pattern'`. Measured:
+
+```
+source barrel  rotate -> the PATTERN combinator   (=== pattern.rotate)
+dist ESM       rotate -> the ARRAY function       (=== euclid.rotate)
+```
+
+The workbench aliases `bellowsjs` to library source, so **bellows.live and npm shipped
+different functions under the same name**, with incompatible arguments: the array one on a
+`StepPattern` throws, because `StepPattern` is `{ at, length }` and has no `slice`. The spec
+says the explicit export wins, so `dist` was right and the source resolution was wrong, but a
+barrel whose meaning depends on the bundler is the defect, not whichever side lost.
+
+A docs page already carried a footnote saying the package's `rotate` was the array one and
+"not the pattern combinator", which was true of npm and false of the site the footnote was
+served from. The pattern combinator was, on npm, reachable from nothing.
+
+**Fixed.** `seq/pattern` is listed explicitly rather than starred, and its rotation is
+exported as `rotatePattern`. `rotate` keeps meaning the array one, which is what npm has
+always shipped, so nothing that worked changes. The docs footnote now describes both.
+
+Two gates, in `test/integration/package.test.ts`. One asserts that every value a starred
+module declares is reachable from the barrel under some name, by identity, so an alias
+satisfies it and a lookalike stub does not. The other pins what the two colliding names mean,
+in both artefacts, by calling them. Verified: re-starring `seq/pattern` fails 2 tests,
+dropping the alias fails 2, dropping any other pattern export fails 1.
+
+### 15. Nothing had ever compared realtime against offline
+
+`packages/bellows/src/kernel/worklet-entry.ts`
+
+The README, the PRD and the offline renderer's own header all say they render identically.
+`worklet-entry.ts` was imported by no test, and CI only proved that regenerating
+`worklet-code.gen.ts` produced no diff, which pins the string to its source and says nothing
+about whether the two wirings agree. They differ in three places: the worklet supplies
+`resolveBankEngine` and the offline renderer takes it from the caller, the worklet calls
+`setFrame` with the context clock every block and the offline renderer never does, and the
+worklet posts a meter.
+
+`test/kernel/worklet-parity.test.ts` evaluates the shipped IIFE against a real global scope
+and drives it block by block. Over 96 blocks with two engines, a channel effect, a bus send,
+a master limiter and five events at fractional sample positions, the two are **bit
+identical**. Also gated: the processor name matches `KERNEL_PROCESSOR_NAME`, an event lands
+on the same sample whether the node was made at frame 0 or a minute in, a bad message comes
+back over the port instead of throwing, a mono output does not crash the node, and an empty
+output does not either. Verified: removing `setFrame`, renaming the processor, changing the
+meter cadence, changing the block size, aliasing the right channel to the left, and making
+`apply` throw each fail it.
+
+**The first version of this harness passed the globals in as function parameters.** That
+froze `currentFrame` at load, so the kernel re-rendered block zero forever, and two of the
+tests passed anyway. A harness that degrades that quietly is worse than none, and the file
+says so at the top.
+
+### 16. The shelf filters' corner frequency was unconstrained
+
+`packages/bellows/src/dsp/filters.ts:124`
+
+`g = Math.tan(w) / Math.sqrt(A)` changed to `* Math.sqrt(A)` passed the whole suite. That
+moves the corner by `A`, an octave at 12 dB, and leaves the asymptotes alone, which is
+exactly what the two existing tests measure: they read 40 Hz and 4000 Hz for a 200 Hz corner.
+
+What pins it is that this design passes exactly half its dB gain at the corner. Measured
+5.994 and 6.000 dB of 12 for the low and high shelf, against 11.09 for the mutation.
+
+### 17. Six analysis constants were reachable by no test
+
+`pitch.ts` DEFAULT_THRESHOLD, MPM_K and MPM_MIN_CLARITY; `chroma.ts` MIN_HZ and MAX_HZ;
+`onset.ts` TEMPO_LO and TEMPO_HI. Every one survived a one-step mutation, for the same reason
+each time: the tests used signals nowhere near the threshold. Clean sawtooth and digital
+silence for the pitch detectors, 40 Hz against a 60 Hz cut for chroma, 120 bpm in the middle
+of a range that folds at 75 and 150.
+
+Each is now bracketed from both sides on measured signals: noise 0.2 accepted and 0.3
+rejected for YIN, a fundamental at a tenth its octave's amplitude for MPM_K (0.93 gives
+110 Hz at clarity 1.0, 0.75 gives 219.9 at 0.78), clarity 0.376 at noise 1.0 and under 0.3 at
+1.3, C2 counted and G sharp 1 dropped, D8 counted and E8 dropped, 70 doubling to 140 and 180
+halving to 90. Verified: fifteen mutations, all dead.
+
+**The first attempt to gate MPM_K reported that no value from 0.1 to 0.99 changed anything
+across 96 signals.** That was a module-cache hit: the "mutant" run re-imported a cached copy
+of the original. Re-run with a fresh process per value, 0.75 changes 22 of the 96.
+
+### 18. A non-finite YIN threshold made the detector go deaf, silently
+
+`packages/bellows/src/analysis/pitch.ts`
+
+Every comparison against NaN is false, so `cmnd[tau] < threshold` never fired and `yin`
+returned null for every input, forever, with nothing reported. A caller reaches that through
+`Number(config.threshold)` on a field that is not there. This is the same hole 0.1.6 closed in
+the SFZ parser's limits, in a different file, and it is closed the same way.
+
+### The rest of round one
+
+- **6.** Building the app against `dist` works, and was rejected: `dist/bellows.js` is one
+  pre-bundled file, so Rollup can no longer split library internals across routes and the
+  entry chunk goes from 123 KB gzipped to 145 KB. That is 22 KB on first paint to buy a check
+  that belongs in a test, so the check is a test.
+- **7.** `vue-tsc` runs in the build script, as its own npm script, and as its own CI step.
+- **8.** `test/integration/package.test.ts`, 14 tests: the export list as a written-down
+  public API, resolution by bare specifier in a plain Node subprocess, agreement between the
+  source barrel and the built bundle by kind and arity, the standalone IIFE actually leaving
+  a global behind, and every path `package.json` promises.
+- **9.** `core/register.ts` is `src/register.ts`, and `test/integration/layering.test.ts`
+  gates the whole rule: no runtime upward imports at all, exactly three type-only ones listed
+  by name, and no browser globals in the pure layers.
+- **10.** Measured before capping: MIDI amplifies 26.6x (781 KiB of input retains 20.3 MB)
+  and WAV 217x (64 KiB declaring 65535 channels retains 13.6 MB). Both capped, at a million
+  events and 256 channels, both overridable, both validating a non-finite override. SF2's
+  bags and generators are transient rather than retained, so its peak is bounded by its own
+  chunk sizes; its `sampleCache` grows without eviction and is recorded rather than capped,
+  because a ceiling there would reject legitimate banks.
+- **11.** `1 << dd` is `Math.pow(2, dd)`, and a meter that cannot be interpreted comes back
+  as raw meta rather than as an invented one.
+- **12.** vitest 2 to 4 clears all eight advisories. 1330 tests pass and `dist/bellows.js` is
+  byte-identical before and after, so the upgrade changed nothing the package ships.
+- **13.** `copyWithin` and a length assignment instead of `splice`, which allocated the array
+  of removed elements on the audio thread.
+
+### Two hazards this round created and then closed
+
+- **CI ordering.** `package.test.ts` builds `dist` when it is missing, and that build
+  regenerates the worklet. With the worklet freshness check running after the tests, as it
+  did, it would have compared the file against a copy the suite had just written. The check
+  runs before the tests now.
+- **Test contention.** Building inside a `beforeAll` ran while other workers ran, and the
+  contention pushed the brown noise bound past its 5 second timeout. The build is a
+  `globalSetup` now. Separately, that timeout was measured on vitest 2 and vitest 4 and is the
+  same either way, so it is the default that is tight rather than the upgrade that is slow;
+  `testTimeout` is 30 s and the assertions remain the gate.

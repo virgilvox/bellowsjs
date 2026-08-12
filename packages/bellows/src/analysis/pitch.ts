@@ -39,6 +39,17 @@ export interface YinOptions {
 
 const DEFAULT_BUFFER = 2048;
 const DEFAULT_THRESHOLD = 0.1;
+
+/*
+ * A non-finite threshold makes every `cmnd[tau] < threshold` false, so the
+ * detector returns null for every input forever and reports nothing wrong.
+ * A caller reaches that through `Number(config.threshold)` on a field that
+ * is not there, which is the same way the SFZ parser's limits were being
+ * disabled before 0.1.6. Same resolution as there: validate, fall back.
+ */
+function finiteOr(value: number | undefined, fallback: number): number {
+  return value === undefined || !Number.isFinite(value) ? fallback : value;
+}
 /** First peak within this fraction of the highest NSDF peak wins. */
 const MPM_K = 0.93;
 /** NSDF peaks below this are treated as unvoiced. */
@@ -111,11 +122,12 @@ export function yin(
   sampleRate: number,
   threshold: number = DEFAULT_THRESHOLD,
 ): PitchResult | null {
+  const t = finiteOr(threshold, DEFAULT_THRESHOLD);
   const maxTau = buffer.length >> 1;
   if (maxTau < 4) return null;
   const d = new Float64Array(maxTau);
   const cmnd = new Float64Array(maxTau);
-  return yinCore(buffer, buffer.length, sampleRate, threshold, d, cmnd);
+  return yinCore(buffer, buffer.length, sampleRate, t, d, cmnd);
 }
 
 /**
@@ -210,8 +222,8 @@ export class YinDetector implements Analyzer {
 
   constructor(sampleRate: number, opts: YinOptions = {}) {
     this.sampleRate = sampleRate;
-    this.threshold = opts.threshold ?? DEFAULT_THRESHOLD;
-    this.size = opts.bufferSize ?? DEFAULT_BUFFER;
+    this.threshold = finiteOr(opts.threshold, DEFAULT_THRESHOLD);
+    this.size = finiteOr(opts.bufferSize, DEFAULT_BUFFER);
     if (this.size < 8) throw new Error('YinDetector bufferSize must be at least 8');
     this.ring = new Float32Array(this.size);
     this.frame = new Float32Array(this.size);

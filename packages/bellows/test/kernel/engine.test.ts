@@ -229,6 +229,30 @@ describe('kernel engine', () => {
     expect(a).toEqual(b);
   });
 
+  it('starts at a master gain of 0.9 when nothing sets one', () => {
+    /*
+     * Bellows.boot only posts masterGain when the caller passes one, so
+     * the kernel's constructor default is what a plain boot plays at. It
+     * was observable by nothing: every test here and every golden render
+     * sets the gain explicitly, so changing 0.9 to 0.7 passed the suite
+     * while quietly making everybody's default output 2 dB quieter.
+     *
+     * 0.9 leaves a little room under full scale for a sum of voices
+     * without being an audible attenuation.
+     */
+    const k = new KernelEngine(48000);
+    k.apply({ type: 'createChannel', id: 0, engineId: 'test-dc', params: { amp: 0.5 }, seed: 's' });
+    k.apply({ type: 'channelGain', id: 0, gain: 1 });
+    k.apply({ type: 'events', events: [
+      { time: 0, kind: EventKind.NoteOn, target: 0, a: 1, b: 440, c: 1 },
+    ] });
+    /* The dc engine emits amp * vel = 0.5 into both channels, the pan law
+     * is equal power at unity in the centre, so the only thing left is
+     * the master gain. Read late, after every ramp has settled. */
+    const { l } = run(k, 40);
+    expect(l[40 * 128 - 1]).toBeCloseTo(0.5 * 0.9, 4);
+  });
+
   it('equal power pan moves energy between channels', () => {
     const k = boot();
     k.apply({ type: 'channelPan', id: 0, pan: -1 });

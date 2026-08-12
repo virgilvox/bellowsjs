@@ -64,6 +64,43 @@ describe('parametric eq', () => {
     expect(Math.abs(measureGainDb(params, 500))).toBeLessThan(1);
   });
 
+  /*
+   * The two tests above measure the asymptotes, 40 Hz against 4000 Hz for a
+   * 200 Hz corner, and the asymptotes do not depend on where the corner is.
+   * Swapping the shelves' `g = tan(w) / sqrt(A)` for `* sqrt(A)`, which
+   * moves the corner by a factor of sqrt(A) and is the classic way to get
+   * this design wrong, passed the whole suite: the shelf still reached its
+   * gain, still returned to unity, and did it an octave off.
+   *
+   * What pins the corner is that a shelf of this design passes exactly half
+   * its dB gain there, and is symmetric in log frequency about it. Both
+   * measured: 5.994 and 6.000 dB of 12 at the corner, and 9.299 + 2.737 =
+   * 12.036 at a half octave either side. The mutation gives 11.09 dB at the
+   * corner, which is 5.1 dB out against a gate of 0.15.
+   */
+  it('passes exactly half its gain at the shelf corner', () => {
+    for (const gain of [12, -12, 6]) {
+      expect(measureGainDb({ b0freq: 200, b0gain: gain }, 200)).toBeCloseTo(gain / 2, 1);
+      expect(measureGainDb({ b5freq: 4000, b5gain: gain }, 4000)).toBeCloseTo(gain / 2, 1);
+    }
+  });
+
+  it('is symmetric in log frequency about the shelf corner', () => {
+    /* A half octave either side of the corner has to sum to the full gain.
+     * This is blind to a corner that has moved, which is why it is the
+     * second gate and not the only one, but it catches a shelf whose
+     * transition has the wrong shape. */
+    const half = Math.SQRT2;
+    for (const [freq, gain] of [
+      [200, 12],
+      [200, -9],
+    ] as const) {
+      const below = measureGainDb({ b0freq: freq, b0gain: gain }, freq / half);
+      const above = measureGainDb({ b0freq: freq, b0gain: gain }, freq * half);
+      expect(below + above).toBeCloseTo(gain, 0);
+    }
+  });
+
   it('is bit-transparent with every gain at 0', () => {
     const fx = eqDef.create(SR, {});
     const noise = rng('fx-dyn/eq-noise');

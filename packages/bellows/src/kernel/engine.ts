@@ -568,9 +568,18 @@ export class KernelEngine {
     }
     this.frame = blockStart;
 
-    // compact the drained queue occasionally
+    /*
+     * Compact the drained queue occasionally. copyWithin and a length
+     * assignment rather than splice, because splice builds and returns an
+     * array of everything it removed and this runs on the audio thread.
+     * The rule is "no allocation at steady state" and steady state has no
+     * events to drain, so splice was inside the letter of it; this is
+     * inside the spirit as well and is not slower.
+     */
     if (this.eventHead > 256) {
-      this.events.splice(0, this.eventHead);
+      const left = this.events.length - this.eventHead;
+      this.events.copyWithin(0, this.eventHead);
+      this.events.length = left;
       this.eventHead = 0;
     }
 

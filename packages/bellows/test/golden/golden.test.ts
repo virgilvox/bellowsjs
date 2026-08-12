@@ -12,7 +12,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { registerBuiltins } from '../../src/core/register';
+import { registerBuiltins } from '../../src/register';
 import { renderOffline } from '../../src/render/offline';
 import { EventKind } from '../../src/types';
 import type { KernelMessage } from '../../src/kernel/messages';

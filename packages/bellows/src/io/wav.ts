@@ -20,6 +20,29 @@ export interface DecodedWav {
   sampleRate: number;
 }
 
+/*
+ * Hostile-input ceiling, matching the one the SFZ parser got in 0.1.6.
+ * numChannels is an unbounded uint16 in the header, and every channel
+ * becomes its own Float32Array, so the per-object overhead is what
+ * amplifies rather than the sample data: measured, a 64 KiB file
+ * declaring 65535 channels of one frame each retained 13.6 MB, 217 times
+ * its own size.
+ *
+ * 256 is far past anything real. WAVE_FORMAT_EXTENSIBLE's speaker mask
+ * describes 18 positions, ambisonic sets run to 64, and the largest
+ * production formats in use are 128.
+ */
+const DEFAULT_MAX_CHANNELS = 256;
+
+export interface DecodeWavOptions {
+  /** Most channels accepted, default 256. See DEFAULT_MAX_CHANNELS. */
+  maxChannels?: number;
+}
+
+function finiteOption(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
 const FORMAT_PCM = 1;
 const FORMAT_FLOAT = 3;
 const FORMAT_EXTENSIBLE = 0xfffe;
@@ -123,7 +146,8 @@ interface FmtChunk {
   bitsPerSample: number;
 }
 
-export function decodeWav(buf: ArrayBuffer): DecodedWav {
+export function decodeWav(buf: ArrayBuffer, opts: DecodeWavOptions = {}): DecodedWav {
+  const maxChannels = finiteOption(opts.maxChannels, DEFAULT_MAX_CHANNELS);
   if (buf.byteLength < 12) throw new Error('wav: buffer too short');
   const v = new DataView(buf);
   if (readAscii(v, 0, 4) !== 'RIFF' || readAscii(v, 8, 4) !== 'WAVE') {
@@ -164,6 +188,9 @@ export function decodeWav(buf: ArrayBuffer): DecodedWav {
   if (fmt === null) throw new Error('wav: missing fmt chunk');
   if (dataOff < 0) throw new Error('wav: missing data chunk');
   if (fmt.numChannels < 1) throw new Error('wav: no channels');
+  if (fmt.numChannels > maxChannels) {
+    throw new Error(`wav: ${fmt.numChannels} channels exceeds maxChannels ${maxChannels}`);
+  }
   if (!(fmt.sampleRate > 0)) throw new Error('wav: invalid sample rate');
 
   const { format, numChannels, bitsPerSample } = fmt;
