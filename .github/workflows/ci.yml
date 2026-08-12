@@ -65,8 +65,12 @@ jobs:
       - name: typecheck
         # vue-tsc was a devDependency of this app that nothing ever ran: no
         # script, and `vite build` strips types through esbuild without
-        # checking them. It is part of the build script now, and also its own
-        # step so a type error reads as one.
+        # checking them. There is a script now and this is what runs it.
+        #
+        # Deliberately here and not inside the build script. .do/app.yaml
+        # deploys bellows.live by running that same build script, and adding
+        # a type check to it would put the site's deploy at the mercy of one.
+        # A type error fails this job on the same push either way.
         run: npm run typecheck -w apps/workbench
       - name: every runnable example still matches the library
         # The examples are strings, so nothing type-checks them, and the app

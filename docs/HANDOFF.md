@@ -4,17 +4,20 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 
 ## Where things stand
 
-- `bellowsjs@0.1.6` is published on npm, tagged `v0.1.6`, and `main` IS current: PR #1 merged on
-  2026-08-06. See `CHANGELOG.md`; it is a safety release, and the SFZ hardening in it fixes a real
-  denial of service on untrusted input in a browser. bellows.live is redeployed from it and was
-  checked serving real audio, not just a 200.
+- `bellowsjs@0.1.6` is published on npm and tagged `v0.1.6`. **`main` is ahead of it**: the three
+  audit-3 commits are merged and unpublished, and `CHANGELOG.md` has an Unreleased section
+  listing what changed for a user (a new `rotatePattern` export, input ceilings on the WAV and
+  MIDI parsers, three fixes). Publishing 0.1.7 is a decision nobody has made yet.
+  0.1.6 itself was a safety release: the SFZ hardening in it fixes a real denial of service on
+  untrusted input in a browser. bellows.live redeploys from `main` on push and was checked
+  serving real audio, not just a 200.
 - **`packages/bellows-embedded` is published nowhere.** It is `private: true`, so it is not on npm
   and is not meant to be, and it is in neither the Arduino Library Manager nor the PlatformIO
   registry. Today the only way to consume it is to point PlatformIO at the subdirectory by hand.
   That is Milestone 6 and it has not started.
 - Library test suite: 90 files, 1348 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
-- The Vue workbench builds clean (`vite build`, `vue-tsc`) and was verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples.
+- The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
 - Embedded: 43 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All five examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library.
 - Parity against the TypeScript passes on 34 rows with the PRNG bit exact and the effect input bit exact, plus 348 exactly-compared value rows for the parts that make no sound.
 - The embedded package went through a size pass whose findings are in `docs/HARDWARE.md` under "Making it smaller". Delay buffers are sized exactly rather than rounded to a power of two, which took 25 percent off RAM library-wide with bit-identical output; the oscillator gained per-shape entry points so the linker can drop the residual table a program never reads; and every transcendental now routes through `fm::`, which is what the docs had claimed for months and was not true, so `BELLOWS_FAST_MATH` went from saving nothing on any sketch with an oscillator to saving 23 to 75 percent. Read that section before optimising anything: it also records what was measured and deliberately NOT taken, and why attributing firmware bytes to a header-only library by symbol name does not work.
@@ -24,12 +27,54 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 1. **Nothing has been flashed to a board and listened to.** Everything is compile-verified,
    link-verified and numerically verified against the TypeScript. That is a strong position and
    it is not the same as having heard it. Assume the first bring-up finds something.
-2. **`.github/workflows/ci.yml` has never run.** It is not on the default branch, so GitHub has
-   never scheduled it and `gh run list` is empty. Every sentence in these documents that says CI
-   enforces something describes a file, not a control: the stale-worklet guard, the
-   generated-header drift check and `check-docs` are all still manual, run by whoever remembers.
-   Pushing that workflow is the cheapest large win in the repository and it needs one `git push`
-   that nobody has been asked to make.
+2. **CI runs now, and this item used to say it never had.** It was true when written and stayed
+   in the document after it stopped being true. `gh run list` shows green runs on push to `main`
+   and on `workflow_dispatch`, across six jobs. So the stale-worklet guard, the generated-header
+   drift check, the golden-render guard and `check-docs` are controls rather than descriptions.
+   What is still not automatic: nothing publishes to npm, and nothing flashes a board.
+
+## What audit 3 established, and what it is safe to rely on
+
+`docs/AUDIT-3.md` has the findings with their evidence. What matters for picking the work back
+up is which properties are now held by a control rather than by hope. Each of these was
+verified by re-running the mutation that motivated it, so they are gates rather than tests
+that happen to pass:
+
+- **The worklet renders the same audio as the offline renderer, bit for bit.** Three documents
+  said so and nothing checked it. `test/kernel/worklet-parity.test.ts` evaluates the shipped
+  IIFE against a real global scope and drives it for 96 blocks through two engines, a channel
+  effect, a bus send and a master limiter. If you change `worklet-entry.ts` or the kernel's
+  wiring, this is what tells you.
+- **Block size does not change the audio.** Bit identical from 32 to 512, effects included.
+  Nothing had ever varied it, and AudioWorklet's render quantum is not promised to stay 128.
+- **The published artefact is checked.** `test/integration/package.test.ts` writes the public
+  API down as a list, resolves the bare specifier in a plain Node subprocess, compares the
+  source barrel against the built bundle by kind and arity, and runs the standalone IIFE. The
+  API list is the specification: removing a name from it is a deliberate edit.
+- **The dependency rule is enforced.** `test/integration/layering.test.ts` fails on any runtime
+  import from a lower layer to a higher one, and lists the three type-only ones by name.
+- **Sample-accurate event placement, the BS.1770 gating thresholds, the sampler's interpolator,
+  the four Dattorro plate constants, the grain pool size, the shelf corner frequency, six
+  analysis constants and the voice-stealing order** all now have gates. Every one of them
+  survived a one-step mutation before this pass.
+- **The site's 49 examples are checked against the library**, in CI, by
+  `apps/workbench/scripts/check-examples.mjs`.
+
+Two habits from this pass worth keeping, both learned by being burned:
+
+1. **A gate you have not seen fail is not a gate.** Six times in three rounds an instrument in
+   this audit produced a confident wrong answer: a harness that froze the context clock and
+   still passed two tests, a module-cache hit that reported 0 of 96 signals differing when the
+   answer was 22, a `cd` that failed so no mutation was ever applied and five rows came back
+   "equivalent", a probe that passed milliseconds as seconds and never reached the code under
+   test. Every new gate here was checked by breaking the thing it guards.
+2. **Do not run a mutation sweep and a measurement against the same working tree at once.** One
+   probe in round three ran while a sweep had `src/dsp/oversample.ts` modified. The result
+   looked fine and meant nothing.
+
+Known and deliberately not gated: `HANN_N`, the grain envelope's table resolution. It is
+observable only on very short grains and the size of the effect moved with every other
+parameter tried, so the note is better than a fragile gate.
 
 ## Layout
 

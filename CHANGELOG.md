@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased
+
+On `main`, not on npm. `bellowsjs@0.1.6` is still what an installer gets.
+
+Three audit rounds, written up in `docs/AUDIT-3.md`. Almost all of it is gates rather than
+behaviour: 1273 tests in 85 files became 1348 in 90, and 68 hand-written mutations were run
+against the whole suite to find out which ones did nothing. What did change for a user:
+
+### Added
+
+- `rotatePattern`, the step-pattern rotation from `seq/pattern`. It existed and was reachable
+  from nothing: `seq/euclid` also exports `rotate`, the explicit export won, and the two
+  functions take incompatible arguments. `rotate` still means the array one, so nothing that
+  worked changes. A docs page used to carry a footnote about this; it describes both now.
+- `decodeWav(buf, { maxChannels })` and `parseMidi(buf, { maxEvents })`. Both untrusted input
+  in a browser, both previously uncapped, and measured: a 64 KiB WAV declaring 65535 channels
+  retained 13.6 MB, and 781 KiB of MIDI retained 20.3 MB. Defaults 256 and 1000000, which no
+  real file approaches.
+
+### Fixed
+
+- **`rotate` meant different functions under different toolchains.** vite's transform resolved
+  the collision above one way and Rollup the other, so the dev server and the test suite ran a
+  different function from every build. The barrel no longer has the ambiguity.
+- **A MIDI time signature could report a negative denominator.** The exponent byte is unvalidated
+  input and `1 << dd` masks the shift to five bits, so bytes 31 and 255 both produced
+  -2147483648 and byte 32 produced 1. Meters that cannot be interpreted now come back as raw
+  meta events instead of invented ones.
+- **A non-finite YIN threshold silently disabled pitch detection.** Every comparison against NaN
+  is false, so `yin(buf, sr, Number(missingField))` returned null for every input forever with
+  nothing reported. Same hole 0.1.6 closed in the SFZ limits, closed the same way.
+- The kernel no longer allocates when it compacts its drained event queue, which it did on the
+  audio thread once per 256 events.
+
+### Changed
+
+- `registerBuiltins` moved from `src/core/register.ts` to `src/register.ts`. It imported 22
+  modules from the layers above it. The export is unchanged and the package has no deep import
+  paths, so this is invisible from outside.
+
 ## 0.1.6
 
 A safety release. One item changes seeded audio and it is named below; nothing
