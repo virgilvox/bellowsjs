@@ -8,7 +8,8 @@
     "build": "vite build",
     "typecheck": "vue-tsc --noEmit",
     "preview": "vite preview",
-    "check:examples": "node scripts/check-examples.mjs"
+    "check:examples": "node scripts/check-examples.mjs",
+    "gen:llm": "node scripts/gen-llm-ref.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.7.0",

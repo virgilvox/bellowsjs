@@ -77,6 +77,15 @@ jobs:
         # has no test suite. They are also the first API a visitor touches.
         # Needs the library built, which the step above does.
         run: npm run check:examples -w apps/workbench
+      - name: the LLM reference is in sync with the library
+        # public/llm.txt is generated from the built bundle and its type
+        # declarations, is served at /llm.txt, and says of itself that it is
+        # exact for a version. Nothing regenerated it, so it drifted: at
+        # 0.1.6 it documented a rotate(p, n) that the package no longer
+        # exported under that name. Same control the worklet string has.
+        run: |
+          npm run gen:llm -w apps/workbench
+          git diff --exit-code -- apps/workbench/public/llm.txt
       - run: npm run build -w apps/workbench
 
   embedded:

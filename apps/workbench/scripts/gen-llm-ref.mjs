@@ -213,7 +213,9 @@ Generators (all deterministic given a NamedRng):
   setNotes(midis), next(rng?), reset().
 - Pattern combinators (step-indexed): seq(...), stack(...), fromArray, gates,
   every(n, fn, p), sometimes(prob, fn, p, rng), fast(n, p), slow(n, p),
-  rev(p), rotate(p, n). Patterns implement at(step) and length.
+  rev(p), rotatePattern(p, n). Patterns implement at(step) and length.
+  (The bare rotate(arr, n) at the package root rotates a plain array, which is
+  what euclid rows want; the two are different functions.)
 
 PRNG: rng(label) -> NamedRng: call for [0,1); .fork(label), .int(n),
 .pick(arr), .range(lo, hi), .chance(p), .shuffle(arr), .gauss(), .weighted(w).

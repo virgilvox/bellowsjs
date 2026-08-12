@@ -4,12 +4,11 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 
 ## Where things stand
 
-- `bellowsjs@0.1.6` is published on npm and tagged `v0.1.6`. **`main` is ahead of it**: the three
-  audit-3 commits are merged and unpublished, and `CHANGELOG.md` has an Unreleased section
-  listing what changed for a user (a new `rotatePattern` export, input ceilings on the WAV and
-  MIDI parsers, three fixes). Publishing 0.1.7 is a decision nobody has made yet.
-  0.1.6 itself was a safety release: the SFZ hardening in it fixes a real denial of service on
-  untrusted input in a browser.
+- `bellowsjs@0.1.7` is published on npm and tagged `v0.1.7`, and `main` is current with it. It is
+  the audit-3 release: almost all gates rather than behaviour, and `CHANGELOG.md` lists the four
+  things a user would notice (a new `rotatePattern` export, input ceilings on the WAV and MIDI
+  parsers, and three fixes). 0.1.6 before it was a safety release: the SFZ hardening in it fixes
+  a real denial of service on untrusted input in a browser.
 - **bellows.live is behind `main` too, and does not catch up on its own.** The app pulls the
   public repo with a plain `git.repo_clone_url`, so there is no deploy-on-push: verified, the
   active deployment is from 2026-08-06 with cause `manual`. Shipping site changes takes

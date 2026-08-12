@@ -1,8 +1,6 @@
 # Changelog
 
-## Unreleased
-
-On `main`, not on npm. `bellowsjs@0.1.6` is still what an installer gets.
+## 0.1.7
 
 Three audit rounds, written up in `docs/AUDIT-3.md`. Almost all of it is gates rather than
 behaviour: 1273 tests in 85 files became 1348 in 90, and 68 hand-written mutations were run
