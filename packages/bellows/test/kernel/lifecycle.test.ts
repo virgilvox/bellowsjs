@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import { Bellows } from '../../src/bellows';
 import { SetupLog } from '../../src/kernel/setuplog';
-import { registerBuiltins } from '../../src/core/register';
+import { registerBuiltins } from '../../src/register';
 import type { KernelMessage } from '../../src/kernel/messages';
 
 /* ------------------------------------------------------------ */

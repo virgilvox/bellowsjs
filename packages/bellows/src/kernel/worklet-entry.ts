@@ -5,7 +5,7 @@
  */
 
 import { KernelEngine } from './engine';
-import { registerBuiltins } from '../core/register';
+import { registerBuiltins } from '../register';
 import { bankEngineResolver } from '../render/banks';
 import type { KernelMessage } from './messages';
 

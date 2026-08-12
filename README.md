@@ -115,7 +115,7 @@ const wav = audio.wav(24); // ArrayBuffer, ready to download
 
 ## What ships
 
-Synthesis: virtual analog (tabulated-BLEP oscillators measuring around -90 dB worst alias, ladder and SVF filters, per-voice drift), FM (2/4/6 operators, DX-style algorithm routing), additive, wavetable (mipmapped, position scan), granular (64-grain clouds), extended Karplus-Strong, waveguide string and tube, modal banks (bar, membrane, bell, glass, wood), west coast (wavefolder into a vactrol low-pass gate), formant vocal synthesis, five drum engines, noise synth, and a DDSP-style harmonic-plus-noise engine with a frame-driven control input.
+Synthesis: virtual analog (tabulated-BLEP oscillators, worst alias measured at -85 dB through the musical range and -73 dB at the top of the band, ladder and SVF filters, per-voice drift), FM (2/4/6 operators, DX-style algorithm routing), additive, wavetable (mipmapped, position scan), granular (64-grain clouds), extended Karplus-Strong, waveguide string and tube, modal banks (bar, membrane, bell, glass, wood), west coast (wavefolder into a vactrol low-pass gate), formant vocal synthesis, five drum engines, noise synth, and a DDSP-style harmonic-plus-noise engine with a frame-driven control input.
 
 Samples: a sampler engine with velocity layers, crossfades, round robins, and loop-seam crossfading; an SF2 parser implementing the generator resolution model of the spec; an SFZ parser covering the opcodes the popular free libraries actually use, with #include and #define.
 

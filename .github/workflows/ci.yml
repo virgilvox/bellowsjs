@@ -28,17 +28,23 @@ jobs:
       - name: typecheck
         run: npx tsc --noEmit
         working-directory: packages/bellows
-      - name: test
-        run: npm test
-        working-directory: packages/bellows
       - name: worklet bundle is in sync with source
         working-directory: packages/bellows
         # The worklet ships as a checked-in generated string. If it drifts from
         # the source, realtime playback runs stale DSP while offline render runs
         # the new code, which is the worst kind of bug to chase.
+        #
+        # Before the tests, not after. test/integration/package.test.ts builds
+        # dist when it is missing, which a clean runner always is, and that
+        # build regenerates this file. Run afterwards, the check would compare
+        # the file against a copy the test suite had just written and pass
+        # whatever the committed state was.
         run: |
           node scripts/gen-worklet.mjs
           git diff --exit-code -- src/kernel/worklet-code.gen.ts
+      - name: test
+        run: npm test
+        working-directory: packages/bellows
       - name: golden renders were not regenerated
         run: git diff --exit-code -- packages/bellows/test/golden/
       - name: build
@@ -56,6 +62,21 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build -w packages/bellows
+      - name: typecheck
+        # vue-tsc was a devDependency of this app that nothing ever ran: no
+        # script, and `vite build` strips types through esbuild without
+        # checking them. There is a script now and this is what runs it.
+        #
+        # Deliberately here and not inside the build script. .do/app.yaml
+        # deploys bellows.live by running that same build script, and adding
+        # a type check to it would put the site's deploy at the mercy of one.
+        # A type error fails this job on the same push either way.
+        run: npm run typecheck -w apps/workbench
+      - name: every runnable example still matches the library
+        # The examples are strings, so nothing type-checks them, and the app
+        # has no test suite. They are also the first API a visitor touches.
+        # Needs the library built, which the step above does.
+        run: npm run check:examples -w apps/workbench
       - run: npm run build -w apps/workbench
 
   embedded:

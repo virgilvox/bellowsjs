@@ -126,7 +126,7 @@ b.clock.at('8n', (t, step) => {
 });
 \`\`\`
 
-Patterns are step-indexed and cyclic: \`p.at(step)\` wraps at \`p.length\`. \`stack\` layers patterns, \`fast\` and \`slow\` change the cycle length by decimating or holding, \`rev\` reverses within a cycle, and \`sometimes\` draws its random mask once so every query of the same step agrees. One footnote: the package root exports \`rotate(arr, n)\` for plain arrays (handy on euclid rows); it is not the pattern combinator.
+Patterns are step-indexed and cyclic: \`p.at(step)\` wraps at \`p.length\`. \`stack\` layers patterns, \`fast\` and \`slow\` change the cycle length by decimating or holding, \`rev\` reverses within a cycle, and \`sometimes\` draws its random mask once so every query of the same step agrees. Two rotations share the root: \`rotate(arr, n)\` shifts a plain array (handy on euclid rows) and \`rotatePattern(p, n)\` shifts a pattern. They were both called \`rotate\` until the collision was measured, at which point the source build and the published build turned out to disagree about which one you got.
 
 ## A complete seeded piece
 

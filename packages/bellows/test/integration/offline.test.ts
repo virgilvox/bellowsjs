@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { registerBuiltins } from '../../src/core/register';
+import { registerBuiltins } from '../../src/register';
 import { listEngines, listEffects } from '../../src/core/registry';
 import { renderOffline } from '../../src/render/offline';
 import { bankEngineResolver } from '../../src/render/banks';

@@ -337,3 +337,82 @@ describe('sampler engine voice contract', () => {
     expect(() => voice.setParam('nope', 1)).not.toThrow();
   });
 });
+
+/*
+ * readCubic is the four-tap Catmull-Rom every pitched note reads through:
+ * SF2, SFZ, WAV, sampler and granular alike. Nothing measured it. The
+ * tests above cover loop wrap, loop crossfade, rate conversion, velocity
+ * layers and round robins, and each of those dies to its own mutation,
+ * but misaligning a tap (y0 reading data[i] instead of data[i - 1], or y3
+ * reading data[i + 1] instead of data[i + 2]) left all 1273 tests passing.
+ *
+ * That failure mode is added distortion on everything rather than a
+ * broken feature, which is exactly the kind a feature-shaped suite misses.
+ * Both gates below are black box, through the engine, so they cover the
+ * rate arithmetic and the read position as well as the four taps.
+ */
+describe('sampler interpolation', () => {
+  /** Play `data` as a zone, pitched by `key` so the read rate is irrational. */
+  function playAt(data: Float32Array, key: number, seconds = 0.2): Float32Array {
+    const def = makeSamplerEngine(bankWith(sineZone({ data, loopMode: 'none' })));
+    const freq = 440 * Math.pow(2, (key - 69) / 12);
+    return render(def, {
+      freq,
+      seconds,
+      params: { attack: 0, decay: 0, sustain: 1, release: 0.01, pan: 0 },
+    }).l;
+  }
+
+  it('is exact on a straight line, which Catmull-Rom is by construction', () => {
+    /*
+     * A cubic Catmull-Rom with centred tangents reproduces a linear
+     * function exactly, so resampling a ramp at any rate has to come back
+     * a ramp. Curvature is measured as the second difference relative to
+     * the step, which is blind to whatever gain and envelope scale it by.
+     *
+     * Measured 7.5e-4 to 1.6e-3, not zero because the sample data is
+     * Float32 and the output gain still smooths at note start. Either tap
+     * misalignment gives 2.7e-2 to 1.2e-1, so the gate sits about three
+     * times the measurement and five times under the nearest failure.
+     */
+    const data = new Float32Array(20000);
+    for (let i = 0; i < data.length; i++) data[i] = -0.5 + i / 20000;
+    for (const key of [70, 71, 76, 64]) {
+      const l = playAt(data, key);
+      let worst = 0;
+      let step = 0;
+      for (let i = 201; i < 3999; i++) {
+        worst = Math.max(worst, Math.abs(l[i - 1] - 2 * l[i] + l[i + 1]));
+        step = Math.max(step, Math.abs(l[i + 1] - l[i]));
+      }
+      expect(worst / step).toBeLessThan(5e-3);
+    }
+  });
+
+  it('reconstructs a resampled sine to within 4e-5 of the analytic answer', () => {
+    /*
+     * The zone holds a pure sine, so the correct output at read position
+     * p is exactly sin(w * p), and the sampler advances p by the playback
+     * rate every sample. The difference is therefore the interpolation
+     * error and nothing else.
+     *
+     * Measured 3.95e-6 relative at both rates, stable to three figures.
+     * Either tap misalignment gives 4.64e-3, which is 1175 times the
+     * measurement, so this gate at ten times the measurement leaves the
+     * failures two orders of magnitude clear of it.
+     */
+    for (const key of [70, 76]) {
+      const src = sineBuffer(440, 1.0, SR, 0.8);
+      const l = playAt(src, key);
+      const rate = Math.pow(2, (key - 69) / 12);
+      const w = (2 * Math.PI * 440) / SR;
+      let peakOut = 0;
+      for (let i = 500; i < 4000; i++) peakOut = Math.max(peakOut, Math.abs(l[i]));
+      let worst = 0;
+      for (let i = 500; i < 4000; i++) {
+        worst = Math.max(worst, Math.abs(l[i] - peakOut * Math.sin(w * i * rate)));
+      }
+      expect(worst / peakOut).toBeLessThan(4e-5);
+    }
+  });
+});

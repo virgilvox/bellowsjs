@@ -98,6 +98,33 @@ describe('OnsetDetector streaming', () => {
 });
 
 describe('estimateTempo', () => {
+  /*
+   * Every case here used 120 bpm, which sits in the middle of the search
+   * range and is unmoved by either end of it: raising TEMPO_HI from 150 to
+   * 190 passed the whole suite. What the range does is fold an estimate
+   * into one octave, so the gate is what happens either side of the fold.
+   *
+   * Measured: 70 doubles to 140, 145 stays, 155 halves to 77.5, 180 halves
+   * to 90. TEMPO_HI at 190 leaves 155 and 180 alone; TEMPO_LO at 60 leaves
+   * 70 alone.
+   */
+  it('folds an estimate into one octave, 75 up to 150', () => {
+    const clicks = (bpm: number): number[] =>
+      Array.from({ length: 48 }, (_, i) => (i * 60) / bpm);
+    const bpmOf = (x: number): number => estimateTempo(clicks(x))!.bpm;
+    expect(bpmOf(70)).toBeCloseTo(140, 0);
+    expect(bpmOf(80)).toBeCloseTo(80, 0);
+    expect(bpmOf(145)).toBeCloseTo(145, 0);
+    expect(bpmOf(155)).toBeCloseTo(77.5, 0);
+    expect(bpmOf(180)).toBeCloseTo(90, 0);
+    /* And the fold is the only thing moving them: every answer is the
+     * input times a power of two. */
+    for (const input of [70, 80, 145, 155, 180, 200]) {
+      const ratio = bpmOf(input) / input;
+      expect(Math.log2(ratio)).toBeCloseTo(Math.round(Math.log2(ratio)), 5);
+    }
+  });
+
   it('estimates 120 bpm from onset times within 2 bpm', () => {
     const onsets: number[] = [];
     for (let t = 0; t < 8; t += 0.5) onsets.push(t);

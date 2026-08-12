@@ -26,7 +26,7 @@ import { createKernelNode, type KernelNode } from './kernel/node';
 import type { FxSpec, KernelMessage, MeterFrame, SamplerZoneData } from './kernel/messages';
 import { renderOffline, type RenderedAudio } from './render/offline';
 import { bankEngineResolver } from './render/banks';
-import { registerBuiltins } from './core/register';
+import { registerBuiltins } from './register';
 import { encodeWav } from './io/wav';
 import { SoundFont } from './io/sf2';
 import { samplerBankFromSf2 } from './engines/soundfont';

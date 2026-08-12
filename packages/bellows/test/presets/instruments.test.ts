@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { registerBuiltins } from '../../src/core/register';
+import { registerBuiltins } from '../../src/register';
 import { getEngine } from '../../src/core/registry';
 import { renderOffline } from '../../src/render/offline';
 import { EventKind } from '../../src/types';

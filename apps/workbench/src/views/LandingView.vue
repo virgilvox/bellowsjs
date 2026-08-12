@@ -137,7 +137,7 @@ const b = await Bellows.boot();</code></pre>
           <li>One clock, one DSP kernel in an AudioWorklet. Events land sample-accurately on the audio thread, so timing survives a busy tab.</li>
           <li>Every random decision flows from named, seeded streams. A seed fully determines a piece, forever.</li>
           <li>Offline rendering runs the same kernel as live playback and produces identical output, which is also the test strategy: over a thousand behavioral tests run in plain Node, including golden-render diffs.</li>
-          <li>Synthesis: virtual analog (about -90 dB worst alias), FM with DX-style algorithms, additive, wavetable, granular, physical models, west coast, formant, drums, harmonic-plus-noise.</li>
+          <li>Synthesis: virtual analog (worst alias measured at -85 dB through the musical range, -73 dB at the top of the band), FM with DX-style algorithms, additive, wavetable, granular, physical models, west coast, formant, drums, harmonic-plus-noise.</li>
           <li>Samples: SF2 with real generator resolution, the SFZ subset free libraries use, velocity layers, round robins.</li>
           <li>Theory with any tuning: 30 plus scales, roman numerals, voice leading, negative harmony, any EDO, just intonation, Scala files.</li>
           <li>Effects and analysis: tape delay, FDN and plate reverbs, compressor, limiter, EQ, spectral suite; pitch tracking, onset detection, key estimation, EBU R128 loudness.</li>

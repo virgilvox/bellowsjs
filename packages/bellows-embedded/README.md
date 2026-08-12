@@ -187,7 +187,7 @@ plate         1.34e-5   1.00e-5  0.00015  pass
 
 34 rows in all, plus `npm run tables`, which compares the parts that make no sound
 (scales, chords, euclid, arp, cellular automata, the tempo map, MIDI parsing) exactly rather
-than by tolerance: 318 rows, 0 mismatched.
+than by tolerance: 348 rows, 0 mismatched.
 
 The theory row covers pitch rather than audio, because a wrong tuning table is silent and no
 test that listens to a buffer can catch it.

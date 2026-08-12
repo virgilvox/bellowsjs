@@ -44,6 +44,30 @@ export interface ParsedMidi {
 export interface ParseMidiOptions {
   /** Convert note on with velocity 0 to note off. Default true. */
   velocityZeroIsNoteOff?: boolean;
+  /**
+   * Most events accepted across the whole file, default 1000000. See
+   * DEFAULT_MAX_EVENTS.
+   */
+  maxEvents?: number;
+}
+
+/*
+ * Hostile-input ceiling. A standard MIDI file is untrusted input in the
+ * same way an SFZ file is, and 0.1.6 bounded that one. The shortest legal
+ * channel event is four bytes with running status, and each one becomes an
+ * object with a nested data object, so measured on a track of nothing else:
+ * 781 KiB of input retained 20.3 MB, an amplification of 26.6x. A 40 MB
+ * file, which nothing stops a page from fetching, retains about a gigabyte.
+ *
+ * A million events is far more than any real file: a dense orchestral score
+ * is tens of thousands, and the largest general MIDI sets in circulation
+ * are a few hundred thousand across all tracks. The bound is on the total
+ * so a file cannot split its way past it.
+ */
+const DEFAULT_MAX_EVENTS = 1_000_000;
+
+function finiteOption(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
 /* ------------------------------------------------------------------ */
@@ -143,12 +167,19 @@ function ascii(bytes: Uint8Array): string {
   return s;
 }
 
-function parseTrack(r: ByteReader, velocityZeroIsNoteOff: boolean): MidiFileEvent[] {
+function parseTrack(
+  r: ByteReader,
+  velocityZeroIsNoteOff: boolean,
+  budget: { left: number },
+): MidiFileEvent[] {
   const events: MidiFileEvent[] = [];
   let tick = 0;
   let running = 0;
 
   while (r.remaining > 0) {
+    if (budget.left-- <= 0) {
+      throw new Error('midi: event count exceeds maxEvents');
+    }
     tick += r.vlq();
     let status = r.peek();
     if (status < 0x80) {
@@ -166,13 +197,25 @@ function parseTrack(r: ByteReader, velocityZeroIsNoteOff: boolean): MidiFileEven
       if (metaType === 0x51 && len === 3) {
         const usPerQuarter = (body[0] << 16) | (body[1] << 8) | body[2];
         events.push({ tick, type: 'tempo', data: { usPerQuarter } });
-      } else if (metaType === 0x58 && len === 4) {
+      } else if (metaType === 0x58 && len === 4 && body[0] >= 1 && body[1] <= 15) {
         events.push({
           tick,
           type: 'timeSignature',
           data: {
             numerator: body[0],
-            denominator: 1 << body[1],
+            /*
+             * The byte is the exponent, and it is a byte: 0 to 255. `1 <<
+             * dd` masks the shift count to five bits, so 31 and 255 both
+             * came back as -2147483648 and 32 came back as 1. A negative
+             * or wrapped denominator then flowed into whatever read the
+             * meter. Math.pow does not wrap, and dd above 15 (a 1/32768
+             * note) is rejected above rather than believed: the event
+             * falls through to the generic meta case with its bytes
+             * intact, which is what a reader that cannot interpret a
+             * meta event is supposed to do. A numerator of 0 goes the
+             * same way.
+             */
+            denominator: Math.pow(2, body[1]),
             clocksPerClick: body[2],
             thirtySecondsPerQuarter: body[3],
           },
@@ -222,6 +265,7 @@ function parseTrack(r: ByteReader, velocityZeroIsNoteOff: boolean): MidiFileEven
 
 export function parseMidi(buf: ArrayBuffer, opts: ParseMidiOptions = {}): ParsedMidi {
   const velocityZeroIsNoteOff = opts.velocityZeroIsNoteOff ?? true;
+  const budget = { left: finiteOption(opts.maxEvents, DEFAULT_MAX_EVENTS) };
   const bytes = new Uint8Array(buf);
   const r = new ByteReader(bytes);
 
@@ -251,7 +295,7 @@ export function parseMidi(buf: ArrayBuffer, opts: ParseMidiOptions = {}): Parsed
       continue;
     }
     const trackReader = new ByteReader(bytes, r.pos, r.pos + len);
-    tracks.push(parseTrack(trackReader, velocityZeroIsNoteOff));
+    tracks.push(parseTrack(trackReader, velocityZeroIsNoteOff, budget));
     r.pos += len;
   }
   if (tracks.length !== trackCount) {

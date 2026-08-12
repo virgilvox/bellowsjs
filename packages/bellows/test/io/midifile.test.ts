@@ -316,3 +316,117 @@ describe('toScore', () => {
     expect(drum?.durBeats).toBe(0.5);
   });
 });
+
+/*
+ * A time signature carries its denominator as an exponent byte, and the
+ * byte is unvalidated input. `1 << dd` masks the shift to five bits, so
+ * dd 31 and dd 255 both produced -2147483648 and dd 32 produced 1. The
+ * parser rejects malformed input everywhere else and believed this.
+ */
+describe('time signature denominator', () => {
+  function fileWithTimeSig(numerator: number, shift: number): ArrayBuffer {
+    const track = [0x00, 0xff, 0x58, 0x04, numerator, shift, 24, 8, 0x00, 0xff, 0x2f, 0x00];
+    return new Uint8Array([
+      0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xe0,
+      0x4d, 0x54, 0x72, 0x6b, 0, 0, 0, track.length,
+      ...track,
+    ]).buffer;
+  }
+  const eventFor = (num: number, shift: number) =>
+    parseMidi(fileWithTimeSig(num, shift)).tracks[0].find(
+      (e) => e.type === 'timeSignature' || (e.type === 'meta' && e.data.metaType === 0x58),
+    )!;
+
+  it('reads the usual meters', () => {
+    for (const [shift, denom] of [[0, 1], [1, 2], [2, 4], [3, 8], [4, 16], [7, 128]] as const) {
+      const e = eventFor(4, shift);
+      expect(e.type).toBe('timeSignature');
+      expect((e.data as { denominator: number }).denominator).toBe(denom);
+    }
+  });
+
+  it('never returns a wrapped or negative denominator', () => {
+    for (let shift = 0; shift <= 255; shift++) {
+      const e = eventFor(4, shift);
+      if (e.type !== 'timeSignature') continue;
+      const d = (e.data as { denominator: number }).denominator;
+      expect(d, `shift ${shift}`).toBeGreaterThan(0);
+      expect(Number.isFinite(d), `shift ${shift}`).toBe(true);
+      expect(Math.log2(d), `shift ${shift}`).toBe(shift);
+    }
+  });
+
+  it('hands an uninterpretable meter back as raw meta rather than inventing one', () => {
+    /* dd above 15 is a 1/65536 note or smaller, and a numerator of 0 is no
+     * meter at all. Both come back as the generic meta event with their
+     * bytes intact, which is what a reader that cannot interpret a meta
+     * event is supposed to do. */
+    for (const [num, shift] of [[4, 16], [4, 31], [4, 32], [4, 255], [0, 2]] as const) {
+      const e = eventFor(num, shift);
+      expect(e.type, `numerator ${num}, shift ${shift}`).toBe('meta');
+      expect((e.data as { bytes: Uint8Array }).bytes.length).toBe(4);
+    }
+  });
+});
+
+/*
+ * A standard MIDI file is untrusted input in the browser in the same way an
+ * SFZ file is, and 0.1.6 bounded that one and not this one. The shortest
+ * legal channel event is four bytes with running status and becomes an
+ * object holding another object, so measured on a track of nothing else,
+ * 781 KiB of input retained 20.3 MB: 26.6 times its own size.
+ */
+describe('parseMidi input ceiling', () => {
+  function noteSpam(events: number): ArrayBuffer {
+    const track: number[] = [];
+    for (let i = 0; i < events; i++) track.push(0x00, 0x90, 60, 100);
+    track.push(0x00, 0xff, 0x2f, 0x00);
+    const n = track.length;
+    return new Uint8Array([
+      0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xe0,
+      0x4d, 0x54, 0x72, 0x6b, (n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255,
+      ...track,
+    ]).buffer;
+  }
+
+  it('parses a file inside the budget', () => {
+    const p = parseMidi(noteSpam(500), { maxEvents: 1000 });
+    expect(p.tracks[0].length).toBe(501); // the note ons plus end of track
+  });
+
+  it('refuses a file past the budget, by name', () => {
+    expect(() => parseMidi(noteSpam(2000), { maxEvents: 1000 })).toThrow(/maxEvents/);
+  });
+
+  it('counts across tracks, so a file cannot split its way past the budget', () => {
+    /* Four tracks of 400 events each is 1600, past a budget of 1000, even
+     * though no single track reaches it. */
+    const per: number[] = [];
+    for (let i = 0; i < 400; i++) per.push(0x00, 0x90, 60, 100);
+    per.push(0x00, 0xff, 0x2f, 0x00);
+    const n = per.length;
+    const bytes = [0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 1, 0, 4, 0x01, 0xe0];
+    for (let t = 0; t < 4; t++) {
+      bytes.push(0x4d, 0x54, 0x72, 0x6b, (n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255, ...per);
+    }
+    const buf = new Uint8Array(bytes).buffer;
+    expect(() => parseMidi(buf, { maxEvents: 1000 })).toThrow(/maxEvents/);
+    expect(parseMidi(buf, { maxEvents: 5000 }).tracks.length).toBe(4);
+  });
+
+  it('treats a non-finite budget as absent rather than as zero', () => {
+    /* Number(config.maxEvents) on a missing field is NaN, and every
+     * comparison against NaN is false. Left unvalidated that either
+     * disables the limit or rejects everything, depending on which way the
+     * comparison runs. Same resolution as the SFZ limits. */
+    for (const bad of [NaN, Infinity, undefined as unknown as number]) {
+      expect(parseMidi(noteSpam(50), { maxEvents: bad }).tracks[0].length, String(bad)).toBe(51);
+    }
+  });
+
+  it('has a default that admits a large real file', () => {
+    /* 200000 events is larger than any general MIDI set in circulation and
+     * has to parse with no options at all. */
+    expect(parseMidi(noteSpam(200_000)).tracks[0].length).toBe(200_001);
+  });
+});

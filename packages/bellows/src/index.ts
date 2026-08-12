@@ -34,7 +34,7 @@ export {
 /* core */
 export { rng, xmur3, mulberry32 } from './core/prng';
 export { registerEngine, registerEffect, getEngine, getEffect, listEngines, listEffects } from './core/registry';
-export { registerBuiltins } from './core/register';
+export { registerBuiltins } from './register';
 export { VoicePool } from './core/voicepool';
 export { Scheduler } from './core/scheduler';
 
@@ -56,7 +56,35 @@ export * from './seq/markov';
 export * from './seq/lsystem';
 export * from './seq/automata';
 export * from './seq/arp';
-export * from './seq/pattern';
+/*
+ * Listed rather than starred, because seq/pattern and seq/euclid both
+ * export `rotate` and the two build outputs did not agree about which one
+ * won. Measured at 0979944: the source barrel gave the pattern combinator
+ * and dist/bellows.js gave the array function, so `b.rotate` on
+ * bellows.live and `b.rotate` from npm were different functions with
+ * incompatible arguments. The spec says the explicit export wins and dist
+ * was right, but a barrel whose meaning depends on the bundler is the
+ * defect, not whichever side lost.
+ *
+ * So the names are distinct now and every toolchain has to agree. `rotate`
+ * stays the array one, which is what npm has always shipped and what pairs
+ * with euclid's rotation argument; the pattern combinator is rotatePattern.
+ * test/integration/package.test.ts gates both halves: that every starred
+ * module stays fully reachable, and that the source barrel and the built
+ * bundle export the same things.
+ */
+export {
+  fromArray,
+  seq,
+  gates,
+  stack,
+  every,
+  sometimes,
+  fast,
+  slow,
+  rev,
+  rotate as rotatePattern,
+} from './seq/pattern';
 
 /* dsp */
 export * from './dsp/oscillators';

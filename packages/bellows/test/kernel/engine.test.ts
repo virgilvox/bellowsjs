@@ -87,6 +87,64 @@ describe('kernel engine', () => {
     expect(l[201]).toBeGreaterThan(0);
   });
 
+  /*
+   * The test above, and every other event test here, uses a whole number
+   * of samples, where round, floor and ceil all agree. So none of them can
+   * see which one the kernel uses: changing Math.round to Math.floor in
+   * process() left all 1273 tests passing. That is the property CLAUDE.md
+   * names as the reason voices take (l, r, from, to) ranges at all, and
+   * the golden render cannot cover it either, because its events also sit
+   * on exact sample boundaries.
+   *
+   * Rounding to nearest is what the kernel does and what it should do: a
+   * request is served by the sample closest to it, so the worst placement
+   * error is half a sample rather than a whole one.
+   *
+   * The exact half-way case is deliberately not asserted. Events carry
+   * seconds, so reaching it needs frames / sr * sr to land back on .5, and
+   * at 48000 it does not: 200.5 / 48000 * 48000 is 200.49999999999997 and
+   * rounds down. Gating that would gate the round trip's luck at one
+   * sample rate rather than the kernel's rule.
+   */
+  it('rounds a fractional event time to the nearest sample, not down or up', () => {
+    const firstSounding = (frames: number): number => {
+      const k = boot();
+      k.apply({ type: 'events', events: [
+        { time: frames / 48000, kind: EventKind.NoteOn, target: 0, a: 1, b: 440, c: 1 },
+      ] });
+      const { l } = run(k, 3);
+      for (let i = 0; i < l.length; i++) if (l[i] !== 0) return i;
+      return -1;
+    };
+    /* floor would give 200 for the middle four; ceil would give 201 for
+     * 200.2 and 200.49. Only round produces this column. */
+    expect(firstSounding(200)).toBe(200);
+    expect(firstSounding(200.2)).toBe(200);
+    expect(firstSounding(200.49)).toBe(200);
+    expect(firstSounding(200.6)).toBe(201);
+    expect(firstSounding(200.8)).toBe(201);
+    expect(firstSounding(201)).toBe(201);
+  });
+
+  it('rounds every event in a block, not just the first', () => {
+    /* The split loop reuses `from` across events, so an event placed
+     * inside the block has to be rounded against the block, not against
+     * the previous split point. Three note ons and two note offs land at
+     * five different fractional positions inside one 128 sample block. */
+    const k = boot();
+    k.apply({ type: 'events', events: [
+      { time: 10.6 / 48000, kind: EventKind.NoteOn, target: 0, a: 1, b: 440, c: 1 },
+      { time: 40.4 / 48000, kind: EventKind.NoteOff, target: 0, a: 1, b: 0, c: 0 },
+      { time: 70.5 / 48000, kind: EventKind.NoteOn, target: 0, a: 2, b: 440, c: 1 },
+      { time: 100.2 / 48000, kind: EventKind.NoteOff, target: 0, a: 2, b: 0, c: 0 },
+      { time: 120.9 / 48000, kind: EventKind.NoteOn, target: 0, a: 3, b: 440, c: 1 },
+    ] });
+    const { l } = run(k, 2);
+    const edges: number[] = [];
+    for (let i = 1; i < 200; i++) if ((l[i] !== 0) !== (l[i - 1] !== 0)) edges.push(i);
+    expect(edges).toEqual([11, 40, 71, 100, 121]);
+  });
+
   it('stops at note off, sample accurate', () => {
     const k = boot();
     k.apply({ type: 'events', events: [
@@ -169,6 +227,30 @@ describe('kernel engine', () => {
     const a = render();
     const b = render();
     expect(a).toEqual(b);
+  });
+
+  it('starts at a master gain of 0.9 when nothing sets one', () => {
+    /*
+     * Bellows.boot only posts masterGain when the caller passes one, so
+     * the kernel's constructor default is what a plain boot plays at. It
+     * was observable by nothing: every test here and every golden render
+     * sets the gain explicitly, so changing 0.9 to 0.7 passed the suite
+     * while quietly making everybody's default output 2 dB quieter.
+     *
+     * 0.9 leaves a little room under full scale for a sum of voices
+     * without being an audible attenuation.
+     */
+    const k = new KernelEngine(48000);
+    k.apply({ type: 'createChannel', id: 0, engineId: 'test-dc', params: { amp: 0.5 }, seed: 's' });
+    k.apply({ type: 'channelGain', id: 0, gain: 1 });
+    k.apply({ type: 'events', events: [
+      { time: 0, kind: EventKind.NoteOn, target: 0, a: 1, b: 440, c: 1 },
+    ] });
+    /* The dc engine emits amp * vel = 0.5 into both channels, the pan law
+     * is equal power at unity in the centre, so the only thing left is
+     * the master gain. Read late, after every ramp has settled. */
+    const { l } = run(k, 40);
+    expect(l[40 * 128 - 1]).toBeCloseTo(0.5 * 0.9, 4);
   });
 
   it('equal power pan moves energy between channels', () => {

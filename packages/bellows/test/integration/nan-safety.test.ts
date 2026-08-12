@@ -31,7 +31,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { registerBuiltins } from '../../src/core/register';
+import { registerBuiltins } from '../../src/register';
 import { listEngines } from '../../src/core/registry';
 import { VoicePool } from '../../src/core/voicepool';
 import { rng } from '../../src/core/prng';

@@ -331,3 +331,57 @@ describe('decodeWav fixtures', () => {
     expect(decoded.channels[0][0]).toBeCloseTo(0.5, 6);
   });
 });
+
+/*
+ * numChannels is an unbounded uint16 in the header and every channel
+ * becomes its own Float32Array, so the per-object overhead amplifies
+ * rather than the sample data: measured, a 64 KiB file declaring 65535
+ * channels of one frame each retained 13.6 MB, 217 times its own size.
+ */
+describe('decodeWav channel ceiling', () => {
+  function wavWithChannels(channels: number, dataBytes = 64): ArrayBuffer {
+    const n = 44 + dataBytes;
+    const b = new Uint8Array(n);
+    const v = new DataView(b.buffer);
+    const put = (o: number, s: string) => {
+      for (let i = 0; i < s.length; i++) b[o + i] = s.charCodeAt(i);
+    };
+    put(0, 'RIFF');
+    v.setUint32(4, n - 8, true);
+    put(8, 'WAVE');
+    put(12, 'fmt ');
+    v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true);
+    v.setUint16(22, channels, true);
+    v.setUint32(24, 44100, true);
+    v.setUint32(28, 44100 * channels, true);
+    v.setUint16(32, channels, true);
+    v.setUint16(34, 8, true);
+    put(36, 'data');
+    v.setUint32(40, dataBytes, true);
+    return b.buffer;
+  }
+
+  it('decodes an ordinary channel count', () => {
+    expect(decodeWav(wavWithChannels(2)).channels.length).toBe(2);
+    expect(decodeWav(wavWithChannels(8)).channels.length).toBe(8);
+  });
+
+  it('refuses a header claiming more channels than the ceiling, by name', () => {
+    expect(() => decodeWav(wavWithChannels(65535))).toThrow(/maxChannels/);
+    expect(() => decodeWav(wavWithChannels(300))).toThrow(/maxChannels/);
+  });
+
+  it('admits the default ceiling exactly, and one past it fails', () => {
+    expect(decodeWav(wavWithChannels(256, 256)).channels.length).toBe(256);
+    expect(() => decodeWav(wavWithChannels(257, 257))).toThrow(/maxChannels/);
+  });
+
+  it('takes a caller ceiling, and treats a non-finite one as absent', () => {
+    expect(decodeWav(wavWithChannels(300, 300), { maxChannels: 512 }).channels.length).toBe(300);
+    expect(() => decodeWav(wavWithChannels(4), { maxChannels: 2 })).toThrow(/maxChannels/);
+    for (const bad of [NaN, Infinity, undefined as unknown as number]) {
+      expect(decodeWav(wavWithChannels(2), { maxChannels: bad }).channels.length, String(bad)).toBe(2);
+    }
+  });
+});
