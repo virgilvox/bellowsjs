@@ -174,7 +174,17 @@ static void PrintHeader() {
   Serial.println(" per second");
 
   Label("cpu clock");
+  /* F_CPU_ACTUAL is the real, possibly overclocked figure and exists only
+   * on the 4.x cores. The 3.x cores have the compile-time F_CPU and no way
+   * to ask the part what it settled on, so they get that instead. Without
+   * this the sketch simply did not compile for Teensy 3.x, which made the
+   * one program written to be run first on a new board unavailable on four
+   * of the seven boards the library builds for. */
+#if defined(F_CPU_ACTUAL)
   Serial.print(F_CPU_ACTUAL / 1000000);
+#else
+  Serial.print(F_CPU / 1000000);
+#endif
   Serial.println(" MHz");
 
   Label("audio blocks");

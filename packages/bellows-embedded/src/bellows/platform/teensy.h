@@ -1,4 +1,4 @@
-/* Teensy 4.x glue: one custom AudioStream node that runs a bellows render.
+/* Teensy glue: one custom AudioStream node that runs a bellows render.
  *
  * The Teensy Audio Library is a graph of AudioStream objects. Every 128
  * frames a software interrupt walks the graph and calls update() on each
@@ -75,7 +75,17 @@ inline int16_t ToInt16(float x) {
 }  // namespace detail
 }  // namespace bellows
 
-#if defined(__IMXRT1062__)
+/* TEENSYDUINO rather than __IMXRT1062__, which is what this used to say.
+ *
+ * Nothing below is specific to the 4.x part. The Audio Library's contract
+ * (allocate, fill data, transmit, release) and the AudioStream base class
+ * are identical on every board the library supports, so the 4.x-only guard
+ * excluded Teensy 3.2, 3.5 and 3.6 from a header that would have compiled
+ * for them unchanged. Verified by building: see examples/README.md for the
+ * board matrix and what "builds" does and does not mean.
+ *
+ * What IS part specific is PSRAM, and that stays guarded below. */
+#if defined(TEENSYDUINO)
 
 #include <Audio.h>
 
@@ -88,12 +98,16 @@ namespace bellows {
 inline constexpr int kTeensyBlockSize = AUDIO_BLOCK_SAMPLES;
 inline float TeensySampleRate() { return AUDIO_SAMPLE_RATE_EXACT; }
 
-/* Attribute for buffers that belong in PSRAM. Defined only when the Teensy
- * core is present, deliberately with no off-target fallback: a fallback
- * would quietly drop a megabyte of delay line into 512 KB of internal RAM
- * and the sketch would fail at link time with a far less obvious error. */
+/* Attribute for buffers that belong in PSRAM, which only the 4.x parts
+ * have. Deliberately left undefined elsewhere rather than given an empty
+ * fallback: an empty one would quietly drop a megabyte of delay line into
+ * the 256 KB of a Teensy 3.6 and fail at link time with a far less obvious
+ * error than "BELLOWS_BIG_BUFFER was not declared". A 3.x sketch that wants
+ * a long delay should size it for the RAM the board has. */
+#if defined(__IMXRT1062__)
 #ifndef BELLOWS_BIG_BUFFER
 #define BELLOWS_BIG_BUFFER EXTMEM
+#endif
 #endif
 
 namespace detail {
@@ -175,4 +189,4 @@ class BellowsAudioStream : public AudioStream {
 
 }  // namespace bellows
 
-#endif  // __IMXRT1062__
+#endif  // TEENSYDUINO

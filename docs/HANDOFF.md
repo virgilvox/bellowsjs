@@ -31,6 +31,13 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 1. **Nothing has been flashed to a board and listened to.** Everything is compile-verified,
    link-verified and numerically verified against the TypeScript. That is a strong position and
    it is not the same as having heard it. Assume the first bring-up finds something.
+
+   As of the output-example set this is verified across seven boards rather than one: every
+   example is built and linked as real firmware, with the Arduino core and the audio library
+   in it, for Teensy LC, 3.2, 3.5, 3.6, 4.0, 4.1 and MicroMod. `examples/README.md` has the
+   matrix and it is a build log, not a reading of data sheets. It still says nothing about
+   whether any of those boards is fast enough, and for the two without a floating point unit
+   (LC and 3.2) that gap is the whole question.
 2. **CI runs now, and this item used to say it never had.** It was true when written and stayed
    in the document after it stopped being true. `gh run list` shows green runs on push to `main`
    and on `workflow_dispatch`, across six jobs. So the stale-worklet guard, the generated-header
@@ -80,6 +87,42 @@ Known and deliberately not gated: `HANN_N`, the grain envelope's table resolutio
 observable only on very short grains and the size of the effect moved with every other
 parameter tried, so the note is better than a fragile gate.
 
+## The output examples, and what a piezo needs
+
+`examples/10` through `examples/15` are one sketch per way of getting sound out of the board:
+the audio shield, an I2S breakout (a MAX98357A drives a speaker directly, a PCM5102A gives
+line out), the built-in DAC on the 3.x parts, a bare Teensy with two resistors and two caps,
+and a piezo disc. They share one patch, `10_AudioShield/audioshield.h`, so comparing them
+compares converters rather than programs. `examples/OUTPUTS.md` is the chooser.
+
+Three things in there are worth knowing before touching that code.
+
+**The platform header was Teensy 4.x only and did not need to be.** `platform/teensy.h` was
+guarded `#if defined(__IMXRT1062__)`, which excluded Teensy 3.2, 3.5 and 3.6 from a header
+that compiles for them unchanged: nothing in `BellowsAudioStream` is part specific. It is
+guarded on `TEENSYDUINO` now, and PSRAM (`BELLOWS_BIG_BUFFER`) stays 4.x only, deliberately
+with no fallback so that a 3.x sketch asking for a megabyte fails at the macro rather than at
+the linker.
+
+**`00_BringUp` did not build for the boards it exists to bring up.** One symbol,
+`F_CPU_ACTUAL`, which is 4.x only. The program written to be run first on a new board was
+unavailable on four of the seven boards the library builds for. It falls back to `F_CPU` now.
+
+**The delay line is the RAM, and the floor is the delay line.** A Karplus-Strong string sized
+for a 20 Hz floor is 9.6 KB of float per voice at 48 kHz; four voices is 38 KB, and a Teensy
+3.2 has 64 KB with the audio library already in it. The shared patch overflowed by 61540 bytes
+before it knew what board it was on. Raising the floor to 100 Hz costs five times less per
+voice and costs nothing else as long as no note goes below it, which is why that header picks
+its floor and voice count from board macros. Teensy LC does not fit even then, measured: over
+by 10048 bytes.
+
+The piezo work is the one part of this that is reasoning rather than measurement, and
+`OUTPUTS.md` says so in those words. A disc is a capacitor with a sharp resonance and no bass,
+so the chain is: drive it differentially across two pins for 6 dB that costs nothing, remove
+everything below about 1.2 kHz because the limiter cannot tell that the disc will never
+reproduce it, boost the resonance, and limit hard because there is no headroom to protect.
+Nobody has held a meter to a disc driven by this code.
+
 ## Layout
 
 - `packages/bellows` is the library and the source of truth for all DSP. Dependency direction, enforced by review not tooling: `types` and `core` at the bottom, then `dsp`, then `engines`/`fx`/`analysis`, then `kernel`/`io`/`render`, then the `bellows.ts` facade. `theory` and `seq` are audio-free.
@@ -103,7 +146,7 @@ Run all of them from `packages/bellows-embedded` unless noted.
 | `npm run size` | flash and RAM per sketch, `cortex-m7` or `cortex-m4` | the whole no-registry design argument |
 | `./tools/check-header.sh <h>` | one header compiles standalone, `-Wall -Wextra` | header hygiene; note it instantiates nothing |
 | `node tools/gen-tables.mjs --check` | generated headers match the TypeScript ParamSpecs | new `Eq6` class the moment it appeared |
-| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md` and `docs/ENGINEERING.md`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath` and `vitest list`: 367 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
+| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md` and `docs/ENGINEERING.md`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath` and `vitest list`: 371 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
 | `npx vitest run test/integration/engine-tuning.test.ts` | every pitched engine plays the note it was given, to 2 cents | proves the fractional-delay tuning is real: an integer-rounded loop is 28 cents flat at E7 |
 | `npx vitest run test/integration/nan-safety.test.ts` | one NaN parameter cannot break the audio graph | 10 parameters threw inside `process()` and 191 poisoned the output before it existed |
 

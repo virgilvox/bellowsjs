@@ -441,6 +441,16 @@ const README_ROWS = [
   { marker: '| through a string-keyed registry of five engines |', sketch: 's6_registry', cols: ['flash', 'ram'] },
 ];
 
+/* examples/OUTPUTS.md. The shared patch behind examples 10 to 15 and the
+ * piezo voicing on top of it. Both sketches pin AUDIOSHIELD_MIN_HZ so they
+ * measure the four-voice configuration a Teensy 4.x compiles, rather than
+ * the two-voice small-board one a freestanding build would otherwise
+ * select by seeing none of the board macros. */
+const OUTPUTS_ROWS = [
+  { marker: '| `p9_e10_chord` the shared patch |', sketch: 'p9_e10_chord', cols: ['flash', 'ram'] },
+  { marker: '| `p10_e15_piezo` plus the piezo voicing |', sketch: 'p10_e15_piezo', cols: ['flash', 'ram'] },
+];
+
 /* examples/README.md. Same five logic headers the p4 to p8 sketches
  * compile, and the file says so in a paragraph that was true while four of
  * its five rows had drifted anyway. */
@@ -456,6 +466,11 @@ const DOCS = [
   { path: join(REPO, 'docs', 'HARDWARE.md'), label: 'docs/HARDWARE.md', rows: HARDWARE_ROWS, parity: true, tables: true },
   { path: join(PKG, 'README.md'), label: 'README.md', rows: README_ROWS, parity: true },
   { path: join(PKG, 'examples', 'README.md'), label: 'examples/README.md', rows: EXAMPLES_ROWS },
+  /* examples/OUTPUTS.md. The two costs it quotes for the shared output
+   * patch and its piezo voicing, from the sketches that compile those
+   * exact headers. Registered on the day the document was written rather
+   * than at the next audit, which is the rule the note above learned. */
+  { path: join(PKG, 'examples', 'OUTPUTS.md'), label: 'examples/OUTPUTS.md', rows: OUTPUTS_ROWS },
   /* No tables, but it states the figures the no-registry rule rests on,
    * and it is the document a new session reads first. Both were stale. */
   { path: join(REPO, 'docs', 'HANDOFF.md'), label: 'docs/HANDOFF.md', rows: [] },

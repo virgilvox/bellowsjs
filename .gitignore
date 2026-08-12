@@ -9,3 +9,8 @@ packages/bellows-embedded/test/parity/build/
 packages/bellows-embedded/test/safety/build/
 packages/bellows-embedded/examples/daisy_onekick/build/
 .pio/
+
+# PlatformIO writes <sketch>.ino.cpp next to the .ino when it builds a
+# folder through PLATFORMIO_SRC_DIR, which examples/build-matrix.sh does 77
+# times. They are generated and identical to the .ino they sit beside.
+packages/bellows-embedded/examples/**/*.ino.cpp

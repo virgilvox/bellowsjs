@@ -1,9 +1,19 @@
 # examples
 
-Five sketches in Arduino layout, ordered so each one adds a single idea.
-Every one is a real program: it compiles, it links as Teensy 4.1 firmware,
-and its cost is measured rather than estimated. None of them has been
-flashed to a board and listened to, which is what `00_BringUp` is for.
+Two sets of sketches in Arduino layout.
+
+**01 to 05 teach the library**, ordered so each one adds a single idea.
+**10 to 15 get sound out of the board**, one per output path: the audio
+shield, an I2S amplifier or DAC breakout, the built-in DAC, a bare Teensy
+with four passive parts, and a piezo disc. If you are trying to hear
+something for the first time, start at `10_AudioShield` if you own the
+shield and `11_I2SAmp` if you are buying something. `OUTPUTS.md` is the
+guide to choosing, and has the piezo reasoning.
+
+Every one is a real program: it compiles and links as firmware for the
+boards in the matrix below, and its cost is measured rather than estimated.
+None of them has been flashed to a board and listened to, which is what
+`00_BringUp` is for.
 
 Start with `00_BringUp`, which is not one of the five. It is the checklist
 for the first session with a board in hand: it prints the real sample rate,
@@ -21,6 +31,18 @@ against a fixed voice budget. See `00_BringUp/README.md`.
 | 04_ScalesAndTuning | the theory layer, 12-EDO against 19-EDO | 8096 B | 30176 B |
 | 05_MidiInstrument | MIDI byte parsing into a voice pool | 30616 B | 3888 B |
 
+The output examples share one patch, `10_AudioShield/audioshield.h`, so
+that comparing them compares converters rather than programs. Its cost and
+the piezo voicing's are in `OUTPUTS.md`.
+
+| example | output path | boards |
+| --- | --- | --- |
+| 10_AudioShield | SGTL5000 over I2S | 3.2, 3.5, 3.6, 4.0, 4.1, MicroMod |
+| 11_I2SAmp | I2S breakout, no codec to configure | 3.2, 3.5, 3.6, 4.0, 4.1, MicroMod |
+| 12_DacOut | the built-in 12 bit DAC | 3.2, 3.5, 3.6 only, 4.x has no DAC |
+| 13_BareOutput | MQS on 4.x, PWM on 3.x, into an RC filter | all but LC |
+| 15_Piezo | a piezo disc driven differentially | all but LC |
+
 Cortex-M7 at `-Os` with `--gc-sections`, library only: no Arduino core and
 no audio library, so these are the bellows half of the binary and nothing
 else. Reproduce them with `./tools/size-report.sh`, rows `p4_` through
@@ -33,6 +55,56 @@ tables are about 16 KB and are paid once no matter how many voices use
 them. 04 is 8096 B of flash because a plucked string needs no such table, and its
 30176 B of RAM is the delay line that is the string. That spread is the whole
 argument for one header per concept.
+
+## Which boards, measured by building
+
+Every cell is a firmware build with the Arduino core and the audio library
+in it, produced by `./build-matrix.sh`, which is 77 builds and takes about
+an hour. `ok NN%` is RAM used, which is the number that decides whether a
+patch fits.
+
+| example | LC | 3.2 | 3.5 | 3.6 | 4.0 | 4.1 | MicroMod |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 00_BringUp | RAM | 28.2% | 7.1% | 7.3% | ok | ok | ok |
+| 01_OneKick | 81.6% | 18.1% | 4.6% | 4.7% | ok | ok | ok |
+| 02_DrumMachine | 88.1% | 19.0% | 4.8% | 4.9% | ok | ok | ok |
+| 03_PolySynth | RAM | 24.0% | 6.0% | 6.2% | ok | ok | ok |
+| 04_ScalesAndTuning | RAM | 62.5% | 15.7% | 15.8% | ok | ok | ok |
+| 05_MidiInstrument | RAM | 24.6% | 6.2% | 6.3% | ok | ok | ok |
+| 10_AudioShield | RAM | 36.1% | 48.7% | 48.9% | ok | ok | ok |
+| 11_I2SAmp | RAM | 34.8% | 48.4% | 48.4% | ok | ok | ok |
+| 12_DacOut | RAM | 34.7% | 48.7% | 48.7% | n/a | n/a | n/a |
+| 13_BareOutput | RAM | 35.5% | 48.6% | 48.6% | ok | ok | ok |
+| 15_Piezo | RAM | 43.7% | 50.6% | 50.6% | ok | ok | ok |
+
+`RAM` is the linker refusing: `region RAM overflowed`. `n/a` is the sketch
+declining on purpose, with an `#error` that says why: Teensy 4.x has no DAC
+at all, so `12_DacOut` cannot exist there and says so rather than failing
+somewhere deep in a header.
+
+Reading it:
+
+- **Teensy 4.0, 4.1, MicroMod** run everything with room to spare.
+- **Teensy 3.5 and 3.6** run everything. The output examples sit near 49
+  percent because they carry four strings tuned down to 20 Hz; that is a
+  choice in `audioshield.h`, not a floor.
+- **Teensy 3.2** runs everything, and 04_ScalesAndTuning at 62.5 percent is
+  the tightest fit here. It has 64 KB.
+- **Teensy LC** runs two of the eleven, at 81.6 and 88.1 percent of its
+  8 KB. It is not a board to plan a synth around.
+
+The 3.5 and 3.6 columns being *higher* than the 3.2 column on rows 10
+through 15 is not an error. `audioshield.h` picks a 20 Hz floor and four
+voices where there is room and a 100 Hz floor and two voices where there is
+not, so those rows are not the same patch. `OUTPUTS.md` explains why that
+one number dominates embedded RAM.
+
+**None of this says any board is fast enough.** A build proves the code is
+valid for the part and fits in its memory. Teensy LC and Teensy 3.2 have no
+floating point unit and this is a float DSP library, so they emulate every
+operation in software. Whether they keep up has never been measured on
+hardware, and neither has anything else here: see "What builds means" in
+`OUTPUTS.md`.
 
 ## Layout
 
