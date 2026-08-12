@@ -10,10 +10,15 @@ suite, and a render-and-diff for every mutant that survived. Where a finding res
 rather than on a number, it says so.
 
 Round one found mostly missing gates around code that was right, plus one wrong number on the
-front page of the npm listing. Round two instrumented what round one had only read, and that
-turned up the one thing here that was actually broken in the shipped product: `b.rotate` was
-the array function in the published package and the pattern combinator on bellows.live,
-because two modules exported the name and the two builds resolved it differently.
+front page of the npm listing. Round two instrumented what round one had only read, and found
+that two modules both export `rotate` and that vite's transform and Rollup resolved the
+collision differently: the test suite and the dev server saw one function, both shipped
+artefacts saw the other, and the pattern combinator was reachable from neither.
+
+Round three checked the deployed site instead of reasoning about it, and that corrected round
+two: the claim that bellows.live and npm shipped different functions was wrong. Both ship the
+array one. The correction is in finding 14, where the original wording is quoted rather than
+quietly replaced.
 
 Three of round two's findings came from catching this audit's own instruments lying. A worklet
 harness froze the context clock and two of its tests passed anyway; a module-cache hit reported
@@ -43,14 +48,20 @@ published package than on bellows.live. Everything is fixed now.
 | 11 | MIDI denominator can be negative | fixed, 4 tests |
 | 12 | Eight dev-tooling advisories | vitest 4, zero advisories, build byte-identical |
 | 13 | `splice` on the audio thread | `copyWithin` and a length assignment |
-| 14 | `rotate` is two different functions | **found in round two**, fixed, gated both ways |
+| 14 | `rotate` resolves differently under vite than Rollup | **found in round two**, fixed, gated; severity corrected in round three |
 | 15 | Realtime never compared to offline | **found in round two**, now bit-exact, 9 tests |
 | 16 | Shelf corner frequency not gated | **found in round two**, 2 tests, an octave of error |
 | 17 | Six analysis constants not gated | **found in round two**, 6 tests, both sides each |
 | 18 | `yin(buf, sr, NaN)` goes deaf silently | **found in round two**, fixed |
+| 19 | Block size was never varied | **round three**, 4 tests, bit exact 32 to 512 |
+| 20 | The four Dattorro constants not gated | **round three**, 4 tests, each isolated |
+| 21 | Grain pool size not gated | **round three**, 2 tests |
+| 22 | Voice stealing order not gated | **round three**, 7 tests |
+| 23 | The 49 site examples checked by nothing | **round three**, a script, in CI |
 
-The suite went from 1273 tests in 85 files to 1330 in 88, and the value-parity harness
-from 318 rows to 348. `npm audit` went from 8 advisories to none.
+The suite went from 1273 tests in 85 files to 1348 in 90, and the value-parity harness from
+318 rows to 348. `npm audit` went from 8 advisories to none. Across three rounds, 68 hand
+written mutations were run against the whole suite; the ones that lived are the findings.
 
 ## What was measured, and what came back clean
 
@@ -395,18 +406,36 @@ Round one instrumented the gates and read the rest. Round two instrumented the r
 `packages/bellows/src/index.ts`
 
 `seq/euclid` exports `rotate(arr, n)` and `seq/pattern` exports `rotate(p, n)`. The barrel
-took the first by name and the second through `export * from './seq/pattern'`. Measured:
+took the first by name and the second through `export * from './seq/pattern'`. Measured on the
+code as it stood at 59a5093:
 
 ```
-source barrel  rotate -> the PATTERN combinator   (=== pattern.rotate)
-dist ESM       rotate -> the ARRAY function       (=== euclid.rotate)
+vite-node on src/index.ts   rotate -> the PATTERN combinator   (=== pattern.rotate)
+dist/bellows.js (Rollup)    rotate -> the ARRAY function       (=== euclid.rotate)
+bellows.live (Rollup)       rotate -> the ARRAY function
 ```
 
-The workbench aliases `bellowsjs` to library source, so **bellows.live and npm shipped
-different functions under the same name**, with incompatible arguments: the array one on a
-`StepPattern` throws, because `StepPattern` is `{ at, length }` and has no `slice`. The spec
-says the explicit export wins, so `dist` was right and the source resolution was wrong, but a
-barrel whose meaning depends on the bundler is the defect, not whichever side lost.
+The spec says the explicit export wins, so both production builds were right and vite's
+transform was wrong. **The first version of this finding said bellows.live and npm shipped
+different functions. That was wrong**, and it was wrong because it reasoned from the vite
+alias in the workbench config rather than from the deployed bundle. Checked afterwards in the
+site's own console:
+
+```
+lib.rotate([1,2,3,4],1) -> [2,3,4,1]
+Array.isArray: true
+typeof lib.rotatePattern: undefined
+lib.rotate(pattern,1) THREW: s.slice is not a function
+```
+
+So the two shipped artefacts agreed with each other, and `npm run dev` and `npx vitest`
+disagreed with both. That is still a defect, and a nastier one than it sounds: a barrel whose
+meaning depends on which toolchain reads it means a developer's dev server and their build
+run different code, and the test suite tests the one nobody ships.
+
+What the last line of that console output confirms is the other half, which was right: the
+pattern combinator was reachable from nothing in production. `lib.rotate(pattern, 1)` throws
+`s.slice is not a function`, because `StepPattern` is `{ at, length }` and has no `slice`.
 
 A docs page already carried a footnote saying the package's `rotate` was the array one and
 "not the pattern combinator", which was true of npm and false of the site the footnote was
@@ -525,3 +554,125 @@ the SFZ parser's limits, in a different file, and it is closed the same way.
   `globalSetup` now. Separately, that timeout was measured on vitest 2 and vitest 4 and is the
   same either way, so it is the default that is tight rather than the upgrade that is slow;
   `testTimeout` is 30 s and the assertions remain the gate.
+
+## Round three
+
+Round two instrumented the library. Round three went at the things neither pass had touched
+at all: a parameter nobody had ever varied, three constant clusters that name themselves in
+the README, and the site itself rather than a description of it.
+
+### 19. Nothing had ever varied the block size
+
+`packages/bellows/src/kernel/engine.ts`
+
+`blockSize` is a public option on `renderOffline` and the reason the event-splitting loop
+exists. Every test in the suite and every golden render used 128. AudioWorklet's render
+quantum is 128 today and the specification does not promise it forever, so a browser changing
+it would have changed every render this library produces, quietly.
+
+Measured: **bit identical from 32 to 512**, for voices alone and for a chain of a channel
+delay, a plate, an oversampled saturator and a lookahead limiter. Each of those last three
+carries state across blocks and two carry latency, so if any were sized from the host block
+rather than from their own design it would show. Verified: disabling the split loop fails it.
+
+Parameter automation is the one thing block size does change, by design, because
+`advanceRamps` runs once per block. That is asserted as a bound (no more than one tread of the
+staircase) rather than as equality, and where the ramp lands is asserted exactly at every size.
+
+### 20. "The Dattorro plate with the 1997 constants" was a claim about four unchecked numbers
+
+`packages/bellows/src/fx/plate.ts`
+
+`DIFF_LEN`, `DIFF_G`, `REF_RATE` and `EXCURSION` all survived mutation. The existing tests
+measure that a tail exists, is long, is dense, is decorrelated and is bounded, and every one
+of those is true of any plausible reverb.
+
+Four gates, each chosen because it moves for one constant and not the others. Measured at
+44100, decay 0.5, mix 1:
+
+| | first arrival | 6th arrival | peak | tone concentration |
+| --- | --- | --- | --- | --- |
+| as shipped | 394 | 804 | 0.0923 | 0.869 |
+| `REF_RATE` 32000 | 367 | 749 | 0.0979 | 0.870 |
+| `DIFF_LEN` last +4 | 394 | 810 | 0.0923 | 0.869 |
+| `DIFF_G` third +0.075 | 394 | 804 | 0.1033 | 0.869 |
+| `EXCURSION` 16 | 394 | 804 | 0.0923 | 0.497 |
+
+The first arrival lands at 8.934 to 8.938 ms at 32000, 44100, 48000 and 96000 Hz, which is
+what `REF_RATE` is for: one geometry in seconds rather than in samples. The gate is on the
+absolute time rather than on agreement between rates, because agreement alone survives a wrong
+constant. Tone concentration is how much of a steady 1 kHz tone is still at exactly 1 kHz
+after the tail, which is 0.923 with modulation off at every setting and separates 0.916, 0.869
+and 0.497 for excursions of 4, 8 and 16 with it on.
+
+### 21. "64-grain clouds" was a claim about an unchecked pool
+
+`packages/bellows/src/engines/granular.ts`
+
+`MAX_GRAINS` survived being cut to 16 and doubled to 128. Every existing test runs at
+densities and grain sizes that never fill the pool.
+
+Grains are decorrelated by spray and pitch jitter, so they sum incoherently and the cloud's
+RMS grows as the square root of how many are alive. At 400 grains per second of half a second
+each, which asks for 200: 0.0448 with a pool of 16, 0.0616 with 32, **0.1268 as shipped**, and
+0.1559 with 128. A second test at a density the pool does not bound reads 0.1445 at every pool
+size, which is what makes the first one a measurement of the pool.
+
+`HANN_N`, the grain envelope's table resolution, is left ungated. It is observable, but only
+on very short grains, and the size of the effect moved with every other parameter this pass
+tried. A gate that fragile is worse than the note.
+
+### 22. Nothing observed which note gets stolen
+
+`packages/bellows/src/core/voicepool.ts`
+
+The header states the policy: "free voice, then oldest released voice, then oldest held
+voice." Two tests mention `VoicePool` and neither observes the order, so the pool could have
+taken the newest note, or the first slot every time.
+
+It is a musical decision rather than an implementation detail. Stealing the newest makes a
+held chord swallow the melody; preferring a held voice over a released one cuts a note that is
+still under a finger in order to protect a release tail. Seven tests now, with velocities as
+powers of two so the sum of the output names exactly which subset is sounding, including one
+that starts notes out of slot order so age and slot position give different answers.
+
+### 23. The 49 examples on the site were checked by nothing
+
+`apps/workbench/scripts/check-examples.mjs`
+
+They are the most-read code the project ships: a visitor's first contact with the API is one
+of them in the code editor. They are strings, so nothing type-checks them, and the app has no
+test suite. An example naming a removed export or a renamed engine would have failed in front
+of a reader with nothing upstream noticing, and `rotate` came within one release of being
+exactly that.
+
+The script parses each one the way the runner compiles it, then checks every `lib.x` is
+exported, every `b.x()` is a method on `Bellows`, and every engine, effect and preset id is
+registered, allowing ids the example registers itself. All 49 pass. In CI, after the library
+build.
+
+### The site, checked rather than described
+
+Round two's finding 14 was written from the vite alias in the workbench config. Round three
+opened bellows.live and typed into its console, which corrected it: both shipped artefacts
+agree and it was the dev transform that disagreed with them. The correction is in finding 14.
+
+While there: the site loads, renders, boots an audio context and runs an example on click.
+
+### Instruments that lied, again
+
+Three more, all caught, all in this round:
+
+- A block-size probe ran while the mutation sweep had `src/dsp/oversample.ts` mutated, because
+  they were started in parallel against one working tree. Redone afterwards on a clean one.
+- A plate mutation harness began with `cd packages/bellows` from inside that directory. The
+  `cd` failed, the backup was never written, no mutation was ever applied, and all five rows
+  came back identical to the baseline, which reads exactly like five equivalent mutants.
+- A granular probe passed `grainSize: 0.2` believing the parameter was seconds. It is
+  milliseconds, so it clamped to 10 and the cloud never held more than four grains: the pool
+  under test was never reached, and `MAX_GRAINS` looked like dead code. A second attempt then
+  zeroed spray and pitch jitter, which made every grain identical, so they summed coherently
+  and the result measured interference instead of saturation and did not move monotonically.
+
+That is six across three rounds. Every one produced a plausible, quiet, wrong answer, which is
+the same thing this document says about ungated constants.

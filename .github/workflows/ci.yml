@@ -68,6 +68,11 @@ jobs:
         # checking them. It is part of the build script now, and also its own
         # step so a type error reads as one.
         run: npm run typecheck -w apps/workbench
+      - name: every runnable example still matches the library
+        # The examples are strings, so nothing type-checks them, and the app
+        # has no test suite. They are also the first API a visitor touches.
+        # Needs the library built, which the step above does.
+        run: npm run check:examples -w apps/workbench
       - run: npm run build -w apps/workbench
 
   embedded:
