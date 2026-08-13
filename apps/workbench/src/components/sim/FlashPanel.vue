@@ -7,7 +7,7 @@
   is known to work, and it is not hidden behind the shiny one.
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import type { Board } from '../../lib/sim/board';
 import type { Firmware } from '../../lib/sim/firmware';
 import {
@@ -23,35 +23,98 @@ import {
 const props = defineProps<{ board: Board; firmware: Firmware }>();
 
 const supported = hidAvailable();
+
 const busy = ref(false);
 const note = ref('');
 const pct = ref(0);
 const error = ref('');
-const hexFile = ref<File | null>(null);
+/* The hex to flash, from the dropdown or from a file the user picked. */
+const hexText = ref('');
+const hexName = ref('');
 
+
+/*
+ * The prebuilt binaries, and the commit they came from.
+ *
+ * public/firmware/manifest.json is written by scripts/gen-firmware-binaries.mjs.
+ * A committed binary goes stale the moment a DSP header changes, and no CI
+ * gate can regenerate twelve firmware links at a sensible cost, so instead
+ * of pretending the panel prints the commit each one was built from. That
+ * makes a stale binary visible rather than silent.
+ */
+interface Manifest {
+  commit: string;
+  builtAt: string;
+  entries: Array<{ example: string; board: string; file: string; bytes: number; sha256: string }>;
+}
+const manifest = ref<Manifest | null>(null);
+const chosen = ref('');
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/firmware/manifest.json');
+    if (res.ok) manifest.value = (await res.json()) as Manifest;
+  } catch {
+    /* no prebuilt binaries deployed; the panel falls back to build-it-yourself */
+  }
+});
+
+/** Prebuilt binaries for the board that is selected, this example first. */
+const prebuilt = computed(() => {
+  const all = (manifest.value?.entries ?? []).filter((e) => e.board === props.board.id);
+  const mine = all.filter((e) => e.example === props.firmware.folder);
+  const rest = all.filter((e) => e.example !== props.firmware.folder);
+  return [...mine, ...rest];
+});
+
+watch(
+  prebuilt,
+  (list) => {
+    if (!list.some((e) => e.file === chosen.value)) chosen.value = list[0]?.file ?? '';
+  },
+  { immediate: true },
+);
+
+const chosenEntry = computed(() => prebuilt.value.find((e) => e.file === chosen.value) ?? null);
+
+async function loadPrebuilt(): Promise<void> {
+  const e = chosenEntry.value;
+  if (!e) return;
+  error.value = '';
+  try {
+    const res = await fetch(`/firmware/${e.file}`);
+    if (!res.ok) throw new Error(`could not fetch ${e.file}`);
+    hexText.value = await res.text();
+    hexName.value = e.file;
+  } catch (err) {
+    error.value = String((err as Error).message ?? err);
+  }
+}
 const cmd = computed(() => loaderCommand(props.board.id, 'firmware.hex'));
 const pioCmd = computed(
   () =>
     `cd packages/bellows-embedded/examples\nPLATFORMIO_SRC_DIR=${props.firmware.folder} pio run -e probe_${props.board.id.replace('teensy', 'teensy')} -t upload`,
 );
 
-function pick(e: Event): void {
+async function pick(e: Event): Promise<void> {
   const input = e.target as HTMLInputElement;
-  hexFile.value = input.files?.[0] ?? null;
+  const f = input.files?.[0];
   error.value = '';
+  if (!f) return;
+  hexText.value = await f.text();
+  hexName.value = f.name;
 }
 
 async function doFlash(): Promise<void> {
   error.value = '';
-  if (!hexFile.value) {
-    error.value = 'Choose a .hex first. Build one with the command below.';
+  if (!hexText.value) {
+    error.value = 'Load a prebuilt binary or choose a .hex first.';
     return;
   }
   busy.value = true;
   note.value = 'requesting device';
   try {
-    const text = await hexFile.value.text();
-    const { data } = parseIntelHex(text);
+    const { data } = parseIntelHex(hexText.value);
 
     const devices = await navigator.hid.requestDevice({
       filters: [{ vendorId: TEENSY_VID, productId: TEENSY_PID }],
@@ -95,11 +158,32 @@ async function doFlash(): Promise<void> {
         reliable way for a page to do that for you on a board that is not already running
         firmware which offers one.
       </p>
+      <div v-if="prebuilt.length" class="field">
+        <label>prebuilt binary</label>
+        <div class="row">
+          <select v-model="chosen">
+            <option v-for="e in prebuilt" :key="e.file" :value="e.file">
+              {{ e.example }} // {{ (e.bytes / 1024).toFixed(0) }} KB
+            </option>
+          </select>
+          <button @click="loadPrebuilt">LOAD</button>
+          <a v-if="chosenEntry" class="dl" :href="'/firmware/' + chosenEntry.file" download>
+            DOWNLOAD
+          </a>
+        </div>
+        <p class="hint" v-if="manifest">
+          Built from commit <b>{{ manifest.commit }}</b> on {{ manifest.builtAt }}. If the
+          repository has moved since, these are the older program and the source above is the
+          newer one. Rebuild with the command below to be sure.
+        </p>
+      </div>
+
       <div class="row">
         <input type="file" accept=".hex" @change="pick" />
-        <button :disabled="busy || !hexFile" @click="doFlash">
+        <button :disabled="busy || !hexText" @click="doFlash">
           {{ busy ? 'FLASHING' : 'FLASH OVER WEBHID' }}
         </button>
+        <span v-if="hexName" class="meta">{{ hexName }}</span>
       </div>
       <div v-if="note" class="progress">
         <div class="bar"><div class="fill" :style="{ width: pct + '%' }"></div></div>
@@ -107,6 +191,18 @@ async function doFlash(): Promise<void> {
       </div>
       <p v-if="error" class="err">{{ error }}</p>
     </template>
+
+    <div v-else-if="prebuilt.length" class="field">
+      <label>prebuilt binary</label>
+      <div class="row">
+        <select v-model="chosen">
+          <option v-for="e in prebuilt" :key="e.file" :value="e.file">
+            {{ e.example }} // {{ (e.bytes / 1024).toFixed(0) }} KB
+          </option>
+        </select>
+        <a v-if="chosenEntry" class="dl" :href="'/firmware/' + chosenEntry.file" download>DOWNLOAD</a>
+      </div>
+    </div>
 
     <p v-else class="note">
       This browser has no WebHID, so the button is not offered. Chromium desktop has it; Firefox
@@ -167,6 +263,40 @@ async function doFlash(): Promise<void> {
   color: var(--faded);
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+.dl {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: var(--char);
+  color: var(--bone);
+  border: 2px solid var(--seam);
+  padding: 7px 10px;
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+}
+.dl:hover {
+  border-color: var(--phosphor);
+  color: var(--phosphor-hot);
+}
+.hint {
+  font-size: 10px;
+  color: var(--faded);
+  line-height: 1.6;
+  margin-top: 6px;
+  max-width: 72ch;
+}
+.hint b {
+  color: var(--phosphor-hot);
+}
+.field label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--tick);
+  margin: 12px 0 6px;
 }
 .err {
   margin-top: 8px;

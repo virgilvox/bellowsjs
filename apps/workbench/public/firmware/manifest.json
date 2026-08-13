@@ -1,0 +1,90 @@
+{
+  "commit": "79cc6f7",
+  "builtAt": "2026-08-13",
+  "entries": [
+    {
+      "example": "01_OneKick",
+      "board": "teensy40",
+      "file": "01_OneKick_teensy40.hex",
+      "bytes": 100877,
+      "sha256": "9accb6ec623dda4c"
+    },
+    {
+      "example": "01_OneKick",
+      "board": "teensy41",
+      "file": "01_OneKick_teensy41.hex",
+      "bytes": 103757,
+      "sha256": "1fc47e71f254b9a0"
+    },
+    {
+      "example": "02_DrumMachine",
+      "board": "teensy40",
+      "file": "02_DrumMachine_teensy40.hex",
+      "bytes": 181517,
+      "sha256": "b9a4a8c21f7692d2"
+    },
+    {
+      "example": "02_DrumMachine",
+      "board": "teensy41",
+      "file": "02_DrumMachine_teensy41.hex",
+      "bytes": 184397,
+      "sha256": "3e1e2bee30a49135"
+    },
+    {
+      "example": "03_PolySynth",
+      "board": "teensy40",
+      "file": "03_PolySynth_teensy40.hex",
+      "bytes": 190174,
+      "sha256": "1c205ee812e44199"
+    },
+    {
+      "example": "03_PolySynth",
+      "board": "teensy41",
+      "file": "03_PolySynth_teensy41.hex",
+      "bytes": 193054,
+      "sha256": "973c1512a9c023c9"
+    },
+    {
+      "example": "04_ScalesAndTuning",
+      "board": "teensy40",
+      "file": "04_ScalesAndTuning_teensy40.hex",
+      "bytes": 112397,
+      "sha256": "d0668c6ea72a1534"
+    },
+    {
+      "example": "04_ScalesAndTuning",
+      "board": "teensy41",
+      "file": "04_ScalesAndTuning_teensy41.hex",
+      "bytes": 115277,
+      "sha256": "8a96dae5ed08c1f3"
+    },
+    {
+      "example": "10_AudioShield",
+      "board": "teensy40",
+      "file": "10_AudioShield_teensy40.hex",
+      "bytes": 106637,
+      "sha256": "a17d9573f92ab53c"
+    },
+    {
+      "example": "10_AudioShield",
+      "board": "teensy41",
+      "file": "10_AudioShield_teensy41.hex",
+      "bytes": 112397,
+      "sha256": "0d305cedacc83d74"
+    },
+    {
+      "example": "15_Piezo",
+      "board": "teensy40",
+      "file": "15_Piezo_teensy40.hex",
+      "bytes": 167117,
+      "sha256": "c22cab02edaeeba1"
+    },
+    {
+      "example": "15_Piezo",
+      "board": "teensy41",
+      "file": "15_Piezo_teensy41.hex",
+      "bytes": 169997,
+      "sha256": "12327546af13339a"
+    }
+  ]
+}

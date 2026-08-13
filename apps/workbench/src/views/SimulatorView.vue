@@ -28,7 +28,7 @@ const running = ref(false);
 const status = ref('idle');
 const potValue = ref(0.5);
 const heldKeys = ref<number[]>([]);
-const showSource = ref(false);
+const showSource = ref(true);
 
 const fw = computed(() => FIRMWARE_BY_ID.get(firmwareId.value)!);
 const board = computed(() => BOARDS.find((b) => b.id === boardId.value)!);
@@ -79,7 +79,7 @@ function tick(): void {
   const effectiveBpm = fw.value.inputs.some((i) => i.kind === 'pot')
     ? 60 + potValue.value * 120
     : bpm;
-  const stepSec = 60 / effectiveBpm / voice.stepsPerBeat;
+  const stepSec = voice.stepSec ?? 60 / effectiveBpm / voice.stepsPerBeat;
   voice.step(stepIndex++, b.now() + 0.05);
   timer = window.setTimeout(tick, stepSec * 1000);
 }
@@ -204,7 +204,7 @@ onActivated(() => {
     </aside>
 
     <main class="main">
-      <section class="panel">
+      <section class="panel board-panel">
         <div class="panel-title">
           board <em>03 // {{ board.label }}</em>
         </div>
@@ -217,7 +217,7 @@ onActivated(() => {
         />
       </section>
 
-      <section class="panel">
+      <section class="panel run-panel">
         <div class="panel-title">
           transport <em>04</em>
         </div>
@@ -245,7 +245,7 @@ onActivated(() => {
         </ul>
       </section>
 
-      <section class="panel">
+      <section class="panel out-panel">
         <div class="panel-title">output <em>05</em></div>
         <div class="chips">
           <button
@@ -313,13 +313,14 @@ onActivated(() => {
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel wide">
         <div class="panel-title">
           firmware source <em>08 // {{ fw.folder }}/{{ fw.headerName }}</em>
         </div>
         <p class="note">
-          The real file, imported from the example rather than copied, so it cannot drift from
-          what compiles. Your parameter changes are written back into it below.
+          The real file, generated from the example rather than copied, so it cannot drift from
+          what compiles. Your parameter changes are written back into it, so what downloads is
+          this example with your numbers and every comment its author wrote still in place.
         </p>
         <div class="row">
           <button @click="showSource = !showSource">{{ showSource ? 'HIDE' : 'SHOW' }} SOURCE</button>
@@ -330,7 +331,7 @@ onActivated(() => {
         <pre v-if="showSource">{{ exported.text }}</pre>
       </section>
 
-      <FlashPanel :board="board" :firmware="fw" />
+      <div class="wide"><FlashPanel :board="board" :firmware="fw" /></div>
     </main>
   </div>
 </template>
@@ -338,9 +339,34 @@ onActivated(() => {
 <style scoped>
 .sim {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 232px 1fr;
   gap: 16px;
   align-items: start;
+}
+
+/*
+ * The main column is itself a two-up grid rather than a stack.
+ *
+ * Stacked full-width panels meant the board diagram sat next to a metre of
+ * empty paper and everything else was a scroll away. Pairing them puts the
+ * board beside the transport and the output beside the parameters, which is
+ * how they are actually used: you change one and listen to the other. The
+ * source and the flasher stay full width because both are long text.
+ */
+.main {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.main > .panel {
+  margin-bottom: 0;
+}
+.wide {
+  grid-column: 1 / -1;
+}
+.board-panel {
+  grid-row: span 2;
 }
 .rail .entry {
   display: block;
@@ -446,8 +472,33 @@ pre {
   margin-top: 10px;
   max-height: 420px;
 }
+/* The two-up main column needs about 560px per side before the board
+ * diagram and its legend stop fitting, so it collapses first and the rail
+ * follows at the app's usual 900. */
+@media (max-width: 1180px) {
+  .main {
+    grid-template-columns: 1fr;
+  }
+  .board-panel {
+    grid-row: auto;
+  }
+}
 @media (max-width: 900px) {
   .sim {
+    grid-template-columns: 1fr;
+  }
+  .rail {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+  .rail .panel {
+    margin-bottom: 0;
+  }
+}
+@media (max-width: 560px) {
+  .rail {
     grid-template-columns: 1fr;
   }
 }

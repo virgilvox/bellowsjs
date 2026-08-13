@@ -33,6 +33,8 @@ const FILES = {
   drummachine_ino: '02_DrumMachine/02_DrumMachine.ino',
   polysynth_h: '03_PolySynth/polysynth.h',
   polysynth_ino: '03_PolySynth/03_PolySynth.ino',
+  scalestuning_h: '04_ScalesAndTuning/scalestuning.h',
+  scalestuning_ino: '04_ScalesAndTuning/04_ScalesAndTuning.ino',
   audioshield_h: '10_AudioShield/audioshield.h',
   audioshield_ino: '10_AudioShield/10_AudioShield.ino',
   piezo_h: '15_Piezo/piezo.h',
