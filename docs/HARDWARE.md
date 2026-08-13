@@ -619,7 +619,11 @@ uninitialized stack array in `hid/audio.cpp`, so the adapter's habit of zeroing 
 the render is load-bearing, not defensive: bellows voices add into the range, and without the
 clear the codec would receive stack garbage.
 
-WHAT HAS NOT BEEN DONE: none of this has been flashed to a board and listened to, on either
+WHAT HAS NOW BEEN DONE, once: `07_Workstation` ran on a Teensy 4.0 at 44.1 kHz through
+a MAX98357A, at 34 to 43 percent CPU and 47.2 percent peak, 2 of 24 audio blocks. Hand
+recorded from a serial console, so no harness checks it.
+
+WHAT HAS NOT BEEN DONE: nothing else has been flashed to a board and listened to, on either
 platform. Everything is compile-verified, link-verified and numerically verified against the
 TypeScript, which is a strong position and is not the same as having heard it. On Daisy, only
 `01_OneKick` has been linked to an image; the other four are compile-verified through the

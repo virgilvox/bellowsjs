@@ -93,7 +93,7 @@ Cortex-M7 at `-Os` with `--gc-sections`, library only, four voices with a
 | sketch | flash | RAM |
 | --- | --- | --- |
 | `p9_e10_chord` the shared patch | 6816 B | 116860 B |
-| `p10_e15_piezo` plus the piezo voicing | 13960 B | 122152 B |
+| `p10_e15_piezo` plus the piezo voicing | 13976 B | 122156 B |
 
 So the piezo chain (two cascaded highpasses, a bell and a true-peak
 limiter) costs 7144 B of flash and 5292 B of RAM on top of the patch it

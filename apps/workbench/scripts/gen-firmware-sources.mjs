@@ -65,6 +65,10 @@ const FILES = {
   clarinet_h: '20_Instruments/clarinet.h',
   choir_h: '20_Instruments/choir.h',
   eightoheight_h: '20_Instruments/eightoheight.h',
+
+  /* The two output builds that were flashed to a real board. */
+  wspiezo_ino: '16_WorkstationPiezo/16_WorkstationPiezo.ino',
+  wsi2s_ino: '17_WorkstationI2S/17_WorkstationI2S.ino',
 };
 
 const parts = [

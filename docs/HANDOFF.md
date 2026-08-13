@@ -33,9 +33,27 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 
 **Two things that have not happened, and both are load bearing.**
 
-1. **Nothing has been flashed to a board and listened to.** Everything is compile-verified,
-   link-verified and numerically verified against the TypeScript. That is a strong position and
-   it is not the same as having heard it. Assume the first bring-up finds something.
+1. **A board has now been flashed and heard, and this item used to say the opposite.**
+   **A Teensy 4.0 has now run this, and the number is the one Milestone 1 existed to
+   collect.** `07_Workstation`, the heaviest program in the set (five engines, a Markov
+   melody, a tempo-synced delay send, an EQ and a limiter), at 44.1 kHz through a
+   MAX98357A on I2S: **34 to 43 percent CPU typical, 47.2 percent peak**, with 2 of 24
+   audio blocks used. It runs with about half the processor spare.
+   
+   What that does NOT settle, and the distinction matters because one board is one data
+   point: no other board has run anything (a 3.2 and an LC have no FPU and emulate every
+   float operation, and a Daisy Seed has been linked to an image but never run), no other
+   program has been measured, and neither implementation has been compared to the other
+   by ear. The numerical comparison, 34 engine and effect rows plus 428 exactly-compared
+   value rows, is what stands in for that and is not the same thing.
+   
+   These CPU figures are hand-recorded from a serial console. No harness prints them, so
+   `check-docs` cannot verify them the way it verifies the size tables.
+
+   The first bring-up did find things, all of them in the tooling rather than the DSP: a
+   `namespace tone` that cannot compile against the Arduino core because the core declares
+   `void tone(uint8_t, uint16_t, uint32_t)`, a piezo chain whose highpass cost 13.4 dB with
+   no gain stage to restore it, and a loader that reports success for having opened a GUI.
 
    As of the output-example set this is verified across seven boards rather than one: every
    example is built and linked as real firmware, with the Arduino core and the audio library
@@ -280,7 +298,7 @@ Run all of them from `packages/bellows-embedded` unless noted.
 | `npm run size` | flash and RAM per sketch, `cortex-m7` or `cortex-m4` | the whole no-registry design argument |
 | `./tools/check-header.sh <h>` | one header compiles standalone, `-Wall -Wextra` | header hygiene; note it instantiates nothing |
 | `node tools/gen-tables.mjs --check` | generated headers match the TypeScript ParamSpecs | new `Eq6` class the moment it appeared |
-| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md` and `docs/ENGINEERING.md`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath` and `vitest list`: 381 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
+| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md` and `docs/ENGINEERING.md`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath` and `vitest list`: 382 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
 | `npx vitest run test/integration/engine-tuning.test.ts` | every pitched engine plays the note it was given, to 2 cents | proves the fractional-delay tuning is real: an integer-rounded loop is 28 cents flat at E7 |
 | `npx vitest run test/integration/nan-safety.test.ts` | one NaN parameter cannot break the audio graph | 10 parameters threw inside `process()` and 191 poisoned the output before it existed |
 

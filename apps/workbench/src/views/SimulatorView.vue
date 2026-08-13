@@ -370,8 +370,9 @@ onActivated(() => {
                 <b>{{ fw.parityRelRms.toExponential(2) }}</b> relative RMS, about
                 <b>{{ parityDb }} dB</b>.
               </template>
-              Timing is not simulated: whether this board renders it in time has never been
-              measured on hardware, for any board.
+              Timing is not simulated. One board has now been measured: a Teensy 4.0 runs
+              <code>07_Workstation</code>, the heaviest program here, at <b>47.2 %</b> peak CPU.
+              No other board and no other program has been.
             </p>
             <ul v-if="caveats.length" class="caveats">
               <li v-for="c in caveats" :key="c">{{ c }}</li>

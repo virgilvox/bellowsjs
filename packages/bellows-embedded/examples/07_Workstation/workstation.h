@@ -174,9 +174,11 @@ class Piece {
     scale_.Init(57, bellows::kScaleMinor);
     edo12_.InitEdo(12, 440.0f, 69);
 
+    for (int i = 0; i < kBars; ++i) prog_[i] = kProgression[i];
+    for (int i = 0; i < kMotifLen; ++i) motif_[i] = kMotif[i];
     chain_.Init(2);
-    trained_ = chain_.Train(kMotif, kMotifLen);
-    chain_.Seed(kMotif, 2);
+    trained_ = chain_.Train(motif_, kMotifLen);
+    chain_.Seed(motif_, 2);
 
     kick_pat_.Generate(5, kSteps);
     snare_pat_.Generate(4, kSteps, 4);
@@ -233,6 +235,90 @@ class Piece {
     }
   }
 
+  /*
+   * Draw a fresh arrangement from a seed.
+   *
+   * Init() gives the piece written into this file, and calling nothing
+   * else keeps that: the size sketch and the parity work are unaffected.
+   * This re-draws the things that make one piece different from another,
+   * which is more than the notes. Tempo, mode, the four bar progression,
+   * all five euclidean rhythms and the motif the Markov chain is trained
+   * on all come from the seed, so two boots are two arrangements rather
+   * than the same arrangement with different dice.
+   *
+   * The seed is the whole contract. The library's promise is that a seed
+   * reproduces a piece, and that still holds here: keep the number and you
+   * can play this arrangement again, which is why the sketch prints it.
+   *
+   * Every draw is bounded to stay musical rather than merely different. A
+   * kick can be 3 to 6 pulses in 16 and not 1 to 15, the modes are all
+   * minor coloured so a progression written in degrees means the same
+   * thing in each, and bar 0 is always the tonic.
+   */
+  void Compose(uint32_t seed) {
+    seed_ = seed;
+    bellows::Rng r;
+    r.Init(seed);
+
+    /* Minor coloured modes only, so degrees keep their character. */
+    static const bellows::ScaleType kModes[] = {
+        bellows::kScaleMinor,          bellows::kScaleDorian,
+        bellows::kScaleHarmonicMinor,  bellows::kScaleMinorPentatonic,
+        bellows::kScalePhrygian,       bellows::kScaleKumoi,
+    };
+    scale_.Init(57, kModes[Draw(r, 6)]);
+    const int len = scale_.Length();
+
+    /* Bar 0 is the tonic. The rest come from degrees that resolve back to
+     * it: the fourth, the fifth, the sixth and the third. */
+    static const int kCandidates[] = {5, 3, 4, 2, 5, 4};
+    prog_[0] = 0;
+    for (int i = 1; i < kBars; ++i) prog_[i] = kCandidates[Draw(r, 6)] % (len > 1 ? len : 1);
+
+    kick_pat_.Generate(3 + Draw(r, 4), kSteps);
+    snare_pat_.Generate(2 + Draw(r, 3), kSteps, 4);
+    hat_pat_.Generate(7 + Draw(r, 7), kSteps, Draw(r, 4));
+    bass_pat_.Generate(3 + Draw(r, 3), kSteps);
+    melody_pat_.Generate(7 + Draw(r, 5), kSteps, Draw(r, 4));
+
+    /* A motif with stepwise bias, because a chain trained on leaps plays
+     * leaps. Steps of -2 to +2 in scale degrees, folded into the
+     * alphabet, which is what keeps it singable. */
+    int d = Draw(r, 3);
+    for (int i = 0; i < kMotifLen; ++i) {
+      motif_[i] = static_cast<uint8_t>(d);
+      d += Draw(r, 5) - 2;
+      if (d < 0) d += kAlphabet;
+      if (d >= kAlphabet) d -= kAlphabet;
+    }
+    chain_.Init(2);
+    trained_ = chain_.Train(motif_, kMotifLen);
+    chain_.Seed(motif_, 2);
+
+    SetTempo(84 + static_cast<unsigned>(Draw(r, 5)) * 7);
+  }
+
+  /* The seed this arrangement came from, or 0 for the written one. */
+  uint32_t Seed() const { return seed_; }
+
+  /* Shift every pitched part by whole octaves.
+   *
+   * The drums are deliberately unaffected: they tune from a fixed noteOn
+   * frequency rather than from a degree, so a kit stays a kit. This exists
+   * for output paths that cannot reproduce the bottom of the piece.
+   *
+   * A piezo disc motivated it and then argued against it. The reasoning
+   * was that a disc passes almost nothing at 100 Hz, so lifting the piece
+   * into its band should help. Measured through the 15_Piezo chain it does
+   * the opposite: 1.1 dB quieter at +1 octave and 2.2 dB at +2, because a
+   * plucked string carries less energy and decays faster the higher it is
+   * pitched, and that loses more than the disc's response gains. Gain into
+   * the limiter was worth 12 dB where this was worth less than nothing.
+   * Keep it for output paths where the arithmetic comes out differently,
+   * and measure before assuming it is one of them. */
+  void SetTranspose(int octaves) { transpose_ = octaves; }
+  int Transpose() const { return transpose_; }
+
   /* True when the motif fitted the chain's table. False means transitions
    * were dropped and the melody is a smaller chain than the one written. */
   bool Trained() const { return trained_; }
@@ -244,7 +330,7 @@ class Piece {
   /* Advance the sequencer one step and fire whatever the patterns say. */
   void Step() {
     const int s = step_ % kSteps;
-    const int chord = kProgression[Bar()];
+    const int chord = prog_[Bar()];
     /* An octave, in degrees of whatever scale is loaded. */
     const int octave = scale_.Length();
 
@@ -298,8 +384,17 @@ class Piece {
   }
 
  private:
+  /* rng.int(n) with the same truncation the JS uses. */
+  static int Draw(bellows::Rng& r, int n) {
+    int i = static_cast<int>(r.Next() * static_cast<float>(n));
+    if (i < 0) i = 0;
+    if (i >= n) i = n - 1;
+    return i;
+  }
+
   float DegreeHz(int degree) const {
-    return bellows::DegreeFreq(edo12_, 57, scale_.Intervals(), scale_.Length(), degree);
+    return bellows::DegreeFreq(edo12_, 57, scale_.Intervals(), scale_.Length(),
+                               degree + transpose_ * scale_.Length());
   }
 
   /*
@@ -394,7 +489,11 @@ class Piece {
   int countdown_ = 0;
   int step_ = 0;
   int bass_gate_ = 0;
+  int transpose_ = 0;
   uint32_t frame_ = 0;
+  uint32_t seed_ = 0;
+  int prog_[kBars] = {0, 0, 0, 0};
+  uint8_t motif_[kMotifLen] = {};
   bool trained_ = false;
   bool delay_ready_ = false;
 };

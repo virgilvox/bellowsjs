@@ -21,8 +21,10 @@ guide to choosing, and has the piezo reasoning.
 
 Every one is a real program: it compiles and links as firmware for the
 boards in the matrix below, and its cost is measured rather than estimated.
-None of them has been flashed to a board and listened to, which is what
-`00_BringUp` is for.
+One of them has now been flashed and heard: `07_Workstation` on a Teensy 4.0
+through an I2S amplifier, at 47.2 percent peak CPU. Everything else here is
+still compile-verified and link-verified only, which is what `00_BringUp` is
+for.
 
 Start with `00_BringUp`, which is not one of the five. It is the checklist
 for the first session with a board in hand: it prints the real sample rate,
@@ -40,7 +42,7 @@ against a fixed voice budget. See `00_BringUp/README.md`.
 | 03_PolySynth | VoicePool, a swept filter | 30280 B | 3876 B |
 | 04_ScalesAndTuning | the theory layer, 12-EDO against 19-EDO | 8096 B | 30176 B |
 | 05_MidiInstrument | MIDI byte parsing into a voice pool | 30616 B | 3888 B |
-| 07_Workstation | five engines, a Markov melody, a send bus | 41840 B | 225468 B |
+| 07_Workstation | five engines, a Markov melody, a send bus | 41992 B | 225508 B |
 | 20_Instruments | eleven patches over eight engines, one note source | 47912 B | 49904 B |
 
 The output examples share one patch, `10_AudioShield/audioshield.h`, so
@@ -75,10 +77,10 @@ bytes and would alias audibly on every note above the middle of the keyboard.
 It is paid once, which is why 20_Instruments reaches eight engines for
 47912 B and not eight times this.
 
-07 is the outlier in both columns and for two different reasons. Its 41840 B
+07 is the outlier in both columns and for two different reasons. Its 41992 B
 of flash is what reaching almost everything costs: the drums, a VA, a
 plucked string, a delay, an EQ, a limiter and the theory and sequencing
-layers, in one program. Its 225468 B of RAM is one object, the 500 ms stereo
+layers, in one program. Its 225508 B of RAM is one object, the 500 ms stereo
 delay line, at 187 KB. Everything else in it, four strings, the chain, the
 patterns and the send scratch, comes to under 40 KB together.
 

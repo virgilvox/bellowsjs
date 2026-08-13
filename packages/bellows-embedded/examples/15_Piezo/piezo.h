@@ -57,6 +57,22 @@ struct Voicing {
   float resonance_hz = 4000.0f;
   float resonance_db = 8.0f;
   float resonance_q = 1.2f;
+  /*
+   * Gain applied after the filtering and before the limiter.
+   *
+   * The chain above is subtractive: two cascaded highpasses throw away
+   * everything the disc cannot reproduce, and on a full-range patch that
+   * is most of the energy. Measured on 07_Workstation, whose kick is at
+   * 50 Hz and whose bass runs 110 to 262 Hz, the chain took RMS from
+   * -19.5 dBFS to -32.9, and the peak reached 0.658 against a ceiling of
+   * 0.944, so the limiter never engaged once and the disc saw a third of
+   * the swing it could have had.
+   *
+   * Point 4 at the top of this file says the useful move is to raise the
+   * average level until it is just under the ceiling all the time. This
+   * is the control that does it. 1.0 leaves the chain exactly as it was.
+   */
+  float drive = 1.0f;
   /* Just under full scale. Not 0 dB: the pin clips hard and squarely, and
    * the last fraction of a dB is not worth the sound of that. */
   float ceiling_db = -0.5f;
@@ -104,6 +120,9 @@ class Voiced {
       float x = 0.5f * (l[n] + r[n]);  /* one disc, so one signal */
       for (int i = 0; i < 2; ++i) x = hp_[i][0].Process(x);
       if (!bell_.Bypassed()) x = bell_.Process(0, x);
+      /* After the filtering, so it lifts only what the disc can use, and
+       * before the limiter, so the limiter is what controls the peaks. */
+      x *= v_.drive;
       l[n] = x;
       r[n] = x;
     }

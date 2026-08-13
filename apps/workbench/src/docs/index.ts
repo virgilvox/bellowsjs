@@ -19,6 +19,7 @@ import renderingAndExport from './pages/rendering-and-export';
 import analysis from './pages/analysis';
 import midi from './pages/midi';
 import customDsp from './pages/custom-dsp';
+import onHardware from './pages/on-hardware';
 
 export type { DocPage } from './types';
 
@@ -36,6 +37,7 @@ export const DOC_GROUPS: DocGroup[] = [
   { label: 'Mix and sample', pages: [effects, soundfontsAndSamples] },
   { label: 'Output', pages: [renderingAndExport, analysis] },
   { label: 'Extend', pages: [midi, customDsp] },
+  { label: 'Hardware', pages: [onHardware] },
 ];
 
 /** All pages in reading order. */
