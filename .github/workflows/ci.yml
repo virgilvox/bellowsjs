@@ -77,6 +77,14 @@ jobs:
         # has no test suite. They are also the first API a visitor touches.
         # Needs the library built, which the step above does.
         run: npm run check:examples -w apps/workbench
+      - name: the simulator shows the examples it claims to
+        # src/lib/sim/sources.gen.ts carries the embedded examples verbatim,
+        # so the simulator page can show the source that compiles to a board.
+        # Same control as the worklet string: regenerate and diff, or the
+        # page quietly shows firmware that no longer exists.
+        run: |
+          npm run gen:sim -w apps/workbench
+          git diff --exit-code -- apps/workbench/src/lib/sim/sources.gen.ts
       - name: the LLM reference is in sync with the library
         # public/llm.txt is generated from the built bundle and its type
         # declarations, is served at /llm.txt, and says of itself that it is

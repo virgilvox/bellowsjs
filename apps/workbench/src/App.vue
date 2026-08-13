@@ -8,9 +8,10 @@ const WorkbenchView = defineAsyncComponent(() => import('./views/WorkbenchView.v
 const CodeView = defineAsyncComponent(() => import('./views/CodeView.vue'));
 const InstrumentView = defineAsyncComponent(() => import('./views/InstrumentView.vue'));
 const RefView = defineAsyncComponent(() => import('./views/RefView.vue'));
+const SimulatorView = defineAsyncComponent(() => import('./views/SimulatorView.vue'));
 const DocsView = defineAsyncComponent(() => import('./views/DocsView.vue'));
 
-type Mode = 'home' | 'bench' | 'code' | 'play' | 'ref' | 'docs';
+type Mode = 'home' | 'bench' | 'code' | 'play' | 'ref' | 'docs' | 'sim';
 
 function modeFromHash(): Mode {
   // docs live on real paths so pages are linkable and crawlable
@@ -19,6 +20,7 @@ function modeFromHash(): Mode {
   if (location.hash.startsWith('#bench')) return 'bench';
   if (location.hash.startsWith('#play')) return 'play';
   if (location.hash.startsWith('#ref')) return 'ref';
+  if (location.hash.startsWith('#sim')) return 'sim';
   return 'home';
 }
 
@@ -61,6 +63,7 @@ window.addEventListener('hashchange', () => {
         <button :class="{ lit: mode === 'code' }" @click="setMode('code')">CODE</button>
         <button :class="{ lit: mode === 'docs' }" @click="setMode('docs')">DOCS</button>
         <button :class="{ lit: mode === 'ref' }" @click="setMode('ref')">LLM REF</button>
+        <button :class="{ lit: mode === 'sim' }" @click="setMode('sim')">SIMULATOR</button>
         <button class="theme-btn" @click="toggleTheme()" :title="theme === 'light' ? 'switch to night forge' : 'switch to daylight'">
           {{ theme === 'light' ? 'NIGHT' : 'DAY' }}
         </button>
@@ -84,6 +87,7 @@ window.addEventListener('hashchange', () => {
       <WorkbenchView v-if="mode === 'bench'" />
       <InstrumentView v-else-if="mode === 'play'" />
       <RefView v-else-if="mode === 'ref'" />
+      <SimulatorView v-else-if="mode === 'sim'" />
       <DocsView v-else-if="mode === 'docs'" />
       <CodeView v-else />
     </KeepAlive>
