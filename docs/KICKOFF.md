@@ -45,7 +45,7 @@ WHERE THINGS STAND
 - packages/bellows-embedded is the C++ port. 43 headers, compiling standalone and combined for
   Cortex-M7 and M4. All five examples plus a bring-up rig build as real Teensy 4.1 firmware, and
   examples/daisy_onekick links against real libDaisy.
-- Parity passes on 34 rows with the PRNG bit exact, plus 348 exactly-compared value
+- Parity passes on 34 rows with the PRNG bit exact, plus 428 exactly-compared value
   rows for the parts that make no sound.
 - TWO THINGS HAVE NOT HAPPENED, and both matter more than they look:
     NOTHING HAS BEEN FLASHED TO A BOARD AND LISTENED TO. Everything is compile-verified and
@@ -69,7 +69,7 @@ VERIFY EVERYTHING WITH THESE. Run them before you claim anything works.
                                npx tsc --noEmit
                                npm run gen:worklet          then confirm no git diff
   packages/bellows-embedded:   npm run parity               34 rows against the TypeScript
-                               npm run tables               348 value rows, compared exactly
+                               npm run tables               428 value rows, compared exactly
                                npm run fastmath             polynomial accuracy against libm
                                npm run memsafety            ASan and UBSan, 0.5x to 4x rate
                                npm run memsafety:fastmath   the same under BELLOWS_FAST_MATH
@@ -86,7 +86,7 @@ TRAPS THAT WILL BITE YOU, in the order they are likely to
    DSP. This has already happened once. CI would catch it if CI ran.
 2. Every documented number rots. A change moves a sketch and the tables quoting it are left
    behind; that happened four times in one session, and a second audit then found sixteen more.
-   node tools/check-docs.mjs --check is the control, and it now covers 371 figures across
+   node tools/check-docs.mjs --check is the control, and it now covers 381 figures across
    docs/HARDWARE.md, the embedded README, examples/README.md, docs/HANDOFF.md, docs/ENGINEERING.md
    and this file, against the size report, the sketch symbol tables, parity, tables, fastmath and
    vitest list.

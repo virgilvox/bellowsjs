@@ -5,6 +5,14 @@
   firmware and output path actually use, so the picture answers one question
   (where does the wire go) rather than reproducing PJRC's pin card badly.
 
+  DRAWN LANDSCAPE, WHICH IS THE SHAPE THE PART IS. An earlier version drew
+  it portrait, 168 px wide and up to 412 tall, so a 24 row board stood in a
+  narrow column beside a metre of empty paper. This is that drawing rotated
+  a quarter turn anticlockwise, which is why the numbering reads the way it
+  does: the left column of pins, 0 downward, becomes the bottom edge left to
+  right, and the right column becomes the top edge. A Teensy 4.1 is now 404
+  units wide and 116 tall and fills the room it is given.
+
   Colours come from CSS custom properties rather than literals, so the
   NIGHT/DAY toggle works without this component knowing about themes.
 -->
@@ -22,11 +30,14 @@ const props = defineProps<{
   active: boolean;
 }>();
 
+/** Pin pitch along the long edge, and the room the USB end takes. */
 const PITCH = 15;
-const TOP = 26;
-const WIDTH = 168;
+const MARGIN = 22;
+const HEIGHT = 116;
+const TOP_Y = 20;
+const BOTTOM_Y = 96;
 
-const height = computed(() => TOP * 2 + props.board.rows * PITCH);
+const width = computed(() => MARGIN * 2 + props.board.rows * PITCH);
 
 const audioPins = computed(() => new Set(outputPins(props.board, props.output.id)));
 const inputPins = computed(
@@ -38,31 +49,29 @@ interface Dot {
   n: number;
   x: number;
   y: number;
-  anchor: 'start' | 'end';
+  labelY: number;
   role: 'audio' | 'input' | 'led' | 'plain';
 }
 
 /**
- * Teensy numbering runs 0 up the left side and continues down the right,
- * which is what makes a drawn pin findable on the real board.
+ * Teensy numbering runs 0 up one side and continues back down the other,
+ * which is what makes a drawn pin findable on the real board. Held with the
+ * USB at the left, that is 0 rising along the bottom edge and the highest
+ * number falling along the top.
  */
 const dots = computed<Dot[]>(() => {
   const out: Dot[] = [];
   const rows = props.board.rows;
-  for (let r = 0; r < rows; r++) {
-    out.push({ ...place(r, 'left'), n: r, ...role(r) });
-    const rn = rows * 2 - 1 - r;
-    out.push({ ...place(r, 'right'), n: rn, ...role(rn) });
+  for (let i = 0; i < rows; i++) {
+    const x = MARGIN + i * PITCH + PITCH / 2;
+    /* Labels sit inside the board: there is height to spare and no room
+     * outside it once the diagram is this wide. */
+    out.push({ n: i, x, y: BOTTOM_Y, labelY: BOTTOM_Y - 10, ...role(i) });
+    const top = rows * 2 - 1 - i;
+    out.push({ n: top, x, y: TOP_Y, labelY: TOP_Y + 14, ...role(top) });
   }
   return out;
 
-  function place(row: number, side: 'left' | 'right') {
-    return {
-      x: side === 'left' ? 14 : WIDTH - 14,
-      y: TOP + row * PITCH + PITCH / 2,
-      anchor: (side === 'left' ? 'start' : 'end') as 'start' | 'end',
-    };
-  }
   function role(n: number): { role: Dot['role'] } {
     if (audioPins.value.has(n)) return { role: 'audio' };
     if (inputPins.value.has(n)) return { role: 'input' };
@@ -86,32 +95,28 @@ const legend = computed(() => {
 
 <template>
   <div class="diagram">
-    <svg :viewBox="`0 0 ${WIDTH} ${height}`" :style="{ maxHeight: height + 'px' }" role="img"
-         :aria-label="`${board.label} pin diagram`">
-      <rect
-        x="6" y="6" :width="WIDTH - 12" :height="height - 12"
-        class="pcb" rx="0"
-      />
-      <rect x="52" :y="14" width="64" height="26" class="usb" />
-      <text :x="WIDTH / 2" :y="height - 14" class="brand" text-anchor="middle">
-        {{ board.label }}
-      </text>
+    <svg
+      class="board"
+      :viewBox="`0 0 ${width} ${HEIGHT}`"
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      :aria-label="`${board.label} pin diagram`"
+    >
+      <rect x="4" y="6" :width="width - 8" :height="HEIGHT - 12" class="pcb" />
 
-      <!-- the onboard LED, which blinks when a firmware is running -->
-      <circle :cx="WIDTH - 30" :cy="52" r="4" class="led" :class="{ on: active }" />
+      <!-- the USB end, which is how you know which way round it is -->
+      <rect x="0" y="38" width="20" height="40" class="usb" />
+
+      <!-- the onboard LED, which lights while a firmware is running -->
+      <circle cx="34" cy="58" r="4" class="led" :class="{ on: active }" />
+
+      <text :x="width / 2" y="61" class="brand" text-anchor="middle">{{ board.label }}</text>
 
       <g v-for="d in dots" :key="d.n">
-        <rect
-          :x="d.x - 5" :y="d.y - 5" width="10" height="10"
-          class="pad" :class="d.role"
-        />
-        <text
-          :x="d.anchor === 'start' ? d.x + 10 : d.x - 10"
-          :y="d.y + 3.5"
-          :text-anchor="d.anchor"
-          class="pin-label"
-          :class="d.role"
-        >{{ d.n }}</text>
+        <rect :x="d.x - 5" :y="d.y - 5" width="10" height="10" class="pad" :class="d.role" />
+        <text :x="d.x" :y="d.labelY" text-anchor="middle" class="pin-label" :class="d.role">
+          {{ d.n }}
+        </text>
       </g>
     </svg>
 
@@ -130,14 +135,22 @@ const legend = computed(() => {
 </template>
 
 <style scoped>
+/*
+ * The board takes the width and the legend takes a fixed column beside it,
+ * because the legend is short lines and would look ragged if it stretched.
+ * The board is capped so a 14 row part does not blow up to twice life size
+ * on a wide screen.
+ */
 .diagram {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 16px;
+  /* The board column is capped rather than 1fr, so the legend sits next to
+   * the drawing instead of at the far edge with a hole between them. */
+  grid-template-columns: minmax(0, 720px) minmax(200px, 1fr);
+  gap: 20px;
   align-items: start;
 }
-svg {
-  width: 168px;
+.board {
+  width: 100%;
   height: auto;
 }
 .pcb {
@@ -152,8 +165,8 @@ svg {
 }
 .brand {
   font-family: var(--disp);
-  font-size: 7px;
-  letter-spacing: 0.14em;
+  font-size: 9px;
+  letter-spacing: 0.2em;
   fill: var(--faded);
 }
 .pad {
@@ -175,7 +188,7 @@ svg {
 }
 .pin-label {
   font-family: var(--mono);
-  font-size: 6px;
+  font-size: 6.5px;
   fill: var(--faded);
 }
 .pin-label.audio,
@@ -229,9 +242,8 @@ svg {
   letter-spacing: 0;
   color: var(--tick);
   line-height: 1.6;
-  max-width: 52ch;
 }
-@media (max-width: 700px) {
+@media (max-width: 760px) {
   .diagram {
     grid-template-columns: 1fr;
   }

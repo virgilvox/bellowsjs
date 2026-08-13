@@ -39,6 +39,32 @@ const FILES = {
   audioshield_ino: '10_AudioShield/10_AudioShield.ino',
   piezo_h: '15_Piezo/piezo.h',
   piezo_ino: '15_Piezo/15_Piezo.ino',
+
+  /* 06_FirstSteps: one header per rung, all four in one image. */
+  firststeps_ino: '06_FirstSteps/06_FirstSteps.ino',
+  tone_h: '06_FirstSteps/tone.h',
+  fs_envelope_h: '06_FirstSteps/envelope.h',
+  fs_filter_h: '06_FirstSteps/filter.h',
+  fs_motion_h: '06_FirstSteps/motion.h',
+
+  /* 07_Workstation: the composer-level one. */
+  workstation_h: '07_Workstation/workstation.h',
+  workstation_ino: '07_Workstation/07_Workstation.ino',
+
+  /* 20_Instruments: one header per patch, sharing player.h and one .ino. */
+  instruments_ino: '20_Instruments/20_Instruments.ino',
+  player_h: '20_Instruments/player.h',
+  epiano_h: '20_Instruments/epiano.h',
+  acid_h: '20_Instruments/acid.h',
+  junopad_h: '20_Instruments/junopad.h',
+  westcoast_h: '20_Instruments/westcoast.h',
+  guitar_h: '20_Instruments/guitar.h',
+  bells_h: '20_Instruments/bells.h',
+  marimba_h: '20_Instruments/marimba.h',
+  glass_h: '20_Instruments/glass.h',
+  clarinet_h: '20_Instruments/clarinet.h',
+  choir_h: '20_Instruments/choir.h',
+  eightoheight_h: '20_Instruments/eightoheight.h',
 };
 
 const parts = [

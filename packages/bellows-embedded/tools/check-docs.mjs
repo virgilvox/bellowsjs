@@ -460,6 +460,9 @@ const EXAMPLES_ROWS = [
   { marker: '| 03_PolySynth |', sketch: 'p6_e3_polysynth', cols: ['flash', 'ram'] },
   { marker: '| 04_ScalesAndTuning |', sketch: 'p7_e4_scalestuning', cols: ['flash', 'ram'] },
   { marker: '| 05_MidiInstrument |', sketch: 'p8_e5_midiinstrument', cols: ['flash', 'ram'] },
+  { marker: '| 07_Workstation |', sketch: 'p11_e7_workstation', cols: ['flash', 'ram'] },
+  { marker: '| 06_FirstSteps |', sketch: 'p12_e6_firststeps', cols: ['flash', 'ram'] },
+  { marker: '| 20_Instruments |', sketch: 'p13_e20_instruments', cols: ['flash', 'ram'] },
 ];
 
 const DOCS = [
@@ -772,6 +775,26 @@ const PROSE = [
     doc: 'examples/README.md',
     re: /04 is (\d+) B of flash because a plucked string needs no such table, and its (\d+) B of RAM/,
     gets: [() => value('p7_e4_scalestuning', 'flash'), () => value('p7_e4_scalestuning', 'ram')],
+  },
+  {
+    doc: 'examples/README.md',
+    re: /Its (\d+) B\s+of flash is what reaching almost everything costs/,
+    gets: [() => value('p11_e7_workstation', 'flash')],
+  },
+  {
+    doc: 'examples/README.md',
+    re: /Its (\d+) B of RAM is one object, the 500 ms stereo\s+delay line, at 187 KB/,
+    gets: [() => value('p11_e7_workstation', 'ram')],
+  },
+  {
+    doc: 'examples/README.md',
+    re: /06 is (\d+) B of flash for four primitives/,
+    gets: [() => value('p12_e6_firststeps', 'flash')],
+  },
+  {
+    doc: 'examples/README.md',
+    re: /why 20_Instruments reaches eight engines for\s+(\d+) B/,
+    gets: [() => value('p13_e20_instruments', 'flash')],
   },
 
   // ---- docs/HANDOFF.md ----

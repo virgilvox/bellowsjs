@@ -7,9 +7,23 @@
   the difference between those two on every commit. That measurement is
   printed next to the transport rather than left as a promise.
 
-  The three panels that matter are BOARD (what you would wire), FIRMWARE
-  (what runs, and the real source), and OUTPUT (what the sound goes through
-  on its way out, which is where most of the audible difference lives).
+  LAID OUT AS A CONSOLE, WHICH IS THE THIRD SHAPE THIS PAGE HAS HAD.
+
+  It was one column, then a two-up grid, and both were a scroll: sixteen
+  panels is sixteen panels however they are arranged, and the controls you
+  use continuously (RUN, the output path, the status lamp) went off the top
+  of the screen the moment you looked at anything else.
+
+  So the panels are not rearranged here, they are collapsed. One strip stays
+  put, holding the transport, the pickers and the one sentence about what
+  this actually runs, and everything else takes turns in a single area under
+  it. That removes the scroll rather than moving it: the strip and the tabs
+  are about 170 px, and whichever area is showing gets the rest of the
+  window without competing with five others.
+
+  The strip is `position: sticky; top: 16px`, which is the app's one sticky
+  convention (DocsView's sidebar uses the same 16). It is not `fixed`,
+  because the page header should still scroll away.
 -->
 <script setup lang="ts">
 import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
@@ -28,9 +42,35 @@ const running = ref(false);
 const status = ref('idle');
 const potValue = ref(0.5);
 const heldKeys = ref<number[]>([]);
-const showSource = ref(true);
 
 const fw = computed(() => FIRMWARE_BY_ID.get(firmwareId.value)!);
+
+/**
+ * The picker, grouped by what kind of thing an entry is.
+ *
+ * Twenty-two flat entries is a list you scroll rather than read, and the
+ * groups are a real distinction: four rungs of primitives, four programs
+ * that teach one idea each, one that puts them together, eleven patches
+ * sharing a note source, and two about getting sound off the board.
+ *
+ * The group order is written down rather than taken from the array,
+ * because the order to READ them in is not the order the examples are
+ * numbered in: 06 is the rung below 01, and 20 is a library rather than a
+ * lesson. Order within a group stays as FIRMWARES has it.
+ */
+const GROUP_ORDER = [
+  'first steps',
+  'learn the library',
+  'the whole thing',
+  'instruments',
+  'getting sound out',
+];
+
+const FIRMWARE_GROUPS = computed(() =>
+  GROUP_ORDER.map((name) => ({ name, items: FIRMWARES.filter((f) => f.group === name) })).filter(
+    (g) => g.items.length > 0,
+  ),
+);
 const board = computed(() => BOARDS.find((b) => b.id === boardId.value)!);
 const out = computed(() => OUTPUT_BY_ID.get(outputId.value)!);
 const caveats = computed(() => VOICE_CAVEATS[fw.value.voice] ?? []);
@@ -52,6 +92,34 @@ const parityDb = computed(() => {
 });
 
 const exported = computed(() => applyParams(fw.value.headerSource, params.value));
+
+/* ---------------- the switchable area ---------------- */
+
+type TabId = 'board' | 'code' | 'params' | 'inputs' | 'flash';
+
+/**
+ * One area at a time, in the order you meet them: what you would wire, what
+ * runs, what you can turn, what you can play, how it gets to the board.
+ *
+ * A tab with nothing in it is disabled rather than removed, so the row does
+ * not reflow when you change firmware and the same tab stays under the same
+ * finger.
+ */
+const TABS: Array<{ id: TabId; label: string; num: string }> = [
+  { id: 'board', label: 'board', num: '02' },
+  { id: 'code', label: 'code', num: '03' },
+  { id: 'params', label: 'parameters', num: '04' },
+  { id: 'inputs', label: 'inputs', num: '05' },
+  { id: 'flash', label: 'flash', num: '06' },
+];
+const tab = ref<TabId>('board');
+
+function tabEnabled(id: TabId): boolean {
+  if (id === 'params') return params.value.length > 0;
+  if (id === 'inputs') return fw.value.inputs.length > 0;
+  return true;
+}
+const activeTab = computed(() => TABS.find((t) => t.id === tab.value)!);
 
 /* ---------------- audio ---------------- */
 
@@ -136,6 +204,8 @@ watch(firmwareId, () => {
   if (!availableOutputs.value.some((o) => o.id === outputId.value)) {
     outputId.value = availableOutputs.value[0]?.id ?? 'shield';
   }
+  /* A firmware with no pot leaves you looking at an empty INPUTS. */
+  if (!tabEnabled(tab.value)) tab.value = 'board';
   if (wasRunning) void start();
 });
 
@@ -180,74 +250,43 @@ onActivated(() => {
 
 <template>
   <div class="sim">
-    <aside class="rail">
-      <div class="panel">
-        <div class="panel-title">firmware <em>01</em></div>
-        <button
-          v-for="f in FIRMWARES"
-          :key="f.id"
-          class="entry"
-          :class="{ lit: f.id === firmwareId }"
-          @click="firmwareId = f.id"
-        >
-          {{ f.title }}
-        </button>
-      </div>
-
-      <div class="panel">
-        <div class="panel-title">board <em>02</em></div>
-        <select v-model="boardId">
-          <option v-for="b in BOARDS" :key="b.id" :value="b.id">{{ b.label }}</option>
-        </select>
-        <p class="note">{{ board.blurb }}</p>
-      </div>
-    </aside>
-
-    <main class="main">
-      <section class="panel board-panel">
+    <!--
+      The strip. Everything in here is either something you press while
+      listening or something you need to be able to read while listening,
+      which is the whole rule for what earns a place in it.
+    -->
+    <div class="deck">
+      <section class="panel strip">
         <div class="panel-title">
-          board <em>03 // {{ board.label }}</em>
+          simulator <em>01 // {{ fw.folder }}</em>
         </div>
-        <BoardDiagram
-          :board="board"
-          :inputs="fw.inputs"
-          :indicators="fw.indicators"
-          :output="out"
-          :active="running"
-        />
-      </section>
 
-      <section class="panel run-panel">
-        <div class="panel-title">
-          transport <em>04</em>
-        </div>
-        <div class="row">
+        <div class="row transport">
           <button class="big" :class="{ lit: running }" @click="running ? stop() : start()">
             {{ running ? 'STOP' : 'RUN' }}
           </button>
           <span class="lamp-dot" :class="{ hot: booted }"></span>
-          <span class="meta">{{ status }}</span>
+          <span class="meta status">{{ status }}</span>
+
+          <label class="pick">
+            <span class="pick-label">firmware</span>
+            <select v-model="firmwareId">
+              <optgroup v-for="g in FIRMWARE_GROUPS" :key="g.name" :label="g.name">
+                <option v-for="f in g.items" :key="f.id" :value="f.id">{{ f.title }}</option>
+              </optgroup>
+            </select>
+          </label>
+
+          <label class="pick">
+            <span class="pick-label">board</span>
+            <select v-model="boardId">
+              <option v-for="b in BOARDS" :key="b.id" :value="b.id">{{ b.label }}</option>
+            </select>
+          </label>
         </div>
 
-        <p class="accuracy">
-          This runs the TypeScript implementation of the same DSP, not an emulated Cortex-M7.
-          <template v-if="fw.parityRelRms !== null">
-            The repository diffs the two on every commit: for
-            <code>{{ fw.parityRow }}</code> the measured difference is
-            <b>{{ fw.parityRelRms.toExponential(2) }}</b> relative RMS, about
-            <b>{{ parityDb }} dB</b>.
-          </template>
-          Timing is not simulated: whether this board renders it in time has never been measured
-          on hardware, for any board.
-        </p>
-        <ul v-if="caveats.length" class="caveats">
-          <li v-for="c in caveats" :key="c">{{ c }}</li>
-        </ul>
-      </section>
-
-      <section class="panel out-panel">
-        <div class="panel-title">output <em>05</em></div>
-        <div class="chips">
+        <div class="row outs">
+          <span class="pick-label">output</span>
           <button
             v-for="o in availableOutputs"
             :key="o.id"
@@ -257,18 +296,108 @@ onActivated(() => {
             {{ o.label }}
           </button>
         </div>
-        <p class="note">{{ out.blurb }}</p>
-        <div class="facts">
-          <span v-if="out.bits">{{ out.bits }} bit</span>
-          <span v-if="noiseFloorDb(out.bits)">floor {{ noiseFloorDb(out.bits) }} dB</span>
-          <span>{{ out.mono ? 'mono' : 'stereo' }}</span>
-          <span>{{ out.example }}</span>
-        </div>
-        <p class="basis">{{ out.basis }}</p>
+
+        <!--
+          The claim, on one line, where it cannot be scrolled away from. The
+          paragraph that explains it is under BOARD; this is the part that
+          has to stay in front of you while you listen.
+        -->
+        <p class="accuracy">
+          TypeScript, not an emulated Cortex-M7.
+          <template v-if="fw.parityRelRms !== null">
+            <code>{{ fw.parityRow }}</code> measured against the C++ at
+            <b>{{ fw.parityRelRms.toExponential(2) }}</b> relative RMS, about
+            <b>{{ parityDb }} dB</b>.
+          </template>
+          Timing is not simulated.
+        </p>
       </section>
 
-      <section v-if="params.length" class="panel">
-        <div class="panel-title">parameters <em>06</em></div>
+      <nav class="tabs">
+        <button
+          v-for="t in TABS"
+          :key="t.id"
+          :class="{ lit: t.id === tab }"
+          :disabled="!tabEnabled(t.id)"
+          @click="tab = t.id"
+        >
+          {{ t.label }}
+        </button>
+      </nav>
+    </div>
+
+    <section class="panel stage">
+      <div class="panel-title">
+        {{ activeTab.label }}
+        <em>
+          {{ activeTab.num }}
+          <template v-if="tab === 'board'"> // {{ board.label }}</template>
+          <template v-else-if="tab === 'code'"> // {{ fw.folder }}/{{ fw.headerName }}</template>
+        </em>
+      </div>
+
+      <!-- BOARD: what you would wire, and what the page is claiming -->
+      <div v-if="tab === 'board'">
+        <BoardDiagram
+          :board="board"
+          :inputs="fw.inputs"
+          :indicators="fw.indicators"
+          :output="out"
+          :active="running"
+        />
+
+        <div class="split">
+          <div>
+            <div class="sub">output path // {{ out.label }}</div>
+            <p class="note">{{ out.blurb }}</p>
+            <div class="facts">
+              <span v-if="out.bits">{{ out.bits }} bit</span>
+              <span v-if="noiseFloorDb(out.bits)">floor {{ noiseFloorDb(out.bits) }} dB</span>
+              <span>{{ out.mono ? 'mono' : 'stereo' }}</span>
+              <span>{{ out.example }}</span>
+            </div>
+            <p class="basis">{{ out.basis }}</p>
+          </div>
+
+          <div>
+            <div class="sub">what this is, in full</div>
+            <p class="note">
+              This runs the TypeScript implementation of the same DSP, not an emulated
+              Cortex-M7.
+              <template v-if="fw.parityRelRms !== null">
+                The repository diffs the two on every commit: for
+                <code>{{ fw.parityRow }}</code> the measured difference is
+                <b>{{ fw.parityRelRms.toExponential(2) }}</b> relative RMS, about
+                <b>{{ parityDb }} dB</b>.
+              </template>
+              Timing is not simulated: whether this board renders it in time has never been
+              measured on hardware, for any board.
+            </p>
+            <ul v-if="caveats.length" class="caveats">
+              <li v-for="c in caveats" :key="c">{{ c }}</li>
+            </ul>
+            <p class="note">{{ board.blurb }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- CODE: the real file, with your numbers written into it -->
+      <div v-else-if="tab === 'code'">
+        <p class="note">
+          The real file, generated from the example rather than copied, so it cannot drift from
+          what compiles. Your parameter changes are written back into it, so what downloads is
+          this example with your numbers and every comment its author wrote still in place.
+        </p>
+        <div class="row">
+          <button @click="download(fw.headerName, exported.text)">DOWNLOAD .H</button>
+          <button @click="download(fw.folder + '.ino', fw.inoSource)">DOWNLOAD .INO</button>
+          <span class="meta">{{ exported.applied }} value(s) written</span>
+        </div>
+        <pre>{{ exported.text }}</pre>
+      </div>
+
+      <!-- PARAMETERS -->
+      <div v-else-if="tab === 'params'" class="fields">
         <div class="field" v-for="p in params" :key="p.key">
           <label>{{ p.label }}<span v-if="p.unit"> // {{ p.unit }}</span></label>
           <div class="slider-row">
@@ -284,15 +413,15 @@ onActivated(() => {
           </div>
           <p class="hint">{{ p.hint }}</p>
         </div>
-      </section>
+      </div>
 
-      <section v-if="fw.inputs.length" class="panel">
-        <div class="panel-title">inputs <em>07</em></div>
+      <!-- INPUTS -->
+      <div v-else-if="tab === 'inputs'">
         <div v-for="inp in fw.inputs" :key="inp.label" class="input-block">
           <label>{{ inp.label }}<span v-if="inp.pin !== null"> // PIN {{ inp.pin }}</span></label>
           <p class="hint">{{ inp.hint }}</p>
 
-          <div v-if="inp.kind === 'pot'" class="slider-row">
+          <div v-if="inp.kind === 'pot'" class="slider-row narrow">
             <input type="range" min="0" max="1" step="0.001" v-model.number="potValue" />
             <output>{{ Math.round(potValue * 1023) }}</output>
           </div>
@@ -311,74 +440,115 @@ onActivated(() => {
             </button>
           </div>
         </div>
-      </section>
+      </div>
 
-      <section class="panel wide">
-        <div class="panel-title">
-          firmware source <em>08 // {{ fw.folder }}/{{ fw.headerName }}</em>
-        </div>
-        <p class="note">
-          The real file, generated from the example rather than copied, so it cannot drift from
-          what compiles. Your parameter changes are written back into it, so what downloads is
-          this example with your numbers and every comment its author wrote still in place.
-        </p>
-        <div class="row">
-          <button @click="showSource = !showSource">{{ showSource ? 'HIDE' : 'SHOW' }} SOURCE</button>
-          <button @click="download(fw.headerName, exported.text)">DOWNLOAD .H</button>
-          <button @click="download(fw.folder + '.ino', fw.inoSource)">DOWNLOAD .INO</button>
-          <span class="meta">{{ exported.applied }} value(s) written</span>
-        </div>
-        <pre v-if="showSource">{{ exported.text }}</pre>
-      </section>
-
-      <div class="wide"><FlashPanel :board="board" :firmware="fw" /></div>
-    </main>
+      <!-- FLASH -->
+      <FlashPanel v-else :board="board" :firmware="fw" />
+    </section>
   </div>
 </template>
 
 <style scoped>
 .sim {
-  display: grid;
-  grid-template-columns: 232px 1fr;
-  gap: 16px;
-  align-items: start;
+  display: block;
 }
 
 /*
- * The main column is itself a two-up grid rather than a stack.
- *
- * Stacked full-width panels meant the board diagram sat next to a metre of
- * empty paper and everything else was a scroll away. Pairing them puts the
- * board beside the transport and the output beside the parameters, which is
- * how they are actually used: you change one and listen to the other. The
- * source and the flasher stay full width because both are long text.
+ * The strip and the tabs travel together, so the tab you are on is always
+ * visible next to the transport that is driving it. The background matters:
+ * without it the page shows through the gap between the two as the content
+ * scrolls under them.
  */
-.main {
+.deck {
+  position: sticky;
+  top: 16px;
+  z-index: 5;
+  background: var(--forge);
+  padding-bottom: 10px;
+}
+.strip {
+  margin-bottom: 10px;
+}
+.tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tabs button {
+  font-family: var(--disp);
+  font-weight: 600;
+  padding: 8px 16px;
+}
+.stage {
+  min-height: 380px;
+}
+/* The flash panel is a panel of its own, so it must not draw a second box
+ * inside this one. Capped, because its select is width 100% and would
+ * otherwise stretch across the whole console. */
+.stage :deep(.panel) {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin-bottom: 0;
+  max-width: 780px;
+}
+.stage :deep(.panel > .panel-title) {
+  display: none;
+}
+
+.transport {
+  margin-bottom: 8px;
+}
+.outs {
+  border-top: 1px dashed var(--seam);
+  padding-top: 8px;
+}
+.pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pick select {
+  width: auto;
+  min-width: 168px;
+}
+.pick-label,
+.sub {
+  font-size: 10px;
+  color: var(--tick);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.sub {
+  border-bottom: 1px dashed var(--seam);
+  padding-bottom: 5px;
+  margin-bottom: 8px;
+}
+.status {
+  min-width: 62px;
+}
+
+.split {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  align-items: start;
+  gap: 20px;
+  margin-top: 18px;
+  border-top: 1px dashed var(--seam);
+  padding-top: 14px;
 }
-.main > .panel {
-  margin-bottom: 0;
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px 20px;
 }
-.wide {
-  grid-column: 1 / -1;
-}
-.board-panel {
-  grid-row: span 2;
-}
-.rail .entry {
-  display: block;
-  width: 100%;
-  text-align: left;
-  margin-bottom: 4px;
-}
+
 .note {
   font-size: 11.5px;
   color: var(--tick);
   line-height: 1.6;
   margin-top: 8px;
+  max-width: 74ch;
 }
 .hint {
   font-size: 10px;
@@ -396,11 +566,6 @@ onActivated(() => {
   display: flex;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
-}
-.chips {
-  display: flex;
-  gap: 6px;
   flex-wrap: wrap;
 }
 .facts {
@@ -425,7 +590,11 @@ onActivated(() => {
   margin-top: 10px;
   max-width: 74ch;
 }
-.accuracy b {
+.accuracy {
+  margin-top: 8px;
+}
+.accuracy b,
+.note b {
   color: var(--phosphor-hot);
 }
 .caveats {
@@ -452,7 +621,8 @@ onActivated(() => {
   touch-action: none;
 }
 .input-block {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  max-width: 520px;
 }
 .input-block label {
   display: block;
@@ -461,45 +631,39 @@ onActivated(() => {
   text-transform: uppercase;
   color: var(--tick);
 }
+.slider-row.narrow {
+  max-width: 320px;
+}
 pre {
   background: var(--iron);
   border: 1px solid var(--seam);
   padding: 12px 14px;
-  overflow-x: auto;
+  overflow: auto;
   font-size: 11.5px;
   line-height: 1.6;
   color: var(--bone);
   margin-top: 10px;
-  max-height: 420px;
+  /* The strip and the tabs are about 170 px, so this is the rest of a
+   * short window with the panel's own chrome taken off. */
+  max-height: calc(100vh - 330px);
+  min-height: 300px;
 }
-/* The two-up main column needs about 560px per side before the board
- * diagram and its legend stop fitting, so it collapses first and the rail
- * follows at the app's usual 900. */
-@media (max-width: 1180px) {
-  .main {
-    grid-template-columns: 1fr;
-  }
-  .board-panel {
-    grid-row: auto;
-  }
+code {
+  font-family: var(--mono);
+  background: var(--char);
+  border: 1px solid var(--seam);
+  padding: 0 4px;
+  color: var(--phosphor-hot);
 }
+
 @media (max-width: 900px) {
-  .sim {
+  .split {
     grid-template-columns: 1fr;
   }
-  .rail {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    align-items: start;
-  }
-  .rail .panel {
-    margin-bottom: 0;
-  }
-}
-@media (max-width: 560px) {
-  .rail {
-    grid-template-columns: 1fr;
+  /* Below this the strip is tall enough that pinning it costs more room
+   * than it saves. */
+  .deck {
+    position: static;
   }
 }
 </style>

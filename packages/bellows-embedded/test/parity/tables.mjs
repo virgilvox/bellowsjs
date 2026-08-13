@@ -44,6 +44,7 @@ const { parseNote, noteName } = await import(join(SRC, 'theory/notes.ts'));
 const { ElementaryCA } = await import(join(SRC, 'seq/automata.ts'));
 const { lsystem, mapToDegrees } = await import(join(SRC, 'seq/lsystem.ts'));
 const { Arpeggiator } = await import(join(SRC, 'seq/arp.ts'));
+const { Markov } = await import(join(SRC, 'seq/markov.ts'));
 const { TempoMap } = await import(join(SRC, 'seq/tempomap.ts'));
 const { parseMidiMessage } = await import(join(SRC, 'io/webmidi.ts'));
 
@@ -140,6 +141,152 @@ for (const c of LSYS_CASES) {
   /* -128 is kRestDegree in the C++, standing in for the JS null. */
   const degs = mapToDegrees(r, { A: 0, B: 2, C: null }).map((d) => (d === null ? -128 : d));
   out.push(`lsysdeg ${degs.length} ${degs.join(' ')} `);
+}
+
+/*
+ * Markov chains.
+ *
+ * This is the one module here that is a REWRITE and not a transcription:
+ * the JS keys a context by JSON.stringify into a Map per order and grows
+ * for as long as you train, and the C++ packs the context into a uint32
+ * and holds a fixed number of them. So there is more to get wrong here
+ * than anywhere else in this file, and the sentence at the top applies
+ * hardest: a wrong transition table plays a confident, plausible, wrong
+ * melody and no audio test can hear it.
+ *
+ * Three things are compared, not one.
+ *
+ * The whole TABLE, per order, in the order contexts were first recorded,
+ * which is the order both a JS Map and the C++ array iterate. Reading the
+ * private `tables` field is deliberate: the table is what has to be right,
+ * and the notes coming out of the chain only sample it.
+ *
+ * The ORDERING INSIDE each distribution, which the row carries because
+ * symbols print in first-seen order. rng.weighted subtracts along the
+ * array, so the same weights in a different order pick a different symbol
+ * from the same draw, and nothing else would notice.
+ *
+ * And the WALK, step by step, so the backoff from order k down to 0 is
+ * compared rather than assumed.
+ *
+ * The draw is compared here, where the arp's random mode above and the
+ * L-system's stochastic rules are excluded because they draw from an rng.
+ * What makes it possible is that Markov::NextWith on the C++ side takes
+ * the uniform instead of drawing it, so both sides walk the same r. Every
+ * r is a multiple of 1/16 and every weight is a small integer, so r *
+ * total and the subtraction chain are exact in float and in double alike:
+ * that is what keeps the generator's float rounding, which the fxin rows
+ * in parity.mjs exist to pin, out of a comparison that is not about it.
+ *
+ * The six line weighted walk below is written out rather than taken from
+ * rng.weighted, because a fixed r cannot be pushed into a NamedRng
+ * closure. It is the reference, so what it gates is the C++ walk against
+ * the JS one; prng.ts's own copy is not under test here and never was.
+ *
+ * Truncation is C++ only, like the L-system's, so it is not asked.
+ */
+{
+  /* (2i + 1) / 16, matching the kDraws array in tables.cpp. No odd
+   * numerator can land on a cumulative boundary of the cases below, whose
+   * totals are 2, 3, 4, 5 and 10. */
+  const DRAWS = [0.0625, 0.1875, 0.3125, 0.4375, 0.5625, 0.6875, 0.8125, 0.9375];
+  /* Draws that land EXACTLY on a boundary of the `edge` chain, whose every
+   * distribution sums to 16. Without them nothing here can tell `r <= 0`
+   * from `r < 0`, and the two sides have to agree on the tie. */
+  const EDGE_DRAWS = [0.25, 0.5, 0.75, 0.125, 0.375, 0.625, 0.875, 0.5];
+  const fixed = (r) => ({
+    weighted(weights) {
+      let total = 0;
+      for (let i = 0; i < weights.length; i++) total += weights[i];
+      let x = r * total;
+      for (let i = 0; i < weights.length; i++) {
+        x -= weights[i];
+        if (x <= 0) return i;
+      }
+      return weights.length - 1;
+    },
+  });
+
+  const dump = (name, m) => {
+    /* `tables` is private to TypeScript and an ordinary property at
+     * runtime, which is the only way to see the table at all. */
+    const tables = m.tables;
+    let contexts = 0;
+    for (let k = 0; k <= m.order; k++) contexts += tables[k].size;
+    out.push(`mkvinfo ${name} ${m.order} ${contexts}`);
+    for (let k = 0; k <= m.order; k++) {
+      for (const [ck, bucket] of tables[k]) {
+        const ctx = k === 0 ? '-' : JSON.parse(ck).join('');
+        let line = `mkvtab ${name} ${k} ${ctx} ${bucket.values.length}`;
+        for (let j = 0; j < bucket.values.length; j++) {
+          line += ` ${bucket.values[j]} ${bucket.weights[j].toFixed(6)}`;
+        }
+        out.push(line);
+      }
+    }
+  };
+
+  const walk = (name, m, seed, draws = DRAWS) => {
+    m.seed(seed);
+    for (let i = 0; i < draws.length; i++) {
+      let ok = 1;
+      let v = -1;
+      try {
+        v = m.next(fixed(draws[i]));
+      } catch {
+        /* The C++ returns false where this throws, since an MCU has no
+         * exceptions to throw. */
+        ok = 0;
+      }
+      out.push(`mkvwalk ${name} ${i} ${draws[i].toFixed(4)} ${ok} ${v}`);
+    }
+  };
+
+  const TUNE = [0, 1, 0, 2, 1, 0, 1, 2, 2, 0];
+  for (const order of [1, 2]) {
+    const m = new Markov(order);
+    m.train(TUNE);
+    dump(`o${order}`, m);
+    walk(`o${order}`, m, [0, 1]);
+  }
+  {
+    const m = new Markov(2);
+    m.addTransition([0], 1, 1);
+    m.addTransition([0], 1, 1);
+    m.addTransition([0], 2, 3);
+    m.addTransition([0, 1], 2, 1);
+    m.addTransition([0, 1], 3, 2);
+    m.addTransition([], 0, 1);
+    m.addTransition([], 3, 4);
+    dump('add', m);
+    walk('add', m, [0, 1]);
+  }
+  {
+    const m = new Markov(2);
+    m.train([3, 0, 1]);
+    dump('bko', m);
+    walk('bko', m, [2, 0]);
+  }
+  {
+    dump('empty', new Markov(2));
+    walk('empty', new Markov(2), [0, 1]);
+  }
+  {
+    /* Every distribution sums to 16, so a draw that is a multiple of 1/16
+     * can leave the running total at exactly zero. Walked from the empty
+     * context, the first three draws each land on a boundary. */
+    const m = new Markov(1);
+    m.addTransition([], 0, 4);
+    m.addTransition([], 1, 12);
+    m.addTransition([0], 1, 8);
+    m.addTransition([0], 2, 8);
+    m.addTransition([1], 0, 12);
+    m.addTransition([1], 3, 4);
+    m.addTransition([2], 2, 16);
+    m.addTransition([3], 3, 16);
+    dump('edge', m);
+    walk('edge', m, [], EDGE_DRAWS);
+  }
 }
 
 /* Tempo map, the closed form integral. */

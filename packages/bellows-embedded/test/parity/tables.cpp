@@ -13,6 +13,7 @@
 #include "bellows/seq/arp.h"
 #include "bellows/seq/automata.h"
 #include "bellows/seq/lsystem.h"
+#include "bellows/seq/markov.h"
 #include "bellows/seq/tempomap.h"
 #include "bellows/theory/scales.h"
 #include "bellows/theory/chords.h"
@@ -151,6 +152,164 @@ int main() {
       printf("lsysdeg %d ", n);
       for (int i = 0; i < n; ++i) printf("%d ", static_cast<int>(out[i]));
       printf("\n");
+    }
+  }
+  /*
+   * Markov chains, which are the reason this file exists stated in one
+   * module: a wrong transition table plays a confident, plausible, wrong
+   * melody and no audio test can hear it.
+   *
+   * The C++ is a rewrite rather than a transcription (the JS keys contexts
+   * by JSON string into an unbounded Map), so there is more to get wrong
+   * here than anywhere else in this file, and two properties beyond the
+   * numbers have to hold. The whole table is dumped, per order, in the
+   * order contexts were first recorded, so the comparison sees the
+   * FIRST-SEEN ordering of each distribution: reordering the same weights
+   * picks a different symbol from the same draw and is otherwise
+   * invisible. And the walk is dumped separately so the backoff from order
+   * k down to 0 is compared step by step.
+   *
+   * The draw itself is compared, unlike the arp's random mode and the
+   * L-system's stochastic rules, which are excluded here because they draw
+   * from an rng. That is possible because Markov::NextWith takes the
+   * uniform instead of drawing it, so both sides can be handed the same r.
+   * Every r below is a multiple of 1/16 and every weight is a small
+   * integer, so r * total and the subtraction chain are exact in float and
+   * in double alike and no rounding can reach the comparison. Going
+   * through an Rng instead would compare the generator's float rounding,
+   * which is the property the fxin rows in parity.mjs already pin.
+   *
+   * Truncation is a C++-only behaviour with no JS counterpart, so it is
+   * not a parity question and is not asked; kMaxContexts is 24 here, above
+   * the 21 that the widest case can reach.
+   */
+  {
+    using Chain = bellows::Markov<4, 24, 2>;
+    /* (2i + 1) / 16: exactly representable, and no odd numerator can land
+     * on a cumulative boundary of the cases below, whose totals are 2, 3,
+     * 4, 5 and 10. That is what kEdge is for. */
+    static const float kDraws[] = {0.0625f, 0.1875f, 0.3125f, 0.4375f,
+                                   0.5625f, 0.6875f, 0.8125f, 0.9375f};
+    /* Draws that land EXACTLY on a boundary of the kEdge chain, whose
+     * every distribution sums to 16. Without them the comparison cannot
+     * tell `x <= 0` from `x < 0`, which is the one line where the two
+     * implementations must agree on a tie and where an off-by-one in the
+     * walk is otherwise invisible: watched failing on that mutation. */
+    static const float kEdgeDraws[] = {0.25f,  0.5f,   0.75f,  0.125f,
+                                       0.375f, 0.625f, 0.875f, 0.5f};
+
+    auto dump = [](const char* name, Chain& chain) {
+      printf("mkvinfo %s %d %d\n", name, chain.Order(), chain.Contexts());
+      for (int k = 0; k <= chain.Order(); ++k) {
+        for (int i = 0; i < chain.Contexts(); ++i) {
+          const Chain::Context& c = chain.ContextAt(i);
+          if (static_cast<int>(c.order) != k) continue;
+          uint8_t ctx[2] = {0, 0};
+          Chain::Unpack(c.key, c.order, ctx);
+          printf("mkvtab %s %d ", name, k);
+          if (k == 0) {
+            printf("-");
+          } else {
+            for (int j = 0; j < k; ++j) printf("%d", static_cast<int>(ctx[j]));
+          }
+          printf(" %d", static_cast<int>(c.count));
+          for (int j = 0; j < c.count; ++j) {
+            printf(" %d %.6f", static_cast<int>(c.next[j]), static_cast<double>(c.weight[j]));
+          }
+          printf("\n");
+        }
+      }
+    };
+
+    auto walk = [](const char* name, Chain& chain, const uint8_t* seed, int seed_n,
+                   const float* draws) {
+      chain.Seed(seed, seed_n);
+      for (int i = 0; i < 8; ++i) {
+        uint8_t v = 0;
+        const bool ok = chain.NextWith(draws[i], &v);
+        printf("mkvwalk %s %d %.4f %d %d\n", name, i, static_cast<double>(draws[i]), ok ? 1 : 0,
+               ok ? static_cast<int>(v) : -1);
+      }
+    };
+
+    /* A ten symbol tune over a four symbol alphabet, trained at order 1
+     * and again at order 2, so the same data is compared at both depths. */
+    static const uint8_t kTune[] = {0, 1, 0, 2, 1, 0, 1, 2, 2, 0};
+    static const uint8_t kSeed01[] = {0, 1};
+    {
+      Chain c;
+      c.Init(1);
+      c.Train(kTune, 10);
+      dump("o1", c);
+      walk("o1", c, kSeed01, 2, kDraws);
+    }
+    {
+      Chain c;
+      c.Init(2);
+      c.Train(kTune, 10);
+      dump("o2", c);
+      walk("o2", c, kSeed01, 2, kDraws);
+    }
+    /* Weights accumulated by hand, including a repeated pair, which is the
+     * only path that adds into an existing entry rather than appending. */
+    {
+      Chain c;
+      c.Init(2);
+      static const uint8_t a0[] = {0};
+      static const uint8_t a01[] = {0, 1};
+      c.AddTransition(a0, 1, 1, 1.0f);
+      c.AddTransition(a0, 1, 1, 1.0f);
+      c.AddTransition(a0, 1, 2, 3.0f);
+      c.AddTransition(a01, 2, 2, 1.0f);
+      c.AddTransition(a01, 2, 3, 2.0f);
+      c.AddTransition(a0, 0, 0, 1.0f);
+      c.AddTransition(a0, 0, 3, 4.0f);
+      dump("add", c);
+      walk("add", c, a01, 2, kDraws);
+    }
+    /*
+     * The backoff, on purpose. Trained on three symbols only, then seeded
+     * with a context that exists at no order, so the first step falls from
+     * 2 to 1 and the second falls all the way to the order-0 distribution.
+     */
+    {
+      Chain c;
+      c.Init(2);
+      static const uint8_t kShort[] = {3, 0, 1};
+      static const uint8_t kUnseen[] = {2, 0};
+      c.Train(kShort, 3);
+      dump("bko", c);
+      walk("bko", c, kUnseen, 2, kDraws);
+    }
+    /* An untrained chain answers nothing, where the JS throws. */
+    {
+      Chain c;
+      c.Init(2);
+      dump("empty", c);
+      walk("empty", c, kSeed01, 2, kDraws);
+    }
+    /*
+     * Every distribution sums to 16, so a draw that is a multiple of 1/16
+     * can leave the running total at exactly zero. Walked from the empty
+     * context, the first three draws each land on a boundary.
+     */
+    {
+      Chain c;
+      c.Init(1);
+      static const uint8_t e0[] = {0};
+      static const uint8_t e1[] = {1};
+      static const uint8_t e2[] = {2};
+      static const uint8_t e3[] = {3};
+      c.AddTransition(e0, 0, 0, 4.0f);
+      c.AddTransition(e0, 0, 1, 12.0f);
+      c.AddTransition(e0, 1, 1, 8.0f);
+      c.AddTransition(e0, 1, 2, 8.0f);
+      c.AddTransition(e1, 1, 0, 12.0f);
+      c.AddTransition(e1, 1, 3, 4.0f);
+      c.AddTransition(e2, 1, 2, 16.0f);
+      c.AddTransition(e3, 1, 3, 16.0f);
+      dump("edge", c);
+      walk("edge", c, e0, 0, kEdgeDraws);
     }
   }
   /* Tempo map: the closed form beat/second conversion, including a ramp. */

@@ -28,7 +28,7 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
 - Embedded: 43 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All five examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library.
-- Parity against the TypeScript passes on 34 rows with the PRNG bit exact and the effect input bit exact, plus 348 exactly-compared value rows for the parts that make no sound.
+- Parity against the TypeScript passes on 34 rows with the PRNG bit exact and the effect input bit exact, plus 428 exactly-compared value rows for the parts that make no sound.
 - The embedded package went through a size pass whose findings are in `docs/HARDWARE.md` under "Making it smaller". Delay buffers are sized exactly rather than rounded to a power of two, which took 25 percent off RAM library-wide with bit-identical output; the oscillator gained per-shape entry points so the linker can drop the residual table a program never reads; and every transcendental now routes through `fm::`, which is what the docs had claimed for months and was not true, so `BELLOWS_FAST_MATH` went from saving nothing on any sketch with an oscillator to saving 23 to 75 percent. Read that section before optimising anything: it also records what was measured and deliberately NOT taken, and why attributing firmware bytes to a header-only library by symbol name does not work.
 
 **Two things that have not happened, and both are load bearing.**
@@ -94,6 +94,53 @@ parameter tried, so the note is better than a fragile gate.
 
 ## The output examples, and what a piezo needs
 
+`examples/06_FirstSteps` is the rung below 01_OneKick, which was described as
+the smallest useful program and is already an engine. Four headers in one
+image: one oscillator, then an envelope, then a resonant ladder with an
+envelope of its own, then two LFOs. It is the cheapest example here, the only
+one with no delay line anywhere in it, and the only one besides 01 and 02 that
+fits a Teensy LC (87.0 percent). It also found a real trap: `namespace tone`
+does not compile against the Arduino core, which declares `void tone(uint8_t,
+uint16_t, uint32_t)`, and no host probe can see that because a host probe
+never includes Arduino.h. All four rungs share one `firststeps` namespace now,
+which is what the other examples do anyway.
+
+`examples/20_Instruments` is the patch library, eleven instruments over eight
+engines in one image: FM electric piano, acid bass, chorused pad, west coast
+wavefolder, plucked string, three modal materials (bell, wood, glass),
+waveguide clarinet, formant choir and a long-decay kit. One header per patch,
+all sharing `player.h` for the scale, tuning, progression and rhythms, so
+switching patch compares instruments rather than the parts they happen to be
+playing. 47912 B of flash and 49904 B of RAM for all eleven, and it fits a
+Teensy 3.5 at 26.3 percent.
+
+The thing worth knowing before editing a patch is the trim. The engines have
+no common loudness reference, and measured on the parts they actually play
+they spanned 30 dB: a struck wooden bar at 0.0046 RMS against a sustained reed
+at 0.26. Each header carries a measured `kTrim` that the shell applies, and
+nine of the eleven now land within one percent of each other. The two that do
+not, the plucked string and the marimba, sit about 3 dB under because they are
+transient-dominated and the master limiter is holding them, which is the
+limiter doing its job rather than a miscalibration. Re-measure rather than
+guess if you change a patch: RMS over the whole render is the wrong instrument
+for a sparse percussive patch and reported marimba as needing 25x gain, which
+was the patch being under-driven and not the trim being wrong.
+
+`examples/07_Workstation` is the composer-level one, and it is the example to point
+at when someone asks what the library is for. Five engines at once (Kick, Snare,
+Hat, Va, a Pluck pool), euclidean rhythms on the kit, a bass line, a melody drawn
+from the ported Markov chain rather than read from an array, a tempo-synced stereo
+delay on a send, an EQ and a limiter on the master, all from one seed. Three things
+in it are worth knowing. There is no mixer in this library on purpose, so
+`RenderSpan` IS the mixer and it is fifteen lines; the rule that shapes it is that a
+voice advances its envelope when it renders, so a part that goes two places is
+rendered once into a scratch and added twice. Its determinism was measured rather
+than asserted: two `Piece` objects with the same seed produce 0 differing samples
+over 30 seconds. And the board answer was not the expected one: it was written
+expecting a 4.x and `build-matrix.sh` says it also fits a 3.5 and a 3.6, at 91.4 and
+91.5 percent, which is the tightest fit in that table. It costs 41840 B of flash and
+225468 B of RAM, and 187 KB of that RAM is one object, the delay line.
+
 `examples/10` through `examples/15` are one sketch per way of getting sound out of the board:
 the audio shield, an I2S breakout (a MAX98357A drives a speaker directly, a PCM5102A gives
 line out), the built-in DAC on the 3.x parts, a bare Teensy with two resistors and two caps,
@@ -147,7 +194,21 @@ are hearing, which is the one claim here that most projects cannot make. What it
 is printed beside it: timing is not simulated and no board's ability to keep up has ever been
 measured.
 
-Four things to know before touching it:
+**It is laid out as a console now, which is the third shape it has had.** One
+column, then a two-up grid, and both were a scroll: sixteen panels is sixteen
+panels however they are arranged, and RUN, the output picker and the status went
+off the top of the screen the moment you looked at anything else. So the panels
+are collapsed rather than rearranged. A `position: sticky; top: 16px` strip holds
+the transport, the firmware and board pickers, the output chips and a one line
+version of the honesty claim, and BOARD, CODE, PARAMETERS, INPUTS and FLASH take
+turns in a single area under it. A tab with nothing in it is disabled rather than
+removed so the row does not reflow when you change firmware. The board is drawn
+landscape now (404 by 116 units for a Teensy 4.1, against 168 by 412 before),
+which is the same drawing rotated a quarter turn anticlockwise: pin 0 runs along
+the bottom edge and the high numbers back along the top, with the USB at the
+left.
+
+Five things to know before touching it:
 
 - **`NoteValue` treats a bare number as a MIDI note, not a frequency.** Passing Hz directly is
   what made every sample click at the wrong pitch: the hat asked for MIDI 330 and the chord's
@@ -161,6 +222,35 @@ Four things to know before touching it:
   read the example's header for its patterns, pitches and velocities.
 - **KeepAlive wraps the view**, so `onDeactivated` matters as much as `onBeforeUnmount`, and
   the output stage has to be unspliced from the analyser on both.
+- **The catalogue is 22 entries in five groups now**, not six: four rungs from
+  `06_FirstSteps`, the four original lessons, `07_Workstation`, eleven patches
+  from `20_Instruments`, and the two output examples. Every one is still a real
+  example that compiles to a board, which is the page's whole claim, so adding
+  an entry means writing firmware and not just a browser patch. All 22 were
+  driven in Chrome and measured: none silent, none non-finite, no console
+  errors. Two defects fell out of that pass. The plucked string reached exactly
+  1.0 because the browser side had no master limiter where the C++ shell has
+  one, and POLY SYNTH reached 1.095 once its chord started lasting the full
+  2.5 seconds, because nothing modelled the `codec.volume(0.6f)` every .ino
+  sets.
+- **When a sim entry measures silent, suspect the probe first.** A debug pass
+  here set the firmware `<select>` to VOICE keys (`inst-808`) rather than
+  firmware ids (`eightoheight`). The select silently takes `""`, the page keeps
+  whatever was loaded, and the measurement is of nothing. It cost two rounds and
+  produced a confident wrong diagnosis about `masterFx` ordering that had to be
+  taken back out of a comment.
+- **A control that reads a parameter out of `paramMap` is reading a snapshot.**
+  `buildVoice` builds `p` once and the step closures keep it, so `p.tune` in the
+  kick's step meant the TUNE slider moved its readout and nothing else. Found by
+  measuring rather than by reading: the peak bin sat at 49.8 Hz with the slider at
+  50 and at 100. It holds `tune` in a local the setter writes now, and the fix was
+  confirmed the same way, 35.2 / 49.8 / 111.3 Hz for 35 / 50 / 110, each inside one
+  2.93 Hz bin. `tune` is also the one parameter `applyParams` cannot write back into
+  the header, because the pitch is a `Trigger(hz, vel)` argument rather than a
+  `p.<field>` line, which is what the panel is reporting when it says 2 values
+  written of 3. The poly voice's CUTOFF is a different case and not a bug: a 0.12 Hz
+  LFO rewrites it every 50 ms, exactly as the firmware does per block, so the slider
+  only sets where the sweep starts.
 
 `public/firmware/` holds twelve prebuilt binaries with a manifest recording the commit each was
 built from, because no CI gate can rebuild twelve firmware links cheaply and a stale binary
@@ -190,7 +280,7 @@ Run all of them from `packages/bellows-embedded` unless noted.
 | `npm run size` | flash and RAM per sketch, `cortex-m7` or `cortex-m4` | the whole no-registry design argument |
 | `./tools/check-header.sh <h>` | one header compiles standalone, `-Wall -Wextra` | header hygiene; note it instantiates nothing |
 | `node tools/gen-tables.mjs --check` | generated headers match the TypeScript ParamSpecs | new `Eq6` class the moment it appeared |
-| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md` and `docs/ENGINEERING.md`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath` and `vitest list`: 371 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
+| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md` and `docs/ENGINEERING.md`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath` and `vitest list`: 381 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
 | `npx vitest run test/integration/engine-tuning.test.ts` | every pitched engine plays the note it was given, to 2 cents | proves the fractional-delay tuning is real: an integer-rounded loop is 28 cents flat at E7 |
 | `npx vitest run test/integration/nan-safety.test.ts` | one NaN parameter cannot break the audio graph | 10 parameters threw inside `process()` and 191 poisoned the output before it existed |
 
@@ -290,7 +380,7 @@ Both are now done in the TypeScript and the C++ respectively, with one part deli
 The theory and sequencing layers are the reason to choose this over DaisySP or Mozzi, and they cost almost nothing: the whole theory layer is 2624 bytes of flash and 116 of RAM. Finishing them is high value per byte.
 
 Not yet ported:
-- `seq`: `markov` (needs a fixed-capacity rewrite, the JS keys contexts by `JSON.stringify`), `pattern`, `transport`, `time`
+- `seq`: `pattern`, `transport`, `time`. `markov` is DONE: `seq/markov.h`, a rewrite rather than a transcription, templated on alphabet size, context capacity and maximum order, with the context packed into a uint32 instead of stringified. The default `Markov<8, 32, 2>` is 1556 bytes and nothing allocates. It is compared in `tables.cpp` at 74 rows, and unlike the arp's random mode the DRAW is compared too: `NextWith(float r, ...)` takes the uniform instead of drawing it, so both sides walk the same exactly-representable r and the generator's float rounding stays out of a comparison that is not about it. Seven mutations were watched failing on it, including one that did not fire and was a bad mutation rather than a weak gate: `<=` against `<` in the weighted walk is unobservable unless a draw lands exactly on a cumulative boundary, so the `edge` case exists to put one there.
 - `theory`: `progressions`, `voicelead`, `scala`
 
 Each one gets a row in `tables.mjs` with an exact comparison. That harness is where they get proven.

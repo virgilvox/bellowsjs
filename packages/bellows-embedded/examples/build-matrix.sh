@@ -7,7 +7,7 @@
 #   ./build-matrix.sh              every example, every board
 #   ./build-matrix.sh 15_Piezo     one example, every board
 #
-# Takes about an hour for the full sweep: 77 firmware builds, each with the
+# Takes about an hour for the full sweep: 98 firmware builds, each with the
 # Arduino core and the audio library, and PlatformIO does not share objects
 # between board environments. Needs `pio` and the teensy platform:
 #
@@ -34,7 +34,8 @@ cd "$(dirname "$0")" || exit 1
 
 BOARDS="teensylc teensy31 teensy35 teensy36 teensy40 teensy41 teensymm"
 ALL="00_BringUp 01_OneKick 02_DrumMachine 03_PolySynth 04_ScalesAndTuning
-     05_MidiInstrument 10_AudioShield 11_I2SAmp 12_DacOut 13_BareOutput 15_Piezo"
+     05_MidiInstrument 06_FirstSteps 07_Workstation 10_AudioShield 11_I2SAmp
+     12_DacOut 13_BareOutput 15_Piezo 20_Instruments"
 EXAMPLES="${1:-$ALL}"
 
 printf '%-22s' "example"
