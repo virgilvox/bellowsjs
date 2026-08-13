@@ -196,3 +196,61 @@ enum values. Build the host side (serialise from Transport.scheduleHorizon over 
 eight events per second at sixteenths and 120 bpm) and the device side (a lock-free
 single-producer ring feeding the kernel, plus a sample clock the host lookahead targets).
 ```
+
+```
+OBJECTIVE: Three pieces of work on the simulator page and the embedded port, in this order,
+because the third depends on the first two.
+
+1. PORT MARKOV TO THE EMBEDDED LIBRARY.
+   packages/bellows/src/seq/markov.ts is 183 lines and is one of the last seq modules that is
+   TypeScript only. It cannot be transcribed: it keys contexts with JSON.stringify into a Map
+   and grows without bound, and this library allocates nothing and sizes every buffer from a
+   template parameter. So it needs a fixed-capacity rewrite: a template on alphabet size and
+   maximum contexts, a flat table indexed by a packed context rather than a string key, and the
+   documented backoff from order k down to 0 preserved exactly. Read seq/lsystem.h first: it is
+   the closest thing already ported, it solves the same "grow a sequence without a heap"
+   problem, and its header explains the truncation contract it chose.
+   Then give it a row in test/parity/tables.cpp and tables.mjs. Markov draws from an rng, and
+   the arp rows already establish how that is handled: "Random is excluded on both sides: it
+   draws from an rng." Do the same, or make the draw comparable and say how. A wrong transition
+   table plays a confident, plausible, wrong melody and no audio test can hear it, which is the
+   sentence at the top of that harness and the reason it exists.
+
+2. A COMPOSER LEVEL EXAMPLE.
+   Everything shipped so far is one idea per sketch. What is missing is the one that argues for
+   the library: several engines at once, a sequencer driving them, effects on a bus, all seeded
+   so two boards produce the same piece. test/sketches/p3_workstation.cpp is already that shape
+   as a size profile (8 VA, 8 Pluck, a kit, a delay and an EQ) but it is not an example and it
+   makes no music. Build the example version: euclidean rhythms on the kit, a markov melody
+   from the port above, a bass line, a plate or delay send, and one PRNG root forked per part.
+   It has to fit a Teensy 4.x and say plainly which boards it does not fit, measured with
+   examples/build-matrix.sh rather than assumed. apps/workbench/src/lib/composer.ts is the
+   browser equivalent and is worth reading for structure, not for porting.
+
+3. THE SIMULATOR LAYOUT, WHICH IS STILL WRONG.
+   apps/workbench/src/views/SimulatorView.vue is sixteen panels. It was a single column, then a
+   two-up grid, and it is still a scroll. The shape it wants is a console: a strip that does not
+   scroll away holding RUN, the output picker and the status, and one switchable area beneath it
+   for BOARD, CODE, PARAMETERS, INPUTS and FLASH. That is the change that removes scrolling
+   rather than rearranging it. The board diagram is also drawn as a tall thin SVG next to empty
+   paper; a Teensy is a rectangle and the drawing should use the width it has.
+   Match the app: tokens from styles/forge.css only, never a literal hex, panels as .panel plus
+   .panel-title with the number in the <em>, plain <button> with .lit for the active one. The
+   design notes are in docs/HANDOFF.md under the simulator section, and the four traps there are
+   real and cost time: NoteValue treats a bare number as MIDI, a scripted click does not unlock
+   an AudioContext, samples must be read off the firmware rather than written from memory, and
+   KeepAlive means onDeactivated matters.
+
+VERIFY, and none of these is optional:
+  npm test -w packages/bellows                          1348 tests
+  npm run typecheck -w apps/workbench                   vue-tsc
+  npm run check:examples -w apps/workbench              the 49 site examples still resolve
+  npm run gen:sim -w apps/workbench && git diff --exit-code -- apps/workbench/src/lib/sim/sources.gen.ts
+  cd packages/bellows-embedded && npm run tables:check   the new markov rows
+  cd packages/bellows-embedded && npm run parity:check   34 audio rows
+  cd packages/bellows-embedded && node tools/check-docs.mjs --check
+  cd packages/bellows-embedded/examples && ./build-matrix.sh 07_YourExample
+
+And listen to it. The simulator's samples were wrong three times in ways that typechecked and
+built, and the only thing that caught them was playing them and measuring the output.
+```

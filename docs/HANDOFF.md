@@ -4,6 +4,11 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 
 ## Where things stand
 
+- **Two commits are unpushed**: the simulator page and its fix pass. `origin/main` is at
+  6a81cc1, so bellows.live has no SIMULATOR button and anyone reporting the nav as broken is
+  looking at a site that never received it. Push, then run
+  `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`, because the site does not
+  deploy on push.
 - `bellowsjs@0.1.7` is published on npm and tagged `v0.1.7`, and `main` is current with it. It is
   the audit-3 release: almost all gates rather than behaviour, and `CHANGELOG.md` lists the four
   things a user would notice (a new `rotatePattern` export, input ceilings on the WAV and MIDI
@@ -122,6 +127,45 @@ so the chain is: drive it differentially across two pins for 6 dB that costs not
 everything below about 1.2 kHz because the limiter cannot tell that the disc will never
 reproduce it, boost the resonance, and limit hard because there is no headroom to protect.
 Nobody has held a meter to a disc driven by this code.
+
+## The simulator page, and what it is honest about
+
+`apps/workbench/src/views/SimulatorView.vue` plus `src/lib/sim/`. Pick an embedded example,
+hear it, change its parameters, switch the way sound leaves the board, download valid firmware.
+
+**It does not emulate a Cortex-M7, and that was researched rather than assumed.** Nothing
+models the i.MX RT1062 in a browser-capable emulator: Wokwi's open cores are AVR and RP2040 and
+its Teensy request is closed unimplemented, Renode has an RT1064 board but is a .NET
+application with no wasm build and no audio path, and the fastest browser MCU emulators reach
+about 10 M guest cycles per second against the 600 MHz that would be needed. Compiling the C++
+to wasm was the other candidate and was rejected for a better reason than difficulty: it adds a
+third set of numerics to a repository that spends a CI gate keeping two in agreement, and
+nothing measured says the TypeScript is too slow.
+
+So the page runs the TypeScript implementation and prints the parity figure for the engine you
+are hearing, which is the one claim here that most projects cannot make. What it does not cover
+is printed beside it: timing is not simulated and no board's ability to keep up has ever been
+measured.
+
+Four things to know before touching it:
+
+- **`NoteValue` treats a bare number as a MIDI note, not a frequency.** Passing Hz directly is
+  what made every sample click at the wrong pitch: the hat asked for MIDI 330 and the chord's
+  110 Hz became MIDI 110. Everything goes through `{ hz: n }` now. The C++ side takes Hz,
+  because the drum engines tune from the noteOn frequency, so the two sides genuinely differ.
+- **A programmatic click does not unlock an AudioContext.** Driving the page from the console
+  measures silence and looks exactly like broken audio. One real click unlocks the shared
+  context for the session, after which scripted auditions work.
+- **The samples are checked against the firmware, not written from memory.** Three were wrong
+  when checked: the snare pattern, the hat's rotation and the hat's pitch. If you add a sample,
+  read the example's header for its patterns, pitches and velocities.
+- **KeepAlive wraps the view**, so `onDeactivated` matters as much as `onBeforeUnmount`, and
+  the output stage has to be unspliced from the analyser on both.
+
+`public/firmware/` holds twelve prebuilt binaries with a manifest recording the commit each was
+built from, because no CI gate can rebuild twelve firmware links cheaply and a stale binary
+should be visible rather than silent. Rebuild with
+`node apps/workbench/scripts/gen-firmware-binaries.mjs`.
 
 ## Layout
 
