@@ -310,11 +310,18 @@ comment. A second row driving morph across its range would close it.
   missing SIMULATOR button; both are shipped. Check with `git rev-list --count origin/main..HEAD`
   rather than trusting this line, which is the sort that goes stale the moment someone
   commits.
-- `bellowsjs@0.1.7` is published on npm and tagged `v0.1.7`, and `main` is current with it. It is
-  the audit-3 release: almost all gates rather than behaviour, and `CHANGELOG.md` lists the four
-  things a user would notice (a new `rotatePattern` export, input ceilings on the WAV and MIDI
-  parsers, and three fixes). 0.1.6 before it was a safety release: the SFZ hardening in it fixes
-  a real denial of service on untrusted input in a browser.
+- `bellowsjs@0.1.8` is published on npm and tagged `v0.1.8`, and `main` is current with it. It is
+  a documentation release and the code is byte-identical to 0.1.7: `git diff v0.1.7..v0.1.8 --
+  packages/bellows/src` is empty. It exists because the README is one of the three things the
+  tarball ships, alongside `dist` and `LICENSE`, and it did not mention the microcontroller port
+  at all. That gap survived a session that had just been asked to fix exactly it, because there
+  are TWO near-identical READMEs maintained by hand, the repository root and
+  `packages/bellows/README.md`, nothing syncs them, and only the root one got the fix. Worth a
+  gate the next time either is touched.
+  0.1.7 before it was the audit-3 release: almost all gates rather than behaviour, and
+  `CHANGELOG.md` lists the four things a user would notice (a new `rotatePattern` export, input
+  ceilings on the WAV and MIDI parsers, and three fixes). 0.1.6 was a safety release: the SFZ
+  hardening in it fixes a real denial of service on untrusted input in a browser.
 - **bellows.live does not catch up on its own, and that has not changed.** The app pulls the
   public repo with a plain `git.repo_clone_url`, so there is no deploy-on-push. Shipping site
   changes takes `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d` after the
@@ -1260,7 +1267,7 @@ The site is a DigitalOcean App Platform static site, the cheapest App Platform f
 
 1. `npm test` and `npx tsc --noEmit` in `packages/bellows`.
 2. `npm run gen:worklet -w packages/bellows` if anything kernel-reachable changed.
-3. `npm run build -w packages/bellows`; check `dist/worklet.js` exists and the standalone size is sane. Measure it rather than remembering it: `gzip -9 -c dist/bellows.standalone.js | wc -c` prints 108400 bytes, 106 KB, after the 2026-08-05 fixes, against 106147 before them and about 97 KB at 0.1.0. Compare against the previous release and ask about a jump over roughly ten percent; a fixed threshold from an old version is what turned 97 into a number three releases stale. Nothing checks this one: `check-docs.mjs` cannot, because it needs a built `dist`. Note also that `dist` goes stale against `src` silently (`gen-tables.mjs` warns and reads it anyway), so build before you measure, and before running any pure-library snippet against it.
+3. `npm run build -w packages/bellows`; check `dist/worklet.js` exists and the standalone size is sane. Measure it rather than remembering it: `gzip -9 -c dist/bellows.standalone.js | wc -c` prints **108945 bytes at 0.1.8**, against 108400 after the 2026-08-05 fixes, 106147 before them and about 97 KB at 0.1.0. The 0.1.8 rise is 0.50 percent for a release whose source is byte-identical to 0.1.7, so it is toolchain drift rather than code: worth knowing that this figure moves on its own, and worth not reading a sub-one-percent change as a regression. Compare against the previous release and ask about a jump over roughly ten percent; a fixed threshold from an old version is what turned 97 into a number three releases stale. Nothing checks this one: `check-docs.mjs` cannot, because it needs a built `dist`. Note also that `dist` goes stale against `src` silently (`gen-tables.mjs` warns and reads it anyway), so build before you measure, and before running any pure-library snippet against it.
 4. Bump version, `npm publish` from `packages/bellows`, tag `vX.Y.Z`, push with the tag.
 5. Regenerate the LLM reference: `node apps/workbench/scripts/gen-llm-ref.mjs`, commit `apps/workbench/public/llm.txt`. THIS STEP WAS SKIPPED FOR 0.1.5 AND THE FILE IS STALE, which matters because five documentation pages send readers to `/llm.txt` as the authoritative parameter list. It is generated from the BUILT library, so it needs step 3 first and cannot be edited by hand: `grep -c rampParam apps/workbench/public/llm.txt` prints 0 against 3 in `src/bellows.ts` and 2 in `dist/bellows.d.ts`, and the `maxSeconds` and `maxSize` capacity options from `docs/AUDIT.md` finding 5 are missing the same way, while the file's own line 11 says "Everything in it is exact for version 0.1.5". Rebuild, regenerate, then check that grep is non-zero before believing the header.
 6. Redeploy the site (pushes do not auto-deploy): `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`.

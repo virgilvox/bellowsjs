@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.8
+
+A documentation release, and the code is byte-identical to 0.1.7. `git diff v0.1.7..v0.1.8 --
+packages/bellows/src` is empty, the test suite is the same 1348, and no behaviour changes. It
+exists because the README is one of the three things this package ships, alongside `dist` and
+`LICENSE`, and it was missing something a reader would want.
+
+### Added
+
+- The README now documents the microcontroller port. The same DSP core is a header-only C++17
+  library for 32-bit parts, it lives in the same repository, and the npm page said nothing
+  about it at all. It now links there and carries the board support table, measured by
+  building all 17 examples for each part rather than read off a data sheet: 16 of 17 on Teensy
+  4.1, 4.0 and MicroMod, 16 of 17 on 3.6 and 3.5, 12 of 17 on 3.2, 3 of 17 on LC, plus a Daisy
+  Seed image.
+- The parity evidence is stated where a reader can see it: the C++ is diffed against this
+  package on every commit, 40 engine and effect rows compared sample by sample, 428
+  exactly-compared value rows, and all 50 instrument presets compared value by value, 1054 of
+  them, with the PRNG bit exact.
+- What that does not claim, in the same paragraph rather than a footnote: one board has been
+  run, a Teensy 4.0 at 33.8 to 46.5 percent CPU with a 47.3 percent running maximum, and a
+  build proves a part can hold the code rather than keep up with it.
+
 ## 0.1.7
 
 Three audit rounds, written up in `docs/AUDIT-3.md`. Almost all of it is gates rather than
