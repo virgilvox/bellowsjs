@@ -305,20 +305,21 @@ comment. A second row driving morph across its range would close it.
 
 ## Where things stand
 
-- **Two commits are unpushed**: the simulator page and its fix pass. `origin/main` is at
-  6a81cc1, so bellows.live has no SIMULATOR button and anyone reporting the nav as broken is
-  looking at a site that never received it. Push, then run
-  `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`, because the site does not
-  deploy on push.
+- **Nothing is unpushed.** `origin/main` is current as of 2026-08-15, and CI is green on it:
+  all six jobs, run `31873741708`. This bullet used to name two unpushed commits and a
+  missing SIMULATOR button; both are shipped. Check with `git rev-list --count origin/main..HEAD`
+  rather than trusting this line, which is the sort that goes stale the moment someone
+  commits.
 - `bellowsjs@0.1.7` is published on npm and tagged `v0.1.7`, and `main` is current with it. It is
   the audit-3 release: almost all gates rather than behaviour, and `CHANGELOG.md` lists the four
   things a user would notice (a new `rotatePattern` export, input ceilings on the WAV and MIDI
   parsers, and three fixes). 0.1.6 before it was a safety release: the SFZ hardening in it fixes
   a real denial of service on untrusted input in a browser.
-- **bellows.live is behind `main` too, and does not catch up on its own.** The app pulls the
-  public repo with a plain `git.repo_clone_url`, so there is no deploy-on-push: verified, the
-  active deployment is from 2026-08-06 with cause `manual`. Shipping site changes takes
-  `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d` after the push. See
+- **bellows.live does not catch up on its own, and that has not changed.** The app pulls the
+  public repo with a plain `git.repo_clone_url`, so there is no deploy-on-push. Shipping site
+  changes takes `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d` after the
+  push, every time. Deployed on 2026-08-15 immediately after the push above, so the site is
+  current; it will fall behind again on the next commit that touches `apps/workbench`. See
   "Deployment (bellows.live)" below, which has said this all along; an earlier draft of this
   line said the opposite and was wrong.
 - **`packages/bellows-embedded` is published nowhere.** It is `private: true`, so it is not on npm
