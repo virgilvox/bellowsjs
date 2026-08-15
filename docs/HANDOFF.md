@@ -1265,15 +1265,56 @@ The site is a DigitalOcean App Platform static site, the cheapest App Platform f
 
 ## Release ritual
 
-1. `npm test` and `npx tsc --noEmit` in `packages/bellows`.
-2. `npm run gen:worklet -w packages/bellows` if anything kernel-reachable changed.
-3. `npm run build -w packages/bellows`; check `dist/worklet.js` exists and the standalone size is sane. Measure it rather than remembering it: `gzip -9 -c dist/bellows.standalone.js | wc -c` prints **108945 bytes at 0.1.8**, against 108400 after the 2026-08-05 fixes, 106147 before them and about 97 KB at 0.1.0. The 0.1.8 rise is 0.50 percent for a release whose source is byte-identical to 0.1.7, so it is toolchain drift rather than code: worth knowing that this figure moves on its own, and worth not reading a sub-one-percent change as a regression. Compare against the previous release and ask about a jump over roughly ten percent; a fixed threshold from an old version is what turned 97 into a number three releases stale. Nothing checks this one: `check-docs.mjs` cannot, because it needs a built `dist`. Note also that `dist` goes stale against `src` silently (`gen-tables.mjs` warns and reads it anyway), so build before you measure, and before running any pure-library snippet against it.
-4. Bump version, `npm publish` from `packages/bellows`, tag `vX.Y.Z`, push with the tag.
-5. Regenerate the LLM reference: `node apps/workbench/scripts/gen-llm-ref.mjs`, commit `apps/workbench/public/llm.txt`. THIS STEP WAS SKIPPED FOR 0.1.5 AND THE FILE IS STALE, which matters because five documentation pages send readers to `/llm.txt` as the authoritative parameter list. It is generated from the BUILT library, so it needs step 3 first and cannot be edited by hand: `grep -c rampParam apps/workbench/public/llm.txt` prints 0 against 3 in `src/bellows.ts` and 2 in `dist/bellows.d.ts`, and the `maxSeconds` and `maxSize` capacity options from `docs/AUDIT.md` finding 5 are missing the same way, while the file's own line 11 says "Everything in it is exact for version 0.1.5". Rebuild, regenerate, then check that grep is non-zero before believing the header.
-6. Redeploy the site (pushes do not auto-deploy): `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`.
-7. No Claude attribution in commits, no emojis, no em dashes, per `CLAUDE.md`.
+**Bump the version before you regenerate, not after.** Two generated files carry
+it, and one of them is gated in CI by regenerate-and-diff, so bumping last means
+a red build on the commit you have already published to npm. That is not
+hypothetical: it is what 0.1.8 did. The steps are in this order for that reason.
 
-For a change that touches DSP shared with the embedded port, add before step 4, from `packages/bellows-embedded`:
+1. `npm test` and `npx tsc --noEmit` in `packages/bellows`.
+2. **Bump the version now**, in `packages/bellows/package.json`.
+3. Regenerate everything that carries a version or derives from what changed,
+   and diff each one:
+   - `npm run gen:llm -w apps/workbench`, which writes
+     `apps/workbench/public/llm.txt` and stamps the package version into two
+     lines of it. **CI gates this**, `gen:llm` then
+     `git diff --exit-code -- apps/workbench/public/llm.txt`, and it is the step
+     that went red on 0.1.8.
+   - `npm run gen:llm-embedded -w apps/workbench`, which stamps the version from
+     `packages/bellows-embedded/library.properties` instead, so it moves only
+     when the embedded library moves. Regenerate it anyway after touching that
+     file for any reason.
+   - `npm run gen:worklet -w packages/bellows` if anything kernel-reachable
+     changed.
+   - `npm run gen:sim -w apps/workbench` if any embedded example changed.
+4. `npm run build -w packages/bellows`; check `dist/worklet.js` exists and the standalone size is sane. Measure it rather than remembering it: `gzip -9 -c dist/bellows.standalone.js | wc -c` prints **108945 bytes at 0.1.8**, against 108400 after the 2026-08-05 fixes, 106147 before them and about 97 KB at 0.1.0. The 0.1.8 rise is 0.50 percent for a release whose source is byte-identical to 0.1.7, so it is toolchain drift rather than code: worth knowing that this figure moves on its own, and worth not reading a sub-one-percent change as a regression. Compare against the previous release and ask about a jump over roughly ten percent; a fixed threshold from an old version is what turned 97 into a number three releases stale. Nothing checks this one: `check-docs.mjs` cannot, because it needs a built `dist`. Note also that `dist` goes stale against `src` silently (`gen-tables.mjs` warns and reads it anyway), so build before you measure, and before running any pure-library snippet against it.
+5. Run the full verify block, including `npm run check:examples`, `check:embedded`,
+   `check:catalogue` and `check:presets` in `apps/workbench`. `check:examples`
+   reads the BUILT library, so it needs step 4 first.
+6. `npm publish` from `packages/bellows`, tag `vX.Y.Z`, push with the tag.
+7. Redeploy the site, because pushes do not auto-deploy:
+   `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`. Not
+   optional on a release: `llm.txt` is served from there and five documentation
+   pages send readers to it as the authoritative parameter list, so until you
+   deploy, the site tells them a version npm no longer has.
+8. No Claude attribution in commits, no emojis, no em dashes, per `CLAUDE.md`.
+
+**Why the regenerate step moved to 3, and the history that says it had to.**
+It used to be step 5, after publish and tag. The document knew that step got
+skipped, and said so in capitals, having watched it happen at 0.1.5 and leave
+`llm.txt` claiming to be exact for a version three releases old. What it did
+not notice is that its own ordering was the cause: regenerating a
+version-stamped file after you have tagged and pushed means the fix is always a
+second commit, and CI gates `gen:llm` with regenerate-and-diff, so the release
+commit itself goes red.
+
+0.1.8 proved it by following the ritual literally: green CI on the two commits
+before it, red on the release, on the one job that checks this. The library was
+already on npm by then. Nothing was wrong with the published tarball, since
+`llm.txt` lives in `apps/workbench/public` and is not in it, but for the length
+of one commit the repository disagreed with the registry about what version
+existed.
+
+For a change that touches DSP shared with the embedded port, add before step 6, from `packages/bellows-embedded`:
 
 - `npm run parity` and confirm every gate passes. The PRNG row must be exactly zero.
 - `npm run tables` for anything touching theory or sequencing.
