@@ -105,9 +105,11 @@ it move, because that is the only thing that catches this.
 
 ### Still not done, in the order I would take it
 
-Ordered by cost to fix against risk of being wrong later. The first four are
-bookkeeping the session created and did not close; they are cheap and they are
-the kind of gap that rots.
+Ordered by cost to fix against risk of being wrong later. The first four were
+bookkeeping one session created and did not close; three are now done and the
+fourth is blocked on hardware being plugged in. What each turned up is kept
+below rather than deleted, because the interesting part of a bookkeeping item
+is usually what it was hiding.
 
 **1. Three examples exist with nothing checking them. DONE.**
 `16_WorkstationPiezo`, `17_WorkstationI2S` and `21_Presets` are committed and
@@ -137,29 +139,77 @@ Measured while adding the rows: 21_Presets is the only example in the set that
 a Teensy 3.6 refuses. Eleven voice pools and a plate tank is 251 KB against
 the 256 KB the part has.
 
-**2. The firmware manifest points at the wrong commit.** The 60 binaries in
-`apps/workbench/public/firmware` were built before the commit that contains
-them, so `manifest.json` records `2873f24-dirty` rather than `11356c4`. The
-manifest is doing its job (it says the tree was dirty rather than pretending),
-but the provenance is a commit behind. Rerun
-`node apps/workbench/scripts/gen-firmware-binaries.mjs` from a clean tree. It is
-about 40 minutes of building and needs `pio` and the teensy platform.
+**2. The firmware manifest points at the wrong commit. DONE.** The 60 binaries
+in `apps/workbench/public/firmware` were built before the commit that contained
+them, so `manifest.json` recorded `2873f24-dirty`.
 
-**3. The development board is running stale firmware.** The Teensy 4.0 has
-`17_WorkstationI2S` from before the AudioMemory ordering fix, which is the null
-render window described above. Rebuild and reflash:
+Rebuilt from a clean `packages/bellows-embedded` at `12f12ef`: 68 of 68 cells,
+60 ok, 6 that do not fit, 2 that decline on purpose, about an hour. The script
+discovers example folders on disk, so the three added since were already in the
+sweep and no list in it needed editing.
+
+Worth knowing before the next sweep: **the Teensy 3.x images are not
+reproducible.** 28 of the 60 changed content, all of them 3.2 and 3.6, and each
+by exactly three bytes at one address. Decoded rather than assumed, that word is
+`TIME_T`, the compile-time Unix timestamp the teensy3 core writes into `RTC_TSR`
+to set the clock at boot (`pins_teensy.c:425` and `:458`). So every sweep
+produces a diff on those rows whether or not anything changed, and a 3.x binary
+diff is only news if it is more than three bytes. Every 4.x and MicroMod image
+came back byte identical, which is what says no DSP moved.
+
+**3. The development board is running stale firmware. BLOCKED, no board.**
+Checked on 2026-08-15: `pio device list` shows only Bluetooth and wlan-debug, so
+nothing is connected. The Teensy 4.0 still has `17_WorkstationI2S` from before
+the AudioMemory ordering fix, which is the null render window described above.
+When a board is in hand:
 `cd packages/bellows-embedded/examples && PLATFORMIO_SRC_DIR=17_WorkstationI2S pio run -e probe_teensy40`
 then `teensy_loader_cli --mcu=TEENSY40 -w -s -v .pio/build/probe_teensy40/firmware.hex`.
-Use the CLI loader and watch for `Found HalfKay Bootloader` then `Programming`:
-PlatformIO's default `teensy-gui` protocol reports success for having opened an
-application, which is not the same as having programmed anything.
+The loader is at `~/.platformio/packages/tool-teensy/teensy_loader_cli` and is
+not on PATH. Use the CLI loader and watch for `Found HalfKay Bootloader` then
+`Programming`: PlatformIO's default `teensy-gui` protocol reports success for
+having opened an application, which is not the same as having programmed
+anything.
 
-**4. The playground catalogue does not offer the new work.** It has 22 entries
-and none of them is `21_Presets`, `16_WorkstationPiezo` or `17_WorkstationI2S`.
-Adding one means two entries in `FILES` in `gen-firmware-sources.mjs`, an entry
-in `FIRMWARES`, a `case` in `buildVoice`, and usually a `VOICE_CAVEATS` line.
-The presets one is the interesting entry, because it could offer all 50 as a
-picker rather than as a firmware.
+**4. The playground catalogue does not offer the new work. DONE.** It had 22
+entries and none of them was `21_Presets`, `16_WorkstationPiezo` or
+`17_WorkstationI2S`. It has 25.
+
+16 and 17 share 07's voice builder, because 07's patch is what both programs
+are; the disc chain and the mono fold are output-stage properties and
+`output-stage.ts` already models both. They keep their own voice keys so they
+can carry their own caveats, which earns its keep: 17 draws a seed at power up
+and composes a fresh arrangement and the other two do not. Both take
+`workstation.h` as their header, because that is the file they include, so the
+export panel writes three values rather than none.
+
+21_Presets got a labelled picker rather than a slider: `Firmware` gained
+`choices` and `RunningVoice` gained `select`, which rebuilds the instrument the
+way `Slot::Load` re-Inits the pool. The list is built from `INSTRUMENT_PRESETS`
+rather than typed out, so it cannot drift from what the page loads.
+
+All 50 were rendered offline through the real library first, four bars each:
+none silent, none non-finite, RMS from 0.0085 to 0.362, and the first note's
+pitch measured from the audio against 220 Hz times the preset's octave shift,
+searched two octaves either side so an octave error could not be absorbed. Every
+preset and fx parameter name resolves against a registered ParamSpec, which is
+the check that exists because a wrong name is silent at every layer. Then seven
+presets across five families were stepped through in the browser while running,
+which is the `select()` path the offline harness cannot reach.
+
+Three defects came out of that and are fixed: `select()` did not reset the step
+counter, so a preset picked during a chord bar could sit silent for thirteen
+sixteenths; `availableOutputs` filtered the global list and so returned
+declaration order, making "first is the default" false and landing both piezo
+entries on MQS; and the output survived a firmware change, so leaving 16 left
+the next program playing through a 1.2 kHz high pass.
+
+`npm run check:catalogue -w apps/workbench` is new and matters more than the
+entries. `FIRMWARES`, the `case` labels in `buildVoice`, `VOICE_CAVEATS` and
+`GROUP_ORDER` are four lists tied by two plain strings, nothing checked they
+agreed, and both failures are silent: a `group` not in `GROUP_ORDER` drops the
+entry from the picker with no error at all, and a `voice` with no `case` throws
+only when a visitor presses RUN. Mutated three ways and watched to fail. It is
+in `ci.yml`, which is a file rather than a control until CI runs.
 
 **5. Hardware breadth, which is the real gap.** One board, one program, one
 session. Nothing on a 3.x, nothing on a Daisy, and the two boards without a
