@@ -30,6 +30,47 @@ const root = join(src, 'bellows');
 const props = readFileSync(join(pkg, 'library.properties'), 'utf8');
 const version = /^version=(.*)$/m.exec(props)?.[1] ?? 'unknown';
 
+/*
+ * Board support, counted from the measured matrix in examples/README.md
+ * rather than written out here.
+ *
+ * That table is the output of examples/build-matrix.sh, 119 real firmware
+ * builds. Restating it in this file would make a fourth hand-maintained copy
+ * of the same figures, after the repository README, the package README and
+ * the npm one, and nothing checks any of them against each other. Parsing it
+ * means this reference cannot disagree with what was actually built: if a
+ * board stops fitting an example, this file says so on the next regenerate.
+ */
+function boardSupport() {
+  const md = readFileSync(join(pkg, 'examples', 'README.md'), 'utf8').split('\n');
+  const head = md.findIndex((l) => l.startsWith('| example | LC |'));
+  if (head < 0) return null;
+  const names = md[head].split('|').map((s) => s.trim()).filter(Boolean).slice(1);
+  const rows = [];
+  for (let i = head + 2; i < md.length && md[i].startsWith('|'); i++) {
+    const cells = md[i].split('|').map((s) => s.trim()).filter(Boolean);
+    rows.push({ example: cells[0], cells: cells.slice(1) });
+  }
+  if (!rows.length) return null;
+  return {
+    total: rows.length,
+    boards: names.map((name, i) => ({
+      name,
+      builds: rows.filter((r) => r.cells[i] && r.cells[i] !== 'RAM' && r.cells[i] !== 'n/a').length,
+      ram: rows.filter((r) => r.cells[i] === 'RAM').length,
+      na: rows.filter((r) => r.cells[i] === 'n/a').length,
+      refuses: rows.filter((r) => r.cells[i] === 'RAM').map((r) => r.example),
+    })),
+  };
+}
+
+const support = boardSupport();
+if (!support) {
+  console.error('could not parse the board matrix out of examples/README.md; refusing to');
+  console.error('write a reference with no targets section rather than writing one silently.');
+  process.exit(1);
+}
+
 /** Every header under src/bellows, in directory order. */
 function headers(dir) {
   const out = [];
@@ -255,6 +296,47 @@ defaults, because the two are compared numerically on every commit.
    concatenation: rng('a').fork('b') in the browser is Rng::Init("a::b") here,
    which is what makes a seeded piece reproduce across the two.
 
+## Installing
+
+PlatformIO, from the repository:
+
+    lib_deps = https://github.com/virgilvox/bellowsjs.git#main
+
+If you have cloned the monorepo, point lib_extra_dirs at
+packages/bellows-embedded instead. Not on npm, and not meant to be: the npm
+package bellowsjs is the browser library, a different artefact from this.
+
+Arduino IDE: copy packages/bellows-embedded into your sketchbook's libraries/
+folder and rename it Bellows, so the folder matches name=Bellows in
+library.properties. The layout is the Arduino 1.5 format, everything under
+src/, so #include <bellows/engines/drums.h> resolves once installed and
+#include <Bellows.h> pulls in the umbrella header. There are no .cpp files at
+all, so nothing is archived and dot_a_linkage is deliberately not set.
+
+Two things to know before relying on the IDE path. It has not been tested:
+every build in the repository goes through PlatformIO. And six examples
+include across folders, 11, 12, 13, 15, 16 and 17, each reaching a sibling for
+a shared header such as "../10_AudioShield/audioshield.h". PlatformIO resolves
+that; the IDE preprocesses a sketch into a build directory first, so it may
+not. If one of those six fails there, copy the header next to the sketch.
+
+Not in the Arduino Library Manager: it indexes whole repositories and this is
+one package inside a monorepo.
+
+## Build flags
+
+    BELLOWS_FAST_MATH     default 0. 1 swaps libm for polynomial
+                          approximations. Accuracy is gated against libm in
+                          CI. Not bit-identical to the JavaScript.
+    BELLOWS_SAMPLE_RATE   default 48000. Sizes compile-time buffers ONLY.
+                          Init() still takes the real rate, and everything
+                          derived from the rate is computed there.
+    BELLOWS_BLOCK_SIZE    default 128. Matches the AudioWorklet quantum and
+                          the Teensy Audio Library block.
+
+In PlatformIO put them in build_flags. In the Arduino IDE edit
+src/bellows/config.h, or define them before including any bellows header.
+
 ## Minimal program
 
     #include <Audio.h>
@@ -276,14 +358,57 @@ defaults, because the two are compared numerically on every commit.
     static AudioConnection c2(node, 1, out, 1);
 
     void setup() {
-      AudioMemory(12);
       kick.Init(bellows::TeensySampleRate());
+      /* AudioMemory LAST. It is what opens the audio interrupt, so
+       * anything initialised after it can be rendered before it is
+       * ready, and a delay line without its buffer reads through a null
+       * pointer, which on an IMXRT1062 is executable memory rather than
+       * a trap page. Init everything first, then this. */
+      AudioMemory(12);
     }
 
     void loop() {
       kick.NoteOn(50.0f, 0.9f);
       delay(500);
     }
+
+Earlier revisions of this file had those two lines the other way round, which
+is the ordering that produced a real null render window on a board. Every
+example in the repository calls AudioMemory last.
+
+## Targets, measured by building
+
+Counted from the board matrix in examples/README.md, which is the output of
+examples/build-matrix.sh: all ${support.total} examples compiled for each part with the
+Arduino core and the Audio Library linked in.
+
+${support.boards
+  .map((b) => {
+    const note = b.na
+      ? `${b.na} declines on purpose (a 4.x has no DAC)`
+      : b.ram
+        ? `refuses ${b.refuses.length <= 2 ? b.refuses.join(', ') : `${b.ram} of them`}`
+        : 'all of them';
+    return `    ${(b.name + ' ').padEnd(10, '.')} ${String(b.builds).padStart(2)} of ${support.total} build, ${note}`;
+  })
+  .join('\n')}
+
+Daisy Seed is not in that matrix because it is not a Teensy. examples/
+daisy_onekick links 01_OneKick as a real Daisy image against libDaisy 8.1.0,
+and the logic headers compile against the Daisy adapter for the STM32H750.
+
+Only Teensy and Daisy have a platform layer: src/bellows/platform/ holds
+teensy.h and daisy.h and nothing else. Targeting an ESP32 or an RP2350 means
+writing that layer first.
+
+WHAT A BUILD PROVES, and this matters when answering questions about fit. It
+proves the code is valid for the part and fits in its memory. It does not
+prove the part keeps up. Teensy LC and 3.2 have no floating point unit and
+emulate every operation this library performs. ONE board has been run: a
+Teensy 4.0 at 600 MHz playing the heaviest program in the set through an I2S
+amplifier, at 33.8 to 46.5 percent CPU with a 47.3 percent running maximum and
+2 of 24 audio blocks. Everything else here is compile-verified and
+numerically verified, which is a different claim.
 
 `;
 
