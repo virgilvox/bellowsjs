@@ -28,7 +28,13 @@
 <script setup lang="ts">
 import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
 import { ensureBellows, disposeBellows, bellows, booted } from '../lib/audio';
-import { FIRMWARES, FIRMWARE_BY_ID, applyParams, type FirmwareParam } from '../lib/sim/firmware';
+import {
+  FIRMWARES,
+  FIRMWARE_BY_ID,
+  GROUP_ORDER,
+  applyParams,
+  type FirmwareParam,
+} from '../lib/sim/firmware';
 import { OUTPUTS, OUTPUT_BY_ID, OutputStageGraph, noiseFloorDb, type OutputId } from '../lib/sim/output-stage';
 import { buildVoice, VOICE_CAVEATS, type RunningVoice } from '../lib/sim/voices';
 import { BOARDS, wiringFor, type BoardId } from '../lib/sim/board';
@@ -45,27 +51,6 @@ const heldKeys = ref<number[]>([]);
 
 const fw = computed(() => FIRMWARE_BY_ID.get(firmwareId.value)!);
 
-/**
- * The picker, grouped by what kind of thing an entry is.
- *
- * Twenty-two flat entries is a list you scroll rather than read, and the
- * groups are a real distinction: four rungs of primitives, four programs
- * that teach one idea each, one that puts them together, eleven patches
- * sharing a note source, and two about getting sound off the board.
- *
- * The group order is written down rather than taken from the array,
- * because the order to READ them in is not the order the examples are
- * numbered in: 06 is the rung below 01, and 20 is a library rather than a
- * lesson. Order within a group stays as FIRMWARES has it.
- */
-const GROUP_ORDER = [
-  'first steps',
-  'learn the library',
-  'the whole thing',
-  'instruments',
-  'getting sound out',
-];
-
 const FIRMWARE_GROUPS = computed(() =>
   GROUP_ORDER.map((name) => ({ name, items: FIRMWARES.filter((f) => f.group === name) })).filter(
     (g) => g.items.length > 0,
@@ -81,9 +66,22 @@ function cloneParams(): FirmwareParam[] {
   return fw.value.params.map((p) => ({ ...p }));
 }
 
-/** Outputs this board actually has. A Teensy 4.x has no DAC at all. */
+/**
+ * Outputs this board actually has. A Teensy 4.x has no DAC at all.
+ *
+ * Ordered by the FIRMWARE's list rather than by the OUTPUTS declaration,
+ * because `Firmware.outputs` is documented as "first is the default" and
+ * filtering the global list silently made that false. 15_Piezo and
+ * 16_WorkstationPiezo both name `piezo` first and both were landing on MQS,
+ * which is the same patch with no high pass, no resonance lift and no disc
+ * at all: exactly the comparison those two entries exist to prevent. Every
+ * other entry lists the outputs in the declaration order already, so this
+ * changes the button row for those two and for nothing else.
+ */
 const availableOutputs = computed(() =>
-  OUTPUTS.filter((o) => o.boards.includes(boardId.value) && fw.value.outputs.includes(o.id)),
+  fw.value.outputs
+    .map((id) => OUTPUT_BY_ID.get(id))
+    .filter((o): o is (typeof OUTPUTS)[number] => !!o && o.boards.includes(boardId.value)),
 );
 
 const parityDb = computed(() => {
@@ -118,7 +116,9 @@ const TABS: Array<{ id: TabId; label: string; num: string }> = [
 const tab = ref<TabId>('board');
 
 function tabEnabled(id: TabId): boolean {
-  if (id === 'params') return params.value.length > 0;
+  /* A choice list counts: 21_Presets has no sliders and one picker, and
+   * that picker is the only control it has. */
+  if (id === 'params') return params.value.length > 0 || (fw.value.choices?.length ?? 0) > 0;
   if (id === 'inputs') return fw.value.inputs.length > 0;
   return true;
 }
@@ -137,6 +137,10 @@ async function start(): Promise<void> {
   const b = await ensureBellows('sim/' + fw.value.id);
   insertStage(b);
   voice = buildVoice(b, fw.value, params.value);
+  /* The builder starts on the first choice, so a rebuild after a stop
+   * would otherwise play preset 1 while the picker still reads the one
+   * you chose. */
+  if (fw.value.choices && choiceIndex.value !== 0) voice.select?.(choiceIndex.value);
   running.value = true;
   status.value = 'running';
   stepIndex = 0;
@@ -204,9 +208,20 @@ watch(firmwareId, () => {
   const wasRunning = running.value;
   stop();
   params.value = cloneParams();
-  if (!availableOutputs.value.some((o) => o.id === outputId.value)) {
-    outputId.value = availableOutputs.value[0]?.id ?? 'shield';
-  }
+  choiceIndex.value = 0;
+  /*
+   * Take the new firmware's own default rather than keeping the last
+   * output, which is what this used to do and only changed the selection
+   * when the old one was unavailable.
+   *
+   * That was survivable while every entry offered most of the paths. It
+   * stopped being once two entries existed whose whole point is one
+   * converter: coming off 16_WorkstationPiezo left PIEZO DISC selected, so
+   * the next program you picked played through a 1.2 kHz high pass and a
+   * resonance lift and sounded broken. Comparing converters is done inside
+   * one entry, with the row below, and it still is.
+   */
+  outputId.value = availableOutputs.value[0]?.id ?? 'shield';
   /* A firmware with no pot leaves you looking at an empty INPUTS. */
   if (!tabEnabled(tab.value)) tab.value = 'board';
   if (wasRunning) void start();
@@ -234,6 +249,30 @@ function onParam(p: FirmwareParam): void {
     return;
   }
   voice?.setParam(p.key, p.value);
+}
+
+/*
+ * The selected entry of `fw.choices`, for the one firmware that picks
+ * rather than adjusts.
+ *
+ * It survives a stop and start, because the voice is rebuilt on start and
+ * would otherwise silently snap back to the first preset while the control
+ * still read the one you chose.
+ */
+const choiceIndex = ref(0);
+function onChoice(): void {
+  voice?.select?.(choiceIndex.value);
+  /*
+   * Back to bar 0, step 0, which is what presets.h does: its Select ends
+   * with `step_ = 0` so a new preset always enters on the line.
+   *
+   * Without this the free-running counter carries on, and a preset picked
+   * during a chord bar lands somewhere in the middle of one. A chord bar
+   * only acts on step 0 and step 12, so the new instrument could sit
+   * silent for up to thirteen sixteenths, about two seconds at 96 bpm,
+   * and read as a preset that does not work.
+   */
+  stepIndex = 0;
 }
 
 /* Keyboard for the firmwares that take notes. Two rows, one octave. */
@@ -415,6 +454,17 @@ onActivated(() => {
 
       <!-- PARAMETERS -->
       <div v-else-if="tab === 'params'" class="fields">
+        <div class="field" v-if="fw.choices">
+          <label>preset<span> // {{ choiceIndex + 1 }} of {{ fw.choices.length }}</span></label>
+          <select v-model.number="choiceIndex" @change="onChoice">
+            <option v-for="c in fw.choices" :key="c.value" :value="c.value">{{ c.label }}</option>
+          </select>
+          <p class="hint">
+            Every one of these is a row in the preset table, and the same table
+            compiles into the firmware. Changing it rebuilds the voice, which is
+            what the board does too.
+          </p>
+        </div>
         <div class="field" v-for="p in params" :key="p.key">
           <label>{{ p.label }}<span v-if="p.unit"> // {{ p.unit }}</span></label>
           <div class="slider-row">

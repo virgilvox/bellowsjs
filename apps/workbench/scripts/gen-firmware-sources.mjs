@@ -66,9 +66,17 @@ const FILES = {
   choir_h: '20_Instruments/choir.h',
   eightoheight_h: '20_Instruments/eightoheight.h',
 
-  /* The two output builds that were flashed to a real board. */
+  /* The two output builds that were flashed to a real board. Neither has a
+   * logic header: the program of each is a declaration over 07's and 15's
+   * headers, so the .ino is the whole thing to show. */
   wspiezo_ino: '16_WorkstationPiezo/16_WorkstationPiezo.ino',
   wsi2s_ino: '17_WorkstationI2S/17_WorkstationI2S.ino',
+
+  /* 21_Presets: the other half of 20_Instruments. One shell over eleven
+   * engines, driven by the ported preset table rather than by a header
+   * per patch. */
+  presets_h: '21_Presets/presets.h',
+  presets_ino: '21_Presets/21_Presets.ino',
 };
 
 const parts = [

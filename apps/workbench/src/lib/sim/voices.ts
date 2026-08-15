@@ -13,7 +13,7 @@
  * papered over. Nothing here silently substitutes.
  */
 
-import { Markov } from 'bellowsjs';
+import { INSTRUMENT_PRESETS, Markov } from 'bellowsjs';
 import type { Bellows, Instrument } from 'bellowsjs';
 
 /*
@@ -37,6 +37,14 @@ export interface RunningVoice {
   /** Play a pitch, for firmwares with a keyboard. */
   noteOn?: (midi: number) => void;
   noteOff?: (midi: number) => void;
+  /**
+   * Pick one of `Firmware.choices`, for firmwares that select rather than
+   * adjust. Separate from setParam because selecting rebuilds the
+   * instrument: 21_Presets is the only user, and its C++ counterpart
+   * re-Inits the voice pool for the same reason, because Pluck derives its
+   * loop filter and its delay length at Init.
+   */
+  select?: (index: number) => void;
   /** Steps per beat, so the transport knows how fast to tick. */
   stepsPerBeat: number;
   /**
@@ -123,6 +131,30 @@ function makePlay(b: Bellows): Play {
 
 /* 96 bpm in sixteenths, which is what the .ino sets. */
 const INST_STEP_SEC = 60 / 96 / 4;
+
+/* ------------------------------------------------------------------ *
+ * The part for 21_Presets, from examples/21_Presets/presets.h.
+ *
+ * One part rather than 20_Instruments' four, because the question there
+ * is what suits a clarinet and the question here is what the preset table
+ * sounds like. A pad gets an arpeggio it would not have chosen and a
+ * woodblock gets a held chord it cannot sustain, and both are informative.
+ * ------------------------------------------------------------------ */
+const PRESET_STEPS = 16;
+const PRESET_BARS = 4;
+/* kLine: a broken line over the bar, resolving down. REST is the same
+ * sentinel the 20_Instruments part uses; presets.h calls it kRest. */
+const PRESET_LINE = [0, REST, 4, REST, 2, REST, 7, REST, 4, REST, 2, REST, 0, REST, REST, REST];
+const PRESET_TRIAD = [0, 2, 4];
+/* Released four sixteenths before the bar turns over, leaving a tail. */
+const PRESET_CHORD_RELEASE = 12;
+/* kRootIndex, A3 in 12-EDO. The line reaches degree 7, an octave up, and a
+ * preset's own octave shift moves the lot: bass-guitar at -2 puts the root
+ * on 55 Hz, which is why the C++ Pluck pool is sized for 55 and not 110. */
+const PRESET_ROOT_MIDI = 57;
+const PRESET_ROOT_OCTAVE = 3;
+/* kVoices, which is what the held triad needs and no more. */
+const PRESET_VOICES = 3;
 
 /**
  * The master limiter the 20_Instruments shell has, at the same ceiling.
@@ -601,7 +633,24 @@ export function buildVoice(b: Bellows, fw: Firmware, params: FirmwareParam[]): R
       return v;
     }
 
-    /* ---------------- 07_Workstation ---------------- */
+    /* ---------------- 07_Workstation, and 16 and 17 ----------------
+     *
+     * The same builder for all three, because the same patch is what all
+     * three programs are. 16 wraps it in the piezo voicing and 17 folds it
+     * to mono, and the browser already does both on the other side of the
+     * voice: the disc chain and the mono sum are properties of the output
+     * stage, which is where output-stage.ts models them, and picking PIEZO
+     * or I2S AMP under either entry runs the same code the 15_Piezo entry
+     * runs.
+     *
+     * They keep separate voice keys anyway, and the only thing that buys
+     * is separate caveats: VOICE_CAVEATS is keyed by voice, so sharing
+     * `workstation` would have made three programs share one set of small
+     * print, and what is true of 17 (it composes a new arrangement every
+     * power up) is not true of the other two.
+     */
+    case 'ws-piezo':
+    case 'ws-i2s':
     case 'workstation': {
       /*
        * The whole piece: kit on euclidean rhythms, a bass line, a plucked
@@ -830,6 +879,96 @@ export function buildVoice(b: Bellows, fw: Firmware, params: FirmwareParam[]): R
       };
     }
 
+    /* ---------------- 21_Presets ---------------- */
+    case 'presets': {
+      /*
+       * The preset table, walked. Read off examples/21_Presets/presets.h:
+       * the line, the triad, the release step, the root and the two bar
+       * alternation are its constants.
+       *
+       * This is the entry where the two sides are closest, because the
+       * thing being ported is data rather than code. presets.h asks
+       * bellows/presets/instruments.h for a row and applies it to the
+       * matching engine's Params; this asks INSTRUMENT_PRESETS for the
+       * same row and hands it to b.voice. The two tables are diffed value
+       * by value by `npm run presets:check`, 1054 of them, so a preset
+       * that sounds different here is a difference in the engine and not
+       * in what was asked of it.
+       */
+      instrumentMaster(b);
+      /* A3, which is kRootIndex 57, natural minor. The C++ goes through
+       * DegreeFreq with a Tuning and this goes through Scale; the two
+       * agree in 12-EDO and only in 12-EDO, which is the point
+       * 04_ScalesAndTuning makes. */
+      const scale = b.scale(PRESET_ROOT_MIDI, 'minor');
+
+      let index = 0;
+      let inst: Instrument | null = null;
+      let octave = 0;
+      let held: number[] = [];
+
+      const hz = (degree: number): number =>
+        midiToHz(scale.degreeToMidi(degree, PRESET_ROOT_OCTAVE)) * Math.pow(2, octave);
+
+      const load = (i: number): void => {
+        const pre = INSTRUMENT_PRESETS[i];
+        if (!pre) return;
+        /* Rebuild rather than retune, which is what Slot::Load does: it
+         * re-Inits the pool because Pluck derives its loop filter and its
+         * delay length at Init and has no SetParams at all. */
+        if (inst) inst.dispose();
+        held = [];
+        index = i;
+        octave = pre.octave ?? 0;
+        inst = b.voice(pre.engineId, pre.params, { polyphony: PRESET_VOICES });
+        if (pre.fx?.length) inst.fx(...pre.fx.map((f) => [f.effectId, f.params ?? {}] as [string, Record<string, number>]));
+        inst.gain(pre.gain ?? 0.8);
+      };
+
+      load(0);
+
+      return {
+        stepsPerBeat: 4,
+        stepSec: INST_STEP_SEC,
+        step: (i, at) => {
+          if (!inst) return;
+          const s = i % PRESET_STEPS;
+          const bar = Math.floor(i / PRESET_STEPS) % PRESET_BARS;
+          /* Bars 1 and 3 hold the triad; bars 0 and 2 play the line. */
+          if (bar % 2 === 1) {
+            if (s === 0) {
+              for (const id of held) inst.off(id, at);
+              held = PRESET_TRIAD.map((d) => inst!.on({ hz: hz(d) }, 0.62, at));
+            } else if (s === PRESET_CHORD_RELEASE) {
+              for (const id of held) inst.off(id, at);
+              held = [];
+            }
+            return;
+          }
+          const d = PRESET_LINE[s];
+          if (d === REST) return;
+          /*
+           * No note off, exactly as presets.h has none: a plucked string
+           * has no key to lift, so the pool's steal order ends the notes
+           * instead and a sustaining preset overlaps three of them. Using
+           * note() with a duration here would have made every pad staccato
+           * and would have been a different program.
+           */
+          inst.on({ hz: hz(d) }, s % 4 === 0 ? 0.9 : 0.6, at);
+        },
+        /* Nothing to move: a preset IS its parameter set, and a slider that
+         * edited one would be showing a preset the table does not contain. */
+        setParam: () => {},
+        select: (i) => {
+          if (i !== index) load(i);
+        },
+        dispose: () => {
+          if (inst) inst.dispose();
+          inst = null;
+        },
+      };
+    }
+
     default:
       throw new Error(`no voice builder for ${fw.voice}`);
   }
@@ -901,4 +1040,26 @@ export const VOICE_CAVEATS: Record<string, string[]> = {
   'inst-clarinet': [],
   'inst-choir': [],
   'inst-808': [],
+
+  /* 16 and 17. Both play 07's piece, so what is worth saying about each
+   * is what its own .ino does that 07's does not. */
+  'ws-piezo': [
+    'The piece is 07_Workstation unchanged. What the disc does to it is the output stage, so the PIEZO output above is the example: a high pass at 1.2 kHz, a lift at the resonance, and a hard limit.',
+    'That high pass is a filter here and a transducer there. A real 27 mm disc is about a megaohm at 100 Hz and passes essentially nothing, so on a board the kick at 50 Hz and the bass at 110 to 262 Hz are gone rather than quiet. The WORKSTATION entry is the same piece with every output to choose from, which is where to hear what is being thrown away.',
+    'The firmware drives the limiter at 12, which was worth 12 dB of radiated level measured through the real chain. That drive is in the .ino and is not one of the controls here.',
+  ],
+  'ws-i2s': [
+    'The one program in this catalogue that has been flashed to a board and listened to: a Teensy 4.0 through a MAX98357A, 34 to 43 percent CPU typical and 47.2 percent peak, 2 of 24 audio blocks used.',
+    'The firmware draws a seed from a floating analog pin at power up and calls Piece::Compose(seed), which redraws the mode, the progression, all five rhythms, the motif and the tempo. So two boots are two pieces. What plays here is the one fixed arrangement 07 ships with.',
+    'It sums to mono in software, because the amplifier decides what to do with two channels from the voltage on its SD pin and that is not worth guessing about. The I2S AMP output here does the same fold.',
+  ],
+
+  /* 21_Presets. The entry where the two implementations are closest,
+   * because what was ported is a table rather than a program. */
+  presets: [
+    'Both sides read the same 50 rows. bellows/presets/instruments.h is a value-exact port of the array this page loads from, diffed entry by entry by the preset harness: 1054 values, 0 differences. So a preset that sounds different here is a difference in an engine, not in what was asked of it.',
+    'The C++ shell carries one chorus, one tremolo and one plate, shared, because only one preset sounds at a time. clean-electric asks for a tape delay, which is not ported, and plays dry there; here it gets the delay the preset actually names.',
+    'Levels are not matched and the table does not claim they are. Each preset carries a gain trim chosen in a browser, not a measured loudness match, so stepping through the tour moves the level. A limiter at -1 dB catches the peaks and nothing pretends to fix the rest.',
+    'Three voices, which is what the held triad needs. On a sustaining preset the line overlaps and steals, exactly as it does on the board, because neither side lifts a key on the line.',
+  ],
 };

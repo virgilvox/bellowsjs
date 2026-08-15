@@ -63,7 +63,13 @@ import {
   audioshield_ino,
   piezo_h,
   piezo_ino,
+  wspiezo_ino,
+  wsi2s_ino,
+  presets_h,
+  presets_ino,
 } from './sources.gen';
+
+import { INSTRUMENT_PRESETS } from 'bellowsjs';
 
 import type { OutputId } from './output-stage';
 
@@ -125,6 +131,18 @@ export interface Firmware {
   /** The header's filename, for the export. */
   headerName: string;
   params: FirmwareParam[];
+  /**
+   * A labelled list the firmware picks one of, when the thing being chosen
+   * has a name rather than a value.
+   *
+   * 21_Presets walks 50 named instruments, and a slider reading "31" for
+   * DOUBLE BASS is not a tour of a preset library. Only that entry uses
+   * this; everything else varies by number and a slider is the honest
+   * control. The chosen index reaches the voice through
+   * `RunningVoice.select`, not through `setParam`, because selecting
+   * rebuilds the instrument rather than moving one of its fields.
+   */
+  choices?: Array<{ value: number; label: string }>;
   inputs: FirmwareInput[];
   indicators: FirmwareIndicator[];
   /** Output paths this example is written for. First is the default. */
@@ -282,6 +300,64 @@ export const FIRMWARES: Firmware[] = [
     outputs: ['piezo', 'mqs', 'pwm'],
     boards: ALL_BOARDS,
     voice: 'chord',
+  },
+
+  /* ---------------------------------------------------------------- *
+   * 16 and 17. 07_Workstation's piece through two of the output paths
+   * above, and they are here rather than under "the whole thing"
+   * because what distinguishes them is the converter and not the music.
+   *
+   * Neither folder holds a header of its own, and neither needs one:
+   * both include `../07_Workstation/workstation.h`, so that IS their
+   * program and it is what the header pane shows. The `.ino` differs and
+   * carries the whole difference between the two, which is the split the
+   * rest of the catalogue already uses. It also means the parameters
+   * below write back into a file that really has those fields, rather
+   * than reporting 0 of 3 against an `.ino` that has none.
+   * ---------------------------------------------------------------- */
+  {
+    id: 'ws-piezo',
+    group: 'getting sound out',
+    folder: '16_WorkstationPiezo',
+    title: 'WORKSTATION ON A DISC',
+    blurb: 'The whole piece onto a piezo, which passes nothing under 1.2 kHz. What survives is the hat, the snare and the melody as harmonics.',
+    parityRow: 'va',
+    parityRelRms: 2.19e-3,
+    headerSource: workstation_h,
+    inoSource: wspiezo_ino,
+    headerName: 'workstation.h',
+    params: [
+      { key: 'cutoff', label: 'bass cutoff', min: 200, max: 4000, step: 10, value: 900, unit: 'Hz', hint: 'Ladder corner on the bass voice. On a disc you will not hear this move.' },
+      { key: 'damp', label: 'string damp', min: 0.05, max: 0.9, step: 0.01, value: 0.32, hint: 'How fast the top comes off the plucked melody. On a disc this is most of what you hear.' },
+      { key: 'feedback', label: 'delay fb', min: 0, max: 0.85, step: 0.01, value: 0.42, hint: 'Repeats on the send. The times follow the tempo.' },
+    ],
+    inputs: [],
+    indicators: [],
+    outputs: ['piezo', 'mqs', 'pwm'],
+    boards: FOUR_PLUS,
+    voice: 'ws-piezo',
+  },
+  {
+    id: 'ws-i2s',
+    group: 'getting sound out',
+    folder: '17_WorkstationI2S',
+    title: 'WORKSTATION ON AN AMP',
+    blurb: 'The same piece into a MAX98357A, summed to mono so the SD pin on the amplifier stops mattering. This is the one that has been flashed and heard.',
+    parityRow: 'va',
+    parityRelRms: 2.19e-3,
+    headerSource: workstation_h,
+    inoSource: wsi2s_ino,
+    headerName: 'workstation.h',
+    params: [
+      { key: 'cutoff', label: 'bass cutoff', min: 200, max: 4000, step: 10, value: 900, unit: 'Hz', hint: 'Ladder corner on the bass voice.' },
+      { key: 'damp', label: 'string damp', min: 0.05, max: 0.9, step: 0.01, value: 0.32, hint: 'How fast the top comes off the plucked melody.' },
+      { key: 'feedback', label: 'delay fb', min: 0, max: 0.85, step: 0.01, value: 0.42, hint: 'Repeats on the send. The times follow the tempo.' },
+    ],
+    inputs: [],
+    indicators: [],
+    outputs: ['i2s-amp'],
+    boards: FOUR_PLUS,
+    voice: 'ws-i2s',
   },
 
   /* ---------------------------------------------------------------- *
@@ -661,8 +737,74 @@ export const FIRMWARES: Firmware[] = [
     boards: ALL_BOARDS,
     voice: 'inst-808',
   },
+
+  /* ---------------------------------------------------------------- *
+   * 21_Presets. The other half of 20_Instruments: eleven patches
+   * written out by hand there, and here the whole 50 row preset table
+   * played through one shell.
+   *
+   * The choice list below is built FROM the library rather than typed
+   * out, so it cannot drift from what the browser will actually load,
+   * and the same table is what the C++ side compiles: every value in
+   * bellows/presets/instruments.h is diffed against this array by
+   * `npm run presets:check`, 1054 of them. So the labels here and the
+   * sounds on the board come from one source.
+   * ---------------------------------------------------------------- */
+  {
+    id: 'presets',
+    group: 'instruments',
+    folder: '21_Presets',
+    title: 'THE PRESET TABLE',
+    blurb: 'All 50 instruments from the preset library, each playing the same four bars, so what changes between them is the instrument and nothing else.',
+    /* Eleven engines, so no single parity row describes it. Each preset
+     * inherits the row of the engine it names, which the panel shows
+     * for the individual instruments above. */
+    parityRow: null,
+    parityRelRms: null,
+    headerSource: presets_h,
+    inoSource: presets_ino,
+    headerName: 'presets.h',
+    params: [],
+    choices: INSTRUMENT_PRESETS.map((pre, i) => ({ value: i, label: pre.label })),
+    inputs: [],
+    indicators: [],
+    outputs: OUTPUTS_ALL,
+    /* Measured, not assumed: ./build-matrix.sh 21_Presets refuses the
+     * link on LC, 3.2, 3.5 and 3.6 with `region RAM overflowed`. Eleven
+     * voice pools plus a plate tank is 251 KB, and a 3.6 has 256 KB
+     * total. */
+    boards: ['teensy40', 'teensy41', 'teensymm'],
+    voice: 'presets',
+  },
 ];
 
+
+/**
+ * The picker's groups, in reading order.
+ *
+ * Twenty-five flat entries is a list you scroll rather than read, and the
+ * groups are a real distinction: four rungs of primitives, four programs
+ * that teach one idea each, one that puts them together, eleven patches
+ * sharing a note source plus the whole preset table, and four about
+ * getting sound off the board.
+ *
+ * The order is written down rather than taken from the array, because the
+ * order to READ them in is not the order the examples are numbered in: 06
+ * is the rung below 01, and 20 is a library rather than a lesson. Order
+ * within a group stays as FIRMWARES has it.
+ *
+ * It lives here rather than in the view because it is catalogue data and
+ * because a `group` that is not in this list is dropped from the picker
+ * with no error of any kind. `npm run check:catalogue` is what makes that
+ * loud; it could not import this while it was a const inside a .vue file.
+ */
+export const GROUP_ORDER = [
+  'first steps',
+  'learn the library',
+  'the whole thing',
+  'instruments',
+  'getting sound out',
+];
 
 export const FIRMWARE_BY_ID = new Map(FIRMWARES.map((f) => [f.id, f]));
 

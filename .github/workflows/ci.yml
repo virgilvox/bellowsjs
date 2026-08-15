@@ -88,6 +88,13 @@ jobs:
         run: |
           npm run gen:sim -w apps/workbench
           git diff --exit-code -- apps/workbench/src/lib/sim/sources.gen.ts
+      - name: the simulator catalogue agrees with itself
+        # FIRMWARES, the case labels in buildVoice, VOICE_CAVEATS and
+        # GROUP_ORDER are four lists tied together by two plain strings.
+        # Both ways of getting it wrong are silent: a group that is not in
+        # GROUP_ORDER drops the entry from the picker with no error at all,
+        # and a voice with no case throws only when a visitor presses RUN.
+        run: npm run check:catalogue -w apps/workbench
       - name: the LLM reference is in sync with the library
         # public/llm.txt is generated from the built bundle and its type
         # declarations, is served at /llm.txt, and says of itself that it is
