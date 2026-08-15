@@ -1,5 +1,91 @@
 # KICKOFF
 
+Paste the block below into a fresh session. Everything under
+"Reference, unchanged" is the standing material about the project and the
+harnesses; it is still accurate and does not need editing between sessions.
+
+---
+
+## The prompt
+
+You are picking up bellowsjs: a browser-native audio engine in TypeScript
+published to npm as `bellowsjs`, a header-only C++17 port for microcontrollers
+in `packages/bellows-embedded`, and a Vue demo app at bellows.live. Repo:
+`/Users/obsidian/Projects/ossuary-projects/bellowsjs`
+
+READ FIRST, in this order, and do not skip them: `CLAUDE.md` (house rules,
+strict: no emojis, no em dashes, no stock AI phrasing), `docs/HANDOFF.md`
+(state, harnesses, and the numbered list under "Still not done, in the order I
+would take it"), `docs/AUDIT-3.md` (the standard for honesty in this repo).
+
+The last session finished the embedded story: all four remaining engines are
+ported so parity is 40 rows, all 50 instrument presets exist on a board with a
+1054-value exact gate, and the site gained an EMBEDDED PLAYGROUND, a JAVASCRIPT
+and EMBEDDED switch on the CODE page with 36 compiled C++ examples, a nine page
+embedded docs tree behind a BROWSER and EMBEDDED switch, and an embedded LLM
+reference. It also ran on hardware for the first time: a Teensy 4.0 plays
+`07_Workstation` at 47.2 percent peak CPU.
+
+OBJECTIVE: work down items 1 to 4 of "Still not done" in HANDOFF, which are
+bookkeeping the last session created and did not close, then pick up item 5 or 6
+depending on whether you have a board in hand.
+
+Item 1 is the one that matters most, because it is the shape of gap this
+repository exists to prevent: `16_WorkstationPiezo`, `17_WorkstationI2S` and
+`21_Presets` are committed and building, and NOTHING checks their figures. They
+have no size sketch, no README rows, and are not in the `ALL` list in
+`build-matrix.sh`. Adding a row moves the `SELF` figure count in both
+`docs/HANDOFF.md` and this file by two, and `check-docs` will tell you.
+
+THE RULES THAT MATTER HERE, learned by being burned:
+
+- A gate you have not watched fail is not a gate. Mutate the thing it guards,
+  see it go red, revert, see it go green. If a mutation does not fire, suspect
+  the mutation before the gate.
+- Numbers in documents rot exactly like generated files.
+  `node tools/check-docs.mjs --check` is the control, and it now covers 382
+  figures across 7 documents.
+- A wrong engine parameter name is silent at every layer of the browser
+  library. `fillDefaults` copies only spec names and `setParam` returns early on
+  an unknown one, neither warns, and the type checker cannot see it because
+  `param(name: string, value: number)` takes anything. The last session shipped
+  an FM electric piano with no tine and an acid bass with no filter sweep for
+  exactly this reason. If you add a control, check the name against the engine's
+  ParamSpec list and then LISTEN to it move.
+- On a board, `AudioMemory()` is what opens the audio interrupt. Anything
+  initialised after it can be rendered before it is ready. Init first.
+- Do not trust a loader that says SUCCESS. PlatformIO's `teensy-gui` protocol
+  reports success for having opened an application. Use
+  `teensy_loader_cli -w -s -v` and look for `Found HalfKay Bootloader`.
+
+VERIFY, and none of these is optional:
+
+```
+npm test -w packages/bellows                        1348 tests
+npx vue-tsc --noEmit -p apps/workbench              clean
+npm run check:examples -w apps/workbench            49 javascript examples
+npm run check:embedded -w apps/workbench            36 C++ snippets compile
+npm run gen:sim -w apps/workbench && git diff --exit-code -- apps/workbench/src/lib/sim/sources.gen.ts
+cd packages/bellows-embedded && npm run parity:check     40 rows, prng exactly 0
+cd packages/bellows-embedded && npm run tables:check     428 value rows
+cd packages/bellows-embedded && npm run presets:check    50 presets, 1054 values
+cd packages/bellows-embedded && node tools/gen-tables.mjs --check
+cd packages/bellows-embedded && node tools/check-docs.mjs --check
+```
+
+`gen-tables --check` refuses to run against a stale `dist`, so
+`npm run build -w packages/bellows` first if you have touched the library.
+
+And listen to it. The playground's samples were wrong three times in ways that
+typechecked and built, and the only thing that caught them was playing them and
+measuring the output. A scripted click does not unlock an AudioContext; one real
+click unlocks it for the session, after which scripted auditions work.
+
+---
+
+## Reference, unchanged
+
+
 A prompt for starting a fresh session on this repository with no prior context. Copy the block
 below, replace the OBJECTIVE line, and paste it as the first message.
 

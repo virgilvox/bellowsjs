@@ -103,14 +103,74 @@ it move, because that is the only thing that catches this.
 | `npm run check:embedded` (workbench) | every C++ snippet on the site compiles against the real headers |
 | `node scripts/gen-llm-embedded.mjs` | the embedded LLM reference, from the headers, gaps reported not dropped |
 
-### Still not done
+### Still not done, in the order I would take it
 
-- No board other than a Teensy 4.0 has run anything, and only one program on it.
-- Nothing has been compared to the browser by ear.
-- `packages/bellows-embedded` is still `private: true` and in neither registry.
-  Milestone 6 has not started.
-- The firmware currently flashed on the development Teensy predates the
-  AudioMemory ordering fix.
+Ordered by cost to fix against risk of being wrong later. The first four are
+bookkeeping the session created and did not close; they are cheap and they are
+the kind of gap that rots.
+
+**1. Three examples exist with nothing checking them.** `16_WorkstationPiezo`,
+`17_WorkstationI2S` and `21_Presets` are committed and build, but they have no
+size sketch under `test/sketches`, no row in either table in
+`examples/README.md`, and no entry in the `ALL` list in
+`examples/build-matrix.sh` (which still names 14 of the 17 folders). So
+`check-docs` cannot see their flash and RAM, and `./build-matrix.sh` with no
+argument does not sweep them. Add `p14_e16_*`, `p15_e17_*` and `p16_e21_*`,
+their README rows, their `EXAMPLES_ROWS` entries in `tools/check-docs.mjs`, and
+the three folder names to `ALL`. Remember the `SELF` count in this file and in
+`docs/KICKOFF.md` moves by two per row added.
+
+**2. The firmware manifest points at the wrong commit.** The 60 binaries in
+`apps/workbench/public/firmware` were built before the commit that contains
+them, so `manifest.json` records `2873f24-dirty` rather than `11356c4`. The
+manifest is doing its job (it says the tree was dirty rather than pretending),
+but the provenance is a commit behind. Rerun
+`node apps/workbench/scripts/gen-firmware-binaries.mjs` from a clean tree. It is
+about 40 minutes of building and needs `pio` and the teensy platform.
+
+**3. The development board is running stale firmware.** The Teensy 4.0 has
+`17_WorkstationI2S` from before the AudioMemory ordering fix, which is the null
+render window described above. Rebuild and reflash:
+`cd packages/bellows-embedded/examples && PLATFORMIO_SRC_DIR=17_WorkstationI2S pio run -e probe_teensy40`
+then `teensy_loader_cli --mcu=TEENSY40 -w -s -v .pio/build/probe_teensy40/firmware.hex`.
+Use the CLI loader and watch for `Found HalfKay Bootloader` then `Programming`:
+PlatformIO's default `teensy-gui` protocol reports success for having opened an
+application, which is not the same as having programmed anything.
+
+**4. The playground catalogue does not offer the new work.** It has 22 entries
+and none of them is `21_Presets`, `16_WorkstationPiezo` or `17_WorkstationI2S`.
+Adding one means two entries in `FILES` in `gen-firmware-sources.mjs`, an entry
+in `FIRMWARES`, a `case` in `buildVoice`, and usually a `VOICE_CAVEATS` line.
+The presets one is the interesting entry, because it could offer all 50 as a
+picker rather than as a firmware.
+
+**5. Hardware breadth, which is the real gap.** One board, one program, one
+session. Nothing on a 3.x, nothing on a Daisy, and the two boards without a
+floating point unit (LC and 3.2) are the whole question, because they emulate
+every float operation in software. `00_BringUp` exists for exactly this and has
+never been run. The other half is that nothing has been compared to the browser
+BY EAR: 40 parity rows and 1054 preset values are a strong position and they are
+not the same as having listened to both.
+
+**6. Milestone 6, publishing the embedded library.** Still `private: true` and
+in neither the Arduino Library Manager nor the PlatformIO registry. The decision
+is recorded under "Decisions, made": a mirror repository holding only
+`packages/bellows-embedded`, pushed by CI on tag. PlatformIO can consume the
+subdirectory today. Note `library.properties` still says `dot_a_linkage=true`,
+which is questionable for a header-only library with no `.cpp`, and the Arduino
+IDE path is untested: examples 11, 12, 13, 16 and 17 include across folders
+(`../10_AudioShield/audioshield.h`), which PlatformIO resolves and the Arduino
+IDE may not, because it preprocesses the `.ino` into a build directory.
+
+**7. The audit backlog.** `docs/AUDIT-2.md` still has roughly 73 genuinely open
+findings, triaged in "The work queue" below. The largest single one is the
+string waveguide being up to 23 cents flat below 165 Hz, which now matters more
+than it did: the engine is ported, five presets use it, and the C++ reproduces
+the defect faithfully because parity demanded it.
+
+**8. One parity row is weaker than it looks.** `additive_morph` moves only 4.4x
+against a 10x gate for a 0.1 percent `morph` error. It is recorded in the GATES
+comment. A second row driving morph across its range would close it.
 
 ## Where things stand
 
