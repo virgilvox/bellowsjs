@@ -170,7 +170,8 @@ WHERE THINGS STAND
   correction is worth reading rather than skipping, because both were stated here as hard
   facts for weeks after they stopped being true:
     A BOARD HAS BEEN FLASHED AND HEARD. A Teensy 4.0 runs 17_WorkstationI2S, which is
-    07_Workstation summed to mono, through a MAX98357A at 47.2 percent peak CPU. That is one
+    07_Workstation summed to mono, through a MAX98357A at 33.8 to 46.5 percent CPU and a
+    47.3 percent running maximum, measured twice on two builds. That is one
     board and one program. Nothing else has been run, and neither implementation has been
     compared to the other by ear.
     CI HAS RUN, 26 times: 19 green and 7 failures, 11 push, 11 pull_request, 4 manual. All

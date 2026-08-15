@@ -1049,7 +1049,7 @@ export const VOICE_CAVEATS: Record<string, string[]> = {
     'The firmware drives the limiter at 12, which was worth 12 dB of radiated level measured through the real chain. That drive is in the .ino and is not one of the controls here.',
   ],
   'ws-i2s': [
-    'The one program in this catalogue that has been flashed to a board and listened to: a Teensy 4.0 through a MAX98357A, 34 to 43 percent CPU typical and 47.2 percent peak, 2 of 24 audio blocks used.',
+    'The one program in this catalogue that has been flashed to a board and listened to, twice: a Teensy 4.0 through a MAX98357A, 33.8 to 46.5 percent CPU and a 47.3 percent running maximum, 2 of 24 audio blocks used. Two boots are two arrangements, so the two runs agreeing is worth more than either number alone.',
     'The firmware draws a seed from a floating analog pin at power up and calls Piece::Compose(seed), which redraws the mode, the progression, all five rhythms, the motif and the tempo. So two boots are two pieces. What plays here is the one fixed arrangement 07 ships with.',
     'It sums to mono in software, because the amplifier decides what to do with two channels from the voltage on its SD pin and that is not worth guessing about. The I2S AMP output here does the same fold.',
   ],

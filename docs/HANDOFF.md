@@ -8,12 +8,16 @@ Four things happened that a reader of the older sections below needs to know
 before trusting them, because each one falsifies something those sections say.
 
 **1. It ran on hardware, and there is a CPU number.** A Teensy 4.0 at 600 MHz
-played `07_Workstation`, the heaviest program in the set, through a MAX98357A at
-44.1 kHz: **34 to 43 percent CPU, 47.2 percent peak**, 2 of 24 audio blocks. That
-is Milestone 1's acceptance criterion and it replaces an assumption the whole
-repository rested on. It is ONE board and ONE program: no other board has run
-anything, and nothing has been compared to the browser by ear. Those CPU figures
-are hand recorded from a serial console, so no harness checks them.
+played `17_WorkstationI2S`, which is `07_Workstation` summed to mono and the
+heaviest program in the set, through a MAX98357A at 44.1 kHz: **33.8 to 46.5
+percent CPU, 47.3 percent peak**, 2 of 24 audio blocks. That is Milestone 1's
+acceptance criterion and it replaces an assumption the whole repository rested
+on. It has now run **twice**, on two builds and two arrangements, and the second
+run is what those figures are: see the table in `docs/HARDWARE.md`. It is still
+ONE board and ONE program: no other board has run anything, and nothing has been
+compared to the browser by ear. The CPU figures are hand recorded from a serial
+console, so no harness checks them, and `AudioProcessorUsageMax` is a running
+maximum since boot rather than a bound.
 
 **2. The engine set is complete.** `additive`, `harmonic`, `waveguide` and
 `wavetable` are ported, so every engine the browser ships now exists in C++. The
@@ -168,18 +172,44 @@ produces a diff on those rows whether or not anything changed, and a 3.x binary
 diff is only news if it is more than three bytes. Every 4.x and MicroMod image
 came back byte identical, which is what says no DSP moved.
 
-**3. The development board is running stale firmware. BLOCKED, no board.**
-Checked on 2026-08-15: `pio device list` shows only Bluetooth and wlan-debug, so
-nothing is connected. The Teensy 4.0 still has `17_WorkstationI2S` from before
-the AudioMemory ordering fix, which is the null render window described above.
-When a board is in hand:
-`cd packages/bellows-embedded/examples && PLATFORMIO_SRC_DIR=17_WorkstationI2S pio run -e probe_teensy40`
-then `teensy_loader_cli --mcu=TEENSY40 -w -s -v .pio/build/probe_teensy40/firmware.hex`.
-The loader is at `~/.platformio/packages/tool-teensy/teensy_loader_cli` and is
-not on PATH. Use the CLI loader and watch for `Found HalfKay Bootloader` then
-`Programming`: PlatformIO's default `teensy-gui` protocol reports success for
-having opened an application, which is not the same as having programmed
-anything.
+**3. The development board is running stale firmware. DONE.** It had
+`17_WorkstationI2S` from before the AudioMemory ordering fix, which is the null
+render window described above. Reflashed on 2026-08-15 with the post-fix build:
+
+```
+cd packages/bellows-embedded/examples
+PLATFORMIO_SRC_DIR=17_WorkstationI2S pio run -e probe_teensy40
+~/.platformio/packages/tool-teensy/teensy_loader_cli --mcu=TEENSY40 -w -s -v \
+  .pio/build/probe_teensy40/firmware.hex
+```
+
+The loader printed `Found HalfKay Bootloader`, then `Programming`, then
+`Booting`, which is the sequence to insist on: PlatformIO's default `teensy-gui`
+protocol reports success for having opened an application. The loader is not on
+PATH; it is in the PlatformIO packages tree at the path above. In bootloader
+mode the board is a HID device, VID `0x16c0` PID `0x0478`, and does NOT appear
+in `pio device list`, which is why "no board connected" was the wrong reading
+earlier the same day.
+
+It came back up playing, and the numbers are in `docs/HARDWARE.md`. The
+AudioMemory fix cost nothing measurable.
+
+Three things learned by running it that were not knowable from the source.
+
+`AudioProcessorUsageMax` is a running maximum since boot that nothing resets, so
+a "peak" figure is the highest value seen so far and not a bound. It moved from
+47.2 to 47.3 during the minute it was watched.
+
+The seed is unobservable in practice, which is a real defect in the example. 17
+prints it once in `setup()` and invites you to write it down and put it in
+`kPinnedSeed` to hear the piece again, but a host cannot open the serial port
+before that print happens, so it is discarded. The fix is a short
+`while (!Serial && millis() < 2000);` before the banner. Until then the one
+control that makes a piece reproducible cannot be read.
+
+`teensy_loader_cli -b -s` hangs rather than failing when the serial port is
+already held open by a reader. It has no timeout. Nothing is harmed, but do not
+leave it in a script without one.
 
 **4. The playground catalogue does not offer the new work. DONE.** It had 22
 entries and none of them was `21_Presets`, `16_WorkstationPiezo` or
@@ -305,8 +335,10 @@ comment. A second row driving morph across its range would close it.
    **A Teensy 4.0 has now run this, and the number is the one Milestone 1 existed to
    collect.** `07_Workstation`, the heaviest program in the set (five engines, a Markov
    melody, a tempo-synced delay send, an EQ and a limiter), at 44.1 kHz through a
-   MAX98357A on I2S: **34 to 43 percent CPU typical, 47.2 percent peak**, with 2 of 24
-   audio blocks used. It runs with about half the processor spare.
+   MAX98357A on I2S: **33.8 to 46.5 percent CPU, 47.3 percent peak**, with 2 of 24
+   audio blocks used. It runs with about half the processor spare. Measured twice
+   now, on two builds and two arrangements; `docs/HARDWARE.md` has both rows and
+   the caveats.
    
    What that does NOT settle, and the distinction matters because one board is one data
    point: no other board has run anything (a 3.2 and an LC have no FPU and emulate every

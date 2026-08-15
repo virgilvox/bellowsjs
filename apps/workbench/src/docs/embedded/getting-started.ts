@@ -26,7 +26,7 @@ Six rules shape the whole package, and they are the reason it fits on a part wit
 
 The supported targets are Teensy 3.2, 3.5, 3.6, 4.0, 4.1 and MicroMod through the Teensy Audio Library, and the Daisy Seed through libDaisy.
 
-**One program has been flashed and heard**: \`07_Workstation\` on a Teensy 4.0 at 600 MHz, 44.1 kHz, through an I2S amplifier. It ran at 34 to 43 percent CPU typical, 47.2 percent peak, using 2 audio blocks of the 24 it asked for. Everything else in the package is compile-verified and link-verified as real firmware, which is not the same claim.
+**One program has been flashed and heard**, twice: \`17_WorkstationI2S\`, which is \`07_Workstation\` summed to mono, on a Teensy 4.0 at 600 MHz, 44.1 kHz, through an I2S amplifier. The second run measured 33.8 to 46.5 percent CPU with a running maximum of 47.3 percent, using 2 audio blocks of the 24 it asked for. Everything else in the package is compile-verified and link-verified as real firmware, which is not the same claim.
 
 ## What it costs
 

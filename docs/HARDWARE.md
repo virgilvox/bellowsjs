@@ -619,9 +619,32 @@ uninitialized stack array in `hid/audio.cpp`, so the adapter's habit of zeroing 
 the render is load-bearing, not defensive: bellows voices add into the range, and without the
 clear the codec would receive stack garbage.
 
-WHAT HAS NOW BEEN DONE, once: `07_Workstation` ran on a Teensy 4.0 at 44.1 kHz through
-a MAX98357A, at 34 to 43 percent CPU and 47.2 percent peak, 2 of 24 audio blocks. Hand
-recorded from a serial console, so no harness checks it.
+WHAT HAS NOW BEEN DONE, twice: `17_WorkstationI2S`, which is `07_Workstation` summed to
+mono, ran on a Teensy 4.0 at 44.1 kHz through a MAX98357A. Hand recorded from a serial
+console, so no harness checks either run.
+
+| run | build | CPU across the samples | `AudioProcessorUsageMax` | blocks |
+| --- | --- | --- | --- | --- |
+| 2026-08-13 | before the AudioMemory fix | 34 to 43 % | 47.2 % | 2 of 24 |
+| 2026-08-15 | after it, 19 samples | 33.8 to 46.5 % | 47.3 % | 2 of 24 |
+
+The second run is the one to read, and three things about it are worth stating. The
+AudioMemory ordering fix cost nothing measurable. The first run's typical upper bound of
+43 percent was low; the load reaches 46.5, so typical and peak are barely a point apart
+and this program's cost is flatter than two numbers suggest. And `AudioProcessorUsageMax`
+is a running maximum since boot that nothing resets, so 47.3 is the highest value seen in
+about a minute, not a bound: it had already moved from 47.2 to 47.3 while being watched.
+
+Each boot draws a fresh seed and composes a different arrangement, so the two runs are not
+the same piece. That the figures agree across two arrangements is worth more than either
+figure alone.
+
+**These figures are quoted in nine places across six files and not one of them is
+machine-checked**, because no harness prints a number that comes off a serial console.
+This table is the one to change first; the others are `docs/HANDOFF.md` twice,
+`docs/KICKOFF.md`, `packages/bellows-embedded/examples/README.md`, and four spots in
+`apps/workbench`. That spread is a known liability and the reason `check-docs` exists for
+everything it can reach.
 
 WHAT HAS NOT BEEN DONE: nothing else has been flashed to a board and listened to, on either
 platform. Everything is compile-verified, link-verified and numerically verified against the

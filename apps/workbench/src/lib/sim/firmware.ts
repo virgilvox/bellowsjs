@@ -22,11 +22,12 @@
  *
  * What that number does NOT cover, and the UI says so plainly:
  *   - timing. Whether a given board renders this in time is not simulated.
- *     One board has been measured since: a Teensy 4.0 at 600 MHz runs
- *     07_Workstation, the heaviest program in the set, at 47.2 percent
- *     peak CPU with 2 of 24 audio blocks used. That is one board and one
- *     program, so it is a data point rather than a general answer, and
- *     nothing here predicts any other combination.
+ *     One board has been measured since, twice: a Teensy 4.0 at 600 MHz
+ *     runs 07_Workstation's patch, the heaviest program in the set, at
+ *     33.8 to 46.5 percent CPU with a 47.3 percent running maximum and 2
+ *     of 24 audio blocks used. That is one board and one program, so it
+ *     is a data point rather than a general answer, and nothing here
+ *     predicts any other combination.
  *   - the .ino. Codec setup, pin configuration and the audio library's
  *     scheduling are not modelled. Only the program logic is.
  */

@@ -171,13 +171,15 @@ This is the whole of what has been measured on hardware.
 
 | | |
 | --- | --- |
-| CPU, typical | 34 to 43 % |
-| CPU, peak | 47.2 % |
+| CPU, across 19 samples | 33.8 to 46.5 % |
+| CPU, running maximum | 47.3 % |
 | audio memory used | 2 blocks of 24 |
 
 \`07_Workstation\` is the heaviest program in the set: five engines, a Markov melody, a tempo-synced delay send, an EQ and a limiter, all at once. It runs with about half the processor spare.
 
 These figures were hand-recorded from a serial console. No harness prints them, so \`check-docs\` cannot verify them the way it verifies the size tables above.
+
+It has been run twice, on two builds and two arrangements, and the numbers above are the second run. The first read 34 to 43 percent with a 47.2 percent maximum, so the earlier upper bound was low: typical and peak sit barely a point apart, and this program's cost is flatter than two numbers suggest. "Running maximum" is literal, \`AudioProcessorUsageMax\` never resets, so it is the highest value seen in about a minute rather than a bound.
 
 **What that does not settle:**
 

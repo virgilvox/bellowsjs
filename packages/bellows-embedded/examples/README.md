@@ -27,10 +27,11 @@ same piece is a different program on a disc that passes nothing under
 
 Every one is a real program: it compiles and links as firmware for the
 boards in the matrix below, and its cost is measured rather than estimated.
-One of them has now been flashed and heard: `17_WorkstationI2S`, which is
-`07_Workstation` summed to mono, on a Teensy 4.0 through a MAX98357A, at
-47.2 percent peak CPU. Everything else here is still compile-verified and
-link-verified only, which is what `00_BringUp` is for.
+One of them has now been flashed and heard, twice: `17_WorkstationI2S`, which
+is `07_Workstation` summed to mono, on a Teensy 4.0 through a MAX98357A, at
+33.8 to 46.5 percent CPU and a 47.3 percent running maximum. Everything else
+here is still compile-verified and link-verified only, which is what
+`00_BringUp` is for.
 
 Start with `00_BringUp`, which is not one of the five. It is the checklist
 for the first session with a board in hand: it prints the real sample rate,

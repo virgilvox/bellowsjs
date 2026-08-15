@@ -53,6 +53,13 @@ said all of them were green; all three claims came from reading a `gh run list`
 that was truncated by its own default limit. The real figures are in that
 finding's blockquote.
 
+Long dashes inside quoted material are transliterated to hyphens, because the
+house rule against them applies to this file and rewriting one as a word would
+put a sentence in a quotation that the source does not contain. That happened
+once before it was caught: `docs/ENGINEERING.md` writes a range as `1-20` with
+an en dash and this file briefly quoted it, inside quotation marks, as "1 to
+20".
+
 This status is a reading, not a harness. Nothing regenerates it, so it rots like
 every other number here, which is what the date on each line is for.
 
@@ -612,7 +619,7 @@ Line 460 reads: "Restated plainly: on every viable board, bellows uses well unde
 
 **Docs and claims: docs/ENGINEERING.md section 2.5's onset detector spec does not match src/analysis/onset.ts: wrong window, wrong hop, no log compression, different peak picking**
 
-> **PARTIAL** as of 2026-08-15. [under ten minutes] Documented but not reconciled. The spec line is unchanged, docs/ENGINEERING.md:157: "**Onsets: spectral flux:** L1 half-wave-rectified magnitude difference with log compression `log(1+γ|X|)`, γ ≈ 1 to 20; 2048-sample Hann window @ 44.1k, **hop 441 (10 ms)**. Peak picking (Dixon): ..." and the code is unchanged, packages/bellows/src/analysis/onset.ts:83-88 "this.frameSize = opts.frameSize ?? 1024; this.hop = opts.hop ?? 256; this.medianWindow = opts.medianWindow ?? 21; this.multiplier = opts.multiplier ?? 1.5; this.floor = opts.floor ?? 0.01; this.refractory = opts.refractory ?? 0.08;" with no log compression anywhere. What IS fixed: an AS BUILT note now states the divergence in the doc itself, docs/ENGINEERING.md:159-169: "**AS BUILT.** ... The onset detector does not match. `src/analysis/onset.ts` uses a 1024-sample Hann frame with a hop of 256 (5.8 ms at 44.1k), computes flux as a plain half-wave-rectified magnitude difference with no log compression at all ... picks peaks the \"optional\" way rather than the Dixon way ... No SuperFlux frequency max-filter." So the misleading-claim half is closed; the spec/implementation mismatch itself is still open.
+> **PARTIAL** as of 2026-08-15. [under ten minutes] Documented but not reconciled. The spec line is unchanged, docs/ENGINEERING.md:157: "**Onsets: spectral flux:** L1 half-wave-rectified magnitude difference with log compression `log(1+γ|X|)`, γ ≈ 1-20; 2048-sample Hann window @ 44.1k, **hop 441 (10 ms)**. Peak picking (Dixon): ..." and the code is unchanged, packages/bellows/src/analysis/onset.ts:83-88 "this.frameSize = opts.frameSize ?? 1024; this.hop = opts.hop ?? 256; this.medianWindow = opts.medianWindow ?? 21; this.multiplier = opts.multiplier ?? 1.5; this.floor = opts.floor ?? 0.01; this.refractory = opts.refractory ?? 0.08;" with no log compression anywhere. What IS fixed: an AS BUILT note now states the divergence in the doc itself, docs/ENGINEERING.md:159-169: "**AS BUILT.** ... The onset detector does not match. `src/analysis/onset.ts` uses a 1024-sample Hann frame with a hop of 256 (5.8 ms at 44.1k), computes flux as a plain half-wave-rectified magnitude difference with no log compression at all ... picks peaks the \"optional\" way rather than the Dixon way ... No SuperFlux frequency max-filter." So the misleading-claim half is closed; the spec/implementation mismatch itself is still open.
 >
 > **Why it is not closed:** Correctly self-reported as PARTIAL. The AS BUILT note at docs/ENGINEERING.md:159-169 is real and accurate, but the spec line at docs/ENGINEERING.md:157 is unchanged (2048-sample Hann, hop 441, log compression log(1+g|X|), Dixon peak picking, SuperFlux max-filter) and packages/bellows/src/analysis/onset.ts:83-88 is unchanged (frameSize 1024, hop 256, medianWindow 21, multiplier 1.5, floor 0.01, refractory 0.08), with no log compression anywhere in the file. The mismatch the finding is about survives; only the misleading-claim half is closed.
 
