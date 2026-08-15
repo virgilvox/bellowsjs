@@ -44,14 +44,23 @@ static AudioConnection patchL(node, 0, out, 0);
 static AudioConnection patchR(node, 1, out, 1);
 
 void setup() {
-  AudioMemory(12);
-  codec.enable();
-  codec.volume(0.6f);
 
   /* Take the rate from the audio library rather than writing 44100 by
    * hand: the SAI clock does not land exactly there, and every envelope
    * coefficient in the voice is derived from this number. */
   voice.Init(bellows::TeensySampleRate());
+  /* AudioMemory LAST, and this ordering is load bearing.
+   *
+   * BellowsAudioStream::update() returns early only while allocate() is
+   * null, which is to say only until AudioMemory() runs. After that the
+   * audio interrupt renders whatever it is pointed at, so anything
+   * initialised below this line can be rendered before it is ready. A
+   * delay line that has not been given its buffer reads through a null
+   * pointer, which on an IMXRT1062 is executable memory rather than a
+   * trap page. */
+  AudioMemory(12);
+  codec.enable();
+  codec.volume(0.6f);
 }
 
 void loop() {

@@ -384,13 +384,17 @@ void setup() {
   while (!Serial && (millis() - start) < 4000) {
   }
 
-  AudioMemory(kAudioBlocks);
   codec.enable();
   codec.volume(0.6f);
 
   sample_rate = bellows::TeensySampleRate();
   rig.Init(sample_rate);
 
+
+  /* AudioMemory LAST: it is what opens the audio interrupt, and anything
+   * initialised after it can be rendered before it is ready. See the note
+   * in platform/teensy.h. */
+  AudioMemory(kAudioBlocks);
   PrintHeader();
 }
 

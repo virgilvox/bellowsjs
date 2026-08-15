@@ -31,7 +31,7 @@ import { ensureBellows, disposeBellows, bellows, booted } from '../lib/audio';
 import { FIRMWARES, FIRMWARE_BY_ID, applyParams, type FirmwareParam } from '../lib/sim/firmware';
 import { OUTPUTS, OUTPUT_BY_ID, OutputStageGraph, noiseFloorDb, type OutputId } from '../lib/sim/output-stage';
 import { buildVoice, VOICE_CAVEATS, type RunningVoice } from '../lib/sim/voices';
-import { BOARDS, type BoardId } from '../lib/sim/board';
+import { BOARDS, wiringFor, type BoardId } from '../lib/sim/board';
 import BoardDiagram from '../components/sim/BoardDiagram.vue';
 import FlashPanel from '../components/sim/FlashPanel.vue';
 
@@ -92,6 +92,9 @@ const parityDb = computed(() => {
 });
 
 const exported = computed(() => applyParams(fw.value.headerSource, params.value));
+
+/** Exact connections for this output on this board. */
+const wiring = computed(() => wiringFor(board.value, outputId.value));
 
 /* ---------------- the switchable area ---------------- */
 
@@ -215,7 +218,21 @@ watch(boardId, () => {
   }
 });
 
+const PIEZO_KEYS: Record<string, 'highpassHz' | 'resonanceHz' | 'resonanceDb'> = {
+  highpass_hz: 'highpassHz',
+  resonance_hz: 'resonanceHz',
+  resonance_db: 'resonanceDb',
+};
+
 function onParam(p: FirmwareParam): void {
+  /* The piezo voicing lives in the output stage, not in the voice: those
+   * three are Voicing fields in piezo.h and there is no engine parameter
+   * they could reach. */
+  const piezoKey = PIEZO_KEYS[p.key];
+  if (piezoKey && stage) {
+    stage.setPiezo({ [piezoKey]: p.value });
+    return;
+  }
   voice?.setParam(p.key, p.value);
 }
 
@@ -336,7 +353,7 @@ onActivated(() => {
         </em>
       </div>
 
-      <!-- BOARD: what you would wire, and what the page is claiming -->
+      <!-- BOARD: what you would wire -->
       <div v-if="tab === 'board'">
         <BoardDiagram
           :board="board"
@@ -347,37 +364,36 @@ onActivated(() => {
         />
 
         <div class="split">
+          <div v-if="wiring">
+            <div class="sub">wiring // {{ out.label }} on {{ board.label }}</div>
+            <p class="parts">{{ wiring.parts }}</p>
+            <table class="wires">
+              <tr v-for="(w, i) in wiring.rows" :key="i">
+                <td class="from">{{ w.from }}</td>
+                <td class="arrow">-&gt;</td>
+                <td>{{ w.to }}</td>
+              </tr>
+            </table>
+            <p v-if="wiring.gotcha" class="gotcha">{{ wiring.gotcha }}</p>
+          </div>
+          <div v-else>
+            <div class="sub">wiring // {{ out.label }}</div>
+            <p class="note">This board has no {{ out.label.toLowerCase() }}.</p>
+          </div>
+
           <div>
-            <div class="sub">output path // {{ out.label }}</div>
-            <p class="note">{{ out.blurb }}</p>
+            <div class="sub">what you are hearing</div>
             <div class="facts">
               <span v-if="out.bits">{{ out.bits }} bit</span>
               <span v-if="noiseFloorDb(out.bits)">floor {{ noiseFloorDb(out.bits) }} dB</span>
               <span>{{ out.mono ? 'mono' : 'stereo' }}</span>
               <span>{{ out.example }}</span>
             </div>
+            <p class="note">{{ out.blurb }}</p>
             <p class="basis">{{ out.basis }}</p>
-          </div>
-
-          <div>
-            <div class="sub">what this is, in full</div>
-            <p class="note">
-              This runs the TypeScript implementation of the same DSP, not an emulated
-              Cortex-M7.
-              <template v-if="fw.parityRelRms !== null">
-                The repository diffs the two on every commit: for
-                <code>{{ fw.parityRow }}</code> the measured difference is
-                <b>{{ fw.parityRelRms.toExponential(2) }}</b> relative RMS, about
-                <b>{{ parityDb }} dB</b>.
-              </template>
-              Timing is not simulated. One board has now been measured: a Teensy 4.0 runs
-              <code>07_Workstation</code>, the heaviest program here, at <b>47.2 %</b> peak CPU.
-              No other board and no other program has been.
-            </p>
             <ul v-if="caveats.length" class="caveats">
               <li v-for="c in caveats" :key="c">{{ c }}</li>
             </ul>
-            <p class="note">{{ board.blurb }}</p>
           </div>
         </div>
       </div>
@@ -568,6 +584,39 @@ onActivated(() => {
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+}
+.wires {
+  border-collapse: collapse;
+  font-size: 11px;
+  line-height: 1.7;
+  margin-top: 8px;
+}
+.wires td {
+  padding: 1px 10px 1px 0;
+  vertical-align: top;
+  color: var(--tick);
+}
+.wires .from {
+  color: var(--phosphor-hot);
+  white-space: nowrap;
+}
+.wires .arrow {
+  color: var(--faded);
+}
+.parts {
+  font-size: 10px;
+  color: var(--faded);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.gotcha {
+  font-size: 11px;
+  color: var(--tick);
+  line-height: 1.6;
+  margin-top: 10px;
+  padding-left: 10px;
+  border-left: 2px solid var(--slag);
+  max-width: 62ch;
 }
 .facts {
   display: flex;

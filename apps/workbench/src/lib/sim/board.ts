@@ -173,3 +173,142 @@ export function outputPins(board: Board, output: string): number[] {
       return [];
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * Wiring
+ *
+ * The exact connections for one output path on one board, derived from
+ * the same fields `outputPins` reads, so the drawing and the text cannot
+ * disagree. If a pin moves in the table above, both move together.
+ *
+ * Everything here is from the Teensy Audio Library's own pin assignments
+ * and the examples in packages/bellows-embedded, not from guesswork. The
+ * pins are not a choice: the audio library owns them.
+ * ------------------------------------------------------------------ */
+
+export interface WiringRow {
+  /** The Teensy side. */
+  from: string;
+  /** What it connects to. */
+  to: string;
+}
+
+export interface Wiring {
+  /** What you need besides the board. */
+  parts: string;
+  rows: WiringRow[];
+  /** The one mistake that costs an evening, or null. */
+  gotcha: string | null;
+}
+
+const DAC_LABEL: Record<string, string> = {
+  teensy32: 'A14',
+  teensy35: 'A21 (left), A22 (right)',
+  teensy36: 'A21 (left), A22 (right)',
+};
+
+/** Exact wiring for an output path on a board, or null if unavailable. */
+export function wiringFor(board: Board, output: string): Wiring | null {
+  const i2s = board.i2s;
+  switch (output) {
+    case 'shield':
+      if (!i2s) return null;
+      return {
+        parts: 'Teensy Audio Shield (Rev D), headers soldered',
+        rows: [
+          { from: 'stack the shield on the board', to: 'no loose wires at all' },
+          { from: `pins ${i2s.data}, ${i2s.bclk}, ${i2s.lrclk}`, to: 'I2S to the SGTL5000, used by the shield' },
+          { from: 'pins 18, 19', to: 'I2C control, used by the shield' },
+          { from: 'headphones', to: 'the shield jack' },
+        ],
+        gotcha:
+          'The shield also claims pins 6, 7, 9, 10, 11, 12, 13, 15, 18, 19, 20, 21, 22 and 23 for SD and memory. Check before you use one for anything else.',
+      };
+
+    case 'i2s-dac':
+      if (!i2s) return null;
+      return {
+        parts: 'PCM5102A or UDA1334A breakout, and something to plug into',
+        rows: [
+          { from: `pin ${i2s.data}`, to: 'DIN / DATA' },
+          { from: `pin ${i2s.bclk}`, to: 'BCK / BCLK / SCK' },
+          { from: `pin ${i2s.lrclk}`, to: 'LRCK / LRC / WS' },
+          { from: '3.3V', to: 'VIN' },
+          { from: 'GND', to: 'GND' },
+          { from: 'line out on the breakout', to: 'amplifier or powered speakers' },
+        ],
+        gotcha:
+          'A line-level DAC draws almost nothing, so 3.3V is fine here. An amplifier breakout is a different question: see I2S AMP.',
+      };
+
+    case 'i2s-amp':
+      if (!i2s) return null;
+      return {
+        parts: 'MAX98357A breakout and a speaker (4 or 8 ohm)',
+        rows: [
+          { from: `pin ${i2s.data}`, to: 'DIN' },
+          { from: `pin ${i2s.bclk}`, to: 'BCLK' },
+          { from: `pin ${i2s.lrclk}`, to: 'LRC' },
+          { from: '5V (the VIN pin)', to: 'VIN' },
+          { from: 'GND', to: 'GND' },
+          { from: 'nothing', to: 'SD and GAIN, both left floating' },
+          { from: 'speaker', to: 'across + and -' },
+        ],
+        gotcha:
+          'Power it from 5V, not the 3.3V regulator. A 3W amp browning that out looks like the audio glitching on loud notes rather than like a power problem. The speaker goes across + and -, never one side to ground.',
+      };
+
+    case 'dac12': {
+      const pins = board.dac;
+      if (!pins || pins.length === 0) return null;
+      const label = DAC_LABEL[board.id] ?? pins.map((p) => `pin ${p}`).join(', ');
+      return {
+        parts: 'one 10uF capacitor per channel',
+        rows: [
+          { from: label, to: '+ side of a 10uF capacitor' },
+          { from: '- side of the capacitor', to: 'amplifier or powered speaker input' },
+          { from: 'GND', to: 'amplifier ground' },
+        ],
+        gotcha:
+          'The capacitor is not optional. The DAC idles at half its reference, so a direct connection puts about 1.6 V of DC into whatever you plugged in.',
+      };
+    }
+
+    case 'mqs':
+    case 'pwm': {
+      const pins = board.mqs ?? board.pwm;
+      const [l, r] = pins;
+      const isMqs = board.mqs !== null;
+      return {
+        parts: '2 resistors (470R) and 2 capacitors (100nF) per channel',
+        rows: [
+          { from: `pin ${l} (left), pin ${r} (right)`, to: isMqs ? 'MQS out' : 'PWM out' },
+          { from: 'each pin', to: '470R, then 100nF to GND' },
+          { from: 'after the first section', to: 'another 470R, then 100nF to GND' },
+          { from: 'the far end', to: 'headphones or an amplifier input' },
+          { from: 'GND', to: 'amplifier ground' },
+        ],
+        gotcha:
+          'Two RC sections, not one. A single 470R/100nF corner sits at 3.4 kHz, inside the audio band and audibly dull, and leaves carrier behind.',
+      };
+    }
+
+    case 'piezo': {
+      const pins = board.mqs ?? board.pwm;
+      const [l, r] = pins;
+      return {
+        parts: 'one piezo disc, and nothing else',
+        rows: [
+          { from: `pin ${l}`, to: 'one side of the disc' },
+          { from: `pin ${r}`, to: 'the other side of the disc' },
+          { from: 'no resistor, no capacitor', to: 'a piezo is already a capacitor' },
+        ],
+        gotcha:
+          `Across the two pins, not one pin to ground. The firmware sends the signal on pin ${l} and its exact inverse on pin ${r}, so the disc sees 6.6 V peak to peak instead of 3.3. Wiring it to ground works and is 6 dB quieter.`,
+      };
+    }
+
+    default:
+      return null;
+  }
+}

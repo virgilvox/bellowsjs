@@ -6,7 +6,7 @@
  * those files and regenerated and diffed in CI, so the source a visitor
  * reads is the source that compiles to a board and cannot drift from it.
  *
- * WHAT THE SIMULATOR ACTUALLY RUNS, WHICH IS THE HONEST PART
+ * WHAT THE PLAYGROUND ACTUALLY RUNS, WHICH IS THE HONEST PART
  *
  * It does not emulate a Cortex-M7. It runs the TypeScript implementation of
  * the same DSP, in this browser, through the same AudioWorklet the rest of
@@ -71,6 +71,17 @@ import type { OutputId } from './output-stage';
 export interface FirmwareParam {
   /** The C++ field name, so codegen can write `p.<key> = <value>f;` */
   key: string;
+  /**
+   * The object the field belongs to, when more than one object in the header
+   * has a field of that name.
+   *
+   * eightoheight.h configures three drums in one function, so `decay` appears
+   * as k.decay, s.decay and h.decay and `tone` as s.tone and h.tone. A global
+   * rewrite on the bare name changed all of them: exporting with untouched
+   * defaults already turned the hat's 0.055 s decay into 1.1 s, which is a
+   * different instrument. Naming the owner makes the rewrite exact.
+   */
+  owner?: string;
   label: string;
   min: number;
   max: number;
@@ -262,7 +273,7 @@ export const FIRMWARES: Firmware[] = [
     inoSource: piezo_ino,
     headerName: 'piezo.h',
     params: [
-      { key: 'highpass_hz', label: 'high pass', min: 400, max: 3000, step: 10, value: 1200, unit: 'Hz', hint: 'Everything below this is thrown away.' },
+      { key: 'highpass_hz', label: 'high pass', min: 400, max: 3000, step: 10, value: 1200, unit: 'Hz', hint: 'Everything below this is thrown away. Moves the output stage, not the voice.' },
       { key: 'resonance_hz', label: 'resonance', min: 1500, max: 7000, step: 50, value: 4000, unit: 'Hz', hint: "The disc's mechanical resonance. Measure yours." },
       { key: 'resonance_db', label: 'lift', min: 0, max: 15, step: 0.5, value: 8, unit: 'dB', hint: 'How hard to lean on the resonance.' },
     ],
@@ -639,10 +650,10 @@ export const FIRMWARES: Firmware[] = [
     inoSource: instruments_ino,
     headerName: 'eightoheight.h',
     params: [
-      { key: 'decay', label: 'kick decay', min: 0.1, max: 2, step: 0.01, value: 1.1, unit: 's', hint: 'The whole argument of this patch. 0.4 is an ordinary kick.' },
-      { key: 'pitch_decay', label: 'pitch drop', min: 0.005, max: 0.3, step: 0.005, value: 0.045, unit: 's', hint: 'How fast the head detunes. Short values give the click.' },
-      { key: 'drive', label: 'drive', min: 0.5, max: 8, step: 0.1, value: 2.6, hint: 'How hard the body is pushed into the tanh.' },
-      { key: 'tone', label: 'snare tone', min: 0, max: 1, step: 0.01, value: 0.36, hint: 'Balance between the shells and the noise.' },
+      { key: 'decay', owner: 'k', label: 'kick decay', min: 0.1, max: 2, step: 0.01, value: 1.1, unit: 's', hint: 'The whole argument of this patch. 0.4 is an ordinary kick.' },
+      { key: 'pitch_decay', owner: 'k', label: 'pitch drop', min: 0.005, max: 0.3, step: 0.005, value: 0.045, unit: 's', hint: 'How fast the head detunes. Short values give the click.' },
+      { key: 'drive', owner: 'k', label: 'drive', min: 0.5, max: 8, step: 0.1, value: 2.6, hint: 'How hard the body is pushed into the tanh.' },
+      { key: 'tone', owner: 's', label: 'snare tone', min: 0, max: 1, step: 0.01, value: 0.36, hint: 'Balance between the shells and the noise.' },
     ],
     inputs: [],
     indicators: [],
@@ -672,8 +683,10 @@ export function applyParams(source: string, params: FirmwareParam[]): { text: st
   let applied = 0;
   let text = source;
   for (const p of params) {
-    /* `p.decay = 0.55f;` with any leading whitespace and any current value. */
-    const re = new RegExp(`(\\b\\w+\\.${p.key}\\s*=\\s*)(-?[0-9]*\\.?[0-9]+)f?(\\s*;)`, 'g');
+    /* `p.decay = 0.55f;` with any leading whitespace and any current value.
+     * When the param names its owner, bind to that object only. */
+    const obj = p.owner ? p.owner.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '\\w+';
+    const re = new RegExp(`(\\b${obj}\\.${p.key}\\s*=\\s*)(-?[0-9]*\\.?[0-9]+)f?(\\s*;)`, 'g');
     const next = text.replace(re, (_m, head: string, _old: string, tail: string) => {
       applied++;
       return `${head}${formatFloat(p.value)}f${tail}`;

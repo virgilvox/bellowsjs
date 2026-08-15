@@ -1,0 +1,1572 @@
+# bellows-embedded 0.1.0: LLM reference
+
+The C++17 port of bellowsjs for 32-bit microcontrollers. Header only. Nothing
+allocates and nothing self-registers.
+
+GENERATED from the headers by apps/workbench/scripts/gen-llm-embedded.mjs. Do
+not edit. Regenerate after changing any header.
+
+## How to read this
+
+Every entry is a real declaration parsed out of a real header. Template
+parameters are shown with their defaults, so Pluck<110> means the 110 Hz
+floor and the default sample rate. A Params struct lists every field with the
+default the header sets, and those defaults are the browser library's
+defaults, because the two are compared numerically on every commit.
+
+## The rules that shape the API
+
+1. One header per concept. Include only what you use: there is no registry,
+   so the linker keeps exactly the engines you name.
+2. Init() rather than constructors. Every class is default constructible and
+   does its real setup in Init(sample_rate, ...).
+3. Voices ADD into (l, r, from, to). Effects process that range in place.
+   The caller clears the block.
+4. No allocation. Every buffer is sized by a template parameter.
+5. Rates come from the SDK, not from a literal. Everything derived from the
+   rate is computed in Init.
+6. Randomness flows through Rng, seeded by a label. Forking is literal string
+   concatenation: rng('a').fork('b') in the browser is Rng::Init("a::b") here,
+   which is what makes a seeded piece reproduce across the two.
+
+## Minimal program
+
+    #include <Audio.h>
+    #include "bellows/platform/teensy.h"
+    #include "bellows/engines/drums.h"
+
+    static bellows::Kick kick;
+
+    struct Patch {
+      void operator()(float* l, float* r, int from, int to) {
+        kick.Process(l, r, from, to);
+      }
+    };
+
+    static Patch patch;
+    static bellows::BellowsAudioStream<Patch> node(patch);
+    static AudioOutputI2S out;
+    static AudioConnection c1(node, 0, out, 0);
+    static AudioConnection c2(node, 1, out, 1);
+
+    void setup() {
+      AudioMemory(12);
+      kick.Init(bellows::TeensySampleRate());
+    }
+
+    void loop() {
+      kick.NoteOn(50.0f, 0.9f);
+      delay(500);
+    }
+
+
+## (top level)
+
+### bellows/bank.h
+Compile-time engine bank.
+
+template <class T, class... Rest>
+class Bank
+  public:
+    template <class F> void With(int i, F&& f)
+    template <class F> void ForEach(F&& f)
+
+class Bank
+  public:
+    template <class F> void With(int, F&&)
+    template <class F> void ForEach(F&&)
+
+### bellows/config.h
+Build-time configuration.
+
+constants:
+  float kPi = 3.14159265358979f
+  float kTwoPi = 6.28318530717959f
+  float kSqrtHalf = 0.70710678118655f
+  float kLn3 = 1.09861228866811f
+  float kLn100 = 4.60517018598809f
+  float kLn1000 = 6.90775527898214f
+  float kMaxSampleRate = 1.0e7f
+  float kPhaseToUnit = 2.32830643653870e-10f
+  float kPhaseScale = 4294967296.0f
+
+functions:
+  float Clamp(float v, float lo, float hi)
+  float SafeRate(float sr, float fallback)
+  int ClampI(int v, int lo, int hi)
+  uint32_t PhaseIncrement(float cycles_per_sample)
+  uint32_t PhaseFromCycles(float phase)
+
+### bellows/kernel.h
+Transcription of the render core in src/kernel/engine.ts.
+
+enum class EventKind: kNoteOn, kNoteOff, kParam, kParamRamp, kAllNotesOff
+
+constants:
+  uint8_t kAnyTarget = 255
+
+class KernelEvent
+
+template <int kCapacity>
+class EventRing
+  public:
+    bool Push(const KernelEvent& e)
+    bool Pop(KernelEvent* out)
+    void Clear()
+
+template <class Voice, int kPoly, int kQueue = 64, int kRamps = 8>
+class Kernel
+  public:
+    void Init(float sample_rate)
+    void InitVoices(Args&&... args)
+    Voice& VoiceAt(int i)
+    void SetParamHandler(ParamFn fn, void* ctx)
+    void SetTarget(uint8_t accept)
+    uint32_t CurrentFrame() const
+    float SampleRate() const
+    void SetFrame(uint32_t frame)
+    uint32_t FrameAtSeconds(float seconds) const
+    uint32_t FramesFromNow(float seconds) const
+    bool Push(const KernelEvent& e)
+    bool PushNoteOn(uint32_t frame, uint16_t note_id, float hz, float vel, uint8_t target = 0)
+    bool PushNoteOff(uint32_t frame, uint16_t note_id, uint8_t target = 0)
+    bool PushParam(uint32_t frame, uint16_t param, float value, uint8_t target = 0)
+    bool PushParamRamp(uint32_t frame, uint16_t param, float value, float seconds, uint8_t target = 0)
+    bool PushAllNotesOff(uint32_t frame, uint8_t target = 0)
+    void Process(float* l, float* r, int n)
+    int ActiveVoices() const
+    uint32_t Dropped() const
+    void Panic()
+
+class RampSlot
+
+### bellows/params.gen.h
+Generated from the ParamSpec arrays in packages/bellows. Do not edit.
+
+constants:
+  int kEngineVaParamCount = 19
+  float kEngineVaDefaults[kEngineVaParamCount] = { 0.0f, 7.0f, 0.0f, 9000.0f, 0.2f, 0.0f, 0.0f, 0.005f, 0.1f,
+  int kEngineFmParamCount = 30
+  float kEngineFmDefaults[kEngineFmParamCount] = { 4.0f, 1.0f, 0.0f, 0.5f, 0.003f, 0.3f, 0.7f, 0.3f, 0.002f, 
+  int kEngineAdditiveParamCount = 103
+  float kEngineAdditiveDefaults[kEngineAdditiveParamCount] = { 0.0f, 0.0f, 2.0f, 0.8f, 0.002f, 0.3f, 1.0f, 1.0f, 1.0f, 0.
+  int kEngineWavetableParamCount = 12
+  float kEngineWavetableDefaults[kEngineWavetableParamCount] = { 0.0f, 0.5f, 0.0f, 0.0f, 0.005f, 0.1f, 0.8f, 0.2f, 0.0f, 80
+  int kEngineKickParamCount = 4
+  float kEngineKickDefaults[kEngineKickParamCount] = { 6.0f, 0.05f, 0.4f, 2.0f }
+  int kEngineSnareParamCount = 3
+  float kEngineSnareDefaults[kEngineSnareParamCount] = { 0.5f, 0.18f, 0.15f }
+  int kEngineHatParamCount = 2
+  float kEngineHatDefaults[kEngineHatParamCount] = { 0.08f, 1.0f }
+  int kEnginePluckParamCount = 5
+  float kEnginePluckDefaults[kEnginePluckParamCount] = { 0.35f, 0.28f, 0.0f, 2.5f, 0.9f }
+  int kEngineStringParamCount = 19
+  float kEngineStringDefaults[kEngineStringParamCount] = { 0.35f, 0.6f, 0.0f, 0.0f, 0.5f, 0.5f, 0.9f, 0.0f, 0.0f, 0.0
+  int kEngineTubeParamCount = 5
+  float kEngineTubeDefaults[kEngineTubeParamCount] = { 0.85f, 0.1f, 0.7f, 0.03f, 0.15f }
+  int kEngineModalParamCount = 5
+  float kEngineModalDefaults[kEngineModalParamCount] = { 0.0f, 2.0f, 0.5f, 0.6f, 0.6f }
+  int kEngineWestcoastParamCount = 6
+  float kEngineWestcoastDefaults[kEngineWestcoastParamCount] = { 0.35f, 2.0f, 0.5f, 0.7f, 0.5f, 0.8f }
+  int kEngineFormantParamCount = 6
+  float kEngineFormantDefaults[kEngineFormantParamCount] = { 0.0f, 0.1f, 5.0f, 0.25f, 0.0f, 1.0f }
+  int kEngineHarmonicParamCount = 9
+  float kEngineHarmonicDefaults[kEngineHarmonicParamCount] = { 0.5f, 0.5f, 1.0f, 0.1f, 2.0f, 0.0f, 0.01f, 0.3f, 0.8f }
+  int kEffectDelayParamCount = 6
+  float kEffectDelayDefaults[kEffectDelayParamCount] = { 0.35f, 0.5f, 0.4f, 0.0f, 8000.0f, 0.35f }
+  int kEffectPlateParamCount = 6
+  float kEffectPlateDefaults[kEffectPlateParamCount] = { 0.5f, 0.3f, 0.9995f, 0.0f, 1.0f, 0.35f }
+  int kEffectCompressorParamCount = 8
+  float kEffectCompressorDefaults[kEffectCompressorParamCount] = { -18.0f, 4.0f, 6.0f, 0.01f, 0.2f, 0.0f, 0.0f, 1.0f }
+  int kEffectLimiterParamCount = 3
+  float kEffectLimiterDefaults[kEffectLimiterParamCount] = { -0.3f, 0.05f, 0.0f }
+  int kEffectGateParamCount = 5
+  float kEffectGateDefaults[kEffectGateParamCount] = { -40.0f, 0.001f, 0.05f, 0.1f, -60.0f }
+  int kEffectChorusParamCount = 4
+  float kEffectChorusDefaults[kEffectChorusParamCount] = { 0.5f, 0.5f, 0.5f, 0.0f }
+  int kEffectFlangerParamCount = 6
+  float kEffectFlangerDefaults[kEffectFlangerParamCount] = { 0.25f, 0.7f, 0.25f, 0.4f, 0.5f, 0.0f }
+  int kEffectTremoloParamCount = 4
+  float kEffectTremoloDefaults[kEffectTremoloParamCount] = { 4.0f, 0.8f, 0.0f, 0.0f }
+  int kEffectAutopanParamCount = 3
+  float kEffectAutopanDefaults[kEffectAutopanParamCount] = { 1.0f, 1.0f, 0.0f }
+  int kEffectRingmodParamCount = 2
+  float kEffectRingmodDefaults[kEffectRingmodParamCount] = { 440.0f, 1.0f }
+  int kEffectEqParamCount = 24
+  float kEffectEqDefaults[kEffectEqParamCount] = { 80.0f, 0.0f, 0.707f, 1.0f, 250.0f, 0.0f, 1.0f, 1.0f, 800.0
+  int kEffectSaturatorParamCount = 5
+  float kEffectSaturatorDefaults[kEffectSaturatorParamCount] = { 2.0f, 0.0f, 0.0f, 0.0f, 1.0f }
+
+### bellows/voicepool.h
+Transcription of src/core/voicepool.ts. Polyphony is a template
+
+template <class V, int kPoly>
+class VoicePool
+  public:
+    V& at(int i)
+    void NoteOn(int note_id, float freq, float vel, uint32_t frame)
+    void NoteOff(int note_id)
+    void Process(float* l, float* r, int from, int to)
+    int ActiveCount() const
+
+class Slot
+
+## core
+
+### bellows/core/fastmath.h
+Transcendental approximations, selected by BELLOWS_FAST_MATH.
+
+functions:
+  float SinPi(float x)
+  float Sin(float x)
+  float Cos(float x)
+  float Tanh(float x)
+  float Exp2(float x)
+  float Exp(float x)
+  float Log2(float x)
+  float Pow(float base, float e)
+  float Log(float x)
+  float Tan(float x)
+  float Atan2(float y, float x)
+  float Sqrt(float x)
+  float Sin(float x)
+  float Cos(float x)
+  float Tanh(float x)
+  float Exp(float x)
+  float Exp2(float x)
+  float Log2(float x)
+  float Pow(float base, float e)
+  float Log(float x)
+  float Tan(float x)
+  float Atan2(float y, float x)
+  float Sqrt(float x)
+  float CentsRatio(float cents)
+  float SemisRatio(float semis)
+  float DbToGain(float db)
+
+### bellows/core/prng.h
+Direct transcription of src/core/prng.ts. All uint32 ops, so streams
+
+functions:
+  uint32_t Xmur3(const char* s)
+
+class Rng
+  public:
+    public: void Init(uint32_t seed)
+    void Init(const char* label)
+    uint32_t NextU32()
+    float Next()
+    float Bipolar()
+
+## dsp
+
+### bellows/dsp/blep_tables.h
+Generated from src/dsp/oscillators.ts. Do not edit.
+
+constants:
+  int kBlepKernelHalf = 16
+  int kBlepTableRes = 64
+  int kBlepTableLen = 2049
+  float kBlepStep[kBlepTableLen] = { 0.00000000f, -0.00000456304134f, -0.00000916611016f, -0.00
+  float kBlepRamp[kBlepTableLen] = { 0.00000000f, -3.56487604e-8f, -1.42907757e-7f, -3.22333520
+
+### bellows/dsp/delayline.h
+Transcription of src/dsp/delayline.ts.
+
+class DelayLineExt
+  public:
+    public: void Init(float* buf, uint32_t cap)
+    void Clear()
+    void Write(float x)
+    float ReadInt(int32_t d) const
+    float ReadLinear(float d) const
+    float ReadCubic(float d) const
+    uint32_t MaxDelay() const
+
+template <uint32_t kSamples>
+class DelayLine
+  public:
+    void Init()
+
+### bellows/dsp/envelopes.h
+Transcription of src/dsp/envelopes.ts plus the ExpDecay from
+
+enum class Stage: kIdle, kAttack, kDecay, kSustain, kRelease
+
+class Adsr
+  public:
+    void Init(float sample_rate)
+    void Set(float a, float d, float s, float r)
+    void Trigger()
+    void Release()
+    void Reset()
+    float Process()
+    bool Active() const
+    float Level() const
+
+class ExpDecay
+  public:
+    public: void Init(float sample_rate)
+    void SetTime(float sec)
+    void Trigger(float v = 1.0f)
+    float Process()
+    float Level() const
+
+class Smoother
+  public:
+    public: void Init(float sample_rate, float time_sec)
+    void SetTarget(float v)
+    void Snap(float v)
+    float Process()
+    float Value() const
+
+### bellows/dsp/filters.h
+Transcription of src/dsp/filters.ts: Svf (Simper trapezoidal SVF),
+
+enum class SvfMode: kLp, kHp, kBp, kNotch, kPeak, kAllpass, kBell, kLowShelf, kHighShelf
+
+class Svf
+  public:
+    public: void Init(float sample_rate)
+    void SetMode(SvfMode m)
+    void Set(float cutoff_hz, float q, float gain_db = 0.0f)
+    float Process(float x)
+    void Reset()
+
+class LadderFilter
+  public:
+    public: void Init(float sample_rate)
+    void Set(float cutoff_hz, float resonance, float drive = 1.0f)
+    float Process(float x)
+    void Reset()
+
+class OnePole
+  public:
+    public: void Init(float sample_rate)
+    void SetLowpass(float hz)
+    void SetHighpass(float hz)
+    float Process(float x)
+    void Reset()
+
+class DcBlocker
+  public:
+    public: void Init(float sample_rate)
+    float Process(float x)
+    void Reset()
+
+### bellows/dsp/lfo.h
+Transcription of src/dsp/lfo.ts.
+
+enum class LfoShape: kSine, kTriangle, kSaw, kSquare, kSampleHold
+
+constants:
+  uint32_t kLfoDefaultSeed = Xmur3("lfo/sh")
+
+class Lfo
+  public:
+    public: void Init(float sample_rate, Rng* rng = nullptr)
+    void SetFreq(float hz)
+    void SetShape(LfoShape s)
+    void Reset(float phase = 0.0f)
+    float Process()
+
+### bellows/dsp/noise.h
+Transcription of src/dsp/noise.ts. The Rng is held by reference so a
+
+enum class NoiseColor: kWhite, kPink, kBrown, kVelvet, kCrackle
+
+class NoiseGen
+  public:
+    public: void Init(float sample_rate, NoiseColor color, Rng* rng)
+    void SetColor(NoiseColor c)
+    float Process()
+
+### bellows/dsp/oscillators.h
+Transcription of src/dsp/oscillators.ts. The Kaiser-sinc BLEP/BLAMP
+
+enum class BlepShape: kSaw, kSquare, kTriangle, kSine
+
+class BlepOsc
+  public:
+    public: void Init(float sample_rate)
+    void SetShape(BlepShape s)
+    void SetFreq(float hz)
+    void SetPulseWidth(float pw)
+    void Reset(float phase = 0.0f)
+    float Process()
+    float ProcessSaw()
+    float ProcessSquare()
+    float ProcessTriangle()
+    float ProcessSine()
+
+class SineOsc
+  public:
+    public: void Init(float sample_rate)
+    void SetFreq(float hz)
+    void Reset(float phase = 0.0f)
+    float Process()
+    float ProcessPm(float pm)
+
+### bellows/dsp/oversample.h
+Transcription of src/dsp/oversample.ts.
+
+constants:
+  int kHalfbandOddTaps = 16
+  float kHalfbandOdd[kHalfbandOddTaps] = { -0.0000746390271f, 0.000853939594f, -0.00322899957f, 0.008
+  int kHalfbandCenter = 16
+
+class HalfbandUpStage
+  public:
+    public: void Reset()
+    void Process(const float* input, int from, int to, float* out, int out_from)
+
+class HalfbandDownStage
+  public:
+    public: void Reset()
+    void Process(const float* input, int in_from, int count, float* out, int out_from)
+
+template <bool kOn>
+class SecondStage
+
+template <int kFactor = 4, int kMaxBlock = 128>
+class Oversampler
+  public:
+    public: static_assert(kFactor == 2 || kFactor == 4, "Oversampler factor must be 2 or 4")
+    void Init()
+    void Reset()
+    float* Up(const float* input, int from, int to)
+    void Down(const float* processed, float* out, int from, int to)
+
+class SecondStage
+
+### bellows/dsp/waveshaper.h
+Transcription of src/dsp/waveshaper.ts.
+
+functions:
+  float TanhShape(float x, float drive)
+  float SoftClip(float x)
+  float HardClip(float x)
+  float Foldback(float x, float gain)
+
+class TableShaper
+  public:
+    public: void Init(const float* table, int len)
+    float Process(float x) const
+
+### bellows/dsp/wavetable.h
+Transcription of src/dsp/wavetable.ts, the reading half.
+
+constants:
+  WavetableMip kWtMorph = {&kWtMorphData[0][0][0], kWtMorphMaxHarm, kWtMorphLevels, kW
+
+functions:
+  int WtIndexBits(int length)
+
+class WavetableMip
+
+class WavetableOsc
+  public:
+    public: void Init(float sample_rate)
+    void Init(float sample_rate, const WavetableMip& table)
+    void SetTable(const WavetableMip& t)
+    void SetFreq(float hz)
+    void SetPosition(float pos)
+    void Reset(float phase = 0.0f)
+    float Process()
+    int Level() const
+
+### bellows/dsp/wavetable_tables.h
+Generated from src/dsp/wavetable.ts and src/engines/wavetable.ts. Do not edit.
+
+constants:
+  int kWtMorphFrames = 4
+  int kWtMorphLength = 512
+  int kWtMorphLevels = 8
+  int kWtMorphMaxHarm[kWtMorphLevels] = {255, 127, 63, 31, 15, 7, 3, 1}
+
+## engines
+
+### bellows/engines/additive.h
+Transcription of src/engines/additive.ts.
+
+constants:
+  float kAdditiveFreqLimit = 0.45f
+
+template <int kMaxPartials = 32>
+class Additive
+  Params:
+    float morph = 0.0f
+    float inharm = 0.0f
+    float decay = 2.0f
+    float rolloff = 0.8f
+    float attack = 0.002f
+    float release = 0.3f
+    float gain = 1.0f
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void SetParams(const Params& p)
+    void NoteOn(float freq, float vel)
+    void NoteOff()
+    void Process(float* l, float* r, int from, int to)
+    bool Active() const
+
+### bellows/engines/drums.h
+Transcription of src/engines/drums.ts. Kick, Snare, Hat.
+
+class Kick
+  Params:
+    float click_tune = 6.0f
+    float pitch_decay = 0.05f
+    float decay = 0.4f
+    float drive = 2.0f
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void SetParams(const Params& p)
+    void NoteOn(float freq, float vel)
+    void NoteOff()
+    void Process(float* l, float* r, int from, int to)
+    bool Active() const
+
+class Snare
+  Params:
+    float tone = 0.5f
+    float decay = 0.18f
+    float snap = 0.15f
+  public:
+    void Init(float sample_rate, Rng* rng)
+    void Init(float sample_rate, Rng* rng, const Params& p)
+    void NoteOn(float freq, float vel)
+    void NoteOff()
+    void Process(float* l, float* r, int from, int to)
+    bool Active() const
+
+class Hat
+  Params:
+    float decay = 0.08f
+    float tone = 1.0f
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void NoteOn(float freq, float vel)
+    void NoteOff()
+    void Process(float* l, float* r, int from, int to)
+    bool Active() const
+
+### bellows/engines/fm.h
+Transcription of src/engines/fm.ts.
+
+constants:
+  float kFmModDepth = 4.0f
+  float kFmFbDepth = kPi
+  FmAlgo kFmAlgos2[] = { {{0x02, 0, 0, 0, 0, 0}, 0x01, 1, 1}, {{0x00, 0, 0, 0, 0, 0
+  FmAlgo kFmAlgos4[] = { {{0x02, 0x04, 0x08, 0, 0, 0}, 0x01, 1, 3}, {{0x06, 0x00, 0
+  FmAlgo kFmAlgos6[] = { {{0x02, 0x00, 0x08, 0x10, 0x20, 0x00}, 0x05, 2, 5}, {{0x02
+
+class FmAlgo
+
+class Fm
+  Params:
+    float ops = 4.0f
+    float algorithm = 1.0f
+    float feedback = 0.0f
+    float brightness = 0.5f
+    float attack = 0.003f, decay = 0.3f, sustain = 0.7f, release = 0.3f
+    float m_attack = 0.002f, m_decay = 0.4f, m_sustain = 0.5f, m_release = 0.2f
+    float ratio[kMaxOps] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f}
+    float level[kMaxOps] = {1.0f, 0.6f, 0.5f, 0.4f, 0.4f, 0.3f}
+    float fixed_hz[kMaxOps] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void SetParams(const Params& p)
+    void NoteOn(float freq, float vel)
+    void NoteOff()
+    void Process(float* l, float* r, int from, int to)
+    bool Active() const
+
+class Op
+
+### bellows/engines/formant.h
+Transcription of src/engines/formant.ts.
+
+constants:
+  int kFormantCount = 5
+  int kFormantVowels = 5
+
+class Formant
+  Params:
+    float vowel = 0.0f
+    float breath = 0.1f
+    float vibrato_rate = 5.0f
+    float vibrato_depth = 0.25f
+    float shape = 0.0f
+    float level = 1.0f
+  public:
+    void Init(float sample_rate, Rng* rng)
+    void Init(float sample_rate, Rng* rng, const Params& p)
+    void SetParams(const Params& p)
+    void NoteOn(float freq, float vel)
+    void NoteOff()
+    void Process(float* l, float* r, int from, int to)
+    bool Active() const
+
+### bellows/engines/harmonic.h
+Transcription of src/engines/harmonic.ts.
+
+constants:
+  int kHarmonicMaxPartials = 64
+
+class Harmonic
+  Params:
+    float brightness = 0.5f
+    float even_odd = 0.5f
+    float formant_shift = 1.0f
+    float noise_mix = 0.1f
+    float noise_color = 2.0f
+    float portamento = 0.0f
+    float attack = 0.01f
+    float release = 0.3f
+    float level = 0.8f
+  public:
+    void Init(float sample_rate, Rng* rng)
+    void Init(float sample_rate, Rng* rng, const Params& p)
+    void SetParams(const Params& p)
+    void NoteOn(float freq, float vel)
+    void NoteOff()
+    void SetControlFrame(float f0, float loudness, const float* harmonics = nullptr, int count = 0)
+    void Process(float* l, float* r, int from, int to)
+    bool Active() const
+
+### bellows/engines/modal.h
+Transcription of src/engines/modal.ts.
+
+constants:
+  int kModalMaxModes = 24
+  int kModalTableModes = 8
+  ModalMaterial kModalMaterials[] = { {6, 1.0f, {1.0f, 2.756f, 5.404f, 8.933f, 13.345f, 18.638f,
+  int kModalMaterialCount = static_cast<int>(sizeof(kModalMaterials) / sizeof(kModalMate
+
+class ModalMaterial
+
+class Modal
+  Params:
+    float material = 0.0f
+    float decay = 2.0f
+    float brightness = 0.5f
+    float strike_hardness = 0.6f
+    float level = 0.6f
+  public:
+    void Init(float sample_rate, Rng* rng)
+    void Init(float sample_rate, Rng* rng, const Params& p)
+    void SetParams(const Params& p)
+    void NoteOn(float freq, float vel)
+    void NoteOff()
+    void Process(float* l, float* r, int from, int to)
+    bool Active() const
+
+### bellows/engines/pluck.h
+Transcription of src/engines/pluck.ts.
+
+template <int kMinFreqHz = 20, int kSampleRate = 48000>
+class Pluck
+  Params:
+    float damp = 0.35f
+    float pick_pos = 0.28f
+    float excite_type = 0.0f
+    float decay = 2.5f
+    float level = 0.9f
+  public:
+    void Init(float sample_rate, Rng* rng)
+    void Init(float sample_rate, Rng* rng, const Params& p)
+    float MinFreq() const
+    float Freq() const
+    void NoteOn(float freq, float vel)
+    void NoteOff()
+    void Process(float* l, float* r, int from, int to)
+    bool Active() const
+
+### bellows/engines/tube.h
+Transcription of the TubeVoice half of src/engines/waveguide.ts.
+
+template <int kMinFreqHz = 20, int kSampleRate = BELLOWS_SAMPLE_RATE>
+class Tube
+  Params:
+    float breath = 0.85f
+    float noise = 0.1f
+    float level = 0.7f
+    float glide = 0.03f
+    float legato_scratch = 0.15f
+  public:
+    void Init(float sample_rate, Rng* rng)
+    void Init(float sample_rate, Rng* rng, const Params& p)
+    void SetParams(const Params& p)
+    void NoteOn(float freq, float vel)
+    void NoteOff()
+    void Glide(float target_hz)
+    void Process(float* l, float* r, int from, int to)
+    bool Active() const
+
+### bellows/engines/va.h
+Transcription of src/engines/va.ts: two BLEP oscillators plus a square
+
+class Va
+  Params:
+    float shape = 0.0f
+    float detune = 7.0f
+    float sub = 0.0f
+    float cutoff = 9000.0f
+    float resonance = 0.2f
+    float filter_type = 0.0f
+    float env_amount = 0.0f
+    float attack = 0.005f, decay = 0.1f, sustain = 0.8f, release = 0.2f
+    float f_attack = 0.003f, f_decay = 0.15f, f_sustain = 0.5f, f_release = 0.2f
+    float drift = 0.0f
+    float pan = 0.0f
+    float vel_level = 0.5f
+    float vel_filter = 0.0f
+  public:
+    void Init(float sample_rate, Rng* rng)
+    void Init(float sample_rate, Rng* rng, const Params& p)
+    void SetParams(const Params& p)
+    void NoteOn(float freq, float vel)
+    void NoteOff()
+    void Process(float* l, float* r, int from, int to)
+    bool Active() const
+
+### bellows/engines/waveguide.h
+Transcription of src/engines/waveguide.ts, the StringVoice half.
+
+constants:
+  int kStringBodyModes = 7
+  int kStringForestModes = 17
+  int kStringTotalModes = kStringBodyModes + kStringForestModes
+  int kStringBodyAnchors = 4
+  int kStringDispersionStages = 4
+  float kStringAnchorS[kStringBodyAnchors] = {0.0f, 0.18f, 0.62f, 1.0f}
+  float kStringForestF[kStringForestModes] = { 893.797992f, 819.650089f, 1065.59403f, 1103.42953f, 1571.7
+  float kStringForestQ[kStringForestModes] = { 16.0636552f, 24.9933025f, 20.8635211f, 13.8087731f, 14.384
+  float kStringForestG[kStringForestModes] = { 0.366847425f, -0.308274551f, 0.373796395f, -0.341595155f, 
+
+template <int kMinFreqHz = 20, int kSampleRate = BELLOWS_SAMPLE_RATE, bool kSecondPolarization = true>
+class Waveguide
+  Params:
+    float damp = 0.35f
+    float sustain = 0.6f
+    float dispersion = 0.0f
+    float bow = 0.0f
+    float bow_pressure = 0.5f
+    float bow_speed = 0.5f
+    float level = 0.9f
+    float body = 0.0f
+    float body_size = 0.0f
+    float bow_noise = 0.0f
+    float attack_bite = 0.0f
+    float vib_rate = 6.1f
+    float vib_depth = 0.0f
+    float vib_onset = 0.3f
+    float bow_pos = 0.11f
+    float dynamics = 0.0f
+    float pol_detune = 0.0f
+    float glide = 0.03f
+    float legato_scratch = 0.15f
+  public:
+    void Init(float sample_rate, Rng* rng, Rng* note_rng)
+    void Init(float sample_rate, Rng* rng, Rng* note_rng, const Params& p)
+    void SetParams(const Params& p)
+    float MinFreq() const
+    float Freq() const
+    void NoteOn(float freq, float vel)
+    void NoteOff()
+    void Glide(float target_hz)
+    void Process(float* l, float* r, int from, int to)
+    bool Active() const
+
+### bellows/engines/wavetable.h
+Transcription of src/engines/wavetable.ts.
+
+class Wavetable
+  Params:
+    float position = 0.0f
+    float scan_rate = 0.5f
+    float scan_depth = 0.0f
+    float env_to_position = 0.0f
+    float attack = 0.005f
+    float decay = 0.1f
+    float sustain = 0.8f
+    float release = 0.2f
+    float filter = 0.0f
+    float cutoff = 8000.0f
+    float resonance = 0.1f
+    float pan = 0.0f
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void Init(float sample_rate, const WavetableMip& table, const Params& p)
+    void SetParams(const Params& p)
+    void NoteOn(float freq, float vel)
+    void NoteOff()
+    void Process(float* l, float* r, int from, int to)
+    bool Active() const
+
+### bellows/engines/westcoast.h
+Transcription of src/engines/westcoast.ts.
+
+class WestCoast
+  Params:
+    float fold_amount = 0.35f
+    float fold_stages = 2.0f
+    float fold_env = 0.5f
+    float lpg_color = 0.7f
+    float lpg_decay = 0.5f
+    float level = 0.8f
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void SetParams(const Params& p)
+    void NoteOn(float freq, float vel)
+    void NoteOff()
+    void Process(float* l, float* r, int from, int to)
+    bool Active() const
+
+## fx
+
+### bellows/fx/delay.h
+Transcription of the clean stereo delay from src/fx/delay.ts.
+
+class StereoDelayExt
+  Params:
+    float time_l = 0.35f
+    float time_r = 0.5f
+    float feedback = 0.4f
+    float cross_feedback = 0.0f
+    float damping = 8000.0f
+    float mix = 0.35f
+  public:
+    void Init(float sample_rate, float* buf_l, float* buf_r, uint32_t cap, const Params& p, float max_sec = 0.0f)
+    void SetParams(const Params& p)
+    void Process(float* l, float* r, int from, int to)
+    void Reset()
+
+template <uint32_t kMaxMs = 500, uint32_t kSampleRate = 48000>
+class StereoDelay
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+
+### bellows/fx/dynamics.h
+Transcription of src/fx/dynamics.ts: Compressor, Limiter, Gate.
+
+constants:
+  float kDynFloorDb = -96.0f
+  float kDynFloorLin = 1.58489319e-5f
+  float kDynLog2ToDb = 6.020599913279624f
+  int32_t kSampleCountMax = 1 << 30
+  float kCompCrestTc = 0.2f
+  float kGateHysteresisDb = 3.0f
+
+functions:
+  float LevelDb(float x)
+  float OnePoleCoef(float time_sec, float sample_rate)
+  int32_t SampleCount(float samples, int32_t max = kSampleCountMax)
+
+template <int kMaxLookaheadMs = 10, int kSampleRate = BELLOWS_SAMPLE_RATE>
+class Compressor
+  Params:
+    float threshold_db = -18.0f
+    float ratio = 4.0f
+    float knee_db = 6.0f
+    float attack = 0.01f
+    float release = 0.2f
+    float makeup_db = 0.0f
+    float lookahead = 0.0f
+    float mix = 1.0f
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void SetParams(const Params& p)
+    int32_t Latency() const
+    void Process(float* l, float* r, int from, int to)
+    void Reset()
+
+template <bool kOn, int kBlock>
+class LimiterTruePeak
+  public:
+    void Init()
+    void Reset()
+
+template <int kSampleRate = BELLOWS_SAMPLE_RATE, bool kTruePeak = false, int kMaxBlock = BELLOWS_BLOCK_SIZE>
+class Limiter
+  Params:
+    float ceiling_db = -0.3f
+    float release = 0.05f
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void SetParams(const Params& p)
+    void Process(float* l, float* r, int from, int to)
+    void Reset()
+
+class EnvFollow
+  public:
+    public: void Init(float sample_rate, float attack_sec, float release_sec)
+    float Process(float x)
+    void Reset()
+
+class Gate
+  Params:
+    float threshold_db = -40.0f
+    float attack = 0.001f
+    float hold = 0.05f
+    float release = 0.1f
+    float range_db = -60.0f
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void SetParams(const Params& p)
+    void Process(float* l, float* r, int from, int to)
+    void Reset()
+
+template <int kBlock>
+class LimiterTruePeak
+  public:
+    void Init()
+    void Reset()
+
+### bellows/fx/eq.h
+Parametric EQ, ported from src/fx/eq.ts.
+
+constants:
+  int kEqBands = 6
+  float kEqBandFreq[kEqBands] = {80.0f, 250.0f, 800.0f, 2500.0f, 6000.0f, 12000.0f}
+  float kEqBandQ[kEqBands] = {0.707f, 1.0f, 1.0f, 1.0f, 1.0f, 0.707f}
+
+functions:
+  SvfMode EqBandMode(int i)
+
+class EqBand
+  public:
+    public: void Init(float sample_rate, SvfMode mode, float freq, float q)
+    void Set(float freq, float gain_db, float q, bool enabled)
+    bool Bypassed() const
+    float Process(int ch, float x)
+    void Reset()
+
+class Eq6
+  Params:
+    Band band[kEqBands] = { {80.0f, 0.0f, 0.707f, true}, {250.0f, 0.0f, 1.0f, true}, {800.0f, 0.0f, 1.0f, true}, {2500.0f, 0.0f, 1.0f, true}, {6000.0f, 0.0f, 1.0f, true}, {12000.0f, 0.0f, 0.707f, true}, }
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void SetParams(const Params& p)
+    void Process(float* l, float* r, int from, int to)
+    void Reset()
+
+class Band
+
+class Eq3
+  Params:
+    float low_freq = 120.0f, low_gain = 0.0f
+    float mid_freq = 1000.0f, mid_gain = 0.0f, mid_q = 0.7f
+    float high_freq = 6000.0f, high_gain = 0.0f
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void SetParams(const Params& p)
+    void Process(float* l, float* r, int from, int to)
+    void Reset()
+
+### bellows/fx/modfx.h
+Transcription of src/fx/modfx.ts: Chorus, Flanger, Tremolo, AutoPan,
+
+constants:
+  int kChorusTaps = 3
+  float kChorusCenterMs[kChorusTaps] = {10.0f, 17.5f, 25.0f}
+  float kChorusModMs = 5.0f
+  float kFlangerMinMs = 0.5f
+  float kFlangerMaxMs = 10.0f
+
+class SineCarrier
+  public:
+    public: void Init(float sample_rate)
+    void SetFreq(float hz)
+    void Reset(float phase = 0.0f)
+    float Process()
+
+template <int kSampleRate = BELLOWS_SAMPLE_RATE>
+class Chorus
+  Params:
+    float rate = 0.5f
+    float depth = 0.5f
+    float mix = 0.5f
+    float feedback = 0.0f
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void SetParams(const Params& p)
+    void Process(float* l, float* r, int from, int to)
+    void Reset()
+
+template <int kSampleRate = BELLOWS_SAMPLE_RATE>
+class Flanger
+  Params:
+    float rate = 0.25f
+    float depth = 0.7f
+    float manual = 0.25f
+    float feedback = 0.4f
+    float mix = 0.5f
+    bool invert = false
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void SetParams(const Params& p)
+    void Process(float* l, float* r, int from, int to)
+    void Reset()
+
+class Tremolo
+  Params:
+    float rate = 4.0f
+    float depth = 0.8f
+    LfoShape shape = LfoShape::kSine
+    float phase = 0.0f
+  public:
+    void Init(float sample_rate, Rng* rng = nullptr)
+    void Init(float sample_rate, const Params& p, Rng* rng = nullptr)
+    void SetParams(const Params& p)
+    void Process(float* l, float* r, int from, int to)
+    void Reset()
+
+class AutoPan
+  Params:
+    float rate = 1.0f
+    float depth = 1.0f
+    LfoShape shape = LfoShape::kSine
+  public:
+    void Init(float sample_rate, Rng* rng = nullptr)
+    void Init(float sample_rate, const Params& p, Rng* rng = nullptr)
+    void SetParams(const Params& p)
+    void Process(float* l, float* r, int from, int to)
+    void Reset()
+
+class RingMod
+  Params:
+    float freq = 440.0f
+    float mix = 1.0f
+  public:
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void SetParams(const Params& p)
+    void Process(float* l, float* r, int from, int to)
+    void Reset()
+
+### bellows/fx/plate.h
+Transcription of src/fx/plate.ts.
+
+constants:
+  uint32_t kRefRate = 29761
+  uint32_t kExcursion = 8
+  float kModDepthMax = 2.0f
+  uint32_t kDiffLen[4] = {142, 107, 379, 277}
+  float kDiffG[4] = {0.75f, 0.75f, 0.625f, 0.625f}
+  uint32_t kApA1 = 672, kDelA1 = 4453, kApA2 = 1800, kDelA2 = 3720
+  uint32_t kApB1 = 908, kDelB1 = 4217, kApB2 = 2656, kDelB2 = 3163
+  float kDecayDiff1 = 0.7f
+  float kDecayDiff2 = 0.5f
+  uint32_t kTapsL[7] = {266, 2974, 1913, 1996, 1990, 187, 1066}
+  uint32_t kTapsR[7] = {353, 3627, 1228, 2673, 2111, 335, 121}
+
+functions:
+  uint32_t Scale(uint32_t n, uint32_t sr)
+  uint32_t ExcExtra(uint32_t sr)
+  uint32_t Cap(uint32_t need)
+  uint32_t TotalSamples(uint32_t sr, uint32_t predelay_ms)
+
+class Allpass
+  public:
+    public: void Init(float* buf, uint32_t cap, uint32_t len, float g)
+    float Process(float x)
+    float ProcessMod(float x, float excursion)
+    float Tap(uint32_t offset) const
+    void Reset()
+
+class TankDelay
+  public:
+    public: void Init(float* buf, uint32_t cap, uint32_t len)
+    float Process(float x)
+    float Tap(uint32_t offset) const
+    void Reset()
+
+class PlateExt
+  Params:
+    float decay = 0.5f
+    float damping = 0.3f
+    float bandwidth = 0.9995f
+    float predelay = 0.0f
+    float mod_depth = 1.0f
+    float mix = 0.35f
+  public:
+    bool Init(float sample_rate, float* buf, uint32_t buf_len, uint32_t predelay_ms)
+    bool Init(float sample_rate, float* buf, uint32_t buf_len, uint32_t predelay_ms, const Params& p)
+    void SetParams(const Params& p)
+    bool Ready() const
+    void Process(float* l, float* r, int from, int to)
+    void Reset()
+
+template <int kSampleRate = BELLOWS_SAMPLE_RATE, int kMaxPredelayMs = 250>
+class Plate
+  public:
+    bool Init(float sample_rate)
+    bool Init(float sample_rate, const Params& p)
+
+### bellows/fx/saturator.h
+Transcription of src/fx/saturator.ts.
+
+enum class SatCurve: kTanh, kSoft, kFold, kCheby
+
+constants:
+  float kSatChebyCoeffs[5] = {0.5f, 0.25f, 0.15f, 0.08f, 0.04f}
+  float kSatTiltPivotHz = 700.0f
+  float kSatTiltRangeDb = 6.0f
+  float kSatCompRef = 0.5f
+
+template <bool kOn, int kFactor, int kBlock, uint32_t kLat>
+class SatOsState
+  public:
+    void Init()
+    void Reset()
+
+template <int kOversample = 4, int kMaxBlock = BELLOWS_BLOCK_SIZE>
+class Saturator
+  Params:
+    float drive = 2.0f
+    SatCurve curve = SatCurve::kTanh
+    float tone = 0.0f
+    float output_db = 0.0f
+    float mix = 1.0f
+  public:
+    public: static_assert(kOversample == 1 || kOversample == 2 || kOversample == 4, "Saturator kOversample must be 1, 2 or 4")
+    void Init(float sample_rate)
+    void Init(float sample_rate, const Params& p)
+    void SetParams(const Params& p)
+    void Process(float* l, float* r, int from, int to)
+    void Reset()
+
+template <int kFactor, int kBlock, uint32_t kLat>
+class SatOsState
+  public:
+    void Init()
+    void Reset()
+
+## seq
+
+### bellows/seq/arp.h
+Transcription of src/seq/arp.ts.
+
+enum class ArpMode: kUp, kDown, kUpDown, kDownUp, kRandom, kOrder
+
+template <int kMaxNotes = 16>
+class Arp
+  Params:
+    ArpMode mode = ArpMode::kUp
+    int octaves = 1
+  public:
+    public: static_assert(kMaxNotes >= 1 && kMaxNotes <= 255, "Arp stores cycle entries as bytes, so the pool must fit in 255")
+    void Init()
+    void Init(const Params& p)
+    void SetParams(const Params& p)
+    bool SetNotes(const float* midis, int count)
+    float Next()
+    float Next(Rng& rng)
+    void Reset()
+    int Count() const
+    int CycleLength() const
+    int Position() const
+    bool Empty() const
+
+### bellows/seq/automata.h
+Transcription of src/seq/automata.ts.
+
+template <int kWidth = 32>
+class ElementaryCa
+  public:
+    public: static_assert(kWidth >= 1, "ElementaryCa needs at least one cell")
+    void Init(uint8_t rule)
+    void Init(uint8_t rule, Rng& rng)
+    void Init(uint8_t rule, const uint8_t* cells)
+    void SetRule(uint8_t rule)
+    uint8_t Rule() const
+    void Step()
+    uint8_t Cell(int i) const
+    int Width() const
+    uint32_t Generation() const
+    int Centre() const
+    int Rhythm(uint8_t* out, int steps, int column)
+    int Rhythm(uint8_t* out, int steps)
+
+### bellows/seq/euclid.h
+Transcription of src/seq/euclid.ts.
+
+template <int kMaxSteps = 32>
+class Euclid
+  public:
+    public: static_assert(kMaxSteps >= 1, "Euclid needs room for at least one step")
+    void Init()
+    void Init(int pulses, int steps)
+    bool Generate(int pulses, int steps)
+    bool Generate(int pulses, int steps, int rotation)
+    bool At(int i) const
+    bool Process()
+    void Reset()
+    int Position() const
+    int Length() const
+    int Pulses() const
+
+### bellows/seq/lsystem.h
+Transcription of src/seq/lsystem.ts.
+
+constants:
+  int8_t kRestDegree = -128
+
+functions:
+  int MapToDegrees(const char* str, const char* symbols, const int8_t* degrees, int8_t* out, int max_out)
+
+template <int kMaxLen = 128, int kMaxRules = 8>
+class LSystem
+  public:
+    public: static_assert(kMaxLen >= 1, "LSystem needs room for at least one symbol")
+    void Init()
+    bool SetAxiom(const char* axiom)
+    bool AddRule(char sym, const char* replacement)
+    bool AddRule(char sym, const char* const* outs, const float* weights, int count)
+    bool Grow(int generations)
+    bool Grow(int generations, Rng& rng)
+    const char* Result() const
+    int Length() const
+    bool Truncated() const
+    int RuleCount() const
+
+class Rule
+
+### bellows/seq/markov.h
+Rewrite of src/seq/markov.ts, which is the one seq module that could not
+
+functions:
+  bool MarkovKeyFitsU32(int alphabet, int max_order)
+
+template <int kAlphabet = 8, int kMaxContexts = 32, int kMaxOrder = 2>
+class Markov
+  public:
+    public: static_assert(kAlphabet >= 2 && kAlphabet <= 256, "Markov needs an alphabet of at least 2: at 1 the packed key " "cannot carry the context length")
+    void Init(int order = 1)
+    bool Train(const uint8_t* sequence, int n)
+    bool AddTransition(const uint8_t* from, int len, uint8_t to, float weight = 1.0f)
+    bool Seed(const uint8_t* context, int n)
+    bool Next(Rng& rng, uint8_t* out)
+    bool NextWith(float r, uint8_t* out)
+    int Steps(Rng& rng, uint8_t* out, int n)
+    int Order() const
+    int Contexts() const
+    int ContextLength() const
+    bool Truncated() const
+    const Context& ContextAt(int i) const
+    void Unpack(uint32_t key, int order, uint8_t* out)
+
+class Context
+
+### bellows/seq/tempomap.h
+Transcription of src/seq/tempomap.ts.
+
+functions:
+  double TempoLog(double x)
+  float TempoLog(float x)
+  double TempoExp(double x)
+  float TempoExp(float x)
+
+template <int kMaxPoints = 8>
+class TempoMap
+  public:
+    public: static_assert(kMaxPoints >= 1, "TempoMap needs room for the tempo at beat 0")
+    void Init()
+    void Init(TempoScalar bpm)
+    bool SetBpm(TempoScalar beat, TempoScalar bpm)
+    bool RampTo(TempoScalar beat, TempoScalar bpm)
+    TempoScalar BpmAt(TempoScalar beat) const
+    TempoScalar BeatToSeconds(TempoScalar beat) const
+    TempoScalar SecondsToBeat(TempoScalar sec) const
+    int PointCount() const
+
+class Point
+
+## theory
+
+### bellows/theory/chords.h
+Transcription of src/theory/chords.ts. Chord types, chord building,
+
+constants:
+  int8_t kChordSteps[] = { 0, 4, 7, 0, 3, 7, 0, 4, 7, 10, 0, 4, 7, 11, 0, 3, 7, 10, 0
+  uint8_t kChordOffset[kChordCount + 1] = { 0, 3, 6, 10, 14, 18, 21, 24, 27, 30, 34, 38, 42, 46, 50, 5
+  ChordType kChordDetectOrder[kChordCount] = { kChordMaj6, kChordDom7, kChordDom9, kChordDom11, kChordDom
+
+functions:
+  const int8_t* ChordTypeSteps(ChordType t)
+  int ChordTypeLength(ChordType t)
+  Chord MakeChord(int root, ChordType type)
+  Chord MakeChordFromIntervals(int root, const int8_t* intervals, int count)
+  ChordType ChordTypeOfIntervals(const int8_t* intervals, int count)
+  Chord MakeChordFromIntervals(int root, const int8_t* intervals, int count)
+  Chord DiatonicChord(const Scale& scale, int degree, int notes)
+  int DiatonicTriads(const Scale& scale, Chord* out, int cap)
+  int DiatonicSevenths(const Scale& scale, Chord* out, int cap)
+  bool DetectChord(const int* pitch_classes, int count, int* out_root, ChordType* out_type)
+  const char* ChordTypeName(ChordType t)
+  const char* ChordTypeSuffix(ChordType t)
+  bool ChordTypeFromName(const char* name, ChordType* out)
+  int ChordName(const Chord& ch, char* out, int cap, bool prefer_flats = false)
+  int DetectChordName(const int* pitch_classes, int count, char* out, int cap, bool prefer_flats = false)
+  bool ParseChord(const char* symbol, Chord* out)
+  const char* RomanSuffix(ChordType t)
+  int ChordToRoman(const Chord& ch, const Scale& scale, char* out, int cap)
+  bool RomanSuffixType(const char* suffix, bool lower, ChordType* out)
+  bool RomanToChord(const char* numeral, const Scale& scale, Chord* out)
+
+class Chord
+  public:
+    int Midi(int octave, int* out, int cap) const
+    int Midi(int* out, int cap) const
+    bool IsMinorish() const
+
+### bellows/theory/notes.h
+Transcription of src/theory/notes.ts. Pitch classes, note names,
+
+constants:
+  int kNoteInvalid = INT32_MIN
+
+functions:
+  int Mod12(int n)
+  int FloorDiv(int a, int b)
+  int PitchClass(int midi)
+  int OctaveOf(int midi)
+  int LetterPitchClass(char c)
+  bool StrEq(const char* a, const char* b)
+  int AppendStr(char* out, int cap, int n, const char* s)
+  int AppendInt(char* out, int cap, int n, int v)
+  int ScanAccidentals(const char* s, int* i)
+  int ParsePitchClass(const char* s)
+  int ParseNote(const char* s)
+  bool HasOctave(const char* s)
+  const char* PitchClassName(int pc, bool prefer_flats = false)
+  int NoteName(int midi, char* out, int cap, bool prefer_flats = false)
+  const char* IntervalNameSimple(int semitones)
+  int IntervalName(int semitones, char* out, int cap)
+
+### bellows/theory/scales.h
+Transcription of src/theory/scales.ts. Thirty-four scales and the
+
+constants:
+  uint8_t kScaleSteps[] = { 0, 2, 4, 5, 7, 9, 11, 0, 2, 4, 5, 7, 9, 11, 0, 2, 3, 5, 7,
+  uint8_t kScaleOffset[kScaleCount + 1] = { 0, 7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91, 98, 
+
+functions:
+  const uint8_t* ScaleSteps(ScaleType t)
+  int ScaleLength(ScaleType t)
+  const char* ScaleName(ScaleType t)
+  bool ScaleFromName(const char* name, ScaleType* out)
+
+class Scale
+  public:
+    public: Scale()
+    void Init(int root, ScaleType type)
+    bool InitFromName(const char* root, ScaleType type)
+    void SetType(ScaleType type)
+    int RootPc() const
+    ScaleType Type() const
+    int Length() const
+    int DefaultOctave() const
+    const uint8_t* Intervals() const
+    int Interval(int i) const
+    int DegreeToMidi(int degree, int octave) const
+    int DegreeToMidi(int degree) const
+    bool Contains(int midi) const
+    int Quantize(int midi) const
+    int Degrees(int octaves, int* out, int cap, int base_octave) const
+    int Degrees(int octaves, int* out, int cap) const
+
+### bellows/theory/tuning.h
+Transcription of src/theory/tuning.ts. Tuning and DegreeFreq.
+
+functions:
+  float Log2Ratio(float x)
+  float RatioToCents(float ratio)
+  float DegreeFreq(const TuningT& tuning, int root_index, const IntervalT* intervals, int count, int degree, int octave = 0)
+
+template <int kMaxDegrees = 12>
+class Tuning
+  public:
+    public: static_assert(kMaxDegrees >= 1, "Tuning needs room for at least one degree")
+    void InitEdo(int n, float ref_freq = 440.0f, int ref_index = 69)
+    void InitJi(const float* ratios, int count, float base_freq = 440.0f, int base_index = 69, float period = 2.0f)
+    void InitCents(const float* cents, int count, float period = 1200.0f, float ref_freq = 440.0f, int ref_index = 69)
+    Tuning Edo(int n, float ref_freq = 440.0f, int ref_index = 69)
+    Tuning Ji(const float* ratios, int count, float base_freq = 440.0f, int base_index = 69, float period = 2.0f)
+    Tuning FromCents(const float* cents, int count, float period = 1200.0f, float ref_freq = 440.0f, int ref_index = 69)
+    int Size() const
+    float PeriodCents() const
+    float RefFreq() const
+    int RefIndex() const
+    float DegreeCents(int d) const
+    float CentsOf(int index) const
+    float CentsOf(float index) const
+    float FreqOf(int index) const
+    float FreqOf(float index) const
+    float MidiToFreq(int midi) const
+    float MidiToFreq(float midi) const
+    bool IsMapped(int index) const
+    void TransposeCents(float cents)
+    void TransposeRatio(float ratio)
+    void TransposeSteps(int steps)
+
+## io
+
+### bellows/io/midi_parse.h
+Transcription of parseMidiMessage from src/io/webmidi.ts, and only
+
+enum class Kind: kNone, kNoteOn, kNoteOff, kKeyPressure, kControlChange, kProgramChange, kChannelPressure, kPitchBend
+
+functions:
+  bool Parse(const uint8_t* bytes, int len, MidiMessage* out)
+  float NoteToHz(int note, float a4 = 440.0f)
+
+class MidiMessage
+  public:
+    float Norm() const
+    float Bend() const
+
+## platform
+
+### bellows/platform/daisy.h
+Daisy Seed glue: a bellows render behind a libDaisy audio callback.
+
+constants:
+  int kDaisyDefaultBlockSize = 48
+  float kDaisyDefaultSampleRate = 48000.0f
+
+template <class Render>
+class DaisyAudio
+  public:
+    public: void Init(Render& render)
+    template <class Board> static void Start(Board& hw, Render& render)
+    void Callback(::daisy::AudioHandle::InputBuffer in, ::daisy::AudioHandle::OutputBuffer out, size_t size)
+
+### bellows/platform/teensy.h
+Teensy glue: one custom AudioStream node that runs a bellows render.
+
+constants:
+  int kTeensyBlockSize = AUDIO_BLOCK_SAMPLES
+
+functions:
+  int16_t ToInt16(float x)
+  float TeensySampleRate()
+
+template <class Render>
+class BellowsAudioStream
+
+## presets
+
+### bellows/presets/instruments.h
+Transcription of src/presets/instruments.ts: named instrument presets.
+
+constants:
+  PluckPresetParams kPluckPresetParams[] = { {0.50f, 0.32f, 0.60f, 2.20f, 0.90f}, {0.24f, 0.18f, 0.20f,
+  ModalPresetParams kModalPresetParams[] = { {0.0f, 0.40f, 0.45f, 0.50f, 0.75f}, {0.0f, 3.50f, 0.40f, 0
+  VaPresetParams kVaPresetParams[] = { {0.0f, 9.0f, 0.20f, 3200.0f, 0.35f, 0.0f, 1.5f, 0.004f, 0.
+  int kFmPresetOps = 4
+  FmPresetParams kFmPresetParams[] = { {2.0f, 1.0f, 0.25f, 0.80f, 0.060f, 0.25f, 0.85f, 0.25f, 0.
+  TubePresetParams kTubePresetParams[] = { {0.85f, 0.05f, 0.80f, 0.02f, 0.0f}, {0.70f, 0.12f, 0.75f, 
+  FormantPresetParams kFormantPresetParams[] = { {0.00f, 0.15f, 4.5f, 0.20f, 0.0f, 1.00f}, {3.20f, 0.12f, 5
+  WestCoastPresetParams kWestCoastPresetParams[] = { {0.55f, 2.0f, 0.80f, 0.85f, 0.30f, 0.85f}, }
+  StringPresetParams kStringPresetParams[] = { {0.18f, 0.85f, 0.00f, 0.80f, 0.55f, 0.60f, 0.80f, 0.80f, 0
+  HarmonicPresetParams kHarmonicPresetParams[] = { {0.32f, 0.5f, 1.0f, 0.18f, 4.0f, 0.0f, 0.06f, 0.20f, 0.85f
+  int kAdditivePresetPartials = 12
+  AdditivePresetParams kAdditivePresetParams[] = { {0.000f, 20.0f, 1.00f, 0.004f, 0.08f, 1.0f, {1.0f, 0.85f, 
+  WavetablePresetParams kWavetablePresetParams[] = { {0.25f, 0.20f, 0.35f, 0.25f, 0.70f, 0.40f, 0.85f, 1.20f, 1
+  ChorusPresetParams kChorusPresetParams[] = { {0.80f, 0.35f, 0.55f, 0.0f}, {0.50f, 0.30f, 0.40f, 0.0f}, 
+  TremoloPresetParams kTremoloPresetParams[] = { {4.50f, 0.40f}, }
+  PlatePresetParams kPlatePresetParams[] = { {0.42f, 0.020f, 0.14f}, {0.42f, 0.020f, 0.14f}, {0.42f, 0.
+  TapeDelayPresetParams kTapeDelayPresetParams[] = { {0.115f, 0.12f, 0.22f}, }
+  InstrumentPreset kInstrumentPresets[] = { {"nylon-guitar", "NYLON GUITAR", kFamilyGuitars, kEnginePl
+  int kInstrumentPresetCount = static_cast<int>(sizeof(kInstrumentPresets) / sizeof(kInstru
+  int kEnginePresetCount[kPresetEngineCount] = { static_cast<int>(sizeof(kPluckPresetParams) / sizeof(kPluc
+
+functions:
+  bool IdEq(const char* a, const char* b)
+  int FindPresetIndex(const char* id)
+  const InstrumentPreset* FindPreset(const char* id)
+  const InstrumentPreset* PresetAt(int i)
+  int PresetsInFamily(InstrumentFamily family)
+  int PresetsInFamily(InstrumentFamily family, const InstrumentPreset** out, int cap)
+  const InstrumentPreset* PresetInFamily(InstrumentFamily family, int n)
+  const PluckPresetParams* PluckParamsOf(const InstrumentPreset& p)
+  const ModalPresetParams* ModalParamsOf(const InstrumentPreset& p)
+  const VaPresetParams* VaParamsOf(const InstrumentPreset& p)
+  const FmPresetParams* FmParamsOf(const InstrumentPreset& p)
+  const TubePresetParams* TubeParamsOf(const InstrumentPreset& p)
+  const FormantPresetParams* FormantParamsOf(const InstrumentPreset& p)
+  const WestCoastPresetParams* WestCoastParamsOf(const InstrumentPreset& p)
+  const StringPresetParams* StringParamsOf(const InstrumentPreset& p)
+  const HarmonicPresetParams* HarmonicParamsOf(const InstrumentPreset& p)
+  const AdditivePresetParams* AdditiveParamsOf(const InstrumentPreset& p)
+  const WavetablePresetParams* WavetableParamsOf(const InstrumentPreset& p)
+  const ChorusPresetParams* ChorusParamsOf(const InstrumentPreset& p)
+  const TremoloPresetParams* TremoloParamsOf(const InstrumentPreset& p)
+  const PlatePresetParams* PlateParamsOf(const InstrumentPreset& p)
+  const TapeDelayPresetParams* TapeDelayParamsOf(const InstrumentPreset& p)
+  void ApplyPreset(const PluckPresetParams& src, P* dst)
+  void ApplyPreset(const ModalPresetParams& src, P* dst)
+  void ApplyPreset(const VaPresetParams& src, P* dst)
+  void ApplyPreset(const FmPresetParams& src, P* dst)
+  void ApplyPreset(const TubePresetParams& src, P* dst)
+  void ApplyPreset(const FormantPresetParams& src, P* dst)
+  void ApplyPreset(const WestCoastPresetParams& src, P* dst)
+  void ApplyPreset(const StringPresetParams& src, P* dst)
+  void ApplyPreset(const HarmonicPresetParams& src, P* dst)
+  void ApplyPreset(const AdditivePresetParams& src, P* dst)
+  void ApplyPreset(const WavetablePresetParams& src, P* dst)
+  void ApplyPreset(const ChorusPresetParams& src, P* dst)
+  void ApplyPreset(const TremoloPresetParams& src, P* dst)
+  void ApplyPreset(const PlatePresetParams& src, P* dst)
+  const char* FamilyName(InstrumentFamily f)
+  const char* PresetEngineName(PresetEngine e)
+  bool FamilyFromName(const char* name, InstrumentFamily* out)
+
+class PluckPresetParams
+
+class ModalPresetParams
+
+class VaPresetParams
+
+class FmPresetParams
+
+class TubePresetParams
+
+class FormantPresetParams
+
+class WestCoastPresetParams
+
+class StringPresetParams
+
+class HarmonicPresetParams
+
+class AdditivePresetParams
+
+class WavetablePresetParams
+
+class ChorusPresetParams
+
+class TremoloPresetParams
+
+class PlatePresetParams
+
+class TapeDelayPresetParams
+
+class InstrumentPreset

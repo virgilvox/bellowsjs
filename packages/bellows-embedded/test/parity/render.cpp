@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "bellows/engines/additive.h"
 #include "bellows/engines/drums.h"
 #include "bellows/engines/pluck.h"
 #include "bellows/engines/va.h"
@@ -26,7 +27,10 @@
 #include "bellows/engines/modal.h"
 #include "bellows/engines/westcoast.h"
 #include "bellows/engines/formant.h"
+#include "bellows/engines/harmonic.h"
 #include "bellows/engines/tube.h"
+#include "bellows/engines/wavetable.h"
+#include "bellows/engines/waveguide.h"
 #include "bellows/fx/eq.h"
 #include "bellows/fx/delay.h"
 #include "bellows/fx/saturator.h"
@@ -259,15 +263,144 @@ int main(int argc, char** argv) {
     bellows::WestCoast v;
     v.Init(sr);
     RenderVoice(v, frames, freq, vel);
+  } else if (strcmp(which, "additive") == 0) {
+    /* Default params, which at 220 Hz and 44.1 kHz keeps all 32 partials:
+     * the highest sits at 7040 Hz against a limit of 19845, so the row
+     * covers the whole bank rather than the Nyquist cut. No rng: the JS
+     * voice takes one and never draws from it. */
+    static bellows::Additive<32> v;
+    v.Init(sr);
+    RenderVoice(v, frames, freq, vel);
+  } else if (strcmp(which, "additive_morph") == 0) {
+    /* The same engine with the four things the default record leaves off:
+     * the inharmonicity stretch, the cents conversion, the frame morph and
+     * the Nyquist cut, which at inharm 1/64 stops the bank at partial 26.
+     * Mirrored by hand from VOICE_PARAMS in parity.mjs, so the row also
+     * proves the two sides still agree about what each param means. */
+    static bellows::Additive<32> v;
+    bellows::Additive<32>::Params p;
+    p.morph = 0.5f;
+    p.inharm = 0.015625f;
+    p.decay = 3.0f;
+    p.rolloff = 0.875f;
+    p.attack = 0.00390625f;
+    p.release = 0.25f;
+    p.gain = 0.75f;
+    p.detune[1] = 7.0f;
+    p.detune[2] = -5.0f;
+    p.detune[4] = 12.0f;
+    v.Init(sr, p);
+    RenderVoice(v, frames, freq, vel);
   } else if (strcmp(which, "formant") == 0) {
     rng.Init(LabelFromEnv("parity"));
     bellows::Formant v;
+    v.Init(sr, &rng);
+    RenderVoice(v, frames, freq, vel);
+  } else if (strcmp(which, "harmonic") == 0) {
+    /* The JS voice hands its own stream straight to NoiseGen and forks
+     * nothing, so the C++ Rng sits on the parent label. Default params, and
+     * at 220 Hz against a 19845 Hz limit all 64 partials are in play, so the
+     * row covers the whole bank rather than the Nyquist cut. */
+    rng.Init(LabelFromEnv("parity"));
+    bellows::Harmonic v;
     v.Init(sr, &rng);
     RenderVoice(v, frames, freq, vel);
   } else if (strcmp(which, "tube") == 0) {
     rng.Init(LabelFromEnv("parity"));
     bellows::Tube<20, 44100> v;
     v.Init(sr, &rng);
+    RenderVoice(v, frames, freq, vel);
+  } else if (strcmp(which, "waveguide") == 0) {
+    /*
+     * The string half of waveguide.ts, and the one row where the params are
+     * NOT the defaults. On an empty params record the JS engine has bow 0,
+     * body 0, vibDepth 0, dynamics 0 and no polDetune key, so the voice is a
+     * plain plucked loop and the whole bowed apparatus (friction table, hair
+     * lowpass, position comb, 24 body modes, jitter, pitch settle, second
+     * polarization) is dead code that no comparison can see. The values
+     * below are the ones parity.mjs hands the TypeScript, and they exist to
+     * light every branch: bow on, dispersion on so the allpass chain is not
+     * an identity, body between two anchors so the morph interpolates rather
+     * than picking a row, and a vibrato onset short enough that the raised
+     * cosine ramp completes inside 16384 frames.
+     *
+     * The second polarization exists here because the JS allocates it when
+     * the polDetune KEY is present, and parity.mjs passes it. That is the
+     * template argument on this side.
+     *
+     * Two streams. The JS forks 'note' off the voice stream for its per note
+     * jitter and settle draws, and fork is string concatenation, so the
+     * child label is the parent's plus '::note'. RNG_LABEL['waveguide'] in
+     * parity.mjs is 'parity', which is what fixes both.
+     */
+    rng.Init(LabelFromEnv("parity"));
+    static bellows::Rng note_rng;
+    note_rng.Init("parity::note");
+    using W = bellows::Waveguide<20, 44100, true>;
+    static W v;
+    W::Params p;
+    p.damp = 0.25f;
+    p.sustain = 0.75f;
+    p.dispersion = 0.125f;
+    p.bow = 0.875f;
+    p.bow_pressure = 0.5f;
+    p.bow_speed = 0.625f;
+    p.level = 0.75f;
+    p.body = 0.75f;
+    p.body_size = 0.25f;
+    p.bow_noise = 0.375f;
+    p.attack_bite = 0.5f;
+    p.vib_rate = 6.0f;
+    p.vib_depth = 16.0f;
+    p.vib_onset = 0.0625f;
+    p.bow_pos = 0.125f;
+    p.dynamics = 0.5f;
+    p.pol_detune = 2.0f;
+    v.Init(sr, &rng, &note_rng, p);
+    RenderVoice(v, frames, freq, vel);
+  } else if (strcmp(which, "wavetable") == 0 || strcmp(which, "wavetable_low") == 0) {
+    /*
+     * One engine, two notes, and the params are not the defaults.
+     *
+     * On an empty record scanDepth, envToPosition and position are all 0 and
+     * filter is off, so the voice would sit on frame 0 of the table forever:
+     * a sine through an envelope, with the frame crossfade, the scan LFO,
+     * the position clamp and the filter all unmeasured. The values below are
+     * the ones parity.mjs hands the TypeScript. Every one is exactly
+     * representable in binary floating point, so nothing here is a different
+     * number in float and in double before the DSP touches it.
+     *
+     * position runs 0.25 + 0.5 * lfo + 0.25 * env, which spans -0.25 to 1.0
+     * across the render: it clamps at both ends and crosses all four frames,
+     * so both sides of the `ff > 0` branch are taken. scan_rate 3 Hz is
+     * 1.11 cycles inside 16384 frames, where the motion-pad preset's own 0.2
+     * Hz would have covered 7 percent of one. pan 0.375 is off centre on
+     * purpose, because the harness compares the left channel only. The
+     * lowpass sits at 1024 Hz with resonance 0.75 so that it shapes the
+     * note rather than passing it: that is what makes the resonance to Q
+     * map observable, and parity.mjs carries the measurement.
+     *
+     * The two rows differ in pitch alone, and that picks the mip level. At
+     * 220 Hz the oscillator reads level 2 (63 harmonics kept); at 55 Hz it
+     * reads level 0, which is the level stored at two points per period of
+     * its top harmonic and therefore the one where linear interpolation is
+     * worst. Level 0 is also the part of the flash blob nothing else reads.
+     */
+    bellows::Wavetable v;
+    bellows::Wavetable::Params p;
+    p.position = 0.25f;
+    p.scan_rate = 3.0f;
+    p.scan_depth = 0.5f;
+    p.env_to_position = 0.25f;
+    p.attack = 0.03125f;
+    p.decay = 0.125f;
+    p.sustain = 0.75f;
+    p.release = 0.25f;
+    p.filter = 1.0f;
+    p.cutoff = 1024.0f;
+    p.resonance = 0.75f;
+    p.pan = 0.375f;
+    v.Init(sr, p);
     RenderVoice(v, frames, freq, vel);
   } else if (strcmp(which, "fxin") == 0) {
     /* No effect at all: the input to every effect row, straight back out.

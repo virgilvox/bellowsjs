@@ -5,7 +5,8 @@
  * and sent to MQS on pins 10 and 12.
  *
  * WIRING
- *   pin 10 ---[ piezo disc ]--- pin 12
+ *   Teensy 4.x: pin 10 ---[ piezo disc ]--- pin 12
+ *   Teensy 3.x: pin  6 ---[ piezo disc ]--- pin  9
  *
  *   Across the two pins, NOT from a pin to ground. Voiced renders the
  *   signal on one channel and its exact inverse on the other, so the disc
@@ -62,15 +63,25 @@ static bellows::BellowsAudioStream<piezo::Voiced<workstation::Piece>> node(voice
 /* MQS: Medium Quality Sound, pins 10 and 12, no external parts at all. A
  * sigma-delta output filtered by the disc itself, which for a transducer
  * that rolls off above its resonance is a better match than it sounds. */
+#if defined(__IMXRT1062__)
+/* MQS on pins 10 and 12, Teensy 4.x only. */
 static AudioOutputMQS out;
+#else
+/* PWM on pins 6 and 9. Same reasoning as 15_Piezo: driving a disc you can
+ * usually omit the RC filter, because the disc's own capacitance and its
+ * rolloff do the filtering and there is nothing downstream to offend.
+ *
+ * Without this the sketch named a 4.x-only class unconditionally and the
+ * 3.x builds came back "failed" rather than "does not fit", which reads
+ * like a defect in the library and was a missing #if here. */
+static AudioOutputPWM out;
+#endif
 
 static AudioConnection patchL(node, 0, out, 0);
 static AudioConnection patchR(node, 1, out, 1);
 
 void setup() {
   Serial.begin(115200);
-  /* Five parts and a send bus is more work per callback than one voice. */
-  AudioMemory(24);
 
   const float sr = bellows::TeensySampleRate();
   piece.Init(sr, 96);
@@ -83,6 +94,11 @@ void setup() {
   v.drive = kDrive;
   voiced.Init(sr, v);
 
+
+  /* AudioMemory LAST: it is what opens the audio interrupt, and anything
+   * initialised after it can be rendered before it is ready. See the note
+   * in platform/teensy.h. */
+  AudioMemory(24);
   if (!piece.Trained()) Serial.println("workstation: markov table full, melody is truncated");
   Serial.println("07_Workstation -> piezo on pins 10 and 12");
   Serial.print("sample rate ");

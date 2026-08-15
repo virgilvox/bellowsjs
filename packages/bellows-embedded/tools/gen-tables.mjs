@@ -3,13 +3,23 @@
  * Codegen that keeps the TypeScript library the single source of truth for
  * anything the C++ port has to copy by hand.
  *
- * Two outputs:
+ * Three outputs:
  *
  *   src/bellows/dsp/blep_tables.h   the Kaiser windowed sinc step and blamp
  *                                   residual tables, run through the exact
  *                                   algorithm in packages/bellows/src/dsp/
  *                                   oscillators.ts so the C++ oscillator
  *                                   aliases the same way the JS one does.
+ *
+ *   src/bellows/dsp/wavetable_tables.h  the band limited mipmap of the four
+ *                                   frame morph table (sine, triangle, saw,
+ *                                   square) that engines/wavetable.ts builds
+ *                                   at runtime. Built by calling the
+ *                                   library's own WavetableSet.fromFrames,
+ *                                   so the FFT truncation is not copied.
+ *                                   Its length is a build-time choice and
+ *                                   the file is large: see the section below
+ *                                   for the byte cost of each.
  *
  *   src/bellows/params.gen.h        one comment block per ported engine and
  *                                   effect listing every ParamSpec with its
@@ -18,10 +28,11 @@
  *
  * Usage, from packages/bellows-embedded:
  *
- *   node tools/gen-tables.mjs             regenerate both outputs
+ *   node tools/gen-tables.mjs             regenerate all three outputs
  *   node tools/gen-tables.mjs --check     regenerate into memory, exit 1 if
  *                                         the committed output differs
- *   node tools/gen-tables.mjs --only=blep|params
+ *   node tools/gen-tables.mjs --only=blep|wavetable|params
+ *   node tools/gen-tables.mjs --wt-length=2048   emit the full mipmap
  *
  * The param specs are read out of packages/bellows/dist/bellows.js rather
  * than parsed from the .ts sources. Two engines build their ParamSpec arrays
@@ -196,7 +207,211 @@ function generateBlepHeader() {
 }
 
 /* ------------------------------------------------------------------ */
-/* (b) Param parity table                                              */
+/* (b) Wavetable morph mipmap                                          */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The default 'wavetable' engine builds a four frame morph table at every
+ * sample rate it sees and caches it. On an MCU there is no FFT at boot and
+ * no heap to cache into, so the mipmap goes in flash, and its size is the
+ * whole question.
+ *
+ * levels * frames * length * 4 bytes, with levels fixed by the length
+ * (log2(length) - 1: the top level keeps length/2 - 1 harmonics and each
+ * level below halves that, down to 1):
+ *
+ *   length  levels     bytes   worst alias floor over the register
+ *     2048      10   327680   -73 dB   (what the TypeScript uses)
+ *     1024       9   147456   -58 dB
+ *      512       8    65536   -52 dB   (the default here)
+ *      256       7    28672   -46 dB
+ *
+ * The alias floor is measured, not estimated: render the saw frame at a
+ * bin-aligned fundamental, FFT 32768 samples, take the loudest bin that is
+ * not a harmonic the chosen mip level kept, relative to the fundamental.
+ * The number quoted is the worst case over 30 Hz to 4 kHz. It is set by
+ * linear interpolation between table points, not by the band limiting, and
+ * it improves by about 12 dB per doubling of the length.
+ *
+ * The worst case always lands in the bass, and shortening the table is what
+ * puts it there. The oscillator picks the mip level whose top harmonic
+ * clears the output Nyquist, so the lowest notes get the level that keeps
+ * the most harmonics, which is the one stored at only two points per period
+ * of its top harmonic. At 2048 that critically sampled level is only
+ * selected below 21.5 Hz, under the audio band; at 512 it is selected below
+ * 86 Hz, so the bottom two octaves of the keyboard carry a -52 dB floor
+ * against -62 dB and better above them. Measured at 44100 Hz.
+ *
+ * 512 is the default because 320 KB does not fit a part with 256 KB of
+ * flash at all, and 64 KB is a quarter of it. Anyone with the flash should
+ * regenerate at 2048 and get exactly what the browser plays:
+ *
+ *   node tools/gen-tables.mjs --only=wavetable --wt-length=2048
+ *
+ * The committed header records the length it was generated at, and a run
+ * with no --wt-length regenerates at THAT length rather than at the default,
+ * so --check compares the data and not the choice.
+ */
+const WT_DEFAULT_LENGTH = 512;
+const WT_SAMPLE_RATE = 44100;
+
+/*
+ * WARNING, the same one that sits over buildTables above.
+ *
+ * This is a hand copy of buildMorphFrames() in
+ * packages/bellows/src/engines/wavetable.ts, because the library does not
+ * export it: it is private to the module that builds the default set. The
+ * band limiting is NOT copied (WavetableSet.fromFrames does that, and it is
+ * exported), so what can drift here is only these four closed forms.
+ *
+ * checkMorphFramesAgainstLibrary() below closes that gap rather than leaving
+ * it to a comment: it builds a set from this copy at the library's own
+ * length and compares every sample of every level against the set the
+ * shipped engine actually uses. Generation fails if they differ.
+ */
+function buildMorphFrames(n) {
+  const sine = new Float32Array(n);
+  const tri = new Float32Array(n);
+  const saw = new Float32Array(n);
+  const square = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const t = i / n;
+    sine[i] = Math.sin(2 * Math.PI * t);
+    tri[i] = t < 0.5 ? 4 * t - 1 : 3 - 4 * t;
+    saw[i] = 2 * t - 1;
+    square[i] = t < 0.5 ? 1 : -1;
+  }
+  return [sine, tri, saw, square];
+}
+
+/*
+ * The set the shipped engine is playing, read off a voice.
+ *
+ * `osc` and `set` are private to the TypeScript and ordinary properties at
+ * runtime, which is the only way to see the default set at all: the module
+ * caches it and exports neither it nor the function that builds it. Reading
+ * them is deliberate, and tables.mjs reads the Markov tables the same way
+ * for the same reason. If the shape here ever changes this throws rather
+ * than silently skipping the comparison.
+ */
+function libraryDefaultSet(lib, sampleRate) {
+  const voice = lib.wavetableEngine.createVoice(sampleRate, {}, lib.rng('gen-tables'));
+  const set = voice && voice.osc && voice.osc.set;
+  if (!set || !Array.isArray(set.levels) || !Array.isArray(set.maxHarm)) {
+    throw new Error(
+      'cannot read the default WavetableSet off a voice (voice.osc.set). ' +
+        'The engine internals moved; fix libraryDefaultSet() rather than skipping the check.',
+    );
+  }
+  return set;
+}
+
+/*
+ * Fail if the copied frames no longer produce the library's own mipmap.
+ *
+ * Compared at the library's length and bit for bit: both sides run the same
+ * WavetableSet.fromFrames over Float32Array input, so anything other than
+ * exact equality means the waveform formulas have parted company.
+ */
+function checkMorphFramesAgainstLibrary(lib) {
+  const ref = libraryDefaultSet(lib, WT_SAMPLE_RATE);
+  const mine = lib.WavetableSet.fromFrames(buildMorphFrames(ref.tableLength), WT_SAMPLE_RATE);
+  if (mine.levels.length !== ref.levels.length || mine.frameCount !== ref.frameCount) {
+    throw new Error('morph table shape differs from the library default set');
+  }
+  for (let l = 0; l < ref.levels.length; l++) {
+    if (mine.maxHarm[l] !== ref.maxHarm[l]) throw new Error(`maxHarm[${l}] differs`);
+    for (let f = 0; f < ref.frameCount; f++) {
+      const a = mine.levels[l][f];
+      const b = ref.levels[l][f];
+      for (let i = 0; i < b.length; i++) {
+        if (a[i] !== b[i]) {
+          throw new Error(
+            `buildMorphFrames() in tools/gen-tables.mjs no longer matches the one in ` +
+              `packages/bellows/src/engines/wavetable.ts: level ${l} frame ${f} sample ${i}, ` +
+              `${a[i]} against ${b[i]}`,
+          );
+        }
+      }
+    }
+  }
+  return ref;
+}
+
+/** kWtMorphLength out of the committed header, or null if there is none. */
+async function committedWtLength() {
+  const path = join(PKG, 'src/bellows/dsp/wavetable_tables.h');
+  if (!existsSync(path)) return null;
+  const m = /kWtMorphLength\s*=\s*(\d+)/.exec(await readFile(path, 'utf8'));
+  return m ? Number(m[1]) : null;
+}
+
+function isPowerOfTwo(n) {
+  return n > 0 && (n & (n - 1)) === 0;
+}
+
+async function generateWavetableHeader(check, length) {
+  const lib = await loadLib(check);
+  if (!isPowerOfTwo(length) || length < 16 || length > 2048) {
+    throw new Error(`--wt-length=${length}: want a power of two from 16 to 2048`);
+  }
+  const ref = checkMorphFramesAgainstLibrary(lib);
+  /*
+   * Shorter tables are the same waveforms sampled less often, and exactly
+   * so: buildMorphFrames evaluates at t = i / n, and 2048 / length is an
+   * integer, so every sample of the short frame is a sample of the long one
+   * at the same t. The band limiting is then rebuilt at the new length by
+   * the library's own FFT truncation rather than decimated.
+   */
+  const set = lib.WavetableSet.fromFrames(buildMorphFrames(length), WT_SAMPLE_RATE);
+  const levels = set.levels.length;
+  const bytes = levels * set.frameCount * length * 4;
+
+  const out = [
+    '/* Generated from src/dsp/wavetable.ts and src/engines/wavetable.ts. Do not edit.',
+    ' *',
+    ` * The four frame morph table (sine, triangle, saw, square) at ${length} points,`,
+    ` * band limited into ${levels} mip levels by WavetableSet.fromFrames.`,
+    ' *',
+    ` * ${bytes} bytes of .rodata: ${levels} levels * ${set.frameCount} frames * ${length} samples * 4.`,
+    ` * The TypeScript builds this table at ${ref.tableLength} points, which would be`,
+    ` * ${ref.levels.length * ref.frameCount * ref.tableLength * 4} bytes. tools/gen-tables.mjs carries the measured alias floor`,
+    ' * of each length and why this one is the default. Change it with',
+    ' * --wt-length, which also changes the level count. */',
+    '#pragma once',
+    '',
+    'namespace bellows {',
+    `inline constexpr int kWtMorphFrames = ${set.frameCount};`,
+    `inline constexpr int kWtMorphLength = ${length};`,
+    `inline constexpr int kWtMorphLevels = ${levels};`,
+    '/* Highest harmonic kept at each level, strictly decreasing down to 1. */',
+    `inline constexpr int kWtMorphMaxHarm[kWtMorphLevels] = {${set.maxHarm.join(', ')}};`,
+    '',
+    '/* One contiguous blob, [level][frame][sample], so it needs no pointers',
+    ' * and therefore no relocations. */',
+    'inline constexpr float kWtMorphData[kWtMorphLevels][kWtMorphFrames][kWtMorphLength] = {',
+  ];
+  const FRAME_NAMES = ['sine', 'triangle', 'saw', 'square'];
+  for (let l = 0; l < levels; l++) {
+    out.push(`  /* level ${l}, harmonics 1..${set.maxHarm[l]} */`);
+    out.push('  {');
+    for (let f = 0; f < set.frameCount; f++) {
+      out.push(`  /* ${FRAME_NAMES[f] ?? `frame ${f}`} */`);
+      out.push('  {');
+      out.push(formatRows(set.levels[l][f]));
+      out.push(f === set.frameCount - 1 ? '  }' : '  },');
+    }
+    out.push(l === levels - 1 ? '  }' : '  },');
+  }
+  out.push('};');
+  out.push('');
+  out.push('}  // namespace bellows');
+  out.push('');
+  return out.join('\n');
+}
+
+/* ------------------------------------------------------------------ */
+/* (c) Param parity table                                              */
 /* ------------------------------------------------------------------ */
 
 /*
@@ -221,10 +436,16 @@ function generateBlepHeader() {
  * here would assert a parity it does not claim. Anything unmapped is
  * reported as an orphan in the generated header, which is how this file
  * noticed Eq6 the moment it appeared.
+ *
+ * Waveguide is the port of the StringVoice half of engines/waveguide.ts,
+ * whose registered id is 'string'. The class is not called String because
+ * that name is taken on an Arduino target, so the alias is the only place
+ * the two names meet.
  */
 const CLASS_ALIASES = {
   StereoDelayExt: 'delay',
   Eq6: 'eq',
+  Waveguide: 'string',
 };
 
 /* Classes that intentionally have no TypeScript counterpart, so the
@@ -427,15 +648,32 @@ function unitBlock(kind, def, port) {
   return out.join('\n');
 }
 
+/*
+ * The built bundle, imported once however many outputs want it.
+ *
+ * registerBuiltins() is the call the worklet and the offline renderer make,
+ * so what this reads is exactly what ships. It runs once because a second
+ * call would re-register every id.
+ */
+let libPromise = null;
+function loadLib(check) {
+  if (libPromise) return libPromise;
+  libPromise = (async () => {
+    if (!existsSync(TS_DIST)) {
+      throw new Error(
+        `${relative(REPO, TS_DIST)} not found. Run: npm run build -w packages/bellows`,
+      );
+    }
+    await warnIfDistStale(check);
+    const lib = await import(pathToFileURL(TS_DIST).href);
+    lib.registerBuiltins();
+    return lib;
+  })();
+  return libPromise;
+}
+
 async function generateParamsHeader(check = false) {
-  if (!existsSync(TS_DIST)) {
-    throw new Error(
-      `${relative(REPO, TS_DIST)} not found. Run: npm run build -w packages/bellows`,
-    );
-  }
-  await warnIfDistStale(check);
-  const lib = await import(pathToFileURL(TS_DIST).href);
-  lib.registerBuiltins();
+  const lib = await loadLib(check);
   const defs = {
     engines: new Map(lib.listEngines().map((d) => [d.id, d])),
     effects: new Map(lib.listEffects().map((d) => [d.id, d])),
@@ -592,14 +830,29 @@ async function main() {
   const check = args.includes('--check');
   const onlyArg = args.find((a) => a.startsWith('--only='));
   const only = onlyArg ? onlyArg.slice('--only='.length) : 'all';
-  if (!['all', 'blep', 'params'].includes(only)) {
-    process.stderr.write(`unknown --only=${only}, expected blep or params\n`);
+  if (!['all', 'blep', 'wavetable', 'params'].includes(only)) {
+    process.stderr.write(`unknown --only=${only}, expected blep, wavetable or params\n`);
     process.exit(2);
   }
+  /* No --wt-length means keep the length the committed header was generated
+   * at, so a plain run is idempotent and --check compares the data rather
+   * than second-guessing a deliberate choice. */
+  const wtArg = args.find((a) => a.startsWith('--wt-length='));
+  const wtLength = wtArg
+    ? Number(wtArg.slice('--wt-length='.length))
+    : ((await committedWtLength()) ?? WT_DEFAULT_LENGTH);
 
   let ok = true;
   if (only === 'all' || only === 'blep') {
     ok = (await emit('src/bellows/dsp/blep_tables.h', generateBlepHeader(), check)) && ok;
+  }
+  if (only === 'all' || only === 'wavetable') {
+    ok =
+      (await emit(
+        'src/bellows/dsp/wavetable_tables.h',
+        await generateWavetableHeader(check, wtLength),
+        check,
+      )) && ok;
   }
   if (only === 'all' || only === 'params') {
     ok = (await emit('src/bellows/params.gen.h', await generateParamsHeader(check), check)) && ok;
@@ -619,4 +872,10 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
   });
 }
 
-export { buildTables, generateBlepHeader, generateParamsHeader };
+export {
+  buildTables,
+  buildMorphFrames,
+  generateBlepHeader,
+  generateWavetableHeader,
+  generateParamsHeader,
+};

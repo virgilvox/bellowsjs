@@ -93,6 +93,154 @@ inline constexpr float kEngineFmDefaults[kEngineFmParamCount] = {
   1.0f, 0.4f, 0.0f, 1.0f, 0.3f, 0.0f
 };
 
+/* additive: Additive
+ * bellows/engines/additive.h class Additive, 103 params.
+ *   name       min   max   default               c++ field  unit
+ *   morph      0     1     0                     morph
+ *   inharm     0     0.02  0                     inharm
+ *   decay      0.01  20    2                     decay      s
+ *   rolloff    0.3   1     0.8                   rolloff
+ *   attack     0     10    0.002                 attack     s
+ *   release    0     10    0.3                   release    s
+ *   gain       0     2     1                     gain
+ *   partial1   0     1     1                     partial[]
+ *   target1    0     1     1                     target[]
+ *   detune1    -100  100   0                     detune[]   cents
+ *   partial2   0     1     0.5                   partial[]
+ *   target2    0     1     0                     target[]
+ *   detune2    -100  100   0                     detune[]   cents
+ *   partial3   0     1     0.3333333333333333    partial[]
+ *   target3    0     1     0                     target[]
+ *   detune3    -100  100   0                     detune[]   cents
+ *   partial4   0     1     0.25                  partial[]
+ *   target4    0     1     0                     target[]
+ *   detune4    -100  100   0                     detune[]   cents
+ *   partial5   0     1     0.2                   partial[]
+ *   target5    0     1     0                     target[]
+ *   detune5    -100  100   0                     detune[]   cents
+ *   partial6   0     1     0.16666666666666666   partial[]
+ *   target6    0     1     0                     target[]
+ *   detune6    -100  100   0                     detune[]   cents
+ *   partial7   0     1     0.14285714285714285   partial[]
+ *   target7    0     1     0                     target[]
+ *   detune7    -100  100   0                     detune[]   cents
+ *   partial8   0     1     0.125                 partial[]
+ *   target8    0     1     0                     target[]
+ *   detune8    -100  100   0                     detune[]   cents
+ *   partial9   0     1     0.1111111111111111    partial[]
+ *   target9    0     1     0                     target[]
+ *   detune9    -100  100   0                     detune[]   cents
+ *   partial10  0     1     0.1                   partial[]
+ *   target10   0     1     0                     target[]
+ *   detune10   -100  100   0                     detune[]   cents
+ *   partial11  0     1     0.09090909090909091   partial[]
+ *   target11   0     1     0                     target[]
+ *   detune11   -100  100   0                     detune[]   cents
+ *   partial12  0     1     0.08333333333333333   partial[]
+ *   target12   0     1     0                     target[]
+ *   detune12   -100  100   0                     detune[]   cents
+ *   partial13  0     1     0.07692307692307693   partial[]
+ *   target13   0     1     0                     target[]
+ *   detune13   -100  100   0                     detune[]   cents
+ *   partial14  0     1     0.07142857142857142   partial[]
+ *   target14   0     1     0                     target[]
+ *   detune14   -100  100   0                     detune[]   cents
+ *   partial15  0     1     0.06666666666666667   partial[]
+ *   target15   0     1     0                     target[]
+ *   detune15   -100  100   0                     detune[]   cents
+ *   partial16  0     1     0.0625                partial[]
+ *   target16   0     1     0                     target[]
+ *   detune16   -100  100   0                     detune[]   cents
+ *   partial17  0     1     0.058823529411764705  partial[]
+ *   target17   0     1     0                     target[]
+ *   detune17   -100  100   0                     detune[]   cents
+ *   partial18  0     1     0.05555555555555555   partial[]
+ *   target18   0     1     0                     target[]
+ *   detune18   -100  100   0                     detune[]   cents
+ *   partial19  0     1     0.05263157894736842   partial[]
+ *   target19   0     1     0                     target[]
+ *   detune19   -100  100   0                     detune[]   cents
+ *   partial20  0     1     0.05                  partial[]
+ *   target20   0     1     0                     target[]
+ *   detune20   -100  100   0                     detune[]   cents
+ *   partial21  0     1     0.047619047619047616  partial[]
+ *   target21   0     1     0                     target[]
+ *   detune21   -100  100   0                     detune[]   cents
+ *   partial22  0     1     0.045454545454545456  partial[]
+ *   target22   0     1     0                     target[]
+ *   detune22   -100  100   0                     detune[]   cents
+ *   partial23  0     1     0.043478260869565216  partial[]
+ *   target23   0     1     0                     target[]
+ *   detune23   -100  100   0                     detune[]   cents
+ *   partial24  0     1     0.041666666666666664  partial[]
+ *   target24   0     1     0                     target[]
+ *   detune24   -100  100   0                     detune[]   cents
+ *   partial25  0     1     0.04                  partial[]
+ *   target25   0     1     0                     target[]
+ *   detune25   -100  100   0                     detune[]   cents
+ *   partial26  0     1     0.038461538461538464  partial[]
+ *   target26   0     1     0                     target[]
+ *   detune26   -100  100   0                     detune[]   cents
+ *   partial27  0     1     0.037037037037037035  partial[]
+ *   target27   0     1     0                     target[]
+ *   detune27   -100  100   0                     detune[]   cents
+ *   partial28  0     1     0.03571428571428571   partial[]
+ *   target28   0     1     0                     target[]
+ *   detune28   -100  100   0                     detune[]   cents
+ *   partial29  0     1     0.034482758620689655  partial[]
+ *   target29   0     1     0                     target[]
+ *   detune29   -100  100   0                     detune[]   cents
+ *   partial30  0     1     0.03333333333333333   partial[]
+ *   target30   0     1     0                     target[]
+ *   detune30   -100  100   0                     detune[]   cents
+ *   partial31  0     1     0.03225806451612903   partial[]
+ *   target31   0     1     0                     target[]
+ *   detune31   -100  100   0                     detune[]   cents
+ *   partial32  0     1     0.03125               partial[]
+ *   target32   0     1     0                     target[]
+ *   detune32   -100  100   0                     detune[]   cents
+ *
+ * C++ fields with no ParamSpec: Params, target, detune
+ */
+inline constexpr int kEngineAdditiveParamCount = 103;
+inline constexpr float kEngineAdditiveDefaults[kEngineAdditiveParamCount] = {
+  0.0f, 0.0f, 2.0f, 0.8f, 0.002f, 0.3f, 1.0f, 1.0f,
+  1.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.3333333333333333f, 0.0f, 0.0f,
+  0.25f, 0.0f, 0.0f, 0.2f, 0.0f, 0.0f, 0.16666666666666666f, 0.0f,
+  0.0f, 0.14285714285714285f, 0.0f, 0.0f, 0.125f, 0.0f, 0.0f, 0.1111111111111111f,
+  0.0f, 0.0f, 0.1f, 0.0f, 0.0f, 0.09090909090909091f, 0.0f, 0.0f,
+  0.08333333333333333f, 0.0f, 0.0f, 0.07692307692307693f, 0.0f, 0.0f, 0.07142857142857142f, 0.0f,
+  0.0f, 0.06666666666666667f, 0.0f, 0.0f, 0.0625f, 0.0f, 0.0f, 0.058823529411764705f,
+  0.0f, 0.0f, 0.05555555555555555f, 0.0f, 0.0f, 0.05263157894736842f, 0.0f, 0.0f,
+  0.05f, 0.0f, 0.0f, 0.047619047619047616f, 0.0f, 0.0f, 0.045454545454545456f, 0.0f,
+  0.0f, 0.043478260869565216f, 0.0f, 0.0f, 0.041666666666666664f, 0.0f, 0.0f, 0.04f,
+  0.0f, 0.0f, 0.038461538461538464f, 0.0f, 0.0f, 0.037037037037037035f, 0.0f, 0.0f,
+  0.03571428571428571f, 0.0f, 0.0f, 0.034482758620689655f, 0.0f, 0.0f, 0.03333333333333333f, 0.0f,
+  0.0f, 0.03225806451612903f, 0.0f, 0.0f, 0.03125f, 0.0f, 0.0f
+};
+
+/* wavetable: Wavetable
+ * bellows/engines/wavetable.h class Wavetable, 12 params.
+ *   name           min  max    default  c++ field        unit
+ *   position       0    1      0        position
+ *   scanRate       0    20     0.5      scan_rate        Hz
+ *   scanDepth      0    1      0        scan_depth
+ *   envToPosition  -1   1      0        env_to_position
+ *   attack         0    10     0.005    attack           s
+ *   decay          0    10     0.1      decay            s
+ *   sustain        0    1      0.8      sustain
+ *   release        0    10     0.2      release          s
+ *   filter         0    1      0        filter
+ *   cutoff         20   20000  8000     cutoff           Hz
+ *   resonance      0    1      0.1      resonance
+ *   pan            -1   1      0        pan
+ */
+inline constexpr int kEngineWavetableParamCount = 12;
+inline constexpr float kEngineWavetableDefaults[kEngineWavetableParamCount] = {
+  0.0f, 0.5f, 0.0f, 0.0f, 0.005f, 0.1f, 0.8f, 0.2f,
+  0.0f, 8000.0f, 0.1f, 0.0f
+};
+
 /* kick: Kick
  * bellows/engines/drums.h class Kick, 4 params.
  *   name        min    max  default  c++ field    unit
@@ -141,6 +289,36 @@ inline constexpr float kEngineHatDefaults[kEngineHatParamCount] = {
 inline constexpr int kEnginePluckParamCount = 5;
 inline constexpr float kEnginePluckDefaults[kEnginePluckParamCount] = {
   0.35f, 0.28f, 0.0f, 2.5f, 0.9f
+};
+
+/* string: Waveguide String
+ * bellows/engines/waveguide.h class Waveguide, 19 params.
+ *   name           min   max  default  c++ field       unit
+ *   damp           0     1    0.35     damp
+ *   sustain        0     1    0.6      sustain
+ *   dispersion     0     1    0        dispersion
+ *   bow            0     1    0        bow
+ *   bowPressure    0     1    0.5      bow_pressure
+ *   bowSpeed       0     1    0.5      bow_speed
+ *   level          0     1    0.9      level
+ *   body           0     1    0        body
+ *   bodySize       0     1    0        body_size
+ *   bowNoise       0     1    0        bow_noise
+ *   attackBite     0     1    0        attack_bite
+ *   vibRate        3     9    6.1      vib_rate        Hz
+ *   vibDepth       0     50   0        vib_depth       cents
+ *   vibOnset       0     1    0.3      vib_onset       s
+ *   bowPos         0.06  0.2  0.11     bow_pos
+ *   dynamics       0     1    0        dynamics
+ *   polDetune      0     5    0        pol_detune      cents
+ *   glide          0     0.5  0.03     glide           s
+ *   legatoScratch  0     1    0.15     legato_scratch
+ */
+inline constexpr int kEngineStringParamCount = 19;
+inline constexpr float kEngineStringDefaults[kEngineStringParamCount] = {
+  0.35f, 0.6f, 0.0f, 0.0f, 0.5f, 0.5f, 0.9f, 0.0f,
+  0.0f, 0.0f, 0.0f, 6.1f, 0.0f, 0.3f, 0.11f, 0.0f,
+  0.0f, 0.03f, 0.15f
 };
 
 /* tube: Waveguide Tube
@@ -199,6 +377,25 @@ inline constexpr float kEngineWestcoastDefaults[kEngineWestcoastParamCount] = {
 inline constexpr int kEngineFormantParamCount = 6;
 inline constexpr float kEngineFormantDefaults[kEngineFormantParamCount] = {
   0.0f, 0.1f, 5.0f, 0.25f, 0.0f, 1.0f
+};
+
+/* harmonic: Harmonic plus Noise
+ * bellows/engines/harmonic.h class Harmonic, 9 params.
+ *   name          min    max  default  c++ field      unit
+ *   brightness    0      1    0.5      brightness
+ *   evenOdd       0      1    0.5      even_odd
+ *   formantShift  0.25   4    1        formant_shift
+ *   noiseMix      0      1    0.1      noise_mix
+ *   noiseColor    0.25   16   2        noise_color
+ *   portamento    0      4    0        portamento     s
+ *   attack        0.001  4    0.01     attack         s
+ *   release       0.01   8    0.3      release        s
+ *   level         0      1    0.8      level
+ */
+inline constexpr int kEngineHarmonicParamCount = 9;
+inline constexpr float kEngineHarmonicDefaults[kEngineHarmonicParamCount] = {
+  0.5f, 0.5f, 1.0f, 0.1f, 2.0f, 0.0f, 0.01f, 0.3f,
+  0.8f
 };
 
 /* delay: Stereo Delay
@@ -403,7 +600,7 @@ inline constexpr float kEffectSaturatorDefaults[kEffectSaturatorParamCount] = {
 };
 
 /* Not ported to C++ yet, listed so the gap stays visible:
- *   engines: additive, wavetable, clap, tom, noise, string, granular, harmonic
+ *   engines: clap, tom, noise, granular
  *   effects: tapeDelay, multitap, fdn, transient, phaser, freqshift, pitchshift, freeze, blur, robot, whisper, denoise
  */
 

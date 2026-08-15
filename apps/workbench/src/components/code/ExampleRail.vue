@@ -4,9 +4,25 @@
  * the active example lit phosphor.
  */
 
-import { categories } from '../../examples';
+import { computed } from 'vue';
+import { categories as jsCategories } from '../../examples';
 
-defineProps<{ activeId: string }>();
+/*
+ * The rail is generic over its list now, because the CODE page has two
+ * trees: javascript and embedded. Given nothing it shows the javascript
+ * one, which is what every existing caller expects.
+ */
+interface RailCategory {
+  name: string;
+  examples: Array<{ id: string; title: string }>;
+}
+
+const props = withDefaults(
+  defineProps<{ activeId: string; categories?: RailCategory[] }>(),
+  { categories: undefined },
+);
+
+const cats = computed<RailCategory[]>(() => props.categories ?? jsCategories);
 defineEmits<{ (e: 'select', id: string): void }>();
 
 function num(i: number): string {
@@ -16,7 +32,7 @@ function num(i: number): string {
 
 <template>
   <div class="rail">
-    <div v-for="(cat, ci) in categories" :key="cat.name" class="panel">
+    <div v-for="(cat, ci) in cats" :key="cat.name" class="panel">
       <div class="panel-title">
         {{ num(ci) }} {{ cat.name }}
         <em>{{ cat.examples.length }}</em>

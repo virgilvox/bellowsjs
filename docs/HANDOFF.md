@@ -1,6 +1,116 @@
 # HANDOFF
 
-State of the project as of 2026-08-04, after the audit pass and the embedded port. Read this first when picking the work back up. Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` (every finding with its evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists, where this actually leads, and what the research implies), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session on this), `docs/prototype-0.html` (the original design probe).
+State of the project as of 2026-08-13. Read this first when picking the work back up. Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` and `docs/AUDIT-2.md` and `docs/AUDIT-3.md` (findings with evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists and where this leads), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session), `docs/prototype-0.html` (the original design probe).
+
+## The 2026-08-13 session, which changed the shape of the project
+
+Four things happened that a reader of the older sections below needs to know
+before trusting them, because each one falsifies something those sections say.
+
+**1. It ran on hardware, and there is a CPU number.** A Teensy 4.0 at 600 MHz
+played `07_Workstation`, the heaviest program in the set, through a MAX98357A at
+44.1 kHz: **34 to 43 percent CPU, 47.2 percent peak**, 2 of 24 audio blocks. That
+is Milestone 1's acceptance criterion and it replaces an assumption the whole
+repository rested on. It is ONE board and ONE program: no other board has run
+anything, and nothing has been compared to the browser by ear. Those CPU figures
+are hand recorded from a serial console, so no harness checks them.
+
+**2. The engine set is complete.** `additive`, `harmonic`, `waveguide` and
+`wavetable` are ported, so every engine the browser ships now exists in C++. The
+parity table is **40 rows, not 34**, and all of them pass:
+
+    harmonic         3.63e-5    additive        1.30e-4
+    additive_morph   1.12e-4    waveguide       1.98e-4
+    wavetable        2.63e-5    wavetable_low   1.97e-5
+
+Each new port replaced the JS double phase accumulator with the uint32 fixed
+point counter in `config.h`, for the reason the LFO change already established:
+fixed point is closer to double than float32 is. The additive agent traced its
+own residual to a cause rather than accepting it, and recorded in the GATES
+comment that a 0.1 percent `morph` error moves the row only 4.4x against a 10x
+gate, which is a weakness in that row stated rather than hidden.
+
+**3. All 50 instrument presets exist on the board**, in
+`bellows/presets/instruments.h`: a tagged index plus one param table per engine,
+so `--gc-sections` still drops engines a sketch never names. There is no
+registry. A new harness, `npm run presets:check`, dumps the compiled C++ table
+and diffs it against `src/presets/instruments.ts`, mapping names through the
+generated `params.gen.h` rather than restating them: **50 presets, 1054 values,
+0 failures**, and it was mutation tested. `examples/21_Presets` plays all 50.
+
+**4. The site now documents and demonstrates the port.** The SIMULATOR is the
+EMBEDDED PLAYGROUND. The CODE page has a JAVASCRIPT / EMBEDDED switch with 36
+embedded examples, every one of them real C++ compiled on every build by
+`npm run check:embedded`, shown beside a browser equivalent you can hear. The
+DOCS page has a BROWSER / EMBEDDED switch over a nine page embedded tree. There
+is an embedded LLM reference at `/llm-embedded.txt`, generated from all 50
+headers by `gen-llm-embedded.mjs` with zero unreadable.
+
+### What the audit of that work found, because it is the useful part
+
+Two audit passes over the session's own output found **twelve defects**, all
+fixed. They are worth reading as a class: every one typechecked, every one
+looked right, and none would have been caught by any existing test.
+
+The four in C++:
+
+- **Every sketch could render before it was initialised.** `AudioMemory()` is
+  what opens the audio interrupt (`BellowsAudioStream::update()` returns early
+  only while `allocate()` is null), and every sketch called it BEFORE
+  initialising its patch. ASan confirms a SEGV in `DelayLineExt::ReadCubic`
+  through a null buffer; on an IMXRT1062 the companion write lands at address 0,
+  which is ITCM, which is executable. All 16 sketches now init first, and the
+  reason is at the call site.
+- `Piece::Init` did not clear `delay_ready_`, so a second Init at a different
+  rate left the echo 8.8 percent late (0.5102 s against 0.4688).
+- `SetTempo(0)` cast an infinity to int in four places. Clamped before the
+  arithmetic now.
+- `Markov<1, ...>` aliased every context of every order onto one entry, which
+  contradicted the header's own stated invariant. The bound is `kAlphabet >= 2`.
+
+The eight in the site, all of them dead or wrong controls that no type checker
+can see, because `param(name: string, value: number)` accepts anything:
+
+- **The FM electric piano had no tine.** `modDecay`/`modSustain` do not exist
+  (`mDecay`/`mSustain`), so `mSustain` sat at its 0.5 default and the modulator
+  never died away. It also never set `ratio2: 14`, so the modulator ran at the
+  carrier frequency. It was a bright FM tone, not an electric piano.
+- **The acid bass had no sweep.** `filterSustain` does not exist (`fSustain`),
+  default 0.5, so the filter parked half open. The patch whose whole description
+  is "the filter is the instrument" was not doing it.
+- `step-motion`'s vibrato produced no vibrato: VA `detune` is a symmetric
+  spread, so modulating it moves the oscillators apart and leaves the pitch
+  centre still. That is beating. It uses a one oscillator `defEngine` now.
+- Exporting `20_Instruments` produced a different instrument: the rewrite regex
+  matched `decay` on all three drums, turning the hat's 0.055 s into 1.1 s. A
+  param can name its owning object now.
+- All three PIEZO sliders were dead in the browser and wrote nothing on export.
+  They drive the output stage they name now.
+- The POLY SYNTH cutoff slider was overwritten by its own LFO within 50 ms. It
+  sets the base the sweep runs from now.
+
+**The lesson to carry forward**: a wrong engine parameter name is silent at
+every layer. `fillDefaults` copies only spec names out of the caller's object,
+and `setParam` returns early on an unknown name. Neither warns. If you add a
+control, verify the name against the engine's ParamSpec list and then LISTEN to
+it move, because that is the only thing that catches this.
+
+### New harnesses from this session
+
+| command | what it proves |
+| --- | --- |
+| `npm run presets:check` (embedded) | the 50 C++ presets equal the TypeScript, 1054 values, exactly |
+| `npm run check:embedded` (workbench) | every C++ snippet on the site compiles against the real headers |
+| `node scripts/gen-llm-embedded.mjs` | the embedded LLM reference, from the headers, gaps reported not dropped |
+
+### Still not done
+
+- No board other than a Teensy 4.0 has run anything, and only one program on it.
+- Nothing has been compared to the browser by ear.
+- `packages/bellows-embedded` is still `private: true` and in neither registry.
+  Milestone 6 has not started.
+- The firmware currently flashed on the development Teensy predates the
+  AudioMemory ordering fix.
 
 ## Where things stand
 
@@ -28,7 +138,7 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
 - Embedded: 43 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All five examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library.
-- Parity against the TypeScript passes on 34 rows with the PRNG bit exact and the effect input bit exact, plus 428 exactly-compared value rows for the parts that make no sound.
+- Parity against the TypeScript passes on 40 rows with the PRNG bit exact and the effect input bit exact, plus 428 exactly-compared value rows for the parts that make no sound.
 - The embedded package went through a size pass whose findings are in `docs/HARDWARE.md` under "Making it smaller". Delay buffers are sized exactly rather than rounded to a power of two, which took 25 percent off RAM library-wide with bit-identical output; the oscillator gained per-shape entry points so the linker can drop the residual table a program never reads; and every transcendental now routes through `fm::`, which is what the docs had claimed for months and was not true, so `BELLOWS_FAST_MATH` went from saving nothing on any sketch with an oscillator to saving 23 to 75 percent. Read that section before optimising anything: it also records what was measured and deliberately NOT taken, and why attributing firmware bytes to a header-only library by symbol name does not work.
 
 **Two things that have not happened, and both are load bearing.**
@@ -44,7 +154,7 @@ State of the project as of 2026-08-04, after the audit pass and the embedded por
    point: no other board has run anything (a 3.2 and an LC have no FPU and emulate every
    float operation, and a Daisy Seed has been linked to an image but never run), no other
    program has been measured, and neither implementation has been compared to the other
-   by ear. The numerical comparison, 34 engine and effect rows plus 428 exactly-compared
+   by ear. The numerical comparison, 40 engine and effect rows plus 428 exactly-compared
    value rows, is what stands in for that and is not the same thing.
    
    These CPU figures are hand-recorded from a serial console. No harness prints them, so
@@ -270,10 +380,16 @@ Five things to know before touching it:
   LFO rewrites it every 50 ms, exactly as the firmware does per block, so the slider
   only sets where the sweep starts.
 
-`public/firmware/` holds twelve prebuilt binaries with a manifest recording the commit each was
-built from, because no CI gate can rebuild twelve firmware links cheaply and a stale binary
-should be visible rather than silent. Rebuild with
-`node apps/workbench/scripts/gen-firmware-binaries.mjs`.
+`public/firmware/` holds prebuilt binaries with a manifest recording the commit each was built
+from, because no CI gate can rebuild a firmware link cheaply and a stale binary should be visible
+rather than silent. Rebuild with `node apps/workbench/scripts/gen-firmware-binaries.mjs`, which
+finds every example on disk (any folder holding `<name>/<name>.ino`) and tries it on the 4.1, the
+4.0, the 3.6 and the 3.2. A board that refuses is recorded rather than dropped: `does not fit` is
+the linker overflowing RAM, `n/a` is the sketch declining the part with an `#error`, and each ok
+entry carries the RAM percentage the build reported. The sweep is hours, because PlatformIO
+empties its build directory whenever `src_dir` changes and every cell recompiles the core and the
+audio library, so `--only <example>` and `--boards <ids>` rebuild one cell and merge into the
+manifest that is already there.
 
 ## Layout
 
@@ -291,7 +407,7 @@ Run all of them from `packages/bellows-embedded` unless noted.
 | Command | What it proves | What it caught |
 | --- | --- | --- |
 | `npm test` (in `packages/bellows`) | the TypeScript, including the golden render and the oscillator band sweep | the regression fixture is the only whole-piece guard; `test/dsp-osc/blep-frequency.test.ts` is the only thing that can see alias rejection collapse above 2637 Hz |
-| `npm run parity` | 34 rows match the TypeScript numerically, four of them exactly | the `eq.h` three-band-mislabelled-as-port, the `StereoDelay` clamp bug, and three rows of its own that measured nothing until their input was fixed |
+| `npm run parity` | 40 rows match the TypeScript numerically, four of them exactly | the `eq.h` three-band-mislabelled-as-port, the `StereoDelay` clamp bug, and three rows of its own that measured nothing until their input was fixed |
 | `npm run tables` | euclid, scales, chords, notes, CA, arp, tempo map, MIDI compared EXACTLY | nothing yet, but it is the only thing that can see a wrong scale table |
 | `npm run fastmath` | every polynomial in `core/fastmath.h` against libm | `fm::Log2` wrong by 213 cents, inherited by every `Pow` |
 | `npm run memsafety` (and `memsafety:fastmath`) | ASan and UBSan over the buffer-owning classes at 0.5x to 4x their template rate, and at NaN, zero and negative rates | the `Pluck::NoteOn` overflow, then four undefined float-to-int casts reached through a NaN. Nothing else could: parity compares numbers at one rate, and `check-header.sh` instantiates nothing. Build it for x86-64 as well as arm64: the NaN cast saturates harmlessly on arm64 and only faults on x86-64 |

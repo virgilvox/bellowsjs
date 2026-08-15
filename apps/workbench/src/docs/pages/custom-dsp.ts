@@ -5,7 +5,7 @@ const page: DocPage = {
   title: 'Custom DSP',
   blurb: 'Write your own engines and effects and run them like built-ins.',
   prev: 'midi',
-  next: 'on-hardware',
+  next: null,
   body: `
 By the end of this page you can register an engine and an effect of your own, play them by id like built-ins, and prove them correct offline.
 

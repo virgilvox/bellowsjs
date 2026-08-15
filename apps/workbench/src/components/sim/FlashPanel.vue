@@ -38,14 +38,30 @@ const hexName = ref('');
  *
  * public/firmware/manifest.json is written by scripts/gen-firmware-binaries.mjs.
  * A committed binary goes stale the moment a DSP header changes, and no CI
- * gate can regenerate twelve firmware links at a sensible cost, so instead
+ * gate can rebuild a set of firmware links at a sensible cost, so instead
  * of pretending the panel prints the commit each one was built from. That
- * makes a stale binary visible rather than silent.
+ * makes a stale binary visible rather than silent. A restricted rebuild
+ * mixes commits inside one manifest, so the entry's own commit is what gets
+ * printed and the manifest's is only the fallback.
  */
+interface Entry {
+  example: string;
+  board: string;
+  /* 'ok' is the only one with a binary. The others record what the board
+   * said instead: 'does not fit' is the linker refusing on RAM, 'n/a' is
+   * the sketch declining the part on purpose, 'failed' is anything else. */
+  status?: string;
+  file: string;
+  bytes: number;
+  sha256: string;
+  ram?: string | null;
+  commit?: string;
+  builtAt?: string;
+}
 interface Manifest {
   commit: string;
   builtAt: string;
-  entries: Array<{ example: string; board: string; file: string; bytes: number; sha256: string }>;
+  entries: Entry[];
 }
 const manifest = ref<Manifest | null>(null);
 const chosen = ref('');
@@ -61,7 +77,9 @@ onMounted(async () => {
 
 /** Prebuilt binaries for the board that is selected, this example first. */
 const prebuilt = computed(() => {
-  const all = (manifest.value?.entries ?? []).filter((e) => e.board === props.board.id);
+  const all = (manifest.value?.entries ?? []).filter(
+    (e) => e.board === props.board.id && (e.status ?? 'ok') === 'ok' && e.file,
+  );
   const mine = all.filter((e) => e.example === props.firmware.folder);
   const rest = all.filter((e) => e.example !== props.firmware.folder);
   return [...mine, ...rest];
@@ -91,9 +109,12 @@ async function loadPrebuilt(): Promise<void> {
   }
 }
 const cmd = computed(() => loaderCommand(props.board.id, 'firmware.hex'));
+/* PlatformIO calls the Teensy 3.2 board teensy31, because the 3.1 and the
+ * 3.2 are the same part with a bigger regulator. Every other id matches. */
+const pioEnv = computed(() => `probe_${props.board.id === 'teensy32' ? 'teensy31' : props.board.id}`);
 const pioCmd = computed(
   () =>
-    `cd packages/bellows-embedded/examples\nPLATFORMIO_SRC_DIR=${props.firmware.folder} pio run -e probe_${props.board.id.replace('teensy', 'teensy')} -t upload`,
+    `cd packages/bellows-embedded/examples\nPLATFORMIO_SRC_DIR=${props.firmware.folder} pio run -e ${pioEnv.value} -t upload`,
 );
 
 async function pick(e: Event): Promise<void> {
@@ -163,7 +184,7 @@ async function doFlash(): Promise<void> {
         <div class="row">
           <select v-model="chosen">
             <option v-for="e in prebuilt" :key="e.file" :value="e.file">
-              {{ e.example }} // {{ (e.bytes / 1024).toFixed(0) }} KB
+              {{ e.example }} // {{ (e.bytes / 1024).toFixed(0) }} KB{{ e.ram ? ` // RAM ${e.ram}` : '' }}
             </option>
           </select>
           <button @click="loadPrebuilt">LOAD</button>
@@ -171,10 +192,11 @@ async function doFlash(): Promise<void> {
             DOWNLOAD
           </a>
         </div>
-        <p class="hint" v-if="manifest">
-          Built from commit <b>{{ manifest.commit }}</b> on {{ manifest.builtAt }}. If the
-          repository has moved since, these are the older program and the source above is the
-          newer one. Rebuild with the command below to be sure.
+        <p class="hint" v-if="chosenEntry || manifest">
+          Built from commit <b>{{ chosenEntry?.commit ?? manifest?.commit }}</b> on
+          {{ chosenEntry?.builtAt ?? manifest?.builtAt }}. If the repository has moved since,
+          this is the older program and the source above is the newer one. Rebuild with the
+          command below to be sure.
         </p>
       </div>
 
@@ -197,7 +219,7 @@ async function doFlash(): Promise<void> {
       <div class="row">
         <select v-model="chosen">
           <option v-for="e in prebuilt" :key="e.file" :value="e.file">
-            {{ e.example }} // {{ (e.bytes / 1024).toFixed(0) }} KB
+            {{ e.example }} // {{ (e.bytes / 1024).toFixed(0) }} KB{{ e.ram ? ` // RAM ${e.ram}` : '' }}
           </option>
         </select>
         <a v-if="chosenEntry" class="dl" :href="'/firmware/' + chosenEntry.file" download>DOWNLOAD</a>

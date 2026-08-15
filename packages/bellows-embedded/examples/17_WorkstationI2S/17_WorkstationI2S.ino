@@ -121,13 +121,22 @@ static AudioConnection patchR(node, 1, out, 1);
 void setup() {
   Serial.begin(115200);
   /* Five parts and a send bus is more work per callback than one voice. */
-  AudioMemory(24);
-
   const float sr = bellows::TeensySampleRate();
   piece.Init(sr, 96);
 
   const uint32_t seed = kPinnedSeed != 0u ? kPinnedSeed : BootSeed();
   piece.Compose(seed);
+
+  /* AudioMemory LAST, and this ordering is load bearing.
+   *
+   * BellowsAudioStream::update() returns early only while allocate() is
+   * null, which is to say only until AudioMemory() runs. After that the
+   * audio interrupt renders whatever it is pointed at, so anything
+   * initialised below this line can be rendered before it is ready. A
+   * delay line that has not been given its buffer reads through a null
+   * pointer, which on an IMXRT1062 is executable memory rather than a
+   * trap page. */
+  AudioMemory(24);
 
   if (!piece.Trained()) Serial.println("workstation: markov table full, melody is truncated");
   Serial.println("07_Workstation -> I2S amp, summed to mono");

@@ -92,10 +92,14 @@ static AudioConnection patchR(node, 1, out, 1);
 
 void setup() {
   Serial.begin(115200);
-  AudioMemory(12);
   codec.enable();
   codec.volume(0.5f);
   ladder.Init(bellows::TeensySampleRate());
+
+  /* AudioMemory LAST: it is what opens the audio interrupt, and anything
+   * initialised after it can be rendered before it is ready. See the note
+   * in platform/teensy.h. */
+  AudioMemory(12);
 }
 
 void loop() {

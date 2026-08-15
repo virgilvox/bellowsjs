@@ -25,7 +25,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, existsSync } from 'node:fs';
+import { mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -89,12 +89,121 @@ const GATES = {
   // accumulator to a uint32 counter took it to 1.4e-5, so this gate is set
   // from the new measurement rather than the old one.
   formant: { rel: 1.5e-4, abs: 1.5e-4, note: 'five bandpasses in parallel' },
+  // measured 3.63e-5 / 3.98e-5, and the gate is ten times each. Almost all
+  // of that is pitch, not the bank: both sides carry f0 as log2 and take it
+  // back with a power of two, and doing that round trip in float instead of
+  // double detunes the C++ oscillator by about 0.0007 cents, which opens
+  // into 2e-4 radians of phase at the fundamental over the render. The
+  // uint32 phase counter is what keeps it there. With a float accumulator
+  // instead, everything else equal, this row reads 6.42e-4 / 1.19e-3.
+  //
+  // What the gate catches, all at 0.1 percent: the brightness tilt exponent
+  // 2.5 -> 2.5025 gives 1.06e-3 / 3.46e-4, and the even/odd gain 2.0 ->
+  // 2.002 gives 4.18e-4 / 1.35e-4. Both trip it. Two constants it does not
+  // catch, and the reason is the same for both: they act on a small part of
+  // the output. The 3500 Hz rolloff corner -> 3503.5 gives 1.99e-4 / 8.86e-5
+  // because 1/(1 + rel^4) is flat where most of the energy is, and the noise
+  // bandpass Q 1.5 -> 1.5015 gives 4.76e-5 / 5.04e-5 because noise_mix
+  // defaults to 0.1, so the whole noise path is a tenth of the signal.
+  // Catching those two needs a second row on non-default params, the way the
+  // delay row is set up, not a tighter gate on this one.
+  harmonic: { rel: 3.6e-4, abs: 4e-4, note: '64 partial sine bank plus filtered noise' },
+  // measured 1.3e-4 / 5.7e-5 over 32 partials, so the gates are ten times
+  // each of those. What the row measures is a frequency offset, not a
+  // rounding floor: cut the render to 4096 frames and it reads 3.5e-5, a
+  // factor of 3.7 for a factor of 4 in length, so the error grows with the
+  // note. Each partial's increment is hz / sr rounded once to float, about
+  // 6e-8 relative, and at 16384 frames the 32nd partial has run 2614 cycles,
+  // so 6e-8 of that is 1.6e-4 cycles of phase. Keeping the decay state in
+  // double instead of float moved the row not at all (1.30e-4 either way),
+  // which is how the repeated multiply was ruled out.
+  additive: { rel: 1.3e-3, abs: 5.7e-4, note: '32 sine partials, per partial decay' },
+  // The same engine on the params the empty record leaves at zero, so the
+  // inharmonicity stretch, the cents conversion, the frame morph and the
+  // Nyquist cut are measured rather than assumed. measured 1.1e-4 / 6.2e-5,
+  // gates at ten times each. What it catches, measured: inharm 1/64 ->
+  // 1.001/64 takes it to 1.4e-1, 1276 times the baseline, because the
+  // stretch multiplies every partial's frequency and the phase error grows
+  // through the note. What it does not catch is a 0.1 percent change of
+  // morph itself, which reads 5.0e-4, 4.4 times the baseline and inside
+  // this gate: a lerp weight moves the levels by its own 0.1 percent and
+  // nothing amplifies it. A morph error large enough to be a transcription
+  // fault rather than a rounding slip (1 percent) does trip it.
+  additive_morph: { rel: 1.1e-3, abs: 6.2e-4, note: 'stretch, cents, morph, Nyquist cut' },
   // Rel RMS is 1.7e-3. The abs gate is looser because the 0.4 percent of
   // samples that exceed it sit on the waveform's steep edges, spaced twice
   // per period at 220 Hz, where a sub-sample timing difference reads as a
   // large amplitude difference. Error grows 7e-5 -> 1.9e-3 across the note,
   // which is a recursive loop accumulating in f32, not a defect.
   tube: { rel: 5e-3, abs: 2e-2, note: 'recursive bore, error rides the edges' },
+  // The string half of waveguide.ts, on the params in VOICE_PARAMS rather
+  // than the defaults: on an empty record bow, body, vibDepth, dynamics and
+  // polDetune are all zero or absent and the row would have compared a plain
+  // plucked loop while calling the bowed engine ported.
+  //
+  // measured 1.98e-4 / 2.56e-4, so the gates are ten times each. What the
+  // row measures is a recursive loop accumulating in f32, the same thing the
+  // pluck and tube rows measure: cut the render and it reads 4.75e-5 at 2048
+  // frames, 8.85e-5 at 4096, 1.21e-4 at 8192, so 8 times the note for 4.2
+  // times the error. It accumulates sublinearly because the friction junction
+  // servos the string back to the bow velocity every slip cycle, which is a
+  // correction the free bore in the tube row has nothing equivalent to.
+  //
+  // It is NOT the body bank: rerun with body_z1_ and body_z2_ in double
+  // instead of float and the row reads 1.98e-4 / 2.56e-4, unchanged to three
+  // figures, which is how the 24 biquads were ruled out.
+  //
+  // What the row catches, measured, as the factor by which a 0.1 percent
+  // mutation of one constant moves rel rms above the 1.98e-4 baseline:
+  // dispersion coefficient 114x, bow junction gain 37x, comb depth 23x, bow
+  // hair cutoff 15x, forest mode 0 frequency 14x, pitch settle tau 14x,
+  // vibrato asymmetry 6x. The first five are the parts of this engine that
+  // had no coverage of any kind before this row existed.
+  //
+  // What it does NOT catch, and this is the honest half: body dry bleed
+  // 2.2x, junction noise force gain 2.0x, jitter amount 1.5x, the STK
+  // friction offset 1.1x, polarization coupling 1.07x. All five are small
+  // shares of a sum (the noise paths are a couple of percent of the bow
+  // velocity, the second polarization is 6 dB down and only 0.12 of the
+  // force couples into it), so 0.1 percent of them lands under this row's
+  // own float noise and no choice of params fixes that. Catching them needs
+  // a test that reads the injected force rather than the output.
+  waveguide: { rel: 2e-3, abs: 2.6e-3, note: 'bowed string, friction loop plus 24 body modes' },
+  // The wavetable, twice: the same voice and params at 220 Hz and at 55 Hz,
+  // which is what picks the mip level. measured 2.6e-5 / 5.0e-5 and
+  // 2.0e-5 / 4.8e-5, and each gate is ten times its own measurement.
+  //
+  // Both rows compare against a reference table built at the length the
+  // port ships (see wavetableSet()), not at the TypeScript's 2048 points,
+  // because 2048 points is 320 KB of flash. What they gate is the engine.
+  //
+  // What they measure is a frequency offset rather than a rounding floor,
+  // and it is the residual the fixed point phase leaves: the increment is
+  // rounded once to within half of 2^-32 of a cycle, which is a fixed
+  // detune, so the phase error grows with the note. Cut the render to 1024
+  // frames and the first row reads 1.1e-5, run it to 65536 and it reads
+  // 1.5e-4, and the largest sample difference always lands in the last few
+  // hundred samples. Snapping the JS increments onto the same 2^-32 grid
+  // takes the 65536 frame case to 3.0e-6 and stops it growing with length,
+  // which is what pins the diagnosis: everything else in the voice agrees
+  // to about 3e-6.
+  //
+  // What the gates catch, all at 0.1 percent: the frame crossfade weight,
+  // 1.33e-3 and 1.27e-3, fifty times each baseline; and the resonance to Q
+  // map, 3.09e-4 and 2.36e-4, which is the least covered constant here at
+  // twelve times. It is covered at all only because the filter is set where
+  // it does some work: at the motion-pad preset's own 3800 Hz and
+  // resonance 0.15 the same mutation read 1.58e-4 against a 3.15e-5
+  // baseline, five times, and would have sailed through.
+  //
+  // What they do NOT catch is the interpolation fraction. 0.1 percent of it
+  // is a read offset of 0.001 table samples, the same size as the increment
+  // drift already in the row, and it reads 1.99e-5, under the baseline.
+  // Five percent shows (9.18e-4 and 2.34e-3), and so would any wrong shift,
+  // because those are not small numbers. A tighter gate cannot fix that
+  // one: the row would have to be shorter than the drift it is measuring.
+  wavetable: { rel: 2.6e-4, abs: 5e-4, note: 'mipmap read, frame morph, level 2' },
+  wavetable_low: { rel: 2e-4, abs: 4.8e-4, note: 'level 0, worst interpolation' },
 
   // Effects, driven by bit-exact white noise so the only difference the
   // diff can see is the effect's own arithmetic. These four rows are what
@@ -406,11 +515,21 @@ async function renderTs(voice, frames, freq, vel) {
     modal: [join(src, 'engines/modal.ts'), 'modalEngine'],
     westcoast: [join(src, 'engines/westcoast.ts'), 'westcoastEngine'],
     formant: [join(src, 'engines/formant.ts'), 'formantEngine'],
+    harmonic: [join(src, 'engines/harmonic.ts'), 'harmonicEngine'],
+    additive: [join(src, 'engines/additive.ts'), 'additiveEngine'],
+    additive_morph: [join(src, 'engines/additive.ts'), 'additiveEngine'],
     tube: [join(src, 'engines/waveguide.ts'), 'tubeEngine'],
+    waveguide: [join(src, 'engines/waveguide.ts'), 'stringEngine'],
+    wavetable: [join(src, 'engines/wavetable.ts'), 'makeWavetableEngine'],
+    wavetable_low: [join(src, 'engines/wavetable.ts'), 'makeWavetableEngine'],
   }[voice];
   if (!mod) throw new Error('unknown voice ' + voice);
   const [path, name] = mod;
-  const def = (await import(path))[name];
+  const ex = (await import(path))[name];
+  /* Most rows name an EngineDef. The wavetable names a factory instead,
+   * because its engine is a wrapper around a table that the port ships at a
+   * different length: see wavetableSet(). */
+  const def = typeof ex === 'function' ? ex(await wavetableSet()) : ex;
 
   /* Match the C++ side: one raw mulberry32 stream from the same seed,
    * wrapped in the NamedRng shape the engines expect. */
@@ -424,7 +543,7 @@ async function renderTs(voice, frames, freq, vel) {
    * appeared to fail, all three for the same reason: a component that
    * draws at construction stole a sample from its sibling's stream. Every
    * one of those verdicts was wrong. */
-  const v = def.createVoice(SR, {}, realRng('parity'));
+  const v = def.createVoice(SR, VOICE_PARAMS[voice] ?? {}, realRng('parity'));
   const l = new Float32Array(frames);
   const r = new Float32Array(frames);
   v.noteOn(freq, vel);
@@ -432,6 +551,35 @@ async function renderTs(voice, frames, freq, vel) {
     v.process(l, r, i, Math.min(i + 128, frames));
   }
   return l;
+}
+
+/*
+ * The morph table the wavetable rows compare against.
+ *
+ * The TypeScript's default 'wavetable' engine builds this table at 2048
+ * points, which is 327680 bytes of mipmap. The port cannot put that in the
+ * flash of a 256 KB part, so tools/gen-tables.mjs emits it at a length the
+ * committed header records (512 by default), and the reference here is
+ * built at the same length by reading that number back. What these rows
+ * gate is therefore the ENGINE: the oscillator's phase, its interpolation,
+ * its mip selection, the scan LFO, the envelope, the filter and the pan.
+ *
+ * The table DATA is not left ungated by that, it is gated somewhere better:
+ * the generator builds it by calling this library's own
+ * WavetableSet.fromFrames, and refuses to emit anything if its copy of the
+ * four waveform formulas stops reproducing the set the shipped engine
+ * plays. Comparing float literals here would only re-measure that.
+ *
+ * buildMorphFrames is imported from the generator rather than copied, so
+ * there is one copy of those formulas in this repository and not two.
+ */
+async function wavetableSet() {
+  const { WavetableSet } = await import(join(LIB, 'src', 'dsp/wavetable.ts'));
+  const { buildMorphFrames } = await import(join(PKG, 'tools', 'gen-tables.mjs'));
+  const header = readFileSync(join(PKG, 'src', 'bellows/dsp/wavetable_tables.h'), 'utf8');
+  const m = /kWtMorphLength\s*=\s*(\d+)/.exec(header);
+  if (!m) throw new Error('no kWtMorphLength in src/bellows/dsp/wavetable_tables.h');
+  return WavetableSet.fromFrames(buildMorphFrames(Number(m[1])), SR);
 }
 
 function compare(a, b) {
@@ -451,6 +599,137 @@ function compare(a, b) {
   return { rms, refRms, rel: refRms > 0 ? rms / refRms : rms, maxAbs, n };
 }
 
+/*
+ * Construction params per voice, for the rows where the engine's defaults
+ * would leave most of it unmeasured. Absent means an empty record, which is
+ * what every row before this one used and what keeps them comparable to
+ * their own history.
+ *
+ * The string is the case that forced this. Its bowed apparatus is the bulk
+ * of the engine and every part of it defaults to neutral, so on an empty
+ * record the row would have compared a plucked Karplus-Strong loop and
+ * called the friction table, the bow position comb, the 24 body modes, the
+ * attack jitter, the pitch settle and the second polarization ported. Each
+ * value below turns on a branch, and two are chosen rather than merely
+ * nonzero: bodySize 0.25 lands between the viola and cello anchors so the
+ * morph actually interpolates instead of picking a stored row, and vibOnset
+ * 0.0625 puts the end of the raised cosine ramp at 0.3625 s, inside the
+ * 0.3714 s the render covers, so the ramp is measured and not just started.
+ *
+ * polDetune has to be PRESENT, not merely nonzero: the JS allocates the
+ * second delay line only when the key is in the record at construction.
+ *
+ * These are mirrored by hand in render.cpp, so the row also proves the two
+ * sides still agree about what each param means.
+ */
+const VOICE_PARAMS = {
+  /*
+   * The additive engine's second row, and the reason it exists is the same
+   * one: on an empty record morph, inharm and every detune are 0, so the
+   * plain 'additive' row compares an exactly harmonic sawtooth and would
+   * have called the inharmonicity stretch, the cents conversion, the frame
+   * morph and the Nyquist cut ported without measuring any of them.
+   *
+   * inharm 1/64 is chosen for where it puts the cut, not for the timbre.
+   * Partial 26 lands at 19450 Hz and partial 27 at 20907, against a limit
+   * of 0.45 * 44100 = 19845, so the scan stops at 26 and both sides agree
+   * about it with 400 Hz of margin: a float-against-double difference in
+   * that frequency is under 1e-3 Hz, so the count cannot flip and turn the
+   * row into a comparison of two different spectra.
+   *
+   * Every value is dyadic except the three detunes, which are whole cents,
+   * so nothing here is a different number in float and in double before
+   * the DSP touches it. rolloff 0.875 keeps the top partial's time
+   * constant at 0.1 s, long enough that partial 26 is still ringing at the
+   * end of the render rather than having decayed out of the measurement.
+   */
+  additive_morph: {
+    morph: 0.5,
+    inharm: 0.015625,
+    decay: 3,
+    rolloff: 0.875,
+    attack: 0.00390625,
+    release: 0.25,
+    gain: 0.75,
+    detune2: 7,
+    detune3: -5,
+    detune5: 12,
+  },
+  waveguide: {
+    damp: 0.25,
+    sustain: 0.75,
+    dispersion: 0.125,
+    bow: 0.875,
+    bowPressure: 0.5,
+    bowSpeed: 0.625,
+    level: 0.75,
+    body: 0.75,
+    bodySize: 0.25,
+    bowNoise: 0.375,
+    attackBite: 0.5,
+    vibRate: 6.0,
+    vibDepth: 16,
+    vibOnset: 0.0625,
+    bowPos: 0.125,
+    dynamics: 0.5,
+    polDetune: 2.0,
+  },
+  /*
+   * The wavetable, for the same reason again: on an empty record position,
+   * scanDepth and envToPosition are all 0 and the filter is off, so the
+   * voice would sit on frame 0 of the table and the row would compare a
+   * sine through an envelope while calling the frame crossfade, the scan
+   * LFO, the position clamp and the lowpass ported.
+   *
+   * position runs 0.25 + 0.5 * lfo + 0.25 * env, which spans -0.25 to 1.0:
+   * it clamps at both ends and crosses all four frames, so both sides of
+   * the `ff > 0` branch are taken. scanRate is 3 Hz, 1.11 cycles inside the
+   * render, where the motion-pad preset's own 0.2 Hz would have covered 7
+   * percent of one. pan is off centre because the harness compares the left
+   * channel only, and a centred pan would have left the pan law reading
+   * sqrt(1/2) on both sides whatever it computed. Every value is exactly
+   * representable in binary floating point.
+   *
+   * The filter is set where it does some work, which is the difference
+   * between measuring the resonance-to-Q map and not: a lowpass at 1024 Hz
+   * with Q 7.625 shapes the note, where the preset's 3800 Hz and Q 1.925
+   * barely touch it. Measured, a 0.1 percent mutation of that map moves
+   * this row twelve times its baseline and moved the preset-shaped row
+   * five, which is inside any gate set from a measurement. It also lowers
+   * the baseline, because the drift this row does measure rides the steep
+   * parts of the waveform and the lowpass takes those off.
+   */
+  wavetable: {
+    position: 0.25,
+    scanRate: 3,
+    scanDepth: 0.5,
+    envToPosition: 0.25,
+    attack: 0.03125,
+    decay: 0.125,
+    sustain: 0.75,
+    release: 0.25,
+    filter: 1,
+    cutoff: 1024,
+    resonance: 0.75,
+    pan: 0.375,
+  },
+};
+/* The low row is the same engine and the same params at another pitch. */
+VOICE_PARAMS.wavetable_low = VOICE_PARAMS.wavetable;
+
+/*
+ * Pitch per row, where 220 Hz would not reach the thing being measured.
+ *
+ * The wavetable oscillator picks its mip level from the note, so one pitch
+ * measures one level. At 220 Hz it reads level 2 of 8 (63 harmonics kept);
+ * at 55 Hz it reads level 0, which is the level held at two points per
+ * period of its top harmonic and therefore where linear interpolation is
+ * worst, and it is the part of the flash blob no other row touches.
+ */
+const FREQ_BY_VOICE = {
+  wavetable_low: 55,
+};
+
 /* The label the C++ Rng must sit on to match each JS engine's stream.
  * Empty means the engine uses its parent stream directly. */
 const RNG_LABEL = {
@@ -459,7 +738,12 @@ const RNG_LABEL = {
   pluck: 'parity',
   modal: 'parity',
   formant: 'parity',
+  harmonic: 'parity',
   tube: 'parity',
+  /* The string draws from the voice stream and forks 'note' off it, so the
+   * C++ side sits on 'parity' and seeds its second Rng with 'parity::note'.
+   * See render.cpp. */
+  waveguide: 'parity',
 };
 
 const check = process.argv.includes('--check');
@@ -476,8 +760,9 @@ for (const [voice, gate] of Object.entries(GATES)) {
   let row;
   try {
     const frames = FRAMES_BY_VOICE[voice] ?? FRAMES;
-    const cpp = renderCpp(bin, voice, frames, 220, 0.9);
-    const ts = await renderTs(voice, frames, 220, 0.9);
+    const freq = FREQ_BY_VOICE[voice] ?? 220;
+    const cpp = renderCpp(bin, voice, frames, freq, 0.9);
+    const ts = await renderTs(voice, frames, freq, 0.9);
     const c = compare(cpp, ts);
     const pass = c.rel <= gate.rel + 1e-12 && c.maxAbs <= gate.abs + 1e-12;
     if (!pass) failed++;

@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "check:examples": "node scripts/check-examples.mjs",
     "gen:llm": "node scripts/gen-llm-ref.mjs",
-    "gen:sim": "node scripts/gen-firmware-sources.mjs"
+    "gen:sim": "node scripts/gen-firmware-sources.mjs",
+    "check:embedded": "node scripts/check-embedded-examples.mjs",
+    "gen:llm-embedded": "node scripts/gen-llm-embedded.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.7.0",

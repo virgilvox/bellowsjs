@@ -41,14 +41,17 @@
  * instead of waiting for a fault.
  *
  * WHAT IS DRIVEN, so the opening line can be checked rather than believed:
- * DelayLineExt, Pluck, Tube, StereoDelay, Chorus, Flanger, Compressor,
+ * DelayLineExt, Pluck, Tube, Waveguide, StereoDelay, Chorus, Flanger, Compressor,
  * Limiter (plain and oversampled), Gate, Plate, Saturator (4x and fused 1x),
  * Eq6 and Eq3. The three at the end were added because the list used to stop
  * at Gate while claiming to cover the buffer owners, and Plate is the
  * closest analogue to the Pluck fault: its store_ is carved from
  * TotalSamples(kSampleRate) while every index inside comes from the runtime
- * rate. Still not driven: the drum, FM, modal, formant, VA and westcoast
- * engines, none of which own a rate-sized buffer.
+ * rate. Wavetable is the one entry that owns no buffer at all: it is here
+ * because it indexes a 64 KB constexpr table from two floats (the position
+ * param and the phase counter), which is the same fault shape by another
+ * route. Still not driven: the drum, FM, modal, formant, VA and westcoast
+ * engines, none of which own a rate-sized buffer or index a table.
  *
  * IT ALSO CARRIES THE CHECKS THAT NEED A HOST RUN AND HAVE NOWHERE ELSE TO
  * GO. The parity harness compares numbers against the TypeScript, so it can
@@ -73,6 +76,8 @@
 #include "bellows/engines/drums.h"
 #include "bellows/engines/pluck.h"
 #include "bellows/engines/tube.h"
+#include "bellows/engines/wavetable.h"
+#include "bellows/engines/waveguide.h"
 #include "bellows/fx/delay.h"
 #include "bellows/fx/dynamics.h"
 #include "bellows/fx/eq.h"
@@ -919,6 +924,51 @@ void RunRate(float rate) {
     delete v;
   }
   {
+    /*
+     * Three delay lines, and every read position into them is computed: the
+     * loop read is a period minus a phase delay, plus a vibrato offset and a
+     * pitch settle offset that both scale with it, and the comb read is
+     * 2 * bow_pos periods. All of them are floats derived from the runtime
+     * rate while the buffers come from the template, which is the same
+     * mismatch that made Pluck write past its excitation array, so the sweep
+     * above and below 48000 is the point of driving it here.
+     *
+     * Every param that chooses a read position or an index is on: the bow
+     * (which is what makes the loop nonlinear), vibrato, the pitch settle,
+     * the second polarization, and the body bank, whose 24 biquads are the
+     * only place a NaN could enter the output without passing through a
+     * delay line first. A second Rng stands in for the JS rng.fork('note').
+     */
+    using W = bellows::Waveguide<20, 48000>;
+    auto* v = new W();
+    bellows::Rng note_rng;
+    note_rng.Init("memsafety::note");
+    W::Params p;
+    p.bow = 0.9f;
+    p.dispersion = 0.4f;
+    p.body = 0.8f;
+    p.body_size = 0.5f;
+    p.bow_noise = 0.5f;
+    p.attack_bite = 0.6f;
+    p.vib_depth = 40.0f;
+    p.vib_onset = 0.0f;
+    p.bow_pos = 0.2f;
+    p.dynamics = 0.7f;
+    p.pol_detune = 3.0f;
+    v->Init(rate, &rng, &note_rng, p);
+    DriveVoice(v, "Waveguide", rate);
+    /* Legato onto pitches the loop cannot hold, in both directions, since
+     * Glide clamps against the same MinFreq() bound NoteOn does and then
+     * feeds the result to the same read position arithmetic. */
+    v->NoteOn(220.0f, 1.0f);
+    static const float kTargets[] = {1.0f, 0.0f, -220.0f, NAN, INFINITY, 1.0e9f, 440.0f};
+    for (int i = 0; i < 7; ++i) {
+      v->Glide(kTargets[i]);
+      v->Process(g_l, g_r, 0, kBlock);
+    }
+    delete v;
+  }
+  {
     using D = bellows::StereoDelay<500, 48000>;
     auto* fx = new D();
     fx->Init(rate);
@@ -1119,6 +1169,57 @@ void RunRate(float rate) {
     hi.high_gain = 24.0f;
     DriveFx(fx, "Eq3", rate, lo, hi);
     delete fx;
+  }
+  {
+    /*
+     * The wavetable owns no rate-sized buffer, so it is not here for the
+     * reason the pluck is. It is here because it is the one voice that
+     * INDEXES A TABLE FROM A FLOAT twice over: the frame index is the
+     * position param scaled by the frame count, and the sample index is the
+     * top bits of the phase counter. That is the shape of the fault the NaN
+     * paragraph at the top of this file describes, and the table it reads
+     * is 64 KB of .rodata with whatever the linker put next to it after.
+     *
+     * The positions below are the ones a modulated scan actually reaches.
+     * position is clamped into 0..1 before it is scaled, so the interesting
+     * cases are the two ends and the values that miss the clamp: -1 and 2
+     * land on the ends, and NaN takes the floor rather than walking through
+     * (bellows::Clamp is written negated for exactly that). At the top end
+     * the frame index is frames - 1 and the crossfade weight is zero, which
+     * is what keeps the SECOND frame read, at f0 + 1, inside the blob.
+     */
+    auto* v = new bellows::Wavetable();
+    static const float kPositions[] = {-1.0f, 0.0f, 1.0f, 2.0f, NAN};
+    for (unsigned pi = 0; pi < sizeof(kPositions) / sizeof(kPositions[0]); ++pi) {
+      bellows::Wavetable::Params p;
+      p.position = kPositions[pi];
+      p.scan_depth = 1.0f;
+      p.env_to_position = 1.0f;
+      p.scan_rate = 20.0f;
+      p.filter = 1.0f;
+      v->Init(rate, p);
+      for (int f = 0; f < kNumFreqs; ++f) {
+        v->NoteOn(kFreqs[f], 0.8f);
+        for (int b = 0; b < 3; ++b) {
+          FillInput(b);
+          v->Process(g_l, g_r, 0, kBlock);
+        }
+        v->NoteOff();
+        v->Process(g_l, g_r, 5, 61);
+        for (int b = 0; b < kBlock; ++b) {
+          if (!isfinite(g_l[b]) || !isfinite(g_r[b])) {
+            printf("  FAIL Wavetable emitted a non-finite sample at rate %g, freq %g, pos %g\n",
+                   static_cast<double>(rate), static_cast<double>(kFreqs[f]),
+                   static_cast<double>(kPositions[pi]));
+            g_failures++;
+            b = kBlock;
+          }
+        }
+      }
+    }
+    printf("  ok %-14s rate=%-8.0f positions=%d\n", "Wavetable", rate,
+           static_cast<int>(sizeof(kPositions) / sizeof(kPositions[0])));
+    delete v;
   }
 }
 

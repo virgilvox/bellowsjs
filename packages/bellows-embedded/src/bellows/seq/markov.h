@@ -99,8 +99,14 @@ inline constexpr bool MarkovKeyFitsU32(int alphabet, int max_order) {
 template <int kAlphabet = 8, int kMaxContexts = 32, int kMaxOrder = 2>
 class Markov {
  public:
-  static_assert(kAlphabet >= 1 && kAlphabet <= 256,
-                "Markov stores states as bytes, so the alphabet must fit in 256");
+  /* Two, not one. The packed key is key = 1 then key * kAlphabet + symbol,
+   * so the leading 1 only survives as a length marker while kAlphabet is at
+   * least 2. At 1 every context of every order packs to 1 and they all
+   * alias onto one entry, which is silent: the chain still plays, and
+   * Contexts() reports a table that is not the one the JS built. */
+  static_assert(kAlphabet >= 2 && kAlphabet <= 256,
+                "Markov needs an alphabet of at least 2: at 1 the packed key "
+                "cannot carry the context length");
   static_assert(kMaxContexts >= 1, "Markov needs room for at least one context");
   static_assert(kMaxOrder >= 1, "Markov: order must be at least 1, as in the JS");
   static_assert(MarkovKeyFitsU32(kAlphabet, kMaxOrder),

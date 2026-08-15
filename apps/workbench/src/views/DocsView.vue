@@ -9,7 +9,16 @@
 
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
 import { Marked } from 'marked';
-import { DOC_GROUPS, DOC_PAGES, bySlug, type DocPage } from '../docs';
+import {
+  DOC_GROUPS,
+  DOC_PAGES,
+  bySlug,
+  groupsFor,
+  pagesFor,
+  treeOf,
+  type DocPage,
+  type DocTree,
+} from '../docs';
 
 const BASE_TITLE = document.title;
 
@@ -51,6 +60,25 @@ function slugFromPath(): string {
 
 const slug = ref(slugFromPath());
 const page = computed<DocPage | null>(() => bySlug.get(slug.value) ?? null);
+
+/*
+ * Which tree is showing.
+ *
+ * Derived from the slug when there is one, so a deep link or a refresh lands
+ * in the right tree, and held as state when there is not, so the index page
+ * remembers which set you were reading.
+ */
+const chosenTree = ref<DocTree>(treeOf(slugFromPath()));
+const tree = computed<DocTree>(() => (page.value ? treeOf(page.value.slug) : chosenTree.value));
+const groups = computed(() => groupsFor(tree.value));
+
+function setTree(next: DocTree): void {
+  if (next === tree.value) return;
+  chosenTree.value = next;
+  /* Land on the first page of the tree rather than an index that would
+   * immediately switch back. */
+  go(pagesFor(next)[0].slug);
+}
 const unknown = computed(() => slug.value !== '' && !page.value);
 
 const html = computed(() => (page.value ? (md.parse(page.value.body) as string) : ''));
@@ -164,7 +192,11 @@ onDeactivated(() => {
     <details class="side-mobile">
       <summary>DOCS INDEX</summary>
       <nav>
-        <div v-for="g in DOC_GROUPS" :key="g.label" class="group">
+        <div class="trees">
+          <button :class="{ lit: tree === 'browser' }" @click="setTree('browser')">BROWSER</button>
+          <button :class="{ lit: tree === 'embedded' }" @click="setTree('embedded')">EMBEDDED</button>
+        </div>
+        <div v-for="g in groups" :key="g.label" class="group">
           <div class="group-label">{{ g.label }}</div>
           <a
             v-for="p in g.pages"
@@ -179,8 +211,12 @@ onDeactivated(() => {
 
     <aside class="side">
       <a href="/docs" class="side-home" :class="{ current: slug === '' }" @click.prevent="go('')">DOCUMENTATION</a>
+      <div class="trees">
+        <button :class="{ lit: tree === 'browser' }" @click="setTree('browser')">BROWSER</button>
+        <button :class="{ lit: tree === 'embedded' }" @click="setTree('embedded')">EMBEDDED</button>
+      </div>
       <nav>
-        <div v-for="g in DOC_GROUPS" :key="g.label" class="group">
+        <div v-for="g in groups" :key="g.label" class="group">
           <div class="group-label">{{ g.label }}</div>
           <a
             v-for="p in g.pages"
@@ -209,7 +245,7 @@ onDeactivated(() => {
           Every code snippet is checked against the current release; the machine-readable
           companion at <a href="/llm.txt">/llm.txt</a> lists every signature exactly.
         </p>
-        <section v-for="g in DOC_GROUPS" :key="g.label" class="home-group">
+        <section v-for="g in groups" :key="g.label" class="home-group">
           <h2>{{ g.label }}</h2>
           <ul>
             <li v-for="p in g.pages" :key="p.slug">
@@ -263,6 +299,18 @@ onDeactivated(() => {
   padding: 10px 0 12px;
 }
 
+.trees {
+  display: flex;
+  gap: 6px;
+  padding: 0 12px 10px;
+}
+.trees button {
+  flex: 1;
+  font-family: var(--disp);
+  font-weight: 600;
+  font-size: 10px;
+  padding: 7px 4px;
+}
 .side-home {
   display: block;
   font-family: var(--disp);

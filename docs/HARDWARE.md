@@ -677,7 +677,7 @@ is what `bellows/bank.h` is.
 
 `test/parity/parity.mjs` renders the same note from both implementations and diffs them. It runs
 in CI. The gates sit at roughly ten times the drift actually measured, so they catch a regression
-rather than rubber stamping anything that runs. The harness prints 34 rows in all; the block
+rather than rubber stamping anything that runs. The harness prints 40 rows in all; the block
 below is the engine and effect subset, without the four bit-exact `fxin` input rows or the
 per-curve and per-shape variants.
 

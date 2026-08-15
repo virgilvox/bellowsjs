@@ -192,8 +192,9 @@ function stepVoice(
   stepSec: number,
   hold: boolean,
   extra?: (inst: Instrument) => { tick?: () => void; dispose?: () => void },
+  engineId = 'va',
 ): RunningVoice {
-  const inst = b.voice('va', params);
+  const inst = b.voice(engineId, params);
   const side = extra?.(inst) ?? {};
   let sounding = -1;
   return {
@@ -213,9 +214,15 @@ function stepVoice(
         freq = v;
         return;
       }
+      if (k === 'filter_decay') {
+        /* The C++ names it filter_decay and the engine names it fDecay.
+         * This used to fall into the swallow list below and reach nothing. */
+        inst.param('fDecay', v);
+        return;
+      }
       if (k === 'gate' || k === 'sweep_octaves' || k === 'sweep_rate' ||
           k === 'vibrato_cents' || k === 'vibrato_rate' || k === 'cutoff_floor' ||
-          k === 'filter_decay' || k === 'level') {
+          k === 'level') {
         return; /* handled by the closures below, or not an engine param */
       }
       inst.param(k, v);
@@ -335,11 +342,18 @@ export function buildVoice(b: Bellows, fw: Firmware, params: FirmwareParam[]): R
        * same shape at a coarser grain.
        */
       let phase = 0;
+      /*
+       * The sweep writes cutoff every 50 ms, so a slider that also writes it is
+       * overwritten before you hear it. The slider sets the BASE the sweep runs
+       * from instead, which is the only reading of that control that can be
+       * audible while the LFO owns the parameter.
+       */
+      let sweepBase = p.cutoff;
       const sweep = window.setInterval(() => {
         phase = (phase + 0.05 * 0.12 * 4) % 1;
         const tri = phase < 0.5 ? phase * 4 - 1 : 3 - phase * 4;
         const norm = 0.5 * (tri + 1);
-        const cutoff = Math.min(16000, Math.max(40, 200 * Math.pow(2, norm * 5.5)));
+        const cutoff = Math.min(16000, Math.max(40, (sweepBase / 9) * Math.pow(2, norm * 5.5)));
         inst.param('cutoff', cutoff);
       }, 50);
       /* Instrument.on() returns a note id that off() takes back, so a held
@@ -395,7 +409,13 @@ export function buildVoice(b: Bellows, fw: Firmware, params: FirmwareParam[]): R
           inst.off(id);
           held.delete(midi);
         },
-        setParam: (k, v) => inst.param(k, v),
+        setParam: (k, v) => {
+          if (k === 'cutoff') {
+            sweepBase = v;
+            return;
+          }
+          inst.param(k, v);
+        },
         dispose: () => {
           clearInterval(sweep);
           inst.dispose();
@@ -487,7 +507,7 @@ export function buildVoice(b: Bellows, fw: Firmware, params: FirmwareParam[]): R
         detune: 0, sub: 0,
         cutoff: p.cutoff, resonance: p.resonance, envAmount: 1,
         attack: 0.004, decay: 0.45, sustain: 0, release: 0.05,
-        filterAttack: 0.002, filterDecay: p.filter_decay, filterSustain: 0, filterRelease: 0.05,
+        fAttack: 0.002, fDecay: p.filter_decay, fSustain: 0, fRelease: 0.05,
       }, 110, 0.25, false);
     }
 
@@ -504,10 +524,60 @@ export function buildVoice(b: Bellows, fw: Firmware, params: FirmwareParam[]): R
       let vibCents = p.vibrato_cents;
       let vibRate = p.vibrato_rate;
       const base = 165;
-      const v = stepVoice(b, {
-        detune: 0, sub: 0, cutoff: p.cutoff ?? 1500, resonance: 0.6, envAmount: 0,
-        attack: 0.01, decay: 0.8, sustain: 0, release: 0.08,
-      }, base, 0.5, false, (inst) => {
+      /*
+       * A one-oscillator engine with a real hz parameter, rather than the VA.
+       *
+       * The first version modulated the VA's `detune`, which is a SYMMETRIC
+       * SPREAD: it pushes osc1 down and osc2 up by half each. Modulating it
+       * moves the two oscillators apart and leaves the pitch centre exactly
+       * where it was, so what you heard was beating rather than vibrato, and
+       * the caveat claimed otherwise. One oscillator whose frequency actually
+       * moves is the honest equivalent of the C++, which calls SetFreq.
+       */
+      /*
+       * defEngine bodies are serialised into the worklet realm by toString,
+       * so this has to be self-contained: its own arguments and Math, nothing
+       * closed over. `active` stays true because this rung, like the C++, runs
+       * from power on rather than per note.
+       */
+      b.defEngine({
+        id: 'motion-rung',
+        label: 'motion rung',
+        params: [
+          { name: 'hz', min: 20, max: 4000, default: 165, unit: 'Hz' },
+          { name: 'cutoff', min: 40, max: 16000, default: 1500, unit: 'Hz' },
+        ],
+        polyphony: 1,
+        createVoice: function (sampleRate, params) {
+          var hz = params.hz === undefined ? 165 : params.hz;
+          var cutoff = params.cutoff === undefined ? 1500 : params.cutoff;
+          var ph = 0;
+          var lp = 0;
+          return {
+            noteOn: function () {},
+            noteOff: function () {},
+            setParam: function (name, value) {
+              if (name === 'hz') hz = value;
+              else if (name === 'cutoff') cutoff = value;
+            },
+            process: function (outL, outR, from, to) {
+              var inc = hz / sampleRate;
+              var a = 1 - Math.exp((-2 * Math.PI * cutoff) / sampleRate);
+              for (var i = from; i < to; i++) {
+                ph += inc;
+                if (ph >= 1) ph -= 1;
+                lp += a * (2 * ph - 1 - lp);
+                outL[i] += lp * 0.3;
+                outR[i] += lp * 0.3;
+              }
+            },
+            get active() {
+              return true;
+            },
+          };
+        },
+      });
+      const v = stepVoice(b, {}, base, 0.5, false, (inst) => {
         const timer = window.setInterval(() => {
           phase = (phase + 0.05 * sweepRate) % 1;
           vphase = (vphase + 0.05 * vibRate) % 1;
@@ -516,10 +586,10 @@ export function buildVoice(b: Bellows, fw: Firmware, params: FirmwareParam[]): R
           inst.param('cutoff', Math.min(16000, 1500 * Math.pow(2, norm * sweepOct)));
           /* Cents, not Hz: the same wobble at every pitch. */
           const cents = Math.sin(2 * Math.PI * vphase) * vibCents;
-          inst.param('detune', cents);
+          inst.param('hz', base * Math.pow(2, cents / 1200));
         }, 50);
         return { dispose: () => clearInterval(timer) };
-      });
+      }, 'motion-rung');
       const inner = v.setParam;
       v.setParam = (k, val) => {
         if (k === 'sweep_octaves') sweepOct = val;
@@ -620,11 +690,17 @@ export function buildVoice(b: Bellows, fw: Firmware, params: FirmwareParam[]): R
       const inst = b.voice('fm', {
         ops: 4, algorithm: 5, feedback: p.feedback, brightness: p.brightness,
         attack: 0.002, decay: p.decay, sustain: 0.28, release: 0.5,
-        modAttack: 0.001, modDecay: p.m_decay, modSustain: 0, modRelease: 0.12,
+        mAttack: 0.001, mDecay: p.m_decay, mSustain: 0, mRelease: 0.12,
+        /* The tine. epiano.h sets ratio[1] = 14, and without it the
+         * modulator runs at the carrier frequency and the strike that makes
+         * this an electric piano does not exist. The names are 1-based here
+         * and 0-based there. */
+        ratio1: 1, ratio2: 14, ratio3: 1, ratio4: 1,
+        level1: 1, level2: 0.42, level3: 0.5, level4: 0.22,
       }, { polyphony: 4 });
       inst.gain(0.47);
       return instrumentVoice(b, inst, 'chord', (k, v) => {
-        if (k === 'm_decay') inst.param('modDecay', v);
+        if (k === 'm_decay') inst.param('mDecay', v);
         else inst.param(k, v);
       });
     }
@@ -634,12 +710,12 @@ export function buildVoice(b: Bellows, fw: Firmware, params: FirmwareParam[]): R
         shape: 0, detune: 0, sub: 0,
         cutoff: p.cutoff, resonance: p.resonance, envAmount: p.env_amount,
         attack: 0.002, decay: 0.4, sustain: 0, release: 0.06,
-        filterAttack: 0.001, filterDecay: p.f_decay, filterSustain: 0, filterRelease: 0.05,
+        fAttack: 0.001, fDecay: p.f_decay, fSustain: 0, fRelease: 0.05,
         velLevel: 0.2, velFilter: 0.8,
       }, { polyphony: 1 });
       inst.gain(1.54);
       return instrumentVoice(b, inst, 'bass', (k, v) => {
-        if (k === 'f_decay') inst.param('filterDecay', v);
+        if (k === 'f_decay') inst.param('fDecay', v);
         else if (k === 'env_amount') inst.param('envAmount', v);
         else inst.param(k, v);
       });
@@ -649,7 +725,7 @@ export function buildVoice(b: Bellows, fw: Firmware, params: FirmwareParam[]): R
       const inst = b.voice('va', {
         shape: 0.08, detune: 11, sub: p.sub, cutoff: 2400, resonance: 0.12,
         envAmount: 0.25, attack: p.attack, decay: 0.6, sustain: 0.8, release: 1.4,
-        filterAttack: 0.6, filterDecay: 1.0, filterSustain: 0.6, filterRelease: 1.2,
+        fAttack: 0.6, fDecay: 1.0, fSustain: 0.6, fRelease: 1.2,
       }, { polyphony: 4 });
       /* The chorus is an INSERT, not a send: it is the patch, not an effect
        * applied to it. Set mix to 0 and hear what it was doing. */
@@ -768,7 +844,9 @@ export function buildVoice(b: Bellows, fw: Firmware, params: FirmwareParam[]): R
  */
 export const VOICE_CAVEATS: Record<string, string[]> = {
   kick: [],
-  chord: [],
+  chord: [
+    'The PIEZO entry shares this voice. Its three sliders move the output stage rather than the voice, because a high pass and a resonance lift are properties of the disc and not of the string.',
+  ],
   drums: [
     'The C++ example reads its tempo from a pot on pin 14 every loop; here the pot is a control and the reading is instant rather than sampled once per pass.',
   ],
@@ -798,7 +876,7 @@ export const VOICE_CAVEATS: Record<string, string[]> = {
   ],
   'step-motion': [
     'The firmware steps both LFOs once per audio block. Here they run on a 50 ms timer, which is the same shape at a coarser grain.',
-    'Vibrato is applied through the VA detune parameter rather than by moving the oscillator frequency, so it is the same size in cents but reaches the sound one step later.',
+    'The browser side is a one-oscillator engine registered by the example, not the VA. Modulating the VA detune would have moved the two oscillators apart and left the pitch centre where it was, which is beating rather than vibrato.',
   ],
 
   /* 07_Workstation. */

@@ -158,6 +158,11 @@ export class OutputStageGraph {
   private chain: AudioNode[] = [];
   private spec: OutputSpec;
 
+  /* Defaults are piezo.h's Voicing defaults for a bare 27 mm brass disc. */
+  private piezo = { highpassHz: 1200, resonanceHz: 4000, resonanceDb: 9 };
+  private piezoNodes: { hp1: BiquadFilterNode; hp2: BiquadFilterNode; res: BiquadFilterNode } | null =
+    null;
+
   constructor(ctx: BaseAudioContext, id: OutputId) {
     this.ctx = ctx;
     this.input = ctx.createGain();
@@ -176,6 +181,25 @@ export class OutputStageGraph {
 
   get current(): OutputSpec {
     return this.spec;
+  }
+
+  /*
+   * The piezo voicing, live.
+   *
+   * These three are Voicing fields in 15_Piezo/piezo.h, and the firmware
+   * entry has always offered them as sliders. They reached nothing: the
+   * chain hard-coded 1200, 4000 and 9, and the sliders were routed at the
+   * pluck engine, which has no such parameters. Now they move the filters
+   * they name, which is what a reader would assume they already did.
+   */
+  setPiezo(v: Partial<{ highpassHz: number; resonanceHz: number; resonanceDb: number }>): void {
+    Object.assign(this.piezo, v);
+    const n = this.piezoNodes;
+    if (!n) return;
+    n.hp1.frequency.value = this.piezo.highpassHz;
+    n.hp2.frequency.value = this.piezo.highpassHz;
+    n.res.frequency.value = this.piezo.resonanceHz;
+    n.res.gain.value = this.piezo.resonanceDb;
   }
 
   setOutput(id: OutputId): void {
@@ -210,18 +234,19 @@ export class OutputStageGraph {
     if (this.spec.id === 'piezo') {
       const hp1 = ctx.createBiquadFilter();
       hp1.type = 'highpass';
-      hp1.frequency.value = 1200;
+      hp1.frequency.value = this.piezo.highpassHz;
       hp1.Q.value = 0.707;
       const hp2 = ctx.createBiquadFilter();
       hp2.type = 'highpass';
-      hp2.frequency.value = 1200;
+      hp2.frequency.value = this.piezo.highpassHz;
       hp2.Q.value = 0.707;
       const res = ctx.createBiquadFilter();
       res.type = 'peaking';
-      res.frequency.value = 4000;
-      res.Q.value = 3;
-      res.gain.value = 9;
+      res.frequency.value = this.piezo.resonanceHz;
+      res.Q.value = 1.2;
+      res.gain.value = this.piezo.resonanceDb;
       nodes.push(hp1, hp2, res);
+      this.piezoNodes = { hp1, hp2, res };
     } else if (this.spec.id === 'pwm' || this.spec.id === 'mqs') {
       const rc = ctx.createBiquadFilter();
       rc.type = 'lowpass';

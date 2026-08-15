@@ -45,11 +45,6 @@ static AudioConnection patchL(node, 0, out, 0);
 static AudioConnection patchR(node, 1, out, 1);
 
 void setup() {
-  /* 12 blocks is enough for a source and a stereo output with headroom.
-   * If update() ever finds the pool dry it returns silence rather than
-   * glitching, so a dropout that sounds like a gap rather than a click is
-   * this number being too small. */
-  AudioMemory(12);
 
   codec.enable();
   codec.volume(0.5f);
@@ -58,6 +53,11 @@ void setup() {
    * SAI clock does not land exactly there, and every envelope coefficient
    * in the patch is derived from this number. */
   patch.Init(bellows::TeensySampleRate());
+
+  /* AudioMemory LAST: it is what opens the audio interrupt, and anything
+   * initialised after it can be rendered before it is ready. See the note
+   * in platform/teensy.h. */
+  AudioMemory(12);
 }
 
 void loop() {

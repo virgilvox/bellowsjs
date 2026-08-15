@@ -63,7 +63,7 @@ window.addEventListener('hashchange', () => {
         <button :class="{ lit: mode === 'code' }" @click="setMode('code')">CODE</button>
         <button :class="{ lit: mode === 'docs' }" @click="setMode('docs')">DOCS</button>
         <button :class="{ lit: mode === 'ref' }" @click="setMode('ref')">LLM REF</button>
-        <button :class="{ lit: mode === 'sim' }" @click="setMode('sim')">SIMULATOR</button>
+        <button :class="{ lit: mode === 'sim' }" @click="setMode('sim')">EMBEDDED PLAYGROUND</button>
         <button class="theme-btn" @click="toggleTheme()" :title="theme === 'light' ? 'switch to night forge' : 'switch to daylight'">
           {{ theme === 'light' ? 'NIGHT' : 'DAY' }}
         </button>

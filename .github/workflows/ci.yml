@@ -77,6 +77,9 @@ jobs:
         # has no test suite. They are also the first API a visitor touches.
         # Needs the library built, which the step above does.
         run: npm run check:examples -w apps/workbench
+
+      - name: the C++ snippets on the site still compile
+        run: npm run check:embedded -w apps/workbench
       - name: the simulator shows the examples it claims to
         # src/lib/sim/sources.gen.ts carries the embedded examples verbatim,
         # so the simulator page can show the source that compiles to a board.
@@ -178,6 +181,13 @@ jobs:
           mkdir -p test/parity/build
           c++ -std=c++17 -O2 -Wall -Wextra -I src test/parity/tables.cpp -o test/parity/build/tables
           npm run tables:check
+      - name: value parity for the instrument preset table
+        working-directory: packages/bellows-embedded
+        # 50 presets of hand-transcribed floats, diffed against
+        # packages/bellows/src/presets/instruments.ts with the JS-name to
+        # C++-field mapping read out of the generated params.gen.h rather
+        # than written twice. A wrong preset plays in a voice nobody chose.
+        run: npm run presets:check
       - name: build the TypeScript bundle the codegen reads
         # gen-tables.mjs reads packages/bellows/dist/bellows.js, which is
         # gitignored and which nothing else in this job produces. Without

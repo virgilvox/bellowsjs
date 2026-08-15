@@ -118,7 +118,6 @@ static AudioConnection patchL(node, 0, out, 0);
 static AudioConnection patchR(node, 1, out, 1);
 
 void setup() {
-  AudioMemory(12);
   const float sr = bellows::TeensySampleRate();
 
   source.Init(sr);
@@ -129,6 +128,11 @@ void setup() {
   v.resonance_hz = 4000.0f;
   voiced.Init(sr, v);
 
+
+  /* AudioMemory LAST: it is what opens the audio interrupt, and anything
+   * initialised after it can be rendered before it is ready. See the note
+   * in platform/teensy.h. */
+  AudioMemory(12);
   Serial.begin(115200);
 }
 

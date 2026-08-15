@@ -19,7 +19,6 @@ import renderingAndExport from './pages/rendering-and-export';
 import analysis from './pages/analysis';
 import midi from './pages/midi';
 import customDsp from './pages/custom-dsp';
-import onHardware from './pages/on-hardware';
 
 export type { DocPage } from './types';
 
@@ -37,10 +36,37 @@ export const DOC_GROUPS: DocGroup[] = [
   { label: 'Mix and sample', pages: [effects, soundfontsAndSamples] },
   { label: 'Output', pages: [renderingAndExport, analysis] },
   { label: 'Extend', pages: [midi, customDsp] },
-  { label: 'Hardware', pages: [onHardware] },
 ];
 
 /** All pages in reading order. */
 export const DOC_PAGES: DocPage[] = DOC_GROUPS.flatMap((g) => g.pages);
 
-export const bySlug: Map<string, DocPage> = new Map(DOC_PAGES.map((p) => [p.slug, p]));
+/*
+ * Two trees, and the slug decides which one you are in.
+ *
+ * Every embedded slug is prefixed emb-, so a link, a refresh or a hand-typed
+ * url lands in the right tree without the url having to carry the tree as a
+ * separate thing.
+ */
+export type DocTree = 'browser' | 'embedded';
+
+export function treeOf(slug: string): DocTree {
+  return slug.startsWith('emb-') ? 'embedded' : 'browser';
+}
+
+import { EMBEDDED_DOC_GROUPS, EMBEDDED_DOC_PAGES } from './embedded';
+
+export { EMBEDDED_DOC_GROUPS, EMBEDDED_DOC_PAGES };
+
+export function groupsFor(tree: DocTree): DocGroup[] {
+  return tree === 'embedded' ? EMBEDDED_DOC_GROUPS : DOC_GROUPS;
+}
+
+export function pagesFor(tree: DocTree): DocPage[] {
+  return tree === 'embedded' ? EMBEDDED_DOC_PAGES : DOC_PAGES;
+}
+
+/** Lookup spans both trees, because a slug is unique across them. */
+export const bySlug: Map<string, DocPage> = new Map(
+  [...DOC_PAGES, ...EMBEDDED_DOC_PAGES].map((p) => [p.slug, p]),
+);

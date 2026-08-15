@@ -185,9 +185,16 @@ delay         9.54e-8   4.66e-8 0.000001  pass
 plate         1.34e-5   1.00e-5  0.00015  pass
 ```
 
-34 rows in all, plus `npm run tables`, which compares the parts that make no sound
+40 rows in all, plus `npm run tables`, which compares the parts that make no sound
 (scales, chords, euclid, arp, cellular automata, the tempo map, MIDI parsing) exactly rather
 than by tolerance: 428 rows, 0 mismatched.
+
+`npm run presets` is the third of these, for `bellows/presets/instruments.h`: 50 presets,
+1054 values compared, 0 failures. It applies every preset through `ApplyPreset` and diffs the
+result against `packages/bellows/src/presets/instruments.ts`, mapping each JS param name onto
+its C++ field with the `c++ field` column of the generated `params.gen.h` rather than a second
+copy of the mapping. A mistranscribed preset is otherwise inaudible as wrong: the instrument
+plays, in a voice nobody chose.
 
 The theory row covers pitch rather than audio, because a wrong tuning table is silent and no
 test that listens to a buffer can catch it.

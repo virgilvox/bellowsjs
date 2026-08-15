@@ -45,7 +45,7 @@ WHERE THINGS STAND
 - packages/bellows-embedded is the C++ port. 43 headers, compiling standalone and combined for
   Cortex-M7 and M4. All five examples plus a bring-up rig build as real Teensy 4.1 firmware, and
   examples/daisy_onekick links against real libDaisy.
-- Parity passes on 34 rows with the PRNG bit exact, plus 428 exactly-compared value
+- Parity passes on 40 rows with the PRNG bit exact, plus 428 exactly-compared value
   rows for the parts that make no sound.
 - TWO THINGS HAVE NOT HAPPENED, and both matter more than they look:
     NOTHING HAS BEEN FLASHED TO A BOARD AND LISTENED TO. Everything is compile-verified and
@@ -68,7 +68,7 @@ VERIFY EVERYTHING WITH THESE. Run them before you claim anything works.
   packages/bellows:            npm test                     all green, no count quoted here
                                npx tsc --noEmit
                                npm run gen:worklet          then confirm no git diff
-  packages/bellows-embedded:   npm run parity               34 rows against the TypeScript
+  packages/bellows-embedded:   npm run parity               40 rows against the TypeScript
                                npm run tables               428 value rows, compared exactly
                                npm run fastmath             polynomial accuracy against libm
                                npm run memsafety            ASan and UBSan, 0.5x to 4x rate

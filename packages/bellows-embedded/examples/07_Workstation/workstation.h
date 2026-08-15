@@ -134,6 +134,18 @@ class Piece {
  public:
   void Init(float sample_rate, unsigned bpm) {
     sr_ = sample_rate;
+    /* A second Init at a different rate used to re-init every unit except
+     * the delay, because SetTempo latches delay_ready_ and only calls
+     * SetParams after that. Measured: Init(48000) then Init(44100) left the
+     * echo 8.8 percent late, at 0.5102 s where a fresh Init gives 0.4688.
+     * Everything positional resets here too, so Init means Init. */
+    delay_ready_ = false;
+    step_ = 0;
+    countdown_ = 0;
+    bass_gate_ = 0;
+    frame_ = 0;
+    transpose_ = 0;
+    seed_ = 0;
 
     /* One root, one stream per part. Nothing shares a stream, so changing
      * a drum pattern cannot move the melody. */
@@ -214,6 +226,12 @@ class Piece {
    * dotted eighth and right an eighth, which is the pairing that makes a
    * stereo delay read as a rhythm rather than as a smear. */
   void SetTempo(unsigned bpm) {
+    /* Clamp BEFORE the arithmetic. At bpm 0 the division gives an infinity
+     * and casting that to int is undefined: a Cortex-M7 saturates and the
+     * host traps, which is exactly the class of cast this library already
+     * hardened once in the delay line. */
+    if (bpm < 20u) bpm = 20u;
+    if (bpm > 400u) bpm = 400u;
     bpm_ = bpm;
     const float steps_per_sec = (static_cast<float>(bpm) / 60.0f) * 4.0f;
     samples_per_step_ = static_cast<int>(sr_ / steps_per_sec + 0.5f);

@@ -251,12 +251,14 @@ static AudioConnection patchR(node, 1, out, 1);
 
 void setup() {
   Serial.begin(115200);
-  /* More blocks than the small examples: the pad and the chorus are the
-   * heaviest thing in the book. */
-  AudioMemory(20);
   codec.enable();
   codec.volume(0.6f);
   bk.Init(bellows::TeensySampleRate());
+
+  /* AudioMemory LAST: it is what opens the audio interrupt, and anything
+   * initialised after it can be rendered before it is ready. See the note
+   * in platform/teensy.h. */
+  AudioMemory(20);
 }
 
 void loop() {

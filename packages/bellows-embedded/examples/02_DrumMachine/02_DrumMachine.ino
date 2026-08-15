@@ -31,10 +31,14 @@ static AudioConnection patchR(node, 1, out, 1);
 static const int kTempoPin = A0;
 
 void setup() {
-  AudioMemory(12);
   codec.enable();
   codec.volume(0.6f);
   machine.Init(bellows::TeensySampleRate(), 120);
+
+  /* AudioMemory LAST: it is what opens the audio interrupt, and anything
+   * initialised after it can be rendered before it is ready. See the note
+   * in platform/teensy.h. */
+  AudioMemory(12);
 }
 
 void loop() {

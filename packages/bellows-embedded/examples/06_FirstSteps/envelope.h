@@ -69,6 +69,10 @@ class Envelope {
 
   /* One note per beat. */
   void SetTempo(unsigned bpm) {
+    /* Clamped before the divide: bpm 0 makes an infinity and casting that
+     * to int is undefined. */
+    if (bpm < 20u) bpm = 20u;
+    if (bpm > 400u) bpm = 400u;
     float per_sec = static_cast<float>(bpm) / 60.0f;
     samples_per_step_ = static_cast<int>(sr_ / per_sec + 0.5f);
     if (samples_per_step_ < 2) samples_per_step_ = 2;
