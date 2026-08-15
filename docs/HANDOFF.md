@@ -579,7 +579,7 @@ Rules learned the hard way about these:
 ## Recent history worth knowing
 
 - **`docs/AUDIT-2.md` is the current one**: a whole-repository pass on 2026-08-05, forty agents across eight slices, 95 findings, each escalated finding then attacked by a skeptic whose default was to refute. Two slices came back sound (the architecture holds, the DSP core is correct); six came back needs-work. Five findings were refuted and are listed at the end so nobody rediscovers them: the ladder cutoff is deliberate, `romanToChord`'s accidentals are right, and `pattern.fast()`'s cycle length is the documented contract. Read the blocking and major sections before touching anything.
-- The 2026-08-04 audit is in `docs/AUDIT.md`, findings 1 through 20, each with its evidence. Read it before touching the facade, the fx capacity options, the kernel ramp table, or anything in the embedded port. Findings 10 and 11 carry a correction: they claim CI enforces things, and CI has never run.
+- The 2026-08-04 audit is in `docs/AUDIT.md`, findings 1 through 20, each with its evidence. Read it before touching the facade, the fx capacity options, the kernel ramp table, or anything in the embedded port. Findings 10 and 11 used to carry a correction saying CI had never run. **That correction is itself out of date and the claim in it is now false**: `gh run list` on 2026-08-15 shows twelve completed `ci` runs, all green, ten of them triggered by a push to `main`, the most recent on `f48dbd3`. So findings 10 and 11 read correctly as written and the retraction attached to them should be read as history. The two AUDIT-2 findings about CI, at lines 25 and 31, are both closed: `ci.yml` is on the default branch, and the step that could not pass on a clean checkout gained the build it needed while `gen-tables.mjs --check` learned to refuse a stale `dist` rather than report ok against it.
 - An earlier 22-agent review confirmed and fixed 17 findings (commits `5baef09`, `74e4cbe`). Read those before touching kernel timing, the scheduler, dynamics, spectral, loudness, sf2, or midifile parsing.
 - The oscillator antialiasing gate is enforced by spectrum-measuring tests in `test/dsp-osc`. The 4-point polyBLEP was tried and measured insufficient (about -37 dB); the shipping implementation is a tabulated Kaiser-sinc BLEP, measured at -85 dB or better through the musical range, -94 dB at A440, and -73 dB at its worst anywhere in the band (saw at 19 kHz). Do not "simplify" it back. The per-frequency floors are gated in test/dsp-osc/blep-frequency.test.ts; "about -90 dB" was the figure quoted here and in three other places until AUDIT-3 measured the whole band.
 - Bowed string realism history is in `docs/BOWED-STRINGS.md` with measured evidence; the spectral gates in `test/engines-physical/waveguide.test.ts` are the contract. Do not loosen a gate to pass a change.
@@ -737,17 +737,40 @@ can disagree with the reasoning rather than reopen the question from nothing.
 
 ## The work queue, in the order I would take it
 
-Every one of the 95 findings in `docs/AUDIT-2.md` was re-verified against the code on
-2026-08-05, after the fixes below landed, by agents that had to produce a file and line or a
-command output for each verdict. The tally: **8 fixed, 8 partial, 77 open, 2 not a defect.**
-The lists here are that triage, grouped by whether they need a decision from you.
+**The count lives in `docs/AUDIT-2.md` now, not here.** Every finding in it carries
+a status blockquote under its own heading, so the question "is this still open"
+is answered where the finding is rather than in a list somewhere else that has
+to be kept in step. As of 2026-08-15: **43 open, 8 partial, 38 closed, 5
+refuted, 1 not a defect.** Fifty-one genuinely open.
 
-**Read this before trusting the count.** Four of the five findings the earlier pass refuted were
-re-raised by the re-verification, because the refuted list lives at the end of a 90 KB document
-and nobody reading a finding ever gets there. They are now annotated inline at their own
-headings. Refuted, do not act on them: the ladder cutoff (twice, lines 135 and 249),
-`romanToChord`'s accidentals, `pattern.fast()`'s cycle length, and the plate's gate coverage.
-Subtract them and 73 findings are genuinely open.
+That replaces the figure this section carried for ten days, which was 73, and
+which nobody could reproduce. It came from a 2026-08-05 tally of 8 fixed, 8
+partial, 77 open and 2 not a defect, minus the four refuted findings the
+re-verification had wrongly re-raised. The 77 was never enumerated, the same
+section then said nineteen of them were closed later that day without saying
+which nineteen, `docs/AUDIT-3.md` closed several more without cross-referencing
+them, and the enumerated lists below only ever named 27. Four documents, four
+different answers, none checkable.
+
+The new number was produced by re-reading all 95 against the tree at `526516d`,
+with CLOSED requiring the fixed line quoted as it stands rather than a commit
+named, and anything uncertain held OPEN. Then all 51 claimed closures were
+handed to skeptics briefed to refute them and **13 did not survive**, a quarter
+of them, almost all being a fix applied to the symptom a finding opened with
+rather than to the cause it named further down. Without that second pass the
+backlog would have lost thirteen real defects, which is the argument for doing
+it that way rather than trusting the first read.
+
+Refuted, do not act on them, and they are annotated inline at their own
+headings because the refuted list lives at the end of a 90 KB document and
+nobody reading a finding ever gets there: the ladder cutoff (twice, lines 135
+and 249), `romanToChord`'s accidentals, `pattern.fast()`'s cycle length, and
+the plate's gate coverage.
+
+The lists below are the older triage, grouped by whether they need a decision
+from you. They are now a reading order rather than the register: several
+entries in them were verified closed by the pass above and are marked where
+that is known, but `AUDIT-2.md` is the file to trust.
 
 ### Done, with the commit
 
@@ -829,8 +852,11 @@ than defects, so they are the natural next chunk.
 - A 0.1 percent `Foldback` mutation moves `westcoast` to 1.04e-2 against a 2e-2 gate and fires
   nothing, and the same shape of `TanhShape` mutation moves `kick` to 3.47e-4 against 1e-3.
   Both rows are looser than they look. `saturator_fold` now covers Foldback itself.
-- `gen-tables --check` warns about a stale `dist` and then reads it anyway, so it passes on a
-  stale checkout (31). The clean-checkout half is fixed in `ci.yml`, which has never run.
+- ~~`gen-tables --check` warns about a stale `dist` and then reads it anyway, so it passes on a
+  stale checkout (31).~~ CLOSED. `--check` now exits 2 on a stale `dist` rather than comparing
+  against the previous build and calling it ok, and `ci.yml` builds the bundle before running
+  it. Both verified in the tree on 2026-08-15, and `ci.yml` has now run: it is green on
+  `f48dbd3`, which is what the sentence here used to deny.
 - `chordToRoman` still throws for 6 of the 408 shipped scale and chromatic root pairs: four
   scales have four-semitone gaps, so a root in the middle is more than one accidental from any
   degree. A genuine limit of single-accidental spelling, and the message now says so.

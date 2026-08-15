@@ -7,6 +7,40 @@ covers the earlier pass.
 95 findings raised. 32 were escalated to a skeptic; 27 survived and 5 were refuted.
 Refuted findings are listed at the end so nobody re-raises them.
 
+## Status, and why it is in this file
+
+Every finding now carries a blockquote under its heading giving its status and
+the evidence for it. That is new, and it is the fix for a real problem: until
+2026-08-15 this document had no status field of any kind. The only marker in it
+was the refutation blockquote on five findings, so the answer to "is this still
+open" lived in `docs/HANDOFF.md`'s work queue, in `docs/AUDIT-3.md`'s table, and
+nowhere else. Neither of those enumerated the whole set, `AUDIT-3` closed
+findings here without saying so, and the number everyone quoted, 73 open, was
+77 minus 4 where the 77 was never listed.
+
+**The count on 2026-08-15: 43 open, 8 partial, 38 closed, 5 refuted, 1 not a
+defect.** So 51 are genuinely open, not 73.
+
+How that was arrived at, because a number produced by reading is worth what the
+reading was worth. Every one of the 95 was re-read against the tree at
+`526516d` and given a status, with a rule that CLOSED required quoting the
+fixed line as it stands rather than naming a commit, and that anything
+uncertain stayed OPEN. Then all 51 claimed closures were handed to skeptics
+whose brief was to refute them, and **13 of the 51 did not survive**, which is
+a quarter. Those 13 are the argument for the second pass: most were a fix
+applied to the symptom the finding opened with and not to the cause it named
+further down, and every one of them would have been silently deleted from the
+backlog by the first pass alone.
+
+Two conventions in the status lines. `[changes audio]` marks a finding whose
+fix would move rendered output, as opposed to documents, tests or hygiene.
+`[under ten minutes]` marks one closable by a sentence, a comment or deleting a
+dead declaration. Seventeen open findings carry the second tag.
+
+This status is a reading, not a harness. Nothing regenerates it, so it rots
+like every other number in this repository, and the date on each line is there
+so a reader knows how old the claim is.
+
 Verdict per slice:
 
 | Slice | Verdict | Findings |
@@ -24,11 +58,15 @@ Verdict per slice:
 
 **Architecture: CI has never run: .github/workflows/ci.yml is not on origin/main and GitHub reports zero workflow runs**
 
+> **CLOSED** as of 2026-08-15. The workflow is now on the default branch and has run green on the current HEAD. `git ls-remote --heads origin` -> `f48dbd3d01e4dc7ceee6a98d5e120505ae389414 refs/heads/main`, which is HEAD; `git cat-file -p origin/main:.github/workflows/ci.yml` prints the file, whose own comment records real runs: ".github/workflows/ci.yml:5-9 # Manual trigger, so a green run can be demanded rather than waited for.
+
 `.github/workflows/ci.yml` Confirmed by review at major.
 
 docs/AUDIT.md finding 10 says "Fixed: `.github/workflows/ci.yml` runs typecheck, the suite and the build on node 20 and 22, plus both app builds and the embedded size report on two ARM targets." Finding 11 says "The CI job now regenerates the bundle and fails on a diff." docs/HANDOFF.md says "CI now enforces it" and "tools/check-docs.mjs is the control, and CI runs it." The workflow file exists in the working tree, was added in commit 26c0b2f, and has never been pushed. Every mechanical guarantee the docs attribute to CI (worklet freshness, golden renders not regenerated, generated headers in sync, documented figures matching the size report, parity gates) is currently enforced by nothing but a human remembering to run it locally. This is the project's own standard applied to itself: a gate nobody has watched fail is a gate nobody should trust, and this one has never been watched at all.
 
 **Architecture: The "generated headers are in sync with the TypeScript" CI step cannot pass on a clean checkout, and passes on a stale one**
+
+> **CLOSED** as of 2026-08-15. Both halves are fixed. The missing build step now exists before the check, .github/workflows/ci.yml:198-207: "- name: build the TypeScript bundle the codegen reads / ... run: npm run build -w packages/bellows / - name: generated headers are in sync with the TypeScript / working-directory: packages/bellows-embedded / run: node tools/gen-tables.mjs --check".
 
 `packages/bellows-embedded/tools/gen-tables.mjs`
 
@@ -36,11 +74,15 @@ generateParamsHeader() at line 407 reads TS_DIST = packages/bellows/dist/bellows
 
 **Instrument algorithms: String waveguide is up to 23 cents flat above the fundamental: the dc blocker's phase lead is compensated only at f0**
 
+> **OPEN** as of 2026-08-15. [changes audio] packages/bellows/src/engines/waveguide.ts:541-552 is unchanged: "let pd = onePolePhaseDelay(a, w) + dcBlockerPhaseDelay(this.dcR, w) + DISPERSION_STAGES * allpassPhaseDelay(this.apC, w);" then ":552 this.readDelay = Math.max(1, n - 1 - pd);" where ":523 const w = (TWO_PI * this.freq) / this.sr;" is the fundamental only.
+
 `packages/bellows/src/engines/waveguide.ts:541-552`
 
 updateLoop computes pd = onePolePhaseDelay + dcBlockerPhaseDelay + dispersion at the fundamental only, and sets readDelay = n - 1 - pd. The dc blocker (dcR = 0.9995) contributes about -14 samples of phase LEAD at 41 Hz but only about -7 at 82 Hz, so once the loop is compensated at f0 every partial above f0 sees a loop that is too long. The fundamental partial lands correctly; harmonics 2 and up are flat by a fixed cents offset, and the ear follows the series, so the note reads flat. This is inharmonicity of the wrong sign as well as the wrong size: real strings stretch sharp. The pluck engine, which has no dc blocker, is clean at the same pitches, so this is specific to waveguide.ts. The only pitch gates in test/engines-physical/waveguide.test.ts are at 440 Hz (error -1.3c) and 220 Hz, i.e. exactly where the error is small; nothing tests the bass, and the cello preset (octave -1) and dou
 
 **Docs and claims: packages/bellows-embedded/README.md size table: 9 of 15 rows are stale, one by 26 KB of flash and 152 KB of RAM**
+
+> **CLOSED** as of 2026-08-15. The table was regenerated and is now machine-gated. The rows the finding called stale now carry the figures it printed as actual, e.g. packages/bellows-embedded/README.md:44 "| `Kick` + `Snare` + `Hat` | 28248 B | 1532 B |" (was 1500), :50 "| `StereoDelay<100>` | 1768 B | 39584 B |" (was 1744/66688), :51 "| `StereoDelay<500>` | 1760 B | 193184 B |" (was 1744/263296), :56 "| everything, constructed and driven | 35096 ...
 
 `packages/bellows-embedded/README.md` Confirmed by review at minor.
 
@@ -48,11 +90,15 @@ The headline "You pay only for what you include" table has not been regenerated 
 
 **Docs and claims: packages/bellows-embedded/README.md registry table is stale and its stated conclusion ("thirty-four times the RAM") is wrong and contradicts HARDWARE.md**
 
+> **CLOSED** as of 2026-08-15. packages/bellows-embedded/README.md:75 now reads "| through a string-keyed registry of five engines | 30488 B | 30872 B |", exactly the real s6_registry figures the finding gave, and :77 reads "8.1 times the flash and 28.1 times the RAM for the same sound." docs/HARDWARE.md:91 now states the identical sentence "8.1 times the flash and 28.1 times the RAM for the same sound.", so the two documents agree.
+
 `packages/bellows-embedded/README.md` Confirmed by review at minor.
 
 Line 72 gives the string-keyed registry as 30264 B flash / 37580 B RAM. The real s6_registry is 30488 / 30872. Line 74 then concludes "Eight times the flash and thirty-four times the RAM" (37580/1100 = 34.2, consistent with its own stale number). The true ratio is 30872/1100 = 28.1x, and docs/HARDWARE.md line 56 states "twenty-eight times the RAM" for the same measurement. Two documents state the same fact differently, and the README's version is the wrong one. This is the single load-bearing design rule of the package, so the number carrying it should be the one a command printed.
 
 **Coverage and gates: b.render() is not reproducible for the rng pattern the README and every doc page teach**
+
+> **OPEN** as of 2026-08-15. [changes audio] Bellows.rng is unchanged, packages/bellows/src/bellows.ts:249-256: "rng(label: string): NamedRng { const cache = this.renderCtx ? this.renderCtx.rngCache : this.liveRng; let r = cache.get(label); ..." so the branch still only helps a caller who calls b.rng INSIDE the tick callback.
 
 `packages/bellows/src/bellows.ts`
 
@@ -60,11 +106,15 @@ Bellows.rng(label) (src/bellows.ts:242) reads from this.renderCtx.rngCache durin
 
 **Embedded package: Pluck::NoteOn writes past excite_[] when the runtime sample rate exceeds twice the template rate (ASan-confirmed)**
 
+> **PARTIAL** as of 2026-08-15. [under ten minutes] The overflow (the headline half) is FIXED. packages/bellows-embedded/src/bellows/engines/pluck.h:133 now clamps the fill loop: "if (len > static_cast<int>(kExciteLen)) len = kExciteLen;" placed immediately before ":137 for (int i = 0; i < len; ++i)", and a second guard bounds freq itself at :99-101 "float cap = sr_ / static_cast<float>(kMaxPeriod - 4); float lo = static_cast<float>(kMinFreqHz);
+
 `packages/bellows-embedded/src/bellows/engines/pluck.h` Confirmed by review at major.
 
 kExciteLen is 2 * kMaxPeriod, derived from the TEMPLATE parameter kSampleRate. len is derived from the RUNTIME sr_ passed to Init(): len = round(sr_ / freq_) with freq_ clamped only at kMinFreqHz below. The comb-tail path is clamped (`if (total > kExciteLen) total = kExciteLen`) but the first fill loop at line 56, `for (int i = 0; i < len; ++i) excite_[i] = ...`, is not. Pluck<20,48000> gives kExciteLen 4808; Init(192000) plus NoteOn(20) makes len 9600. Note this is the same latent flaw that at 96 kHz merely detunes (see the next finding) and at 192 kHz corrupts memory. excite_ is also the only array in the class with no initialiser, so before the first NoteOn it holds whatever was in .bss.
 
 **Embedded package: Six buffer-owning classes silently disagree when the template sample rate and the Init() sample rate differ**
+
+> **PARTIAL** as of 2026-08-15. [changes audio] Only Pluck of the seven named classes was fixed. Pluck now derives its floor from the RUNTIME rate, packages/bellows-embedded/src/bellows/engines/pluck.h:99 "float cap = sr_ / static_cast<float>(kMaxPeriod - 4);" so Pluck<20,48000> at Init(96000) reports and clamps to a 40 Hz bottom note instead of sounding an octave sharp.
 
 `packages/bellows-embedded/src/bellows/engines/pluck.h`
 
@@ -72,17 +122,23 @@ Pluck, Tube, StereoDelay, Chorus, Flanger, Compressor and Limiter all size stora
 
 **Facade, kernel, IO: render() posts structural messages straight at the LIVE kernel, so exporting while playing rewrites the live mix**
 
+> **OPEN** as of 2026-08-15. [changes audio] packages/bellows/src/bellows.ts:182-186 still has no renderCtx branch: "private post(msg: KernelMessage, transfer?: Transferable[]): void { this.setup.record(msg); // transfers would detach the recorded copy, so bank payloads post a clone / this.kernel.post(msg, transfer);
+
 `packages/bellows/src/bellows.ts`
 
 This is the highest-risk defect in the slice. postEvents() (bellows.ts:224-230) correctly quarantines events into renderCtx.events during a render. post() (bellows.ts:182-186) does not: it records into this.setup and then calls this.kernel.post(msg) unconditionally, with no renderCtx branch. Every structural call reachable from Instrument goes through Bellows.structural() -> post(): fx(), fxParam(), send(), gain(), pan(), plus masterFx/masterGain/bus on the facade. render() re-runs every registered clock callback for the whole horizon in a tight synchronous loop (bellows.ts:589-592), so each of those calls fires at the live worklet immediately and out of time, and the live mix ends the render pinned to whatever value the callback computed for the LAST tick of the horizon. This is not hypothetical. apps/workbench/src/examples/effects.ts:59-63 (the shipped TAPE DELAY CHARACTER example) cal
 
 **Facade, kernel, IO: A 622-byte SFZ file allocates 352 MB; 644 bytes throws RangeError. #define expands eagerly and doubles per line**
 
+> **CLOSED** as of 2026-08-15. substitute() now prices each expansion before allocating it, packages/bellows/src/io/sfz.ts:570-577: "const hits = countOccurrences(out, n); if (hits === 0) continue; const grown = out.length + hits * (value.length - n.length); if (grown > this.maxExpandedLength) { throw new Error(`sfz: #define expansion of ${n} exceeds ${this.maxExpandedLength} characters`);
+
 `packages/bellows/src/io/sfz.ts`
 
 sfz.ts:338 stores each #define already substituted: this.defines.set(def[1], this.substitute(def[2])). Because substitution happens at definition time, a chain where each define references the previous one twice doubles the stored string on every line. N lines produce 2^N characters. maxIncludeDepth (default 16, sfz.ts:319/324) bounds #include recursion, so the recursion hazard was considered, but nothing bounds macro expansion: not the number of defines, not the length of a stored value, not the total expanded size. This is the only part of the library that parses hostile data and it runs in a browser, where the SFZ path is a user-chosen file or a fetched URL. Past V8's max string length the failure is a RangeError('Invalid string length'), which is not one of the parser's own 'sfz: ' errors, so a caller catching the documented error shape does not catch this. Below that threshold it is
 
 **Facade, kernel, IO: One NaN permanently kills the audio graph: Ramp latches NaN and no later value, panic included, recovers it**
+
+> **CLOSED** as of 2026-08-15. Every Ramp entry point now rejects non-finite input and keeps the last good value. packages/bellows/src/kernel/engine.ts:50-54 "set(target: number): void { if (!Number.isFinite(target)) return; this.target = target; this.step = (target - this.v) * this.rate; }"; :56-61 "snap(v: number): void { if (!Number.isFinite(v)) return; ... }"; and the constructor at :44-45 "const v = Number.isFinite(initial) ? initial : 0;
 
 `packages/bellows/src/kernel/engine.ts`
 
@@ -92,11 +148,15 @@ Ramp.set (engine.ts:35-38) computes step = (target - v) * rate. With a NaN targe
 
 **Music theory: Non-12-EDO is real only at the Tuning object; the scale layer above it still assumes 12 semitones per octave, and the documented degree workflow produces a non-octave octave**
 
+> **OPEN** as of 2026-08-15. [changes audio] packages/bellows/src/theory/scales.ts:100 is unchanged: "return (octave + 1) * 12 + this.rootPc + this.intervals[idx] + wrap * 12;" (octave stride and wrap both hardcoded to 12, intervals still 12-EDO semitones, and the mask is built over 12 at :87 "this.mask = new Array<boolean>(12).fill(false);").
+
 `packages/bellows/src/theory/scales.ts`
 
 Tuning itself is correct (EDO, JI, cents, Scala all verified below). But Scale.degreeToMidi (scales.ts:100) returns `(octave + 1) * 12 + rootPc + intervals[idx] + wrap * 12`: the octave stride is hardcoded to 12 and `intervals` are 12-EDO semitones. Bellows.freqOf (bellows.ts:443) then does `this.tuning.freqOf(sc.degreeToMidi(...))`, feeding a 12-EDO note number into an arbitrary tuning. Under Tuning.edo(19) a C major scale's seven degrees land at 0, 126.3, 252.6, 315.8, 442.1, 568.4, 694.7 cents and its "octave" (degree 7) at 757.9 cents, a frequency ratio of 1.54926 instead of 2. degreeFreq() in tuning.ts:158 is the one function that does this correctly (it wraps by tuning.size and treats intervals as tuning steps), and it is exported from index.ts:47 but called from nowhere in packages/bellows/src or apps/workbench/src. There is also no non-12 scale or chord vocabulary shipped: SCALES
 
 **Music theory: romanToChord reads 'b' and '#' relative to the current scale, so bVII / bVI / bIII in a minor key give the wrong chords**
+
+> **REFUTED** as of 2026-08-15. docs/AUDIT-2.md:101 carries the marker verbatim: "> REFUTED ON REVIEW, see \"Refuted on review, do not re-raise\" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding." and line 102 ends `packages/bellows/src/theory/chords.ts` REFUTED. The pointed-to section exists at docs/AUDIT-2.md:604 ("## Refuted on review, do not re-raise").
 
 > REFUTED ON REVIEW, see "Refuted on review, do not re-raise" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding.
 `packages/bellows/src/theory/chords.ts` REFUTED.
@@ -105,6 +165,8 @@ chords.ts:296-297 computes `root = mod12(scale.degreeToMidi(degree) + offset)` w
 
 **Music theory: fast() reports a cycle length that is wrong when n does not divide the pattern length, breaking the module's stated wrap invariant and corrupting stack()'s LCM**
 
+> **REFUTED** as of 2026-08-15. docs/AUDIT-2.md:108: "> REFUTED ON REVIEW, see \"Refuted on review, do not re-raise\" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding." (finding heading at line 106, cited file at line 109).
+
 > REFUTED ON REVIEW, see "Refuted on review, do not re-raise" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding.
 `packages/bellows/src/seq/pattern.ts`
 
@@ -112,11 +174,15 @@ pattern.ts:128-134 sets `at: step => p.at(step * n)` with `length: ceil(p.length
 
 **Architecture: core/register.ts places the composition root in the bottom layer, producing 22 of the repository's 26 upward imports**
 
+> **PARTIAL** as of 2026-08-15. FIXED HALF: core/register.ts no longer exists. `ls packages/bellows/src/core/` returns only prng.ts, registry.ts, scheduler.ts, serialize.ts, voicepool.ts; the file is now packages/bellows/src/register.ts, whose own header (lines 3-10) says "Lives beside the facade rather than under core/ because of what it imports...
+
 `packages/bellows/src/core/register.ts`
 
 CLAUDE.md: "Dependency direction is one way: types and core at the bottom, then dsp, then engines/fx/analysis, then kernel/io, then the facade. Never import upward." core/register.ts lines 10 through 32 import 13 engines and 9 effect modules, so the file the rule places at the bottom depends on the whole of layer 3. docs/AUDIT.md finding 12 states "a grep confirmed it was the only one anywhere in `core`, `dsp`, `engines`, `fx`, `theory`, `seq` or `analysis`" -- that claim is false as written; register.ts sits in core/ and imports upward 22 times, and core/scheduler.ts imports a type from seq/. The underlying problem is not the file, it is that the repository has three composition roots (core/register.ts, render/banks.ts, kernel/worklet-entry.ts) and no composition layer to put them in, so each was filed under whichever domain seemed closest. render/banks.ts even documents the intent -- "
 
 **Architecture: Six embedded units' hand-copied Params defaults are gated by nothing, and params.gen.h has no compile-time consumer**
+
+> **PARTIAL** as of 2026-08-15. [under ten minutes] FIXED HALF (the six ungated units): every unit the finding names now has a parity case. packages/bellows-embedded/test/parity/parity.mjs:273 `limiter: { rel: 1.2e-5, abs: 3e-5, note: 'lookahead brickwall, sliding max' },`; :282 `gate: { rel: 1.3e-5, abs: 5e-5, ... }`; :302 `gate_sweep: ...`; :308-309 `flanger_static` / `flanger`; :312 `tremolo: { rel: 1e-5, abs: 5e-6, ... }`;
 
 `packages/bellows-embedded/src/bellows/params.gen.h`
 
@@ -124,17 +190,23 @@ params.gen.h emits 22 kDefaults arrays as `inline constexpr float`. Its own head
 
 **Instrument algorithms: Bow position comb delay is twice the physical value: the bow sits at 2 x bowPos of the string length**
 
+> **OPEN** as of 2026-08-15. [changes audio] packages/bellows/src/engines/waveguide.ts:604: `const combDelay = 2 * clamp(this.bowPos, 0.02, 0.45) * this.periodN;` unchanged, with the same preceding comment at :602-603 "the injected force cancels itself one round // trip to the near bridge later (2 * bowPos periods)".
+
 `packages/bellows/src/engines/waveguide.ts:604` Confirmed by review at minor.
 
 `const combDelay = 2 * clamp(this.bowPos, 0.02, 0.45) * this.periodN` where periodN = sr/freq is the full round trip 2L/c. A bow at fraction b from the bridge has its injected wave return inverted after a round trip to the near bridge, 2*(bL)/c = b*periodN samples, not 2*b*periodN. The doubled delay gives |1 - g e^{-j4 pi n b}|, an envelope of sin(2 pi n b), while the file comment on line 24 claims it matches 'the sin(pi n bowPos) coupling envelope of a bow at bowPos of the string length'. The two clauses in that comment cannot both be true. Consequence: with the default bowPos 0.11 the engine has the notch pattern of a bow at 0.22 of the string length, and the ParamSpec range 0.06-0.2 physically spans 0.12-0.4, well past any real bowing position (roughly 1/12 to 1/6). The sibling pluck engine uses the correct convention, `combD = round(pickPos * n)`, and I verified it by measurement. Th
 
 **Instrument algorithms: West coast wavefolder has no antialiasing: at the default fold amount, alias energy exceeds harmonic energy above about 800 Hz**
 
+> **OPEN** as of 2026-08-15. [changes audio] The fold chain now runs at 4x through the existing Oversampler. packages/bellows/src/engines/westcoast.ts:21 `import { Oversampler } from '../dsp/oversample';`; :93 `this.os = new Oversampler(4, OS_BLOCK);`; :182 `const up = this.os.up(this.oscBuf, 0, n);` then :186-190 `for (let s = 0; s < stages; s++) x = foldback(x, gain);` inside the 4x loop, and :192 `this.os.down(up, this.foldBuf, 0, n);`.
+
 `packages/bellows/src/engines/westcoast.ts:137-139`
 
 The core oscillator is a band-limited BLEP triangle, but it is then pushed through `foldback(x, gain)` (dsp/waveshaper.ts:35, a periodic triangle wrap with infinite-slope corners) up to six times in series at the base sample rate. There is no oversampling and no polyBLAMP, even though docs/ENGINEERING.md section 2.1 specifies 2-point polyBLAMP for antialiased clippers and the package already ships src/dsp/oversample.ts. The LPG masks part of it at the shipped defaults but not at the top of the range. Separately, foldback is an idealized periodic wrap, not a model of a Buchla 259/258 fold chain (which has a bounded number of soft-cornered folds and saturates); the file comment says the notes 'open up and relax like a Buchla timbre sweep', which is a simile rather than a claim, so I am reporting the aliasing rather than the folder's identity.
 
 **Instrument algorithms: Ladder filter cutoff is uncalibrated: the -3 dB corner lands at 0.435 x the requested Hz across the whole range**
+
+> **REFUTED** as of 2026-08-15. docs/AUDIT-2.md:139: "> REFUTED ON REVIEW, see \"Refuted on review, do not re-raise\" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding." (heading at 137, cited file `packages/bellows/src/dsp/filters.ts:169-175` at line 140).
 
 > REFUTED ON REVIEW, see "Refuted on review, do not re-raise" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding.
 `packages/bellows/src/dsp/filters.ts:169-175`
@@ -143,11 +215,15 @@ The core oscillator is a band-limited BLEP triangle, but it is then pushed throu
 
 **Instrument algorithms: Bowed source spectrum falls at 13 to 15 dB per octave, not the documented 6 to 9, and the gate that is supposed to check this is one-sided with 26 dB of headroom**
 
+> **OPEN** as of 2026-08-15. [changes audio] Both halves still present. DSP unchanged: packages/bellows/src/engines/waveguide.ts:171 `const BOW_HAIR_FC = 3500;`, :175 `const BOW_LOOP_FC_CAP = 4200;`, :530 `if (this.bow > 0) fc = Math.min(fc, BOW_LOOP_FC_CAP);`, plus the doubled comb at :604.
+
 `packages/bellows/src/engines/waveguide.ts:175`
 
 docs/BOWED-STRINGS.md round two, item 1 sets the target: 'the sustained bowed spectrum, body off, must tilt roughly minus 6 to 9 dB per octave', a Helmholtz sawtooth being -6. The shipping combination of BOW_LOOP_FC_CAP = 4200 Hz on the loop, BOW_HAIR_FC = 3500 Hz on the injected force, the doubled-length comb and the tanh on the injection overshoots that target by more than a factor of two, so the bowed string is duller than a Helmholtz source rather than close to one. The gates written for it (h8 at or below -12 dB, h12 at or below -16 dB relative to h1) have no lower bound, so an arbitrarily over-damped source passes: the measured h8 is 26 dB below the gate. This is exactly the failure mode docs/AUDIT.md finding 16 describes.
 
 **Docs and claims: packages/bellows-embedded/README.md parity table quotes the pre-Milestone-2 formant and plate rows, at gates that no longer exist**
+
+> **CLOSED** as of 2026-08-15. packages/bellows-embedded/README.md:182 now reads `formant 1.39e-5 1.37e-5 0.00015 pass` and :185 `plate 1.34e-5 1.00e-5 0.00015 pass`. The stale 7.85e-4 / 2.44e-3 values and the 0.005 gates are gone from the table, and the printed gates match the live ones in test/parity/parity.mjs:91 (`formant: { rel: 1.5e-4, abs: 1.5e-4, ... }`) and :264 (`plate: { rel: 1.5e-4, abs: 1.5e-4, ... }`).
 
 `packages/bellows-embedded/README.md` Confirmed by review at minor.
 
@@ -155,11 +231,15 @@ Lines 174 and 177 print formant 7.85e-4 max abs 3.74e-4 gate 0.005, and plate 2.
 
 **Docs and claims: BELLOWS_FAST_MATH kick figure of 1448 bytes appears in two documents and is wrong in both; the real figure is 924**
 
+> **CLOSED** as of 2026-08-15. All three copies now agree, and none says 1448. packages/bellows-embedded/README.md:137: "the kick sketch is 3760 bytes at the default and 936 with the flag"; docs/HANDOFF.md:576: "`BELLOWS_FAST_MATH=1` swaps libm for polynomials and takes the kick from 3760 to 936 bytes"; the verified table docs/HARDWARE.md:167: `| `s1_kick` | 3760 B | 936 B | 75 % |`.
+
 `packages/bellows-embedded/README.md` Confirmed by review at major.
 
 README.md line 129 and docs/HANDOFF.md line 75 both say the flag "takes the kick from 3760 to 1448 bytes". docs/HARDWARE.md line 116 says 3760 to 924 B, a 75 percent saving, and check-docs.mjs verifies that row against the size report every run. So the verified copy of the number is 924 and the two unverified copies are 1448. The derived claim differs too: 1448 would be a 61 percent saving, and the README of the flag would understate it.
 
 **Docs and claims: docs/HANDOFF.md still says the Daisy path has never been built and daisy.h has never seen the real SDK; HARDWARE.md and examples/README.md say it has**
+
+> **CLOSED** as of 2026-08-15. The sentence the finding quotes no longer exists: `grep -rn "never seen the real SDK|never been built" docs/*.md packages/bellows-embedded/README.md packages/bellows-embedded/examples/README.md` matches only docs/AUDIT-2.md:162,166.
 
 `docs/HANDOFF.md`
 
@@ -167,11 +247,15 @@ HANDOFF.md line 96, inside Milestone 1, reads: "Then the Daisy path, which has n
 
 **Docs and claims: docs/HANDOFF.md rule 12 quotes registry costs of 30296/30828; the size report says 30488/30872**
 
+> **CLOSED** as of 2026-08-15. docs/HANDOFF.md:575 now reads: "Playing one kick through a string-keyed registry of five engines costs 30488 bytes of flash and 30872 of RAM against 3760 and 1100 direct", and the second copy docs/KICKOFF.md:188 reads "engines costs 30488 bytes of flash and 30872 of RAM against 3760 and 1100 direct." Both match the verified row docs/HARDWARE.md:89 `| through a string-keyed registry of five engines | 30488 B | 30872 ...
+
 `docs/HANDOFF.md`
 
 HANDOFF.md line 74 states the registry comparison as "30296 bytes of flash and 30828 of RAM against 3760 and 1100 direct". docs/KICKOFF.md line 68 repeats the same two wrong numbers. The verified copy in docs/HARDWARE.md (which check-docs.mjs re-measures every run) is 30488 / 30872. This is described in the same sentence as "the single load-bearing design rule of that package", so it is the one number in HANDOFF that most deserves to be a measured one.
 
 **Docs and claims: docs/KICKOFF.md states the test suite as 80 files / 1146 tests in two places; it is 81 / 1173**
+
+> **CLOSED** as of 2026-08-15. docs/KICKOFF.md:66 `npm test -w packages/bellows 1348 tests` and :333 `npm test -w packages/bellows 1348 tests`; :156 `packages/bellows: npm test all green, no count quoted here`. I ran `npm test -w packages/bellows`: `Test Files 90 passed (90)` / `Tests 1348 passed (1348)`, so both quoted figures are correct and the file-count claim is gone.
 
 `docs/KICKOFF.md`
 
@@ -179,11 +263,15 @@ KICKOFF.md line 31 ("80 test files, 1146 tests") and line 52 ("npm test 80 files
 
 **Docs and claims: packages/bellows-embedded/examples/README.md: four of the five example rows are stale, in a table whose own caption says it cannot drift**
 
+> **CLOSED** as of 2026-08-15. packages/bellows-embedded/examples/README.md:47 `| 02_DrumMachine | a compile-time Bank, euclidean patterns | 30120 B | 1620 B |` and the rest of the table (01 3776/1100, 03 30280/3876, 04 8096/30176, 05 30616/3888).
+
 `packages/bellows-embedded/examples/README.md`
 
 Only 01_OneKick (3776/1100) still matches. 02_DrumMachine reads 29696/1588 against 29688/1620; 03_PolySynth 30304/3776 against 30408/3872; 04_ScalesAndTuning 8080/36928 against 7936/30176; 05_MidiInstrument 30296/3792 against 30344/3888. The file then says of the split between .ino and logic header: "test/sketches/p4_e1_onekick.cpp includes that same header and is what the size report compiles, so the numbers above come from the code you are reading rather than from a copy of it that can drift." The mechanism works; the numbers still drifted, because nothing re-reads this file. The prose is wrong too: "04 is 8 KB... and its 36 KB of RAM is the delay line that is the string" should be 7.9 KB and 30 KB, the 36 KB being another pre-exact-sizing figure.
 
 **Docs and claims: docs/HARDWARE.md's VA symbol breakdown repeats the estimate-by-subtraction error the same document says it corrected: the DSP row is 2.7x too large**
+
+> **CLOSED** as of 2026-08-15. docs/HARDWARE.md:118 'Symbol breakdown of the VA voice sketch, 28640 bytes of flash' (size-report prints `s4_va 28640 1376`, so (a) is fixed), and the table is now itemised and counted: :128 `| residual tables, \`kBlepStep\` plus \`kBlepRamp\` | 16392 | 57 % |`, `| newlib, libm and libc together | 8630 | 30 % |`, :130 `| every other \`bellows::\` symbol | 2696 | 9 % |`, `| the sketch's own \`main\` | 552 | 2 % |`, ...
 
 `docs/HARDWARE.md`
 
@@ -191,11 +279,15 @@ Lines 82 to 93 give "Symbol breakdown of the VA voice sketch, 28552 bytes total"
 
 **Docs and claims: docs/ENGINEERING.md section 2.1 specifies polyBLEP as the default oscillator; the shipping code is a tabulated Kaiser-sinc BLEP, and PRD section 3 repeats the wrong description**
 
+> **CLOSED** as of 2026-08-15. docs/ENGINEERING.md:67 `**AS BUILT (\`src/dsp/oscillators.ts\`): neither, and deliberately.**` sits immediately under the 2.1 spec line and states 'What ships is a tabulated residual: the integral of a Kaiser windowed sinc, KERNEL_HALF = 16 ...
+
 `docs/ENGINEERING.md`
 
 ENGINEERING.md line 58 states "Default: **2-point polyBLEP** for saw/square... **4-point**... as a quality tier", followed by the two residual polynomial sets. Nothing in src/dsp/oscillators.ts uses either. The class comment there says the polynomial residuals were measured insufficient and "the residual here is tabulated from the integral of a Kaiser windowed sinc spanning 32 samples", and docs/HANDOFF.md line 74 records the same decision with the measurement (-37 dB for 4-point polyBLEP against about -90 dB tabulated) and adds "Do not 'simplify' it back". docs/PRD.md line 37, describing what is built "as built in v0.1", also says "polyBLEP saw/square/PWM, polyBLAMP triangle". So the two documents a new contributor reads for the DSP design both describe an algorithm the project deliberately rejected, and one of them tells them not to reintroduce it only in a third file.
 
 **Docs and claims: docs/ENGINEERING.md section 2.3's ladder filter formulas are not what LadderFilter implements: no tuning polynomials, no V_T, no ZDF feedback solve**
+
+> **CLOSED** as of 2026-08-15. docs/ENGINEERING.md:136 `**AS BUILT (\`src/dsp/filters.ts\`, \`LadderFilter\`): neither tier.** None of the six constants above appears in the source.` and it then describes the shipped filter: 'four one-pole stages with tanh in each, run at 2x the sample rate, g = 1 - exp(-2 pi fc / (2 fs)), k = 4 * clamp(resonance, 0, 1.05), a half-input compensation term s4 - 0.5 x ...
 
 `docs/ENGINEERING.md`
 
@@ -203,11 +295,15 @@ Section 2.3 specifies two tiers with concrete constants: a Huovilainen tier with
 
 **Docs and claims: apps/workbench/public/llm.txt claims to be exact for 0.1.5 but predates the audit fixes: no rampParam, no fx capacity options**
 
+> **PARTIAL** as of 2026-08-15. FIXED half: apps/workbench/public/llm.txt:1 '# bellowsjs 0.1.7 LLM reference' and :11 'Everything in it is exact for version 0.1.7.' matches packages/bellows/package.json version 0.1.7; rampParam is present at :289 `rampParam(name: string, value: number, over: TimeValue | {` (and :246 rampParamEvent);
+
 `apps/workbench/public/llm.txt`
 
 Line 11 of the generated reference says "Everything in it is exact for version 0.1.5." It is not. Instrument.rampParam, added by AUDIT finding 3 and present in both src/bellows.ts and dist/bellows.d.ts, does not appear anywhere in the file. Neither do the maxSeconds / maxSize construction-time capacity options from AUDIT finding 5. The file is dated 2026-07-04 while dist was built 2026-08-04, so it is stale even against dist. This matters because five of the fourteen workbench documentation pages send readers to /llm.txt as the authoritative parameter reference: the Engines page says "Every engine's exact parameter list, with ranges, defaults, and curve hints, is in the generated reference at /llm.txt", and the Effects and Presets pages say "listed exactly" and "listed exactly in /llm.txt". docs/HANDOFF.md release ritual step 5 requires regenerating it; that step was skipped for the audi
 
 **Coverage and gates: The plate reverb has no gate that any wrong constant can trip**
+
+> **REFUTED** as of 2026-08-15. docs/AUDIT-2.md:212 carries the marker verbatim: '> REFUTED ON REVIEW, see "Refuted on review, do not re-raise" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding.'
 
 > REFUTED ON REVIEW, see "Refuted on review, do not re-raise" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding.
 `packages/bellows/src/fx/plate.ts`
@@ -216,11 +312,15 @@ test/fx-time/plate.test.ts asserts only qualitative properties: tail still audib
 
 **Coverage and gates: Three of the saturator's four curves can be replaced by a linear gain with the suite green**
 
+> **CLOSED** as of 2026-08-15. packages/bellows/test/fx-dyn/saturator.test.ts:233 `it('each curve index selects the shaper it claims to', () => {` now measures harmonics 2..7 of a bin-exact sine per curve and pins each shaper's signature: `expect(h(d2[0], 3)).toBeCloseTo(0.0668, 3);` (tanh), `expect(h(d2[1], 3)).toBeCloseTo(0.1111, 3); expect(h(d2[1], 5)).toBeLessThan(1e-4);` (softClip), `expect(h(d2[2], 3)).toBeLessThan(1e-4);
+
 `packages/bellows/src/fx/saturator.ts`
 
 shapeOne (src/fx/saturator.ts:111) dispatches on curveIdx: 0 tanh, 1 softClip, 2 foldback, 3 the Chebyshev TableShaper. test/fx-dyn/saturator.test.ts measures only curve 0 (lines 61, 75, 97, 108, 158). Curves 1 and 2 appear once each in 'every curve stays finite and bounded at high drive' and curve 3 once in 'is deterministic', neither of which measures what the curve does. Because updateComp() renormalises RMS after any shaper change, replacing a curve with x*drive stays finite, stays audible, and stays deterministic, so both of those assertions still hold. The golden render uses the saturator at its default curve 0, so it does not see the other three either.
 
 **Coverage and gates: Svf cutoff frequency can be off by nearly 10 percent before any test notices**
+
+> **OPEN** as of 2026-08-15. [under ten minutes] packages/bellows/test/dsp-filt/filters.test.ts:36-40 is unchanged: `it('is about -3 dB at cutoff with Butterworth q', () => { const db = responseDb(svf('lp', 1000, Math.SQRT1_2), 1000); expect(db).toBeGreaterThan(-4); expect(db).toBeLessThan(-2); });` and the same shape for hp at :54.
 
 `packages/bellows/src/dsp/filters.ts`
 
@@ -228,11 +328,15 @@ The Svf is the shared filter behind eq (six bands), va's svf mode, formant, and 
 
 **Coverage and gates: rng.shuffle and rng.gauss are never called by any test, and rng.int's top value is never asserted**
 
+> **CLOSED** as of 2026-08-15. packages/bellows/test/prng.test.ts:87 `describe('seeded prng: shuffle', () => {` with 'is a permutation, not a resampling', 'does not modify its input', 'moves every element to every position given enough trials' (`for (let v = 0; v < n; v++) expect(seen[v].size).toBe(n);`), label stability and degenerate lengths;
+
 `packages/bellows/src/core/prng.ts`
 
 prng.ts is the determinism substrate for the whole library, yet coverage reports fn.shuffle (line 42) and fn.gauss (line 52) as never executed, and grep finds no call site anywhere in packages/bellows/src or packages/bellows/test. Their only appearance in the repo is apps/workbench/src/docs/pages/generative-music.ts:25-26, where they are taught as public API. test/prng.test.ts:38-42 checks only that r.int(7) lands in [0,7), so an int() that can never return n-1 (a classic Fisher-Yates-adjacent off-by-one) passes. rng.weighted, by contrast, is well gated: breaking it fails 10 tests across four files.
 
 **Coverage and gates: The C++ parity harness never numerically compares eleven ported classes**
+
+> **PARTIAL** as of 2026-08-15. FIXED half: render.cpp now drives six of the named classes and `npm run parity` prints 40 rows including `limiter 1.14e-6 ... pass`, `gate`, `gate_sweep`, `flanger_static`, `flanger`, `tremolo`, `autopan`, `ringmod` (packages/bellows-embedded/test/parity/render.cpp:513 `static bellows::Limiter<44100, false, kBlock> fx;`, :520 `static bellows::Gate fx;`, :524/:531 `static bellows::Flanger<44100> fx;`, :537 Tremolo, ...
 
 `packages/bellows-embedded/test/parity/render.cpp`
 
@@ -240,17 +344,23 @@ npm run parity passes 19 rows, but render.cpp constructs only Rng, Kick, Hat, Sn
 
 **DSP core: BLAMP table's "drift removed" step is the wrong correction, and costs the triangle 36 to 48 dB**
 
+> **CLOSED** as of 2026-08-15. packages/bellows/src/dsp/oscillators.ts:245 `const uInt = d1 <= 0 ? 0 : d0 >= 0 ? cell : d1;` inside the ramp loop (:240-248), with `const sInt = ((step[i - 1] + step[i]) / 2) * cell;` and `acc2 += sInt - uInt;`, the unit step is now integrated analytically per cell, exactly the construction the finding prescribed.
+
 `packages/bellows/src/dsp/oscillators.ts` Confirmed by review at major.
 
 buildTables() integrates step[i] - (d >= 0 ? 1 : 0) with the trapezoid rule (lines 216-223) across a grid that straddles the unit step's discontinuity at d = 0. The trapezoid over-counts the unit step by exactly half a grid cell, 1/(2*TABLE_RES) = 7.8125e-3, so ramp[n-1] comes out at -7.812e-3 instead of 0. Line 225 then removes that as a LINEAR ramp across the whole table. The artifact is not linear: it is a localised step at d = 0. The subtraction therefore leaves a 3.906e-3 discontinuity at the centre of the BLAMP kernel, 3.2% of the table's peak value 0.12206. The correct construction needs no drift term at all. Integrating the unit step analytically over each cell (uInt = d1 <= 0 ? 0 : d0 >= 0 ? dd : d1) gives a total of 2.97e-14, i.e. the residual is odd about d = 0 and its integral is zero by symmetry, exactly as the step table's own odd symmetry (2.89e-15) implies. This is also w
 
 **DSP core: WavetableOscillator.setPosition(NaN) makes next() throw a TypeError on the audio thread**
 
+> **CLOSED** as of 2026-08-15. Root cause was clamp() passing NaN through; it no longer does. packages/bellows/src/types.ts:193-195 now reads `export function clamp(v: number, lo: number, hi: number): number { return v >= lo ? (v <= hi ? v : hi) : lo; }` (the header at types.ts:176-192 documents the reversed comparison order).
+
 `packages/bellows/src/dsp/wavetable.ts`
 
 setPosition (line 244) guards with clamp(pos, 0, 1), but clamp in src/types.ts line 177 is `v < lo ? lo : v > hi ? hi : v`, and both comparisons are false for NaN, so NaN passes straight through. In next(), fpos = NaN (line 264), f0 = Math.floor(NaN) = NaN (line 265), frames[NaN] is undefined (line 267), and line 268 dereferences it. This is not a NaN sample, it is a thrown TypeError inside process(). In an AudioWorklet that kills the processor node for the rest of the session. It is reachable through the ordinary public parameter API: engines/wavetable.ts line 111 computes setPosition(base + depth * lfo + envAmt * e) from the position, scanDepth and envToPosition params, so a NaN on any of them lands here. Every dsp module is re-exported from src/index.ts (lines 62-72), so a library user calling setPosition directly hits it too.
 
 **DSP core: LadderFilter's cutoff is 2.3x flat against the SVF, and the two share one param declared in Hz**
+
+> **REFUTED** as of 2026-08-15. docs/AUDIT-2.md:255 carries the marker: "> REFUTED ON REVIEW, see \"Refuted on review, do not re-raise\" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding." and line 256 ends `packages/bellows/src/dsp/filters.ts` with "REFUTED." For the record the cited code is unchanged: filters.ts:190 `this.g = 1 - Math.exp((-2 * Math.PI * fc) / fs2);`.
 
 > REFUTED ON REVIEW, see "Refuted on review, do not re-raise" at the end of this file. The measurement reproduces; the conclusion does not. Do not act on this finding.
 `packages/bellows/src/dsp/filters.ts` REFUTED.
@@ -259,11 +369,15 @@ LadderFilter.set (line 172) computes g = 1 - exp(-2*pi*fc/fs2) and gives that po
 
 **DSP core: NaN on any user-settable parameter permanently poisons every recursive unit; clamp() does not stop it**
 
+> **OPEN** as of 2026-08-15. [changes audio] Every unit the finding names now rejects non-finite at the setter, and clamp no longer passes NaN. filters.ts:65-66 `set(cutoffHz: number, q: number, gainDb = 0): void { if (!Number.isFinite(cutoffHz) || !Number.isFinite(q) || !Number.isFinite(gainDb)) return;`;
+
 `packages/bellows/src/dsp/filters.ts`
 
 clamp in src/types.ts line 177 passes NaN through, and the hand-written guards do the same thing: Svf.update line 65-66 uses Math.min(Math.max(cutoffHz, 1e-3), fs*0.49) and Math.max(q, 1e-3), both of which return NaN for a NaN input. Once a NaN reaches a recursive state variable there is no path back, because none of these units has a reset-on-non-finite and reset() is not called on a parameter change. Confirmed non-finite-forever after a single bad set(): Svf (NaN cutoff, NaN q, NaN gainDb in bell mode), LadderFilter (NaN cutoff, resonance or drive), OnePole (setLowpass(NaN)), Adsr (NaN attack or NaN sustain), Smoother (a NaN target sticks after the target is set back to a good value), EnvelopeFollower (one NaN input sticks forever, because `v > this.y` is false for NaN so it takes the release branch). Everything else hostile I threw at these units is handled correctly: q = 0, negative 
 
 **Embedded package: config.h documents BELLOWS_SAMPLE_RATE as sizing "delay lines, pluck loops" and those are exactly the two that ignore it**
+
+> **OPEN** as of 2026-08-15. [changes audio, under ten minutes] config.h still says exactly what the finding quotes: packages/bellows-embedded/src/bellows/config.h:17-20 " * BELLOWS_SAMPLE_RATE\n * Default rate used by the template defaults that need to size buffers\n * at compile time (delay lines, pluck loops). Runtime Init() still takes\n * the real rate;
 
 `packages/bellows-embedded/src/bellows/config.h`
 
@@ -271,11 +385,15 @@ config.h says of BELLOWS_SAMPLE_RATE: "Default rate used by the template default
 
 **Embedded package: 05_MidiInstrument: pitch bend never reaches a sounding note, contradicting its own header comment**
 
+> **OPEN** as of 2026-08-15. [changes audio, under ten minutes] The header claim is still there: packages/bellows-embedded/examples/05_MidiInstrument/midiinstrument.h:21-23 " * Bend is applied by retuning every sounding voice once per block, which\n * is the same rate a param ramp steps at in the TypeScript kernel and far\n * finer than a pitch wheel is played." No retune exists: bend_ratio_ is written only at line 84 `bend_ratio_ = bellows::fm::SemisRatio(m.Bend() * 2.0f);` and ...
+
 `packages/bellows-embedded/examples/05_MidiInstrument/midiinstrument.h`
 
 The header comment states: "Bend is applied by retuning every sounding voice once per block, which is the same rate a param ramp steps at in the TypeScript kernel and far finer than a pitch wheel is played." No such retune exists. bend_ratio_ is written by the kPitchBend case and read only by HzOf(), which is called only from the kNoteOn case. operator() handles the dirty_ flag for cutoff and nothing else. Moving the wheel while a chord is held does nothing at all; the bend only takes effect on the next note-on. bellows::Va has no API to change a sounding voice's pitch anyway (freq_ is written only in NoteOn), so the claimed behaviour is not merely unimplemented, it is not currently implementable against that engine. This is the flagship MIDI example and the pitch wheel is the second thing anyone tries.
 
 **Embedded package: The only call site of the kernel in the tree passes its arguments in the wrong order**
+
+> **CLOSED** as of 2026-08-15. packages/bellows-embedded/test/sketches/s9n_kernel.cpp now calls `kernel.PushNoteOn(0, 50, 55.0f, 0.9f);` / `kernel.PushNoteOn(40, 60, 110.0f, 0.7f);` / `kernel.PushNoteOff(96, 50);`, matching kernel.h:265 `bool PushNoteOn(uint32_t frame, uint16_t note_id, float hz, float vel, uint8_t target = 0)` and kernel.h:270 `bool PushNoteOff(uint32_t frame, uint16_t note_id, uint8_t target = 0)`.
 
 `packages/bellows-embedded/test/sketches/s9n_kernel.cpp`
 
@@ -283,17 +401,23 @@ The signature is PushNoteOn(uint32_t frame, uint16_t note_id, float hz, float ve
 
 **Facade, kernel, IO: A clock callback that creates a channel or bus permanently duplicates it in the setup log and the live kernel on every render**
 
+> **OPEN** as of 2026-08-15. [changes audio] post() is still unconditional, with no renderCtx branch: packages/bellows/src/bellows.ts:182-186 `private post(msg: KernelMessage, transfer?: Transferable[]): void { this.setup.record(msg); this.kernel.post(msg, transfer); }`. voice() (bellows.ts:261-268 `const id = this.nextChannel++; this.post({ type: 'createChannel', ... })`), bus() (bellows.ts:336-338 `const id = this.nextBus++;
+
 `packages/bellows/src/bellows.ts` Confirmed by review at minor.
 
 Same root cause as the structural leak above, but the damage is cumulative rather than transient. voice(), bus(), samplerInstrument(), granular(), defEngine() and defEffect() all call post(), and createChannel / createBus / registerBank / registerGrain / defOp are the messages SetupLog.collapseKey (setuplog.ts:27-52) deliberately never collapses. So each render permanently appends a fresh copy to this.setup AND creates a real channel in the live worklet that nothing will ever dispose. Renders are cumulative with each other: N renders leave N duplicate sets. HANDOFF item 3 says 'If you add a facade method with side effects, decide explicitly how it records and replays'; the decision for the constructors was never made, and there is nothing in the code or the docs that tells a user a clock callback must not create anything.
 
 **Facade, kernel, IO: defOp is evaluated on the MAIN thread by render(), not only in the worklet realm the docs name**
 
+> **OPEN** as of 2026-08-15. [under ten minutes] The eval sink is unchanged and the realm wording is unchanged. packages/bellows/src/kernel/engine.ts:333-337 "// Tier 3: user DSP. The code string must evaluate to an EngineDef or / EffectDef object. Documented constraint: self-contained, numeric / params only. Blocked by CSP in some hosts;
+
 `packages/bellows/src/kernel/engine.ts`
 
 There is exactly one eval sink in src (grep for `new Function` and `eval(` excluding the generated bundle returns only kernel/engine.ts:320 and a comment in core/serialize.ts:5), which is good. The problem is that the security note attached to it names the wrong realm, in all three places it appears: AUDIT finding 9 ('code execution in the worklet realm'), HANDOFF item 8 (same words), and the comment at engine.ts:316-319 ('Tier 3: user DSP ... Blocked by CSP in some hosts'). renderOffline (render/offline.ts:27) applies the same message stream through the same KernelEngine.apply on whatever thread called it, and Bellows.render() replays the recorded setup log, which filters only 'events' (bellows.ts:595) and therefore still carries every defOp. The worklet realm has no DOM, no fetch, no cookies and no localStorage. The main thread has all of them. An app that lets users author defs and th
 
 **Facade, kernel, IO: Multi-track MIDI event insertion is quadratic on the audio thread: 1302 ms for 100000 events**
+
+> **OPEN** as of 2026-08-15. packages/bellows/src/kernel/engine.ts:381-392 is unchanged: `private pushEvent(e: KernelEvent): void { const arr = this.events; let lo = this.eventHead; let hi = arr.length; while (lo < hi) { const mid = (lo + hi) >> 1; ... } arr.splice(lo, 0, e); }` (splice at line 391). The batch path still inserts one at a time: engine.ts:312-314 `case 'events': for (const e of msg.events) this.pushEvent(e);
 
 `packages/bellows/src/kernel/engine.ts`
 
@@ -303,11 +427,15 @@ Confirms AUDIT finding 8 and sharpens it. pushEvent (engine.ts:364-375) binary s
 
 **Music theory: chordToRoman throws for any scale degree past the seventh, so five of the thirty-two shipped scales cannot be analysed, with a misleading message**
 
+> **CLOSED** as of 2026-08-15. The seven-entry ROMANS table is gone, replaced by a composed numeral: packages/bellows/src/theory/chords.ts:189-203 `const ROMAN_TENS = ['', 'X', 'XX', ...]; const ROMAN_ONES = ['', 'I', 'II', ...];` with the header "Composed rather than tabulated because scales here go past seven degrees: the bebop scales and the two octatonics have eight and 'chromatic' has twelve, and a seven-entry table made chordToRoman throw ...
+
 `packages/bellows/src/theory/chords.ts`
 
 ROMANS has seven entries (chords.ts:185) and chords.ts:245 throws 'chord root does not map to a scale degree' when `degree >= ROMANS.length`. The root does map; only the numeral table is short. This makes diatonicTriads(s).map(c => chordToRoman(c, s)) throw for every scale with more than seven degrees: 'bebop dominant', 'bebop major', 'octatonic half-whole', 'octatonic whole-half' (8 each) and 'chromatic' (12). Roman analysis of an octatonic collection is not standard practice, but throwing from a shipped public API on a shipped scale name is not the right failure, and the message points at the wrong cause.
 
 **Music theory: voiceLead minimises motion only; it produces textbook parallel fifths on IV to V and implements none of the classical part-writing prohibitions**
+
+> **NOT-A-DEFECT** as of 2026-08-15. The finding itself says so at docs/AUDIT-2.md:314: "Neither the source nor the README claims those rules, so this is a scope statement rather than a defect". Code is as described and unchanged: packages/bellows/src/theory/voicelead.ts:129-163 voiceLead scores only `cost = (size - pcs.length) * doublePenalty` plus `motionCost(prev, notes, crossPenalty)` (voicelead.ts:146-152), with no fifth/octave/leading-tone test ...
 
 `packages/bellows/src/theory/voicelead.ts`
 
@@ -315,11 +443,15 @@ What voiceLead (voicelead.ts:129-163) actually implements: minimal total absolut
 
 **Music theory: chordToRoman can never emit a sharp accidental for a seven-note scale, so raised degrees are always spelled flat**
 
+> **CLOSED** as of 2026-08-15. The branch order is inverted and the sharp case is now reachable: packages/bellows/src/theory/chords.ts:264-271 `const fifthsUp = mod12(7 * (ch.root - degreePc(0))); if (sharpOf >= 0 && (fifthsUp <= 6 || flatOf < 0)) { degree = sharpOf; accidental = '#'; } else if (flatOf >= 0) { degree = flatOf; accidental = 'b';
+
 `packages/bellows/src/theory/chords.ts`
 
 chords.ts:227-244 tries the 'b' interpretation before the '#' one. In any scale with no gap larger than two semitones (every diatonic mode, harmonic and melodic minor, both Neapolitans, and so on), every chromatic pitch class is a semitone below some scale degree, so the 'b' branch always succeeds and the '#' branch at chords.ts:236-244 is unreachable. F# in C major comes back as bV; standard analysis writes #iv (the #ivo7 of a secondary-dominant or augmented-sixth context) far more often than bV.
 
 **Music theory: CHORD_TYPES has no augmented-major-seventh, so the diatonic III7 of harmonic minor is unnamed**
+
+> **CLOSED** as of 2026-08-15. packages/bellows/src/theory/chords.ts:38-41 now carries the stack with a comment explaining the placement: " // Diatonic seventh on the third degree of harmonic minor, so a shipped\n // scale produces it. Last in the record because nothing else has to\n // change: detectChord reads this order as its tie-break preference.\n 'maj7#5': [0, 4, 8, 11],".
 
 `packages/bellows/src/theory/chords.ts`
 
@@ -327,11 +459,15 @@ CHORD_TYPES (chords.ts:13-38) covers 24 stacks, all of which are correct, but om
 
 **Music theory: buildProgression with bars = 2 emits no cadence chord because the two cadence branches collide**
 
+> **PARTIAL** as of 2026-08-15. [changes audio] FIXED HALF (the heading): packages/bellows/src/theory/progressions.ts:86 now reads `if (cadence && (i === bars - 2 || bars === 2)) {` so for bars = 2 the cadence branch wins over the tonic branch at :90 (`} else if (cadence && i === bars - 1) {`), giving [0, dominant] instead of [0, 0]. The docblock at :74-78 documents it: "Two bars cannot hold that shape ...
+
 `packages/bellows/src/theory/progressions.ts`
 
 progressions.ts:76-86: for bars = 2 the only generated index i = 1 satisfies both `i === bars - 1` and `i === bars - 2`, and the `bars - 1` branch wins, so the result is [0, 0], tonic to tonic, with the documented "dominant-function penultimate, tonic last" silently skipped. Separately, FUNCTIONAL_WEIGHTS is a major-mode function table (its own comment at progressions.ts:16 says so) and buildProgression has no mode parameter, so applied to a minor scale, degree 4 is a minor triad and degree 6 is a subtonic rather than a leading-tone chord, and the weights (V->I at 5, viio->I at 4) no longer describe the harmony they are named for.
 
 **Architecture: Schroeder Allpass is a dsp primitive implemented twice, verbatim, inside the fx layer**
+
+> **OPEN** as of 2026-08-15. Both copies are still present and still unexported, and there is no dsp/allpass.ts (`ls packages/bellows/src/dsp/` gives delayline, envelopes, fft, filters, lfo, noise, oscillators, oversample, stft, waveshaper, wavetable only). packages/bellows/src/fx/delay.ts:69 `class Allpass {` with ` g: number;` (mutable) and packages/bellows/src/fx/reverb.ts:93 `class Allpass {` with ` private readonly g: number;`.
 
 `packages/bellows/src/fx/reverb.ts`
 
@@ -339,11 +475,15 @@ fx/delay.ts:69 and fx/reverb.ts:93 both declare `class Allpass` with an identica
 
 **Architecture: ChromaAnalyzer and OnsetDetector each hand-roll the STFT framer that dsp/stft.ts already provides**
 
+> **OPEN** as of 2026-08-15. Neither analysis file imports dsp/stft: packages/bellows/src/analysis/chroma.ts:20 `import { RealFft, hann } from '../dsp/fft';` and packages/bellows/src/analysis/onset.ts:24 `import { RealFft, hann } from '../dsp/fft';`. Both still rebuild the framer, e.g. chroma.ts:106-117 `if ((this.frameSize & (this.frameSize - 1)) !== 0) { throw new Error('ChromaAnalyzer frameSize must be a power of two'); } ...
+
 `packages/bellows/src/analysis/chroma.ts`
 
 dsp/stft.ts exports class Stft with exactly the interface these two need: a power-of-two size check, hann window, ring buffer, hop counter, RealFft, and push(samples, from, to) with an onFrame callback. analysis/chroma.ts:110-120 and analysis/onset.ts:96-106 each rebuild that framer from RealFft and hann directly, with byte-identical constructor blocks and near-identical push loops, and neither imports dsp/stft. Only fx/spectral.ts uses StftProcessor. The layering rule is not broken here (analysis -> dsp is downward) but the reuse the layering exists to enable is not happening, and there are now three hop/window/overlap implementations to keep consistent.
 
 **Architecture: SampleZone and SamplerZoneData are field-for-field twins bridged by an unchecked cast**
+
+> **OPEN** as of 2026-08-15. [under ten minutes] packages/bellows/src/render/banks.ts:19 is unchanged: ` for (const zone of data as SamplerZoneData[]) bank.addZone(zone as SampleZone);`. Both declarations still exist independently with the same field list in the same order: packages/bellows/src/kernel/messages.ts:14 `export interface SamplerZoneData {` (data, dataR?, sampleRate, rootKey, fineTune?, keyLo, keyHi, velLo, velHi, loopStart?, loopEnd?, loopMode, ...
 
 `packages/bellows/src/render/banks.ts`
 
@@ -351,11 +491,15 @@ kernel/messages.ts:14 declares SamplerZoneData and engines/sampler.ts:43 declare
 
 **Architecture: The public surface is 293 symbols from one flat barrel, half of it uncurated, with implementation details out and signature types missing**
 
+> **OPEN** as of 2026-08-15. packages/bellows/src/index.ts still mixes curated and star exports: 44 `export {` lines and 32 `export *` lines. Every named leak the finding lists is still reachable. Deliberate ones: index.ts:150 `export { bankEngineResolver } from './render/banks';`, index.ts:153 `export { KernelEngine, internParam } from './kernel/engine';`, index.ts:155 `export { createKernelNode, KERNEL_PROCESSOR_NAME } from './kernel/node';`.
+
 `packages/bellows/src/index.ts`
 
 index.ts uses 43 curated named-export lines and 33 `export *` lines. The curated half is coherent; the star half is where the leaks are. Emitting declarations and resolving the barrel gives 293 exported symbols. Leaked internals include the Ogg container plumbing (oggCrc, buildOggPage, opusHead, opusTags, opusPacketSamples, oggOpusMux), MIDI varint codecs (encodeVlq, decodeVlq), loudness internals (kWeightingCoeffs, BiquadCoeffs) and sfz internals (sfzNoteValue, IncludeResolver) -- none of which any doc page or the README mentions. Deliberately exported implementation details beyond the SetupLog and VoicePool that docs/HANDOFF.md already flags: KernelEngine, internParam, createKernelNode, KERNEL_PROCESSOR_NAME, bankEngineResolver. internParam mutates a module-global param index table shared with the worklet realm, so exporting it lets a user desynchronise the two sides. Going the other w
 
 **Architecture: TempoPoint is declared in the contracts file and used nowhere**
+
+> **OPEN** as of 2026-08-15. [under ten minutes] packages/bellows/src/types.ts:117-122 still reads "/** A tempo automation point. Interpolation from the previous point is linear in bpm. */\nexport interface TempoPoint {\n /** Position in beats. */\n beat: number;\n bpm: number;\n}". `grep -rn TempoPoint packages/bellows/src packages/bellows/test apps docs` returns exactly one source hit (types.ts:118);
 
 `packages/bellows/src/types.ts`
 
@@ -363,11 +507,15 @@ types.ts:118 exports `interface TempoPoint`. It is referenced by no other file i
 
 **Architecture: Bellows.render() carries the offline replay algorithm inside the facade**
 
+> **OPEN** as of 2026-08-15. packages/bellows/src/bellows.ts is 769 lines with three classes (`export class Bellows` at :91, `export class Instrument` at :651, `export class BusHandle` at :759). render() at :559-615 is unchanged in shape: `const offTransport = new Transport({ bpm: this.initialBpm, meter: this.initialMeter }); for (const op of this.transportOps) { if (op.kind === 'bpm') ...
+
 `packages/bellows/src/bellows.ts`
 
 bellows.ts is 758 lines holding three classes. Bellows itself has 26 instance fields and roughly 40 public methods, and it is genuinely a facade for most of them -- one-line delegations to the transport, the registry, the kernel and the theory layer. The exception is render() at lines 552 to 610, which is not delegation: it rebuilds a Transport from this.transportOps, replays bpm, ramp-with-anchor and swing ops onto it, expands every subscription over scheduleHorizon, sorts the resulting ticks, drives the callbacks against a renderCtx, filters the setup log and only then calls renderOffline. That is the offline-fidelity contract docs/HANDOFF.md item 3 describes, living in the class whose job is supposed to be routing calls elsewhere. It is also the method HANDOFF item 4 says must never grow an await, an invariant that would be easier to hold and to test in a module with a narrow signatur
 
 **Architecture: engines/soundfont.ts still imports types from io/, three months after the audit recorded it**
+
+> **OPEN** as of 2026-08-15. [under ten minutes] packages/bellows/src/engines/soundfont.ts:20-21 unchanged: `import type { ResolvedZone, SoundFont } from '../io/sf2';` / `import type { SfzEnvelope, SfzRegion } from '../io/sfz';`. The second instance the finding names is also unchanged: packages/bellows/src/core/scheduler.ts:18 `import type { Transport } from '../seq/transport';`.
 
 `packages/bellows/src/engines/soundfont.ts`
 
@@ -375,11 +523,15 @@ docs/AUDIT.md finding 9 records this and docs/AUDIT.md "Still open after this pa
 
 **Instrument algorithms: The body resonator bank raises its strongest mode by only 1.3 dB over dry, and its largest single feature is an undocumented forest mode**
 
+> **OPEN** as of 2026-08-15. [changes audio] The arithmetic the finding attacks is untouched. packages/bellows/src/engines/waveguide.ts:158-161 "/* Dry bleed inside the wet path (prevents the hollow talking-through-a-tube artifact) and makeup gain on the resonator sum.
+
 `packages/bellows/src/engines/waveguide.ts:158-161`
 
 The structure is faithful to docs/BOWED-STRINGS.md section 1 (RBJ constant-peak bandpasses, dryGain 0.35, makeup 0.8) and the anchor frequencies are genuine published violin signature-mode values (A0 275, CBR 405, B1- 465, B1+ 550, bridge hill 2300). But the arithmetic of the specified topology caps the effect: a unity-peak bandpass with table gain 1.0 summed against a 0.35 dry bleed gives at most 20*log10(0.35 + 0.8) = +1.2 dB at a mode centre, so the bank behaves as a broadband 3 to 7 dB loss with narrow small bumps rather than as a resonating body (a real violin shows 15 to 25 dB between the signature modes and the inter-mode valleys). The repo's own gate asserts only g550 > 1.25 * g825, i.e. 1.9 dB of contrast, which codifies the weak effect rather than testing the intent stated in BOWED-STRINGS section 7 item 1 ('at least +6 dB over the inter-mode floor').
 
 **Instrument algorithms: The bowed string is a single loop with a feedforward comb, not a bidirectional waveguide with the bow at a scattering junction**
+
+> **OPEN** as of 2026-08-15. [changes audio] packages/bellows/src/engines/waveguide.ts:703 is unchanged: ` const dv = bowVelInst - y;` where y is the single loop's output/bridge tap. There is still exactly one delay line in the bowed path (`this.delay.write(sIn);` at :737);
 
 `packages/bellows/src/engines/waveguide.ts:700-738`
 
@@ -387,11 +539,15 @@ STK's Bowed (which the file cites for the friction table, and which it matches e
 
 **Instrument algorithms: Modal glass and wood mode tables have no physical source, unlike the bar and membrane tables**
 
+> **OPEN** as of 2026-08-15. [under ten minutes] packages/bellows/src/engines/modal.ts:58-71 is unchanged, and the two invented tables still carry only descriptive comments with no citation, unlike the two above them: " {\n // Glass: sparse, nearly undamped upper modes.\n ratios: [1, 2.32, 4.25, 6.63, 9.38]," and " {\n // Wood: fast decay, faster still in the upper modes.\n ratios: [1, 2.572, 4.644, 6.984, 9.723],".
+
 `packages/bellows/src/engines/modal.ts:58-71`
 
 Materials 0 and 1 are genuine: the free-free bar ratios 1, 2.756, 5.404, 8.933, 13.345, 18.638 are the textbook transverse values, and the membrane ratios 1, 1.594, 2.136, 2.296, 2.653, 2.918, 3.156, 3.501 are the Bessel zero ratios. Material 2 is a recognisable bell set (the tierce at 2.4 is a minor third above the octave partial). Materials 3 (glass, 1, 2.32, 4.25, 6.63, 9.38) and 4 (wood, 1, 2.572, 4.644, 6.984, 9.723) correspond to no plate, bar or shell family I can identify, and the comments do not cite one. The engine header says 'the material param picks a preset mode table', so nothing is overclaimed, but two of the five tables are invented while the first two are real, and a reader cannot tell which is which from the file.
 
 **Instrument algorithms: Formant engine carries only the bass voice, so every register sings with a bass tract**
+
+> **OPEN** as of 2026-08-15. [changes audio] packages/bellows/src/engines/formant.ts:35-42 still holds exactly one table set: "/* Bass a, e, i, o, u. */" then "const VOWELS: VowelTable[] = [ { freq: [600, 1040, 2250, 2450, 2750], db: [0, -7, -9, -9, -20], bw: [60, 70, 110, 120, 130] }, ..." (five rows, nothing else).
 
 `packages/bellows/src/engines/formant.ts:36-43`
 
@@ -399,11 +555,15 @@ The five vowel rows are exactly the bass rows of the Csound manual's 'Formant Va
 
 **Docs and claims: docs/HARDWARE.md gives s5_all's post-exact-sizing RAM as 223280 in one place and 223324 in another; 223324 is correct**
 
+> **CLOSED** as of 2026-08-15. The 223280 figure no longer exists in the file: `grep -n "223280\|223324" docs/HARDWARE.md` returns only 223324, three times. docs/HARDWARE.md:340 now reads "sizing costs one conditional add per read instead. Measured: `s5_all` 300144 to 223324 bytes"; :470 "In `s5_all` after exact sizing, the single `StereoDelay` buffer is 192152 of 223324 bytes, 86";
+
 `docs/HARDWARE.md`
 
 Line 282 reads "Measured: `s5_all` 300144 to 223280 bytes (25 percent)". Line 412, three paragraphs later, reads "In `s5_all` after exact sizing, the single `StereoDelay` buffer is 192152 of 223324 bytes, 86 percent". The size report says 223324, and check-docs.mjs verifies the 223324 in the profiles table at line 434. So 223280 is the odd one out. The 25 percent conclusion is unaffected (300144 to 223324 is still 25.6 percent), which is why nothing caught it.
 
 **Docs and claims: docs/HARDWARE.md per-shape oscillator paragraph quotes s9e_westcoast at 16768 and p1_drums at 20832; both are 16 to 24 bytes low**
+
+> **CLOSED** as of 2026-08-15. Neither 16768 nor 20832 appears anywhere in docs/HARDWARE.md (`grep -n "16768\|20832\|16784\|20856"` returns nothing). The paragraph now reads, docs/HARDWARE.md:366-367: "saving actually lands: `s9e_westcoast` went 27064 to 17656 bytes and / `p1_drums` 29448 to 20808, each keeping only the table it reads." Those agree with the tables at :171 "| `p1_drums` | 20808 B | 12884 B | 38 % |", :172 "| `s9e_westcoast` | ...
 
 `docs/HARDWARE.md`
 
@@ -411,11 +571,15 @@ Lines 308 and 309 say "`s9e_westcoast` went 27064 to 16768 bytes and `p1_drums` 
 
 **Docs and claims: docs/HARDWARE.md's closing summary says bellows uses "well under one percent of flash" on every viable board, contradicting its own Daisy row**
 
+> **CLOSED** as of 2026-08-15. The sentence is gone and its removal is recorded. docs/HARDWARE.md:518-524: "Restated plainly: on every board here that has megabytes of flash, bellows is a rounding error / against it; on the one board where flash is tight, the whole ported set is 27 percent of the / STM32H750's internal 128 KB and still leaves 93.7 KB free.
+
 `docs/HARDWARE.md`
 
 Line 460 reads: "Restated plainly: on every viable board, bellows uses well under one percent of flash and under half the RAM, and delay buffers are the only thing that moves the needle." The board table five lines above does not say that for Daisy: its Daisy row reads "fits in internal flash, 94 KB spare", because the STM32H750 has 128 KB of internal flash and the ported set is 34 KB, which is 27 percent, not under one percent. The whole point of the paragraph directly below the table ("The Daisy row is the striking one... it fits in internal flash and needs no bootloader at all") is that Daisy is the tight case, so the summary sentence undoes it. The RAM half of the sentence does hold (223324 of 524288 is 42.6 percent), though the table renders that as "40 %" for three boards where 42 to 43 percent is the arithmetic, and Teensy's "20 %" where 223324/1048576 is 21.3 percent.
 
 **Docs and claims: docs/ENGINEERING.md section 2.5's onset detector spec does not match src/analysis/onset.ts: wrong window, wrong hop, no log compression, different peak picking**
+
+> **PARTIAL** as of 2026-08-15. [under ten minutes] Documented but not reconciled. The spec line is unchanged, docs/ENGINEERING.md:157: "**Onsets: spectral flux:** L1 half-wave-rectified magnitude difference with log compression `log(1+γ|X|)`, γ ≈ 1 to 20; 2048-sample Hann window @ 44.1k, **hop 441 (10 ms)**. Peak picking (Dixon): ..." and the code is unchanged, packages/bellows/src/analysis/onset.ts:83-88 "this.frameSize = opts.frameSize ?? 1024;
 
 `docs/ENGINEERING.md`
 
@@ -423,11 +587,15 @@ Section 2.5 specifies spectral flux as "L1 half-wave-rectified magnitude differe
 
 **Docs and claims: docs/HARDWARE.md opens with "Reproduce any of it with" and three commands, but four of its tables cannot be reproduced by any of them**
 
+> **CLOSED** as of 2026-08-15. The promise now carries its own exceptions in the same block. docs/HARDWARE.md:26 adds a fourth command, "node tools/check-docs.mjs --check # every figure below, against every harness", and :30-43 state: "`check-docs.mjs` is the honest answer to \"reproduce any of it\" ...
+
 `docs/HARDWARE.md`
 
 Lines 4 to 16 say "Every number here is measured, not estimated" and then "Reproduce any of it with:" followed by size-report.sh, size-report.sh cortex-m4, and check-header.sh. The double-precision recursion table (lines 186 to 190), the oscillator residual-versus-harmonic ns table (lines 756 to 761), the whole-firmware Teensy table and the Daisy table are none of them producible by those commands. tools/check-docs.mjs's own header comment names exactly this set as uncovered, so the gap is known there but is not stated in the document making the promise. The double-precision benchmark in particular has no source in the tree at all: I wrote an equivalent 64-tap recursion and got M7 128 vs 144 B, M4 128 vs 1808 B, M0+ 1656 vs 4536 B, which supports the qualitative conclusion strongly but reproduces none of the three published penalties, and there is no way to tell whether that is my benchm
 
 **Docs and claims: docs/HARDWARE.md's toolchain attribution says GCC 11.3, but size-report.sh picks 9.2.1 first on this machine**
+
+> **OPEN** as of 2026-08-15. [under ten minutes] The provenance is now stated with the ambiguity spelled out and pinned by the checker. docs/HARDWARE.md:9-19: "Read that version as part of the measurement, because the compiler is not interchangeable here. / `size-report.sh` takes the first `arm-none-eabi-g++` on `PATH` and otherwise the first under / `~/.platformio/packages`, and this machine has two: 11.3.1 from the Teensy toolchain ...
 
 `docs/HARDWARE.md`
 
@@ -435,11 +603,15 @@ Line 5 attributes every freestanding figure to arm-none-eabi-g++ 11.3. size-repo
 
 **Docs and claims: Theory doc page comments romanToChord('bVII', cmaj) as "borrowed Bb"; chordName renders it A#**
 
+> **CLOSED** as of 2026-08-15. apps/workbench/src/docs/pages/theory.ts:70 now reads: "romanToChord('bVII', cmaj); // borrowed, spelled A# (see chordName)". The 'Bb' spelling is gone and the comment matches what chordName prints.
+
 `apps/workbench/src/docs/pages/theory.ts`
 
 Line 70 reads `romanToChord('bVII', cmaj); // borrowed Bb`. The chord is correct (root pitch class 10), but the library's own chordName spells it A#, so a reader following the surrounding examples (which all show chordName output) and printing this one gets 'A#'. Every other value assertion on this page and on tuning, generative-music, presets, analysis and custom-dsp verified exactly, so this is the single miss in 48 checked claims and it is a spelling convention rather than a wrong result.
 
 **Docs and claims: docs/HANDOFF.md release ritual quotes the standalone bundle at about 97 KB gzip; it is 104 KB**
+
+> **OPEN** as of 2026-08-15. [under ten minutes] docs/HANDOFF.md:1165 now reads: "3. `npm run build -w packages/bellows`; check `dist/worklet.js` exists and the standalone size is sane. Measure it rather than remembering it: `gzip -9 -c dist/bellows.standalone.js | wc -c` prints 108400 bytes, 106 KB, after the 2026-08-05 fixes, against 106147 before them and about 97 KB at 0.1.0. Compare against the previous release and ask about a jump over roughly ten percent;
 
 `docs/HANDOFF.md`
 
@@ -447,11 +619,15 @@ Step 3 of the release ritual says "check dist/worklet.js exists and the standalo
 
 **Docs and claims: docs/HARDWARE.md says individual functions are 400 to 500 bytes and then cites one at 528**
 
+> **CLOSED** as of 2026-08-15. docs/HARDWARE.md:332-333 now reads: "The DSP code is not the weight and never was. Individual functions run a few hundred bytes: / `Svf::Update` is 444, `NoiseGen::Process` is 528." The "400 to 500 bytes" range is gone (`grep -n "400 to 500" docs/HARDWARE.md` returns nothing), so no cited figure falls outside a stated range.
+
 `docs/HARDWARE.md`
 
 Line 274 reads "Individual functions are 400 to 500 bytes: `Svf::Update` is 444, `NoiseGen::Process` is 528." Both cited sizes are correct against s5_all, but 528 is outside the range the same sentence states. Trivial, and I mention it only because this document's standard is that a stated number be one a command printed, and the range here is the one part that was not.
 
 **Coverage and gates: The golden render covers 4 of 18 engines and 3 of 18-plus effects, and is the only whole-piece guard**
+
+> **OPEN** as of 2026-08-15. packages/bellows/test/golden/ still contains exactly one piece (golden.test.ts, piece-a.f32). pieceSetup is unchanged, packages/bellows/test/golden/golden.test.ts:41-44 "{ type: 'createChannel', id: 0, engineId: 'va', ... }, { ... engineId: 'fm', ... }, { ... engineId: 'kick', ... }, { ... engineId: 'pluck', ... }" and :51-55 "{ type: 'createBus', id: 1, chain: [{ effectId: 'fdn', ... }] ...
 
 `packages/bellows/test/golden/golden.test.ts`
 
@@ -459,11 +635,15 @@ pieceSetup() uses engines va, fm, kick and pluck, and effects saturator (channel
 
 **Coverage and gates: The all-effects integration gate only rules out NaN, silence and blow-up**
 
+> **OPEN** as of 2026-08-15. packages/bellows/test/integration/offline.test.ts:70-93 is unchanged: "it('runs each effect on a va note without NaN or silence collapse', () => { for (const def of listEffects()) { ... const s = stats(out.left); expect(s.nan, def.id + ' produced NaN').toBe(false); expect(s.peak, def.id + ' silent').toBeGreaterThan(1e-4); expect(s.peak, def.id + ' blew up').toBeLessThan(8);
+
 `packages/bellows/test/integration/offline.test.ts`
 
 'runs each effect on a va note without NaN or silence collapse' (offline.test.ts:70-95) asserts nan === false, peak > 1e-4 and peak < 8 for every registered effect. Any effect that degrades into a dry passthrough, or into a plain gain, satisfies all three. That is what let C1, C2, C3 (three saturator curves flattened to a linear gain) and the five plate mutations through. This is a reasonable smoke test and should stay, but it is currently the ONLY thing several effects have beyond their own qualitative unit file, so it is worth not mistaking it for coverage.
 
 **Coverage and gates: voiceLead's unequal-size branch, including the crossing penalty, is never executed**
+
+> **OPEN** as of 2026-08-15. [under ten minutes] packages/bellows/src/theory/voicelead.ts:92-119 still holds the unequal branch: `if (prev.length === notes.length) { ... return c; }` then the nearest-note assignment plus `if (assigned[i] > assigned[j]) c += crossPenalty;`. voicelead.ts:145 `const size = prev.length > pcs.length ? prev.length : pcs.length;` means motionCost only takes the unequal path when prev.length < pcs.length.
 
 `packages/bellows/src/theory/voicelead.ts`
 
@@ -471,11 +651,15 @@ motionCost (src/theory/voicelead.ts:92) has two branches. The equal-sizes branch
 
 **Coverage and gates: Scheduler.rewind() has no test, and it is on the b.start() path**
 
+> **OPEN** as of 2026-08-15. [under ten minutes] packages/bellows/src/core/scheduler.ts:62 `rewind(): void {` (resets lastTick, gap, and every sub's scheduledTo/lastStep) and scheduler.ts:57 `get size()` are still present. packages/bellows/src/bellows.ts:380-382 `start(): void { this.scheduler.rewind(); this.transport.start(this.ctx.currentTime + 0.05); }`.
+
 `packages/bellows/src/core/scheduler.ts`
 
 Bellows.start() (src/bellows.ts:373) calls this.scheduler.rewind() before starting the transport. Coverage reports Scheduler.rewind (scheduler.ts:62) and get size (:57) as never executed; src/core/scheduler.ts sits at 83.92 percent with lines 58-59 and 63-69 uncovered. Making rewind a no-op fails nothing. Since rewind is what resets step counters so a restarted transport replays the piece from step 0, a regression there means the second b.start() of a session plays from the wrong step, and the suite would stay green. b.start, b.stop, b.pause, b.resume, b.panic, b.bpm, b.rampBpm and b.swing are all in the never-called list from coverage too, so this is one instance of a broader hole: the transport control surface of the facade has no test.
 
 **Coverage and gates: The Web MIDI runtime path is uncovered: only parsing is tested**
+
+> **OPEN** as of 2026-08-15. packages/bellows/src/io/webmidi.ts still has exactly the cited entry points, at the same lines: 268 `function findPort<T extends MidiPortLike>(`, 358 `dispatch(bytes: ArrayLike<number>): void {`, 383/448 `close(): void {`, 417 `send(bytes: number[]): void {`, 427 `noteOn(...)`, 432 `noteOff(...)`, 437 `cc(...)`, 443 `pitchBend(...)`.
 
 `packages/bellows/src/io/webmidi.ts`
 
@@ -483,11 +667,15 @@ src/io/webmidi.ts is at 68.24 percent statements and 58.06 percent functions. Un
 
 **DSP core: LadderFilter never self-oscillates, but its doc comment says it does**
 
+> **OPEN** as of 2026-08-15. [under ten minutes] packages/bellows/src/dsp/filters.ts:181 (was 168; the file grew a header block) still reads ` * cutoffHz in Hz, resonance 0..1 (self-oscillation near 1), drive >= 1`. The mechanism is unchanged: filters.ts:189 `this.k = 4 * Math.min(Math.max(resonance, 0), 1.05);`, filters.ts:196 `const u = Math.tanh(this.drive * (x - this.k * (this.s4 - 0.5 * x)));` reads s4 before filters.ts:200 writes it, and the half-input ...
+
 `packages/bellows/src/dsp/filters.ts`
 
 Line 168 reads "resonance 0..1 (self-oscillation near 1)". Measured, the impulse tail is dead at every setting the clamp allows. k tops out at 4 * 1.05 = 4.2, but the loop also carries a one-sample delay at the internal 2x rate (s4 is read at line 179 before being written at line 183) and the half-input compensation term, and the combination keeps the loop gain below unity everywhere. The peak resonance the filter can reach is +23.3 dB at fc = 250 Hz, falling to +10.7 dB at fc = 4000 Hz - a resonant filter, not a self-oscillating one, and the peak height is strongly frequency dependent.
 
 **DSP core: DelayLine hangs forever in its constructor for maxSamples at or above 2^30**
+
+> **CLOSED** as of 2026-08-15. packages/bellows/src/dsp/delayline.ts:21 `const MAX_SAMPLES = 2 ** 30 - 4;`, delayline.ts:33-35 `if (maxSamples > MAX_SAMPLES) { throw new Error(`DelayLine maxSamples must be at most ${MAX_SAMPLES}`); }`, and the loop is now delayline.ts:41-42 `let n = 1;
 
 `packages/bellows/src/dsp/delayline.ts`
 
@@ -495,11 +683,15 @@ Line 23 is `while (n < maxSamples + 4) n <<= 1;`. JavaScript's << is a 32-bit op
 
 **DSP core: Adsr.set is documented "Safe to call while running" but stepping sustain mid-note jumps the level instantly**
 
+> **OPEN** as of 2026-08-15. [under ten minutes] packages/bellows/src/dsp/envelopes.ts:108-110 still reads `case Stage.Sustain: this.lvl = this.sus; return this.lvl;` (unconditional assignment each sample), and envelopes.ts:78 `this.sus = clamp(sustain, 0, 1);` takes effect immediately. The docstring at envelopes.ts:60-65 still opens `Times in seconds, sustain 0..1.
+
 `packages/bellows/src/dsp/envelopes.ts`
 
 The Sustain branch (line 83-85) assigns this.lvl = this.sus unconditionally each sample, so a new sustain value takes effect in one sample with no smoothing. The comment on line 48 says "Times in seconds, sustain 0..1. Safe to call while running." The times genuinely are safe to change while running; sustain is not. engines/va.ts routes every setParam through apply(), which calls ampEnv.set(...), so moving the sustain slider while a note is held produces a step in the amplitude envelope, and a step in an amplitude envelope is a click.
 
 **DSP core: A voice with sustain 0 never goes idle, and the release tail runs 1.85x the configured release**
+
+> **OPEN** as of 2026-08-15. [changes audio] Both halves stand. Part 1: packages/bellows/src/dsp/envelopes.ts:101-106 `case Stage.Decay: this.lvl += this.dCoef * (this.sus - this.lvl); if (Math.abs(this.lvl - this.sus) < 1e-4) { this.lvl = this.sus; this.stage = Stage.Sustain; }` so with sus = 0 the stage becomes Sustain, and envelopes.ts:122-123 `get active(): boolean { return this.stage !== Stage.Idle; }` stays true forever;
 
 `packages/bellows/src/dsp/envelopes.ts`
 
@@ -507,11 +699,15 @@ Two separate lifetime surprises in the same class. First, IDLE_FLOOR is only tes
 
 **DSP core: StftProcessor and Istft accept hop = fftSize and then silently drop samples**
 
+> **OPEN** as of 2026-08-15. [under ten minutes] packages/bellows/src/dsp/stft.ts:30-31 still reads `if (!Number.isInteger(hop) || hop < 1 || hop > fftSize) { throw new Error('hop must be an integer in [1, fftSize], got ' + hop); }`, so hop === fftSize is accepted. The zeroing guard is unchanged at stft.ts:184 and stft.ts:252, both `for (let j = 0; j < hop; j++) this.invNorm[j] = norm[j] > 1e-6 ? 1 / norm[j] : 0;`.
+
 `packages/bellows/src/dsp/stft.ts`
 
 checkArgs (line 30) allows hop up to and including fftSize. With the default hann window on both sides, the per-position COLA sum falls to zero near the frame edges, the 1e-6 guard on line 184/252 turns those positions into a hard zero, and the output develops periodic dropouts. Nothing throws and nothing warns; the caller gets audio that is quietly 5 percent wrong in RMS. To be clear about what is NOT wrong: there is no gain blowup. The guard does its job, and the header's claim that the exact per-position normalisation reconstructs at unity gain "for any hop where that sum stays above zero" is verified true, including for hops that do not divide the window.
 
 **DSP core: LadderFilter's 2x oversampling has no anti-imaging or anti-aliasing filter, which shows once drive is raised**
+
+> **OPEN** as of 2026-08-15. [changes audio] packages/bellows/src/dsp/filters.ts:204-208 `next(x: number): number { // Two half-rate ticks per output sample. The input is held for both; // the second tick's output is the decimated result. this.tick(x); return this.tick(x); }` - still a zero-order hold up and a drop-one-of-two decimation with no filtering.
 
 `packages/bellows/src/dsp/filters.ts`
 
@@ -519,11 +715,15 @@ next() (lines 187-192) upsamples by holding the input across both ticks and deci
 
 **Embedded package: Oversampler drops the maxBlock bound check the TypeScript throws on**
 
+> **CLOSED** as of 2026-08-15. packages/bellows-embedded/src/bellows/dsp/oversample.h:180-181 `float* Up(const float* input, int from, int to) { if (to - from > kMaxBlock) to = from + kMaxBlock;` and oversample.h:196-197 `void Down(const float* processed, float* out, int from, int to) { if (to - from > kMaxBlock) to = from + kMaxBlock;`. The overrun of buf2_/buf4_ is gone.
+
 `packages/bellows-embedded/src/bellows/dsp/oversample.h`
 
 src/dsp/oversample.ts throws 'Oversampler block exceeds maxBlock' at the top of both up() and down(). The C++ Up() and Down() have no equivalent: Up(input, from, to) writes (to - from) * kFactor floats into buf2_/buf4_, which are sized kMaxBlock * 2 and kMaxBlock * 4. Both in-tree users chunk correctly before calling (Saturator::Process and Limiter::Process both loop `for (int start = from; start < to; start += kMaxBlock)`), so this is latent rather than live, but bellows::Oversampler is a public class in a header-only library and the class it most resembles in the JS refuses the overrun loudly.
 
 **Embedded package: Lfo sample-and-hold with a null Rng is a constant zero, so Tremolo and AutoPan silently stop modulating in that shape**
+
+> **CLOSED** as of 2026-08-15. packages/bellows-embedded/src/bellows/dsp/lfo.h:26-27 `inline constexpr uint32_t kLfoDefaultSeed = Xmur3("lfo/sh"); static_assert(kLfoDefaultSeed == 0x3ffd21a2u, "the default LFO stream is rng('lfo/sh')");` and lfo.h:44-50 `if (rng == nullptr) { own_.Init(kLfoDefaultSeed); rng_ = &own_; } else { rng_ = rng; } held_ = rng_->Bipolar();`.
 
 `packages/bellows-embedded/src/bellows/dsp/lfo.h`
 
@@ -531,11 +731,15 @@ The TypeScript Lfo constructor falls back to `makeRng('lfo/sh')` when no rng is 
 
 **Embedded package: Modal's rng draws move from note-on to the audio path, so retriggering diverges from the JS stream**
 
+> **OPEN** as of 2026-08-15. [changes audio] packages/bellows-embedded/src/bellows/engines/modal.h:154-158 still consumes the stream inside Process: `if (strike_pos_ < strike_len_) { float shape = 0.5f * (1.0f - fm::Cos(strike_w_ * static_cast<float>(strike_pos_))); float jitter = 1.0f + 0.25f * rng_->Bipolar(); x = shape * jitter * strike_amp_; ++strike_pos_;
+
 `packages/bellows-embedded/src/bellows/engines/modal.h`
 
 The header states: "the JS precomputes the strike pulse into a Float32Array at NoteOn ...; here the raised cosine is evaluated as it is consumed. The rng draw order inside a note is unchanged, so the excitation is identical". That holds for one note played to completion. It does not hold across a retrigger: the JS consumes all `len` draws at noteOn, while the C++ consumes one per rendered sample and a NoteOn during the strike abandons the remaining draws. The two streams then differ for the rest of the patch. It also breaks if one Rng is shared between voices, which the `Init(sr, rng)` pointer signature invites, because the JS forks per voice. The parity harness renders one note so it cannot see this.
 
 **Embedded package: bringup.h Rig::SetStage races the audio interrupt and can wedge the stage machine**
+
+> **CLOSED** as of 2026-08-15. packages/bellows-embedded/examples/00_BringUp/bringup.h now makes SetStage a pure publisher and the ISR the only writer of pending_/phase_/target_. Lines 207-215: `void SetStage(int stage) { if (stage == requested_) return; requested_ = stage; __atomic_store_n(&req_stage_, stage, __ATOMIC_RELAXED); __atomic_store_n(&req_seq_, req_seq_ + 1u, __ATOMIC_RELEASE); }`.
 
 `packages/bellows-embedded/examples/00_BringUp/bringup.h`
 
@@ -543,11 +747,15 @@ SetStage() is called from loop() and writes pending_, phase_ and target_. Advanc
 
 **Embedded package: Xmur3 hashes plain char, whose signedness differs between the host harness and ARM**
 
+> **CLOSED** as of 2026-08-15. packages/bellows-embedded/src/bellows/core/prng.h:65 reads the byte through unsigned char: `h = (h ^ static_cast<uint32_t>(static_cast<unsigned char>(*p))) * 3432918353u;`. A compile-time gate was added too, prng.h:76-77: `static_assert(Xmur3("caf\xc3\xa9") == 0x1ab6029eu, "Xmur3 must hash bytes as unsigned on every target");` (the comment at :73-75 says the label's fourth character is above 0x7f precisely so the ...
+
 `packages/bellows-embedded/src/bellows/core/prng.h`
 
 `h = (h ^ static_cast<uint32_t>(*p)) * 3432918353u;` with `*p` a plain char. Plain char is signed on x86-64 (where test/parity/render.cpp is compiled and where the prng parity row is proved bit-exact) and unsigned on ARM EABI. For any label byte >= 0x80 the two produce different seeds, so a stream that matches the browser in the parity harness would not match on the board. Every label in the tree is ASCII, so nothing is currently wrong; the parity harness cannot detect it because it only ever runs the host build. Worth noting given the stated endgame of streaming events from bellows.live into the same stream labels.
 
 **Embedded package: midi::Parse writes into *out on paths where it returns false, contrary to its comment**
+
+> **CLOSED** as of 2026-08-15. packages/bellows-embedded/src/bellows/io/midi_parse.h now assembles everything in locals and commits once. Locals: `const uint8_t channel = static_cast<uint8_t>(status & 0x0f); const uint8_t data1 = len > 1 ? ... : 0; uint8_t data2 = len > 2 ? ... : 0; uint16_t bend14 = 8192; Kind parsed;` and the single commit at :139-143: `out->kind = parsed; out->channel = channel; out->data1 = data1; out->data2 = data2;
 
 `packages/bellows-embedded/src/bellows/io/midi_parse.h`
 
@@ -555,11 +763,15 @@ The doc comment says Parse returns false "for system messages, running status (n
 
 **Embedded package: Teensy ToInt16 converts NaN to int16_t, which is undefined behaviour**
 
+> **CLOSED** as of 2026-08-15. packages/bellows-embedded/src/bellows/platform/teensy.h:70-73: `inline int16_t ToInt16(float x) { if (isnan(x)) return 0; return static_cast<int16_t>(Clamp(x, -1.0f, 1.0f) * 32767.0f); }`. The preceding comment records the UBSan reproduction and the fix rationale, and the function was deliberately hoisted outside the __IMXRT1062__ guard ("the host safety harness cannot gate a conversion it cannot compile") so npm ...
+
 `packages/bellows-embedded/src/bellows/platform/teensy.h`
 
 bellows::Clamp is `v < lo ? lo : (v > hi ? hi : v)`, both comparisons false for NaN, so Clamp(NaN, -1, 1) returns NaN and `static_cast<int16_t>(NaN * 32767.0f)` is UB. On Cortex-M7 VCVT yields 0 so the practical result is a sample of silence, but the file's own comment argues carefully that wrapping an out-of-range sample is "the worst failure mode available on a speaker" and this is the one input where the clip does not clip. A self-oscillating LadderFilter or a divide in a feedback path is the realistic source. daisy.h has no conversion so it is unaffected, but it passes NaN straight to the codec.
 
 **Facade, kernel, IO: A sub-block param ramp lands one block LATE, not immediately as documented**
+
+> **OPEN** as of 2026-08-15. [under ten minutes] Ordering is unchanged: packages/bellows/src/kernel/engine.ts:543 `if (this.activeRamps > 0) this.advanceRamps(blockStart);` is still at the top of process(), and the ParamRamp event is applied later in the same block by the event loop below it (`this.applyEvent(e);` inside the while over this.events).
 
 `packages/bellows/src/kernel/engine.ts`
 
@@ -567,11 +779,15 @@ AUDIT.md's still-open list and HANDOFF line 180 both say 'a ramp shorter than a 
 
 **Facade, kernel, IO: A non-finite ramp duration wedges one of the 32 ramp slots forever**
 
+> **OPEN** as of 2026-08-15. [changes audio, under ten minutes] packages/bellows/src/kernel/engine.ts:423-428 now guards with both tests: `if (\n e.c > 0 &&\n Number.isFinite(e.c) &&\n current !== undefined &&\n this.startRamp(e.target, e.a, current, e.b, e.c)\n ) { break; }`. Infinity therefore falls through to the documented immediate-apply path at engine.ts:435-436 `this.clearRamps(e.target, e.a); c.pool.setParam(name, e.b);`.
+
 `packages/bellows/src/kernel/engine.ts`
 
 applyEvent guards the ParamRamp duration with `if (e.c > 0 ...)` (engine.ts:398), which correctly rejects NaN (NaN > 0 is false) and falls through to the documented immediate-apply path. Infinity passes the guard. startRamp then computes endFrame = startFrame + Math.max(1, Math.round(Infinity * sampleRate)) = Infinity (engine.ts:423), so advanceRamps never satisfies `frame >= s.endFrame` and never frees the slot, and t = (frame - start) / Infinity is 0 so the parameter never moves either. Reachable as inst.rampParam(name, value, { seconds: Infinity }), or from any user arithmetic that divides by zero. 32 such calls exhaust RAMP_SLOTS and silently downgrade every future ramp on that kernel to an immediate jump (engine.ts:448 returns false, engine.ts:403-404 applies the destination at once).
 
 **Facade, kernel, IO: b.now() is not render-aware, so a callback timing off it misroutes during replay**
+
+> **CLOSED** as of 2026-08-15. packages/bellows/src/bellows.ts:244-246: `now(): number { return this.renderCtx ? this.renderCtx.now : this.ctx.currentTime; }`. The doc comment above it (bellows.ts:236-243) states the new contract: "During render() this is the tick time of the callback being re-run, the same value untimed calls resolve to, which makes it a fourth replay invariant alongside the three in HANDOFF item 3", and spells out the old ...
 
 `packages/bellows/src/bellows.ts`
 
@@ -579,11 +795,15 @@ Every other time-sensitive facade method branches on renderCtx: noteEvents (bell
 
 **Facade, kernel, IO: quick.ts never resets the shared boot promise and never clears its instrument cache**
 
+> **CLOSED** as of 2026-08-15. Both halves are fixed in packages/bellows/src/quick.ts. Rejection reset, :32-45: `const booting = Bellows.boot({ seed: 'quick' }); shared = booting; booting.then((b) => { if (shared === booting) sharedInstance = b; }, () => { if (shared === booting) shared = null; });` plus a disposal reset at :27-31 `if (sharedInstance && sharedInstance.disposed) { shared = null; sharedInstance = null;
+
 `packages/bellows/src/quick.ts`
 
 Confirmed still true as AUDIT finding 9 records. quick.ts:13, `if (!shared) shared = Bellows.boot({ seed: 'quick' })`, stores the promise before it settles, so a rejection (the likely case in practice: boot() from outside a user gesture, or a CSP that blocks the blob worklet URL, which createKernelNode at kernel/node.ts:37-43 turns into a thrown Error) is cached permanently and every later play() rejects with it for the life of the page. A second, unrecorded half: the module-level `cache` (quick.ts:10) holds Instrument handles bound to that Bellows and is never cleared either, so even a working reset of `shared` would hand back instruments pointing at a disposed kernel.
 
 **Facade, kernel, IO: createBus, registerBank, registerGrain and defOp still grow the setup log without bound, and there is no removeBus**
+
+> **OPEN** as of 2026-08-15. [changes audio] packages/bellows/src/kernel/setuplog.ts collapseKey still has no case for the four message types and ends `default:\n return null;` (setuplog.ts:49-50), so record() appends unconditionally: `const key = collapseKey(msg); if (key === null) { this.msgs.push(msg); return; }` (setuplog.ts:85-88). forgetChannel is still the only escape hatch (setuplog.ts:105) and there is no forgetBus.
 
 `packages/bellows/src/kernel/setuplog.ts`
 
@@ -591,11 +811,15 @@ Confirmed still true as AUDIT.md's still-open list records. collapseKey (setuplo
 
 **Facade, kernel, IO: Input validation on public methods is inconsistent: some throw, some clamp, most silently accept anything**
 
+> **OPEN** as of 2026-08-15. [changes audio] No validation policy has appeared. packages/bellows/src/bellows.ts:264-274 `voice(engineId: string, params: Record<string, number> = {}, opts?: { polyphony?: number })` posts createChannel with the id and polyphony unchecked; masterGain is bare pass-through at bellows.ts:347-349 `masterGain(gain: number): void { this.post({ type: 'masterGain', gain }); }`;
+
 `packages/bellows/src/bellows.ts`
 
 There is no stated policy and the behaviour splits three ways with no visible logic. Throws: b.bpm(0/-100/NaN), b.swing(5), a bad note name, an unparseable TimeValue. Clamps: vel (bellows.ts:467), pan (engine.ts:257). Silently accepts: gain, master gain, send level, polyphony (including 0, negative and 1e7), unknown param names, unknown effect ids, out-of-range fxIndex, negative durations, NaN notes. Two of those are worse than cosmetic: NaN gain is finding 3 above, and b.voice('typo') is accepted at the facade, degrades to a console.error in realtime via the worklet's catch (worklet-entry.ts:34-39), but THROWS out of render() because renderOffline calls engine.apply with no try/catch (render/offline.ts:27). Same call, opposite failure modes in the two paths the whole architecture is built on being identical.
 
 **Facade, kernel, IO: The worklet processor returns true forever and dispose() has no way to stop it**
+
+> **OPEN** as of 2026-08-15. packages/bellows/src/kernel/worklet-entry.ts:63 is still an unconditional `return true;` at the end of process() (the only other return, :45 `if (!out || out.length === 0) return true;`, is also true). `grep -rn "shutdown" packages/bellows/src/kernel` returns nothing, so KernelMessage still has no shutdown member. KernelNode.dispose is unchanged at kernel/node.ts:62-65: `dispose() { node.port.onmessage = null;
 
 `packages/bellows/src/kernel/worklet-entry.ts`
 

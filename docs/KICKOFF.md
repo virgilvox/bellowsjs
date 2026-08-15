@@ -113,10 +113,14 @@ READ FIRST, in this order, before touching anything:
   2. docs/HANDOFF.md    state, the plan, the harnesses, the traps. The two sections that save
                         the most time are "The verification harnesses" and "Things that are not
                         obvious from the code".
-  3. docs/AUDIT-2.md    the current audit. 95 findings from a whole-repo pass, with the five
-                        that were refuted listed at the end so you do not re-raise them.
+  3. docs/AUDIT-2.md    the current audit. 95 findings from a whole-repo pass, each carrying a
+                        status blockquote under its heading with the evidence for it: 43 open,
+                        8 partial, 38 closed, 5 refuted, 1 not a defect, as of 2026-08-15.
+                        That file is the register. Do not re-derive the count from HANDOFF.
   4. docs/AUDIT.md      the earlier audit, findings 1 to 20. Findings 10 and 11 carry a
-                        correction: they say CI enforces things, and CI has never run.
+                        correction saying CI has never run. The correction is stale and the
+                        claim in it is false: CI has run twelve times, all green, ten of them
+                        on a push to main. The findings read correctly as written.
   5. docs/HARDWARE.md   the embedded port, every flash and RAM number, and "Making it smaller",
                         which records what was measured and deliberately NOT taken.
   6. docs/LANDSCAPE.md  what else exists on the web and in hardware, where this library actually
@@ -135,11 +139,16 @@ WHERE THINGS STAND
   examples/daisy_onekick links against real libDaisy.
 - Parity passes on 40 rows with the PRNG bit exact, plus 428 exactly-compared value
   rows for the parts that make no sound.
-- TWO THINGS HAVE NOT HAPPENED, and both matter more than they look:
-    NOTHING HAS BEEN FLASHED TO A BOARD AND LISTENED TO. Everything is compile-verified and
-    numerically verified. Do not confuse that with working.
-    CI HAS NEVER RUN. .github/workflows/ci.yml is not on the default branch, so GitHub has never
-    scheduled it. Every claim that CI enforces something describes a file, not a control.
+- BOTH OF THE THINGS THIS SECTION USED TO SAY HAD NOT HAPPENED HAVE NOW HAPPENED, and the
+  correction is worth reading rather than skipping, because both were stated here as hard
+  facts for weeks after they stopped being true:
+    A BOARD HAS BEEN FLASHED AND HEARD. A Teensy 4.0 runs 17_WorkstationI2S, which is
+    07_Workstation summed to mono, through a MAX98357A at 47.2 percent peak CPU. That is one
+    board and one program. Nothing else has been run, and neither implementation has been
+    compared to the other by ear.
+    CI HAS RUN. Twelve completed runs, all green, ten of them triggered by a push to main, the
+    most recent on f48dbd3. Check with `gh run list` rather than believing this line, since
+    this line is what was wrong before.
 
 HARD RULES (from CLAUDE.md, non-negotiable)
 - No emojis anywhere. No em dashes: use commas, periods, colons, parentheses.
