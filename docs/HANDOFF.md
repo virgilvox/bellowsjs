@@ -130,14 +130,25 @@ Two things this turned up that are worth carrying forward. 16 and 17 have no
 logic header at all, only an `.ino`, so `p14_` and `p15_` reconstruct the
 composition rather than including the source the example compiles, which is
 the one place in the size table where the number and the code are not the same
-text. Both sketches say so at the top. And 17 costs 448 B of flash more than
-07 for the same patch, because it calls `Piece::Compose()` and 07 does not, so
+text. Both sketches say so at the top. And 17's row sits 448 B of flash above
+07's for the same patch, because it calls `Piece::Compose()` and 07 does not, so
 `--gc-sections` keeps the mode picker, the progression, the five euclidean
 rhythms and the motif generator that 07 drops.
 
+That attribution was checked by building twice rather than left as a
+subtraction, because the two sketches differ in two ways and this file has been
+wrong about exactly that before. **`Compose` is 480 B**; the rest of 17,
+including the mono fold, is **minus 32 B** against 07, because calling the
+render through a wrapper changes how the loop inlines. 480 minus 32 is the 448.
+The recipe is in the sketch's header comment.
+
 Measured while adding the rows: 21_Presets is the only example in the set that
-a Teensy 3.6 refuses. Eleven voice pools and a plate tank is 251 KB against
-the 256 KB the part has.
+a Teensy 3.6 refuses, by `region RAM overflowed by 8592 bytes`. That is the
+linker's figure. The first version of this line reasoned instead from the
+251 KB the Cortex-M7 size sketch reports against the 256 KB the part has, which
+is a freestanding library-only number standing in for a firmware link that also
+carries the Arduino core and the audio library. It happened to land near the
+right answer, which is exactly how a wrong method survives a review.
 
 **2. The firmware manifest points at the wrong commit. DONE.** The 60 binaries
 in `apps/workbench/public/firmware` were built before the commit that contained
@@ -235,11 +246,13 @@ genuinely open findings: 43 open and 8 partial, against 38 closed, 5 refuted and
 that file is the register and this one is not. The figure this entry used to
 give, roughly 73, was wrong by 22 and could not be reproduced from any document.
 
-Twenty of the open ones would change rendered output and are tagged
-`[changes audio]` in the file. Seventeen are closable in under ten minutes and
-are tagged `[under ten minutes]`; several of those are documents that describe
-code the repository does not have, which is the failure mode `check-docs` exists
-for and cannot see, because a prose claim about an algorithm is not a figure.
+Twenty-two of the 51 would change rendered output and are tagged
+`[changes audio]` in the file. Twenty are closable in under ten minutes and are
+tagged `[under ten minutes]`; several of those are documents that describe code
+the repository does not have, which is the failure mode `check-docs` exists for
+and cannot see, because a prose claim about an algorithm is not a figure. A
+finding with no tag has been judged neither, rather than left unassessed: all 51
+carry an explicit verdict on both.
 
 The largest single one is unchanged and is still the string waveguide being up
 to 23 cents flat below 165 Hz, which matters more than it did: the engine is
@@ -597,7 +610,7 @@ Rules learned the hard way about these:
 ## Recent history worth knowing
 
 - **`docs/AUDIT-2.md` is the current one**: a whole-repository pass on 2026-08-05, forty agents across eight slices, 95 findings, each escalated finding then attacked by a skeptic whose default was to refute. Two slices came back sound (the architecture holds, the DSP core is correct); six came back needs-work. Five findings were refuted and are listed at the end so nobody rediscovers them: the ladder cutoff is deliberate, `romanToChord`'s accidentals are right, and `pattern.fast()`'s cycle length is the documented contract. Read the blocking and major sections before touching anything.
-- The 2026-08-04 audit is in `docs/AUDIT.md`, findings 1 through 20, each with its evidence. Read it before touching the facade, the fx capacity options, the kernel ramp table, or anything in the embedded port. Findings 10 and 11 used to carry a correction saying CI had never run. **That correction is itself out of date and the claim in it is now false**: `gh run list` on 2026-08-15 shows twelve completed `ci` runs, all green, ten of them triggered by a push to `main`, the most recent on `f48dbd3`. So findings 10 and 11 read correctly as written and the retraction attached to them should be read as history. The two AUDIT-2 findings about CI, at lines 25 and 31, are both closed: `ci.yml` is on the default branch, and the step that could not pass on a clean checkout gained the build it needed while `gen-tables.mjs --check` learned to refuse a stale `dist` rather than report ok against it.
+- The 2026-08-04 audit is in `docs/AUDIT.md`, findings 1 through 20, each with its evidence. Read it before touching the facade, the fx capacity options, the kernel ramp table, or anything in the embedded port. Findings 10 and 11 used to carry a correction saying CI had never run. **That correction is itself out of date and the claim in it is now false**: `gh run list --workflow=ci.yml --limit 200` on 2026-08-15 returns **26 runs, 19 success and 7 failure**, split 11 push, 11 pull_request and 4 workflow_dispatch. Every one of the 7 failures is a pull_request on the `milestone-2-and-bringup` branch; every run on `main` succeeded, most recently on `f48dbd3`. The failures are the interesting half, and a first pass at this correction lost them by reading a list truncated to its default limit and reporting "twelve runs, all green": **this gate has been watched to fail**, which by the repository's own rule is what makes it a control rather than a file. So findings 10 and 11 read correctly as written and the retraction attached to them should be read as history. The two AUDIT-2 findings about CI, at lines 25 and 31, are both closed: `ci.yml` is on the default branch, and the step that could not pass on a clean checkout gained the build it needed while `gen-tables.mjs --check` learned to refuse a stale `dist` rather than report ok against it.
 - An earlier 22-agent review confirmed and fixed 17 findings (commits `5baef09`, `74e4cbe`). Read those before touching kernel timing, the scheduler, dynamics, spectral, loudness, sf2, or midifile parsing.
 - The oscillator antialiasing gate is enforced by spectrum-measuring tests in `test/dsp-osc`. The 4-point polyBLEP was tried and measured insufficient (about -37 dB); the shipping implementation is a tabulated Kaiser-sinc BLEP, measured at -85 dB or better through the musical range, -94 dB at A440, and -73 dB at its worst anywhere in the band (saw at 19 kHz). Do not "simplify" it back. The per-frequency floors are gated in test/dsp-osc/blep-frequency.test.ts; "about -90 dB" was the figure quoted here and in three other places until AUDIT-3 measured the whole band.
 - Bowed string realism history is in `docs/BOWED-STRINGS.md` with measured evidence; the spectral gates in `test/engines-physical/waveguide.test.ts` are the contract. Do not loosen a gate to pass a change.
@@ -770,14 +783,16 @@ which nineteen, `docs/AUDIT-3.md` closed several more without cross-referencing
 them, and the enumerated lists below only ever named 27. Four documents, four
 different answers, none checkable.
 
-The new number was produced by re-reading all 95 against the tree at `526516d`,
+The new number was produced by re-reading all 95 against the tree at `6d23f58`,
 with CLOSED requiring the fixed line quoted as it stands rather than a commit
 named, and anything uncertain held OPEN. Then all 51 claimed closures were
 handed to skeptics briefed to refute them and **13 did not survive**, a quarter
 of them, almost all being a fix applied to the symptom a finding opened with
 rather than to the cause it named further down. Without that second pass the
 backlog would have lost thirteen real defects, which is the argument for doing
-it that way rather than trusting the first read.
+it that way rather than trusting the first read. The method's own weak points
+are listed in `AUDIT-2.md`'s preamble rather than here, and one of them is that
+`526516d` landed mid-run so `docs/HANDOFF.md` moved under the later readers.
 
 Refuted, do not act on them, and they are annotated inline at their own
 headings because the refuted list lives at the end of a 90 KB document and
@@ -873,8 +888,8 @@ than defects, so they are the natural next chunk.
 - ~~`gen-tables --check` warns about a stale `dist` and then reads it anyway, so it passes on a
   stale checkout (31).~~ CLOSED. `--check` now exits 2 on a stale `dist` rather than comparing
   against the previous build and calling it ok, and `ci.yml` builds the bundle before running
-  it. Both verified in the tree on 2026-08-15, and `ci.yml` has now run: it is green on
-  `f48dbd3`, which is what the sentence here used to deny.
+  it. Both verified in the tree on 2026-08-15, and `ci.yml` has now run 26 times: green on
+  `f48dbd3` and on every other push to `main`, which is what the sentence here used to deny.
 - `chordToRoman` still throws for 6 of the 408 shipped scale and chromatic root pairs: four
   scales have four-semitone gaps, so a root in the middle is more than one accidental from any
   degree. A genuine limit of single-accidental spelling, and the message now says so.

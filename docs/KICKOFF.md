@@ -92,6 +92,7 @@ npx vue-tsc --noEmit -p apps/workbench              clean
 npm run check:examples -w apps/workbench            49 javascript examples
 npm run check:embedded -w apps/workbench            36 C++ snippets compile
 npm run check:catalogue -w apps/workbench           25 entries, 24 voice builders
+npm run check:presets -w apps/workbench             50 presets sound, at pitch
 npm run gen:sim -w apps/workbench && git diff --exit-code -- apps/workbench/src/lib/sim/sources.gen.ts
 cd packages/bellows-embedded && npm run parity:check     40 rows, prng exactly 0
 cd packages/bellows-embedded && npm run tables:check     428 value rows
@@ -144,8 +145,9 @@ READ FIRST, in this order, before touching anything:
                         That file is the register. Do not re-derive the count from HANDOFF.
   4. docs/AUDIT.md      the earlier audit, findings 1 to 20. Findings 10 and 11 carry a
                         correction saying CI has never run. The correction is stale and the
-                        claim in it is false: CI has run twelve times, all green, ten of them
-                        on a push to main. The findings read correctly as written.
+                        claim in it is false: CI has run 26 times, 19 green and 7 failures,
+                        all seven of them pull requests on a feature branch, with every run
+                        on main green. The findings read correctly as written.
   5. docs/HARDWARE.md   the embedded port, every flash and RAM number, and "Making it smaller",
                         which records what was measured and deliberately NOT taken.
   6. docs/LANDSCAPE.md  what else exists on the web and in hardware, where this library actually
@@ -171,9 +173,13 @@ WHERE THINGS STAND
     07_Workstation summed to mono, through a MAX98357A at 47.2 percent peak CPU. That is one
     board and one program. Nothing else has been run, and neither implementation has been
     compared to the other by ear.
-    CI HAS RUN. Twelve completed runs, all green, ten of them triggered by a push to main, the
-    most recent on f48dbd3. Check with `gh run list` rather than believing this line, since
-    this line is what was wrong before.
+    CI HAS RUN, 26 times: 19 green and 7 failures, 11 push, 11 pull_request, 4 manual. All
+    seven failures are pull requests on the milestone-2-and-bringup branch and every run on
+    main is green, most recently f48dbd3. The failures are the part that matters, because a
+    gate nobody has watched fail is a gate nobody should trust and this one has been watched.
+    Check with `gh run list --workflow=ci.yml --limit 200` rather than believing this line.
+    The first attempt at this correction said "twelve runs, all green" because it read the
+    list at its default limit, which is the same error one line up in a shorter form.
 
 HARD RULES (from CLAUDE.md, non-negotiable)
 - No emojis anywhere. No em dashes: use commas, periods, colons, parentheses.

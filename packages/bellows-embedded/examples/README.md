@@ -166,9 +166,15 @@ Reading it:
   only fits because it holds no delay line at all.
 
 21_Presets is the only row that refuses a 3.6, and it is worth reading as a
-statement about the program rather than about the library. Eleven voice
-pools, eleven parameter tables and a plate tank in one image is 251 KB of
-RAM, against the 256 KB a 3.6 has in total. Nothing there is a fixed cost of
+statement about the program rather than about the library. It misses by
+`region RAM overflowed by 8592 bytes`, which is the linker's own figure from
+`PLATFORMIO_SRC_DIR=21_Presets pio run -e probe_teensy36`. An earlier revision
+of this paragraph reasoned it out instead, from the 251 KB the Cortex-M7
+size sketch reports against the 256 KB a 3.6 has, which is a freestanding
+library-only number standing in for a firmware link that also carries the
+Arduino core and the audio library. It landed near the right answer, which is
+how a wrong method survives. The plate tank alone is 25 KB, so this is one
+object away from fitting. Nothing there is a fixed cost of
 having presets: a tour that never selects a string preset does not need the
 plate, and a program that names one engine gets the other ten dropped by
 `--gc-sections`. That property is the argument the preset table is split to

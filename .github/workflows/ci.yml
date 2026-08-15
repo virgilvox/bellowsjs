@@ -95,6 +95,13 @@ jobs:
         # GROUP_ORDER drops the entry from the picker with no error at all,
         # and a voice with no case throws only when a visitor presses RUN.
         run: npm run check:catalogue -w apps/workbench
+      - name: every preset the playground offers still makes a sound
+        # Renders all 50 INSTRUMENT_PRESETS through the offline kernel and
+        # checks each is audible, finite, at the pitch it was asked for, and
+        # names only parameters the registry knows. That last one is the
+        # reason it exists: a wrong engine parameter name is silent at every
+        # layer of this library, and it has already shipped twice.
+        run: npm run check:presets -w apps/workbench
       - name: the LLM reference is in sync with the library
         # public/llm.txt is generated from the built bundle and its type
         # declarations, is served at /llm.txt, and says of itself that it is

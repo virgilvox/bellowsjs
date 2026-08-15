@@ -10,13 +10,18 @@
  *
  * WHAT MAKES THIS DIFFER FROM p11_e7_workstation AT ALL
  *
- * The fold is a handful of instructions. The real difference is
- * `Compose()`: 17 draws a seed at power up and redraws the arrangement,
- * 07 does not call it, and `--gc-sections` drops what nothing reaches. So
- * 07's row does not pay for the mode picker, the progression, the five
- * euclidean rhythms or the motif generator, and this one does. That is a
- * property of the two programs rather than of the library, and it is the
- * reason this row exists instead of being assumed equal to 07's.
+ * `Compose()`, almost entirely. 17 draws a seed at power up and redraws
+ * the arrangement, 07 does not call it, and `--gc-sections` drops what
+ * nothing reaches, so 07's row does not pay for the mode picker, the
+ * progression, the five euclidean rhythms or the motif generator.
+ *
+ * Priced by building twice rather than by subtracting this row from 07's,
+ * because the two differ in two ways and a difference attributed to the
+ * wrong one is the mistake docs/HARDWARE.md warns about. Copy this file,
+ * delete the `Compose` call, and size both: `Compose` is 480 B, and
+ * everything else about this sketch comes to MINUS 32 B against p11, since
+ * calling through `Mono` changes how the render loop inlines. The row is
+ * 448 B over 07 as the sum of those, not as the cost of the fold.
  */
 #include "harness.h"
 

@@ -27,6 +27,17 @@
  * Reads firmware.ts through vite-node so the real array is checked rather
  * than a regex over it; the `case` labels are read as text, because they
  * are labels in a switch and there is no other way to see them.
+ *
+ * ONE WEAKNESS, NAMED RATHER THAN LEFT TO BE FOUND
+ *
+ * `vite-node` is in no package.json in this repository and in no
+ * node_modules under it. `npx` resolves it from the machine's own npx
+ * cache here and would fetch it from the registry on a clean runner, so
+ * this gate depends on a package the lockfile does not pin and does not
+ * work offline. That is not a new risk: `parity:check`, `tables:check` and
+ * `presets:check` have all reached vite-node the same way for months and
+ * all three run in CI green, which is the evidence the pattern holds. It
+ * is still worth a devDependency the next time this file is touched.
  */
 
 import { readFileSync } from 'node:fs';
