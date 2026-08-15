@@ -214,7 +214,14 @@ Fixed, with a caveat added later that undoes most of it:
 `.github/workflows/ci.yml` was written and runs typecheck, the suite and the build on node 20 and
 22, plus both app builds and the embedded size report on two ARM targets.
 
-IT HAS NEVER RUN. The file is not on the default branch, so GitHub has never scheduled it, and
+IT HAS NEVER RUN, as of 2026-08-04. **No longer true, and the rest of this finding now reads
+correctly as written**: on 2026-08-15 `gh run list --workflow=ci.yml --limit 200` returns 26
+runs, 19 green and 7 failures, 11 of them pushes to `main`. The file is on the default branch
+and the gates below are enforced. The two consequences named in the next sentence were both
+found by inspection and both have since been fixed. Everything from here to the end of this
+finding is kept as the record of what was true when it was written.
+
+The file is not on the default branch, so GitHub has never scheduled it, and
 `gh run list` returns nothing. Everything below that says CI enforces something describes a file,
 not a control. Two consequences found by inspection rather than by a red build: the parity job
 called `gen-tables.mjs --check` without first building `packages/bellows/dist/bellows.js`, which

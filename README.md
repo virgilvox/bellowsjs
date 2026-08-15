@@ -137,9 +137,50 @@ The DSP core has zero browser dependencies, which is why the library carries mor
 
 AudioWorklet is required (Chrome 66+, Firefox 76+, Safari 14.1+). Web MIDI is Chromium and Firefox only. WebCodecs Opus export is feature-detected with WAV as the universal fallback. See `docs/ENGINEERING.md` in the repository for the full capability matrix.
 
+## On microcontrollers
+
+The same DSP core is also a header-only C++17 library for 32-bit
+microcontrollers: **[packages/bellows-embedded](packages/bellows-embedded/README.md)**.
+Not a rewrite and not a subset that drifted. The C++ is diffed against this
+library on every commit: 40 engine and effect rows rendered from both sides and
+compared sample by sample, 428 exactly-compared value rows for the parts that
+make no sound, and all 50 instrument presets compared value by value, 1054 of
+them, with the PRNG bit exact.
+
+Nothing allocates, nothing self-registers, and every buffer is sized from a
+template parameter, so you include one header and you link one engine. A kick
+drum is 3760 bytes of flash.
+
+Board support, measured by building all 17 examples for each part rather than
+read off a data sheet. `RAM` is the linker refusing, `n/a` is a sketch
+declining on purpose:
+
+| Board | Examples that build | Notes |
+| --- | --- | --- |
+| Teensy 4.1 | 16 of 17 | everything, with room to spare |
+| Teensy 4.0 | 16 of 17 | **the one board this has actually been run on** |
+| Teensy MicroMod | 16 of 17 | as 4.0 |
+| Teensy 3.6 | 16 of 17 | refuses only the 50-preset tour |
+| Teensy 3.5 | 16 of 17 | as 3.6 |
+| Teensy 3.2 | 12 of 17 | no FPU. Refuses the workstation trio, the patch library and the presets |
+| Teensy LC | 3 of 17 | no FPU, 8 KB of RAM. One kick, one drum machine, the primitives |
+| Daisy Seed | linked as firmware | `01_OneKick` built against libDaisy 8.1.0; the other logic headers compile for the STM32H750 |
+
+The three 4.x rows are 16 of 17 because `12_DacOut` declines with an `#error`:
+a Teensy 4.x has no DAC at all. The full matrix, per example and per board, is
+in [examples/README.md](packages/bellows-embedded/examples/README.md).
+
+**What that table does and does not say.** A build proves the code is valid for
+the part and fits in its memory. It says nothing about whether the part keeps
+up. One board has been run: a Teensy 4.0 at 600 MHz playing the heaviest
+program in the set through an I2S amplifier, at 33.8 to 46.5 percent CPU with a
+47.3 percent running maximum and 2 of 24 audio blocks used. Everything else is
+compile-verified and numerically verified, which is not the same claim.
+
 ## Repository layout
 
 - packages/bellows is the library published to npm as bellowsjs
+- packages/bellows-embedded is the header-only C++17 port for microcontrollers
 - apps/workbench is the Vue demo app: generative bench plus code mode
 - docs/ holds the PRD, the engineering brief, and prototype 0
 

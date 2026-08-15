@@ -264,11 +264,14 @@ not the same as having listened to both.
 in neither the Arduino Library Manager nor the PlatformIO registry. The decision
 is recorded under "Decisions, made": a mirror repository holding only
 `packages/bellows-embedded`, pushed by CI on tag. PlatformIO can consume the
-subdirectory today. Note `library.properties` still says `dot_a_linkage=true`,
-which is questionable for a header-only library with no `.cpp`, and the Arduino
-IDE path is untested: examples 11, 12, 13, 16 and 17 include across folders
-(`../10_AudioShield/audioshield.h`), which PlatformIO resolves and the Arduino
-IDE may not, because it preprocesses the `.ino` into a build directory.
+subdirectory today. `dot_a_linkage=true` is gone from `library.properties`: it
+asks the builder to archive compiled library sources into a `.a` and there are
+zero `.cpp` files to archive, so it was meaningless. The Arduino IDE path is
+still untested, and six examples, 11, 12, 13, 15, 16 and 17, include across
+folders (`../10_AudioShield/audioshield.h`), which PlatformIO resolves and the
+Arduino IDE may not, because it preprocesses the `.ino` into a build directory.
+Both are now written down in the embedded README under Installing rather than
+only here, since the person who hits them is reading that file and not this one.
 
 **7. The audit backlog. COUNTED, and now countable.** `docs/AUDIT-2.md` has 51
 genuinely open findings: 43 open and 8 partial, against 38 closed, 5 refuted and
@@ -1108,8 +1111,11 @@ every board has external memory, but the framing "RAM is 43 percent" describes o
 choice rather than a property of the library.
 
 **What none of this tells you is how many voices will actually run.** Every figure above is from
-the linker. CPU has never been measured on hardware, so flash and RAM say what FITS and nothing
-says what KEEPS UP. The one durable CPU fact is arithmetic rather than measurement: the BLEP
+the linker, so flash and RAM say what FITS and mostly not what KEEPS UP. CPU has now been
+measured on hardware exactly once, on one board and one program: a Teensy 4.0 at 600 MHz
+running `17_WorkstationI2S` at 33.8 to 46.5 percent with a 47.3 percent running maximum. That
+is one data point against seven parts and seventeen programs, and it says nothing about either
+part without a floating point unit. The one durable CPU fact is arithmetic rather than measurement: the BLEP
 residual walks `2 * KERNEL_HALF * dt` edges per sample, 0.32 at A440 and 5.1 at 7040 Hz, so a
 high lead costs several times a bass note and polyphony at the top of the keyboard is the number
 to take on the board first.

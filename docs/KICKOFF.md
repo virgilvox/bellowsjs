@@ -32,11 +32,14 @@ main. A BOARD HAS BEEN FLASHED AND HEARD. Both were true when written and
 neither was rechecked. Expect more of that: assume any sentence here that begins
 "nothing has" is older than it looks, and check it.
 
-OBJECTIVE: <replace me. "Still not done" in HANDOFF now begins at item 3, which
-is blocked until a Teensy is plugged in, then items 5 to 8. If you have a board,
-take 3 and 5 together and start with `00_BringUp`, which has never been run. If
-you do not, the two with the most left in them are item 6, publishing the
-embedded library, and the 20 audit findings tagged `[changes audio]`.>
+OBJECTIVE: <replace me. Items 1 to 4 of "Still not done" in HANDOFF are all
+closed, so the list now begins at item 5. If you have a board, take item 5 and
+start with `00_BringUp`, which has still never been run and is the only thing
+that measures the BLEP pitch cost; a Teensy 4.0 is the board that has run
+anything, and a 3.2 or an LC is the interesting question because neither has a
+floating point unit. If you do not, the two with the most left in them are item
+6, publishing the embedded library, and the 22 audit findings tagged
+`[changes audio]`.>
 
 WHAT IS STILL TRUE AND WORTH KNOWING BEFORE YOU START:
 
@@ -278,11 +281,13 @@ BELLOWS_SAMPLE_RATE claims to size delay lines and pluck loops and those two har
 ```
 
 ```
-OBJECTIVE: Push .github/workflows/ci.yml to the default branch and make it green. It has never
-run once. Expect the first run to fail: the parity job needed a build step that was only added
-by inspection, and nothing else in it has ever been exercised. Then correct every sentence in
-docs/AUDIT.md and docs/HANDOFF.md that says CI enforces something, so they describe what the
-run actually printed.
+OBJECTIVE: DONE, and kept here because the shape of it recurs. ci.yml is on the default
+branch and has run 26 times, 19 green and 7 failures, all seven of them pull requests on a
+feature branch. Every run on main is green. The sentences in docs/AUDIT.md and
+docs/HANDOFF.md that said CI had never run were corrected on 2026-08-15, after sitting there
+as hard facts for weeks past the point they stopped being true. If you are looking for work
+of this kind, the general form is: grep the documents for a sentence asserting an absence,
+then spend the one command it takes to check it.
 ```
 
 ```

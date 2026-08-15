@@ -112,17 +112,64 @@ length.
 
 ## Supported targets
 
-| Tier | Boards | What runs |
+Two tables, and the order is deliberate: what has been built, then what a data sheet says
+could be built. They disagree in places and the first one wins.
+
+### Measured, by building every example for every board
+
+`examples/build-matrix.sh` compiles all 17 examples for all seven Teensy parts with the
+Arduino core and the Audio Library linked in, which is 119 firmware builds. This is that
+sweep, counted:
+
+| Board | Examples that build | RAM refused | Declined on purpose |
+| --- | --- | --- | --- |
+| Teensy 4.1 | 16 of 17 | 0 | `12_DacOut` |
+| Teensy 4.0 | 16 of 17 | 0 | `12_DacOut` |
+| Teensy MicroMod | 16 of 17 | 0 | `12_DacOut` |
+| Teensy 3.6 | 16 of 17 | `21_Presets` | 0 |
+| Teensy 3.5 | 16 of 17 | `21_Presets` | 0 |
+| Teensy 3.2 | 12 of 17 | 5 | 0 |
+| Teensy LC | 3 of 17 | 14 | 0 |
+
+`12_DacOut` declines with an `#error` because a Teensy 4.x has no DAC at all, which is
+categorical rather than a matter of memory. Teensy 3.2 refuses the three workstation
+programs, the patch library and the preset tour; the largest single object in the first of
+those is a 500 ms stereo delay line at 187 KB, against the 64 KB the whole part has. Teensy
+LC builds `01_OneKick`, `02_DrumMachine` and `06_FirstSteps` and nothing else, at 81.6 to
+88.1 percent of its 8 KB.
+
+**Daisy Seed** is not in that matrix because it is not a Teensy. `examples/daisy_onekick`
+links `01_OneKick` as a real Daisy Seed image against libDaisy 8.1.0, and all five logic
+headers compile against the Daisy adapter for the STM32H750. Only that one has been linked
+all the way to an image.
+
+The per-example, per-board grid is in `examples/README.md`.
+
+### What builds means, and what it does not
+
+A build proves the code is valid for the part and fits in its memory. It says nothing about
+whether the part keeps up, and Teensy LC and 3.2 have no floating point unit at all, so they
+emulate every operation this library performs in software.
+
+**One board has been run.** A Teensy 4.0 at 600 MHz playing `17_WorkstationI2S`, the
+heaviest program in the set, at 44.1 kHz through a MAX98357A: 33.8 to 46.5 percent CPU, a
+47.3 percent running maximum, 2 of 24 audio blocks. Measured twice, on two builds and two
+arrangements. `docs/HARDWARE.md` has both runs and their caveats. Nothing else here has been
+flashed and heard, which is what `examples/00_BringUp` exists for.
+
+### Read off data sheets, and not yet built
+
+| Tier | Boards | What could run |
 | --- | --- | --- |
-| Full | Daisy Seed / Seed3 / Seed2 DFM, Teensy 4.1 | everything, with room to spare |
+| Full | Daisy Seed / Seed3 / Seed2 DFM | everything, with room to spare |
 | Most | ESP32-P4, ESP32-S3 with PSRAM, RP2350 | cap polyphony around 8, audit double usage first |
 | Control only | RP2040, ESP32 classic, SAMD51, nRF52840 | a couple of voices at best |
 | Not viable | Uno, Nano, Uno R4 | no FPU, too little RAM. Use Mozzi. |
 
-This table is read off data sheets. It is about what a part could hold and not about what has
-been run, and **only Teensy and Daisy have a platform layer**: `src/bellows/platform/` contains
-`teensy.h` and `daisy.h` and nothing else. Targeting an ESP32 or an RP2350 means writing that
-layer first, whatever the row says. Nothing in any row has been measured on hardware.
+This table is about what a part could hold and not about what has been run, and **only Teensy
+and Daisy have a platform layer**: `src/bellows/platform/` contains `teensy.h` and `daisy.h`
+and nothing else. Targeting an ESP32 or an RP2350 means writing that layer first, whatever
+the row says.
 
 Needs C++17, which every current core for these parts provides. No exceptions, no RTTI, no STL
 containers, no heap.
@@ -151,10 +198,37 @@ lib_deps = https://github.com/virgilvox/bellowsjs.git#main
 
 Point `lib_extra_dirs` at `packages/bellows-embedded` if you have cloned the monorepo.
 
-**Arduino IDE**: copy `packages/bellows-embedded` into your `libraries/` folder and rename it
-`Bellows`. The Arduino Library Manager indexes whole repositories rather than subdirectories, so
-listing there needs either a mirror repository containing only this folder or a release-zip
-submission. That decision is open.
+**Arduino IDE**. Copy `packages/bellows-embedded` into your sketchbook's `libraries/` folder
+and rename it `Bellows`, so the folder name matches `name=Bellows` in `library.properties`.
+Restart the IDE and it appears under Sketch, Include Library.
+
+The layout is the Arduino 1.5 format: everything is under `src/`, so
+`#include <bellows/engines/drums.h>` resolves once the library is installed, and
+`#include <Bellows.h>` pulls in the convenience umbrella header that `library.properties`
+names in `includes=`. There are no `.cpp` files at all, which is why `dot_a_linkage` is not
+set: it asks the builder to archive compiled library sources into a `.a`, and there are none
+to archive.
+
+Two things about this path are worth knowing before you rely on it.
+
+**It has not been tested.** Every build in this repository goes through PlatformIO. Nobody
+has compiled a sketch from the Arduino IDE against an installed copy of this library, so
+treat the paragraph above as the intended path rather than a verified one.
+
+**Six of the examples include across folders** and the Arduino IDE may not resolve them.
+`11_I2SAmp`, `12_DacOut`, `13_BareOutput`, `15_Piezo`, `16_WorkstationPiezo` and
+`17_WorkstationI2S` each reach a sibling example for a shared header, for instance
+`#include "../10_AudioShield/audioshield.h"`. PlatformIO resolves that because it compiles
+the folder in place; the Arduino IDE preprocesses a sketch into a build directory first, so a
+relative path out of the sketch folder is a different question there. If one of those six
+fails to compile in the IDE, copy the header it names next to the sketch. The other eleven
+examples are self-contained.
+
+**Library Manager.** Not listed, and this repository is the reason: the Arduino Library
+Manager indexes whole repositories rather than subdirectories, and this library is one
+package inside a monorepo. Listing needs either a mirror repository holding only this folder
+or a release-zip submission. That decision is recorded as open in `docs/HANDOFF.md` under
+Milestone 6.
 
 ## Relationship to the JavaScript library
 

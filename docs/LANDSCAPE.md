@@ -121,7 +121,11 @@ scaffolding for a masking-aware or roughness-aware analyser exists.
 - Multi-target codegen against Faust. Faust solves parity drift structurally; this repository
   pays a permanent tax and keeps it visible with harnesses instead.
 - No FFT or spectral processing on hardware yet.
-- CI has never run, so none of the quality claims are mechanically enforced.
+- ~~CI has never run, so none of the quality claims are mechanically enforced.~~ CORRECTED
+  2026-08-15: it has run 26 times, 19 green and 7 failures, all seven of them pull requests
+  on a feature branch, with every run on main green. The gates are enforced. This line stood
+  for weeks after it stopped being true, which is the failure mode the harnesses in this
+  repository exist to prevent and the one class of claim none of them can reach.
 
 ## What the research implies, in priority order
 

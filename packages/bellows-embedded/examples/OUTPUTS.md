@@ -106,12 +106,16 @@ compiled and linked as real firmware for that board. That is a stronger
 claim than it usually is, because it includes the Arduino core and the
 audio library rather than the DSP alone.
 
-It is not the claim you want. **Nothing in this directory has been flashed
-to a board and listened to.** A build proves the code is valid for the part
+It is not the claim you want. A build proves the code is valid for the part
 and fits in its memory. It does not prove the part is fast enough to render
-the patch in real time, and this library's compute cost has never been
-measured on hardware at all: see `docs/HANDOFF.md`, which has said so since
-the port started.
+the patch in real time.
+
+**One program here has been flashed and listened to**, and this paragraph
+used to say none had. `17_WorkstationI2S` on a Teensy 4.0 through a
+MAX98357A: 33.8 to 46.5 percent CPU, 47.3 percent running maximum, 2 of 24
+audio blocks, measured twice. Everything else in this directory is still
+compile-verified and link-verified only, and no other board has run
+anything at all. See `docs/HARDWARE.md` for both runs.
 
 The boards where that gap is widest are the ones without a floating point
 unit. Teensy LC and Teensy 3.2 emulate every float operation in software,
