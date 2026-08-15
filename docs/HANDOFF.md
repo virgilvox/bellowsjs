@@ -229,11 +229,29 @@ IDE path is untested: examples 11, 12, 13, 16 and 17 include across folders
 (`../10_AudioShield/audioshield.h`), which PlatformIO resolves and the Arduino
 IDE may not, because it preprocesses the `.ino` into a build directory.
 
-**7. The audit backlog.** `docs/AUDIT-2.md` still has roughly 73 genuinely open
-findings, triaged in "The work queue" below. The largest single one is the
-string waveguide being up to 23 cents flat below 165 Hz, which now matters more
-than it did: the engine is ported, five presets use it, and the C++ reproduces
-the defect faithfully because parity demanded it.
+**7. The audit backlog. COUNTED, and now countable.** `docs/AUDIT-2.md` has 51
+genuinely open findings: 43 open and 8 partial, against 38 closed, 5 refuted and
+1 not a defect. Each carries its status and evidence under its own heading, so
+that file is the register and this one is not. The figure this entry used to
+give, roughly 73, was wrong by 22 and could not be reproduced from any document.
+
+Twenty of the open ones would change rendered output and are tagged
+`[changes audio]` in the file. Seventeen are closable in under ten minutes and
+are tagged `[under ten minutes]`; several of those are documents that describe
+code the repository does not have, which is the failure mode `check-docs` exists
+for and cannot see, because a prose claim about an algorithm is not a figure.
+
+The largest single one is unchanged and is still the string waveguide being up
+to 23 cents flat below 165 Hz, which matters more than it did: the engine is
+ported, five presets use it, and the C++ reproduces the defect faithfully
+because parity demanded it. Read the measurement below before picking it up. The
+obvious fix was measured and trades 23 cents flat at 41 Hz for 16 cents sharp at
+440, which is worse at the pitch people actually play.
+
+One habit worth keeping: when the skeptics attacked the 51 claimed closures, 13
+fell over, and the pattern in almost all of them was a fix applied to the
+symptom a finding opened with rather than to the cause it named further down.
+Read a finding to its end before calling it closed.
 
 **8. One parity row is weaker than it looks.** `additive_morph` moves only 4.4x
 against a 10x gate for a 0.1 percent `morph` error. It is recorded in the GATES

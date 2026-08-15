@@ -18,24 +18,36 @@ strict: no emojis, no em dashes, no stock AI phrasing), `docs/HANDOFF.md`
 (state, harnesses, and the numbered list under "Still not done, in the order I
 would take it"), `docs/AUDIT-3.md` (the standard for honesty in this repo).
 
-The last session finished the embedded story: all four remaining engines are
-ported so parity is 40 rows, all 50 instrument presets exist on a board with a
-1054-value exact gate, and the site gained an EMBEDDED PLAYGROUND, a JAVASCRIPT
-and EMBEDDED switch on the CODE page with 36 compiled C++ examples, a nine page
-embedded docs tree behind a BROWSER and EMBEDDED switch, and an embedded LLM
-reference. It also ran on hardware for the first time: a Teensy 4.0 plays
-`07_Workstation` at 47.2 percent peak CPU.
+The last session closed the four bookkeeping items and gave the audit a status.
+`16_WorkstationPiezo`, `17_WorkstationI2S` and `21_Presets` now have size
+sketches, README rows and matrix rows and are in the `ALL` list; the firmware
+manifest names a real commit; the playground offers all three, with the 50
+presets as a labelled picker, behind a new `check:catalogue` gate; and every one
+of the 95 findings in `docs/AUDIT-2.md` carries a status and its evidence, which
+moved the open count from a claimed 73 to a measured 51.
 
-OBJECTIVE: work down items 1 to 4 of "Still not done" in HANDOFF, which are
-bookkeeping the last session created and did not close, then pick up item 5 or 6
-depending on whether you have a board in hand.
+Two claims this repository stated as hard facts turned out to be false and are
+now corrected in place. CI HAS RUN, twelve green runs, ten of them on a push to
+main. A BOARD HAS BEEN FLASHED AND HEARD. Both were true when written and
+neither was rechecked. Expect more of that: assume any sentence here that begins
+"nothing has" is older than it looks, and check it.
 
-Item 1 is the one that matters most, because it is the shape of gap this
-repository exists to prevent: `16_WorkstationPiezo`, `17_WorkstationI2S` and
-`21_Presets` are committed and building, and NOTHING checks their figures. They
-have no size sketch, no README rows, and are not in the `ALL` list in
-`build-matrix.sh`. Adding a row moves the `SELF` figure count in both
-`docs/HANDOFF.md` and this file by two, and `check-docs` will tell you.
+OBJECTIVE: <replace me. "Still not done" in HANDOFF now begins at item 3, which
+is blocked until a Teensy is plugged in, then items 5 to 8. If you have a board,
+take 3 and 5 together and start with `00_BringUp`, which has never been run. If
+you do not, the two with the most left in them are item 6, publishing the
+embedded library, and the 20 audit findings tagged `[changes audio]`.>
+
+WHAT IS STILL TRUE AND WORTH KNOWING BEFORE YOU START:
+
+- 51 audit findings are open, and `docs/AUDIT-2.md` is the register. Do not
+  re-derive that count from HANDOFF; HANDOFF now points at the file.
+- Seventeen of them are tagged `[under ten minutes]` and several are documents
+  describing code that does not exist. `check-docs` cannot see those, because a
+  prose claim about an algorithm is not a figure.
+- One board, one program. Nothing has run on a 3.x, a Daisy, or either part
+  without a floating point unit, and nothing has been compared to the browser by
+  ear.
 
 THE RULES THAT MATTER HERE, learned by being burned:
 
@@ -58,7 +70,19 @@ THE RULES THAT MATTER HERE, learned by being burned:
   initialised after it can be rendered before it is ready. Init first.
 - Do not trust a loader that says SUCCESS. PlatformIO's `teensy-gui` protocol
   reports success for having opened an application. Use
-  `teensy_loader_cli -w -s -v` and look for `Found HalfKay Bootloader`.
+  `teensy_loader_cli -w -s -v` and look for `Found HalfKay Bootloader`. It is at
+  `~/.platformio/packages/tool-teensy/teensy_loader_cli` and is not on PATH.
+- A claim about the world goes stale in a way a figure does not, and nothing
+  here checks one. "CI has never run" and "nothing has been flashed to a board"
+  were both stated as hard facts in this file for weeks after they stopped being
+  true. If a sentence asserts an absence, spend the one command it takes.
+- A fix that answers a finding's headline has not necessarily answered the
+  finding. Of 51 audit closures claimed on evidence, 13 fell over to a skeptic,
+  and almost all of them had guarded the symptom named in the first sentence
+  while the cause named in the fourth was untouched.
+- Teensy 3.x firmware is not reproducible. Every build writes a fresh
+  compile-time timestamp into `RTC_TSR`, so a 3.x `.hex` differs by three bytes
+  on every sweep and only a larger diff is news. The 4.x images are byte stable.
 
 VERIFY, and none of these is optional:
 
@@ -67,6 +91,7 @@ npm test -w packages/bellows                        1348 tests
 npx vue-tsc --noEmit -p apps/workbench              clean
 npm run check:examples -w apps/workbench            49 javascript examples
 npm run check:embedded -w apps/workbench            36 C++ snippets compile
+npm run check:catalogue -w apps/workbench           25 entries, 24 voice builders
 npm run gen:sim -w apps/workbench && git diff --exit-code -- apps/workbench/src/lib/sim/sources.gen.ts
 cd packages/bellows-embedded && npm run parity:check     40 rows, prng exactly 0
 cd packages/bellows-embedded && npm run tables:check     428 value rows
