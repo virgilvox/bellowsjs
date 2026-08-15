@@ -1,5 +1,5 @@
 {
-  "commit": "2873f24-dirty",
+  "commit": "12f12ef",
   "builtAt": "2026-08-15",
   "entries": [
     {
@@ -10,8 +10,8 @@
       "bytes": 242027,
       "sha256": "26a0b5c4bd89011a7b83580c0a70d237ce74e923751e522277f730e1630ff98a",
       "ram": "19.1%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "00_BringUp",
@@ -21,8 +21,8 @@
       "bytes": 239147,
       "sha256": "c320f489eaf60915542d0b24f2a88e10fc67620352c4ce5fa8f1efed502f8b31",
       "ram": "19.1%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "00_BringUp",
@@ -30,10 +30,10 @@
       "status": "ok",
       "file": "00_BringUp_teensy36.hex",
       "bytes": 206884,
-      "sha256": "2599f771d56574c3aee4002c62d1b0cdcc5d605e86d59c0de109459bdcd3d3fe",
+      "sha256": "75159521c826d2a0aceed8643d86f241cd679aaf2ae772db664996c2b75b5e04",
       "ram": "7.3%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "00_BringUp",
@@ -41,10 +41,10 @@
       "status": "ok",
       "file": "00_BringUp_teensy32.hex",
       "bytes": 219206,
-      "sha256": "92b026c2c7ac58514daeb4c9d179a5f553abd8a7ce5c621393599c45eb4911e8",
+      "sha256": "cf615046f2771c709e38b20b371ceddbb13ed06c2c7577197a6bf383dd758a9c",
       "ram": "28.2%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "01_OneKick",
@@ -54,8 +54,8 @@
       "bytes": 103757,
       "sha256": "af5a02d580ea7fe907ce6ed30f33eba12336bc16d5b327bfab7238064f158b38",
       "ram": "8.0%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "01_OneKick",
@@ -65,8 +65,8 @@
       "bytes": 100877,
       "sha256": "bc4fcefc68d5cc3f9a4fbed5a08cc716c2e1432bae0ce99dfb166cfe88f840c3",
       "ram": "8.0%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "01_OneKick",
@@ -74,10 +74,10 @@
       "status": "ok",
       "file": "01_OneKick_teensy36.hex",
       "bytes": 70059,
-      "sha256": "2859f50c89ddb343a04ba444e9ed16b08eeb6222c0c921334eef612251e5c62e",
+      "sha256": "ca8fc259b4874ce70a93623b19b496129ff1dedd1851e3723ca8845ad2b99e17",
       "ram": "4.7%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "01_OneKick",
@@ -85,10 +85,10 @@
       "status": "ok",
       "file": "01_OneKick_teensy32.hex",
       "bytes": 75152,
-      "sha256": "a120144ba550ca2f69ad346c73a3c9973c77a4fbf3d5ed0b839f871779df92fa",
+      "sha256": "de773db27483b4e4d18a6cbb731638936db203f38b2c3e8a141fe4b1227ce581",
       "ram": "18.1%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "02_DrumMachine",
@@ -98,8 +98,8 @@
       "bytes": 184397,
       "sha256": "2e14f3208426ed662f72cd1233435aa889323e965cd665a60d25d5a2bae905c5",
       "ram": "11.5%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "02_DrumMachine",
@@ -109,8 +109,8 @@
       "bytes": 181517,
       "sha256": "816d204f038c5adb5a90535244481b350c8212e4d00e2b3bac7cd3b37681dbf8",
       "ram": "11.5%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "02_DrumMachine",
@@ -118,10 +118,10 @@
       "status": "ok",
       "file": "02_DrumMachine_teensy36.hex",
       "bytes": 142734,
-      "sha256": "ea373c5017b19e4547f97fe21686aa85f47510e4d5ad9dc508e5ccbeb552909f",
+      "sha256": "c27831be8ea9eb03696e66523eaa50e03cd190f7d80eb800c9d965552001c4a7",
       "ram": "4.9%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "02_DrumMachine",
@@ -129,10 +129,10 @@
       "status": "ok",
       "file": "02_DrumMachine_teensy32.hex",
       "bytes": 151996,
-      "sha256": "004202824497108af35df4fbfce0328daa4d0c1e7dd940788b09df897495a64d",
+      "sha256": "e9f0124ddbd1922c539a52e232aa4bccb931d779465532e59d150723d824af17",
       "ram": "19.0%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "03_PolySynth",
@@ -142,8 +142,8 @@
       "bytes": 193054,
       "sha256": "f44e4d164350eae3e473ef71e769560ac6d140317bbcae45eff4a55daf227992",
       "ram": "11.9%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "03_PolySynth",
@@ -153,8 +153,8 @@
       "bytes": 190174,
       "sha256": "b22c032cb8dc11778f8e20d9817abaed65bf28ef13f8681a957ff1a2bd2e3f22",
       "ram": "11.9%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "03_PolySynth",
@@ -162,10 +162,10 @@
       "status": "ok",
       "file": "03_PolySynth_teensy36.hex",
       "bytes": 150789,
-      "sha256": "99b173d64bb58aa871b1f5992070b2a6e5fd75ac001ed1f85b766fd362350bce",
+      "sha256": "1cced4d36c5d20b70019fc4639590e60c914ca520f08bdb1ff193bbfc3d2fd44",
       "ram": "6.2%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "03_PolySynth",
@@ -173,10 +173,10 @@
       "status": "ok",
       "file": "03_PolySynth_teensy32.hex",
       "bytes": 159498,
-      "sha256": "91b846590b847f5f376c28e6ff030724069e23a18d8b5331efa36767429e0815",
+      "sha256": "bbf85fff383d538ca98e8bade13571ba1e7027b78d959975ca4c7d441910316c",
       "ram": "24.0%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "04_ScalesAndTuning",
@@ -186,8 +186,8 @@
       "bytes": 115277,
       "sha256": "55ade1c77aca47c6c3976a461f3fded782b6a95a833bb773f89644d8536fa13d",
       "ram": "13.7%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "04_ScalesAndTuning",
@@ -197,8 +197,8 @@
       "bytes": 112397,
       "sha256": "35e13ba64ca266338fb9011dff13cc6660eb528572fc0974fbe4e70ecdd3b636",
       "ram": "13.7%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "04_ScalesAndTuning",
@@ -206,10 +206,10 @@
       "status": "ok",
       "file": "04_ScalesAndTuning_teensy36.hex",
       "bytes": 82810,
-      "sha256": "842358f01ccc4b2aedcf1b99e5045e02f155c8252dbe274702b7e80318141728",
+      "sha256": "0a1a3ac608b9b4824e66090772a259fd1723baae5f8fae78b2259982dde25e70",
       "ram": "15.8%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "04_ScalesAndTuning",
@@ -217,10 +217,10 @@
       "status": "ok",
       "file": "04_ScalesAndTuning_teensy32.hex",
       "bytes": 90047,
-      "sha256": "e4ea08a4729295cf2aa5cfe6ab1e02331de8cb3e177836ff59666dda75fea8be",
+      "sha256": "57c867bf17bf847869102fd70e35474ab758a3a1facfc9535ca769bb495be89c",
       "ram": "62.5%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "05_MidiInstrument",
@@ -230,8 +230,8 @@
       "bytes": 195947,
       "sha256": "6264699e3ed74742e9ddde68a96d89a74cd02d9d0a79ffed9a2a33bd3b5820d6",
       "ram": "12.0%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "05_MidiInstrument",
@@ -241,8 +241,8 @@
       "bytes": 193054,
       "sha256": "f098f1ddf79d0d1cbfca645c172be6445aa6c6578a6641f932e8d508cab2143c",
       "ram": "12.0%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "05_MidiInstrument",
@@ -250,10 +250,10 @@
       "status": "ok",
       "file": "05_MidiInstrument_teensy36.hex",
       "bytes": 153587,
-      "sha256": "12daffa1d9cd26cc767bacbfc7a8caf82980ffe06d9ddf9ca725507f5456c54c",
+      "sha256": "beb1edf722e50b9c5effb49b7f3b5aa4e63d5ccf20883063704912249ffd740d",
       "ram": "6.3%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "05_MidiInstrument",
@@ -261,10 +261,10 @@
       "status": "ok",
       "file": "05_MidiInstrument_teensy32.hex",
       "bytes": 162317,
-      "sha256": "957e95f107edd11875b6fb7a8d9e045f147ce5a41e1631aa9d952cae9fa48332",
+      "sha256": "79b91519e9070de9a1c4408ae8466e33b0a0408697aadeb3a37b3f466f14df29",
       "ram": "24.6%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "06_FirstSteps",
@@ -274,8 +274,8 @@
       "bytes": 169997,
       "sha256": "e0b70ca1f2f3dd22d28abbbba57e3e8557f25bd94cd7f5be16fc66b5c043ceee",
       "ram": "11.3%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "06_FirstSteps",
@@ -285,8 +285,8 @@
       "bytes": 167117,
       "sha256": "2d393dd6cf28c33b47884237049e55637c0883021eb287bdf0a9e19398c62953",
       "ram": "11.3%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "06_FirstSteps",
@@ -294,10 +294,10 @@
       "status": "ok",
       "file": "06_FirstSteps_teensy36.hex",
       "bytes": 141437,
-      "sha256": "cb409d050fc8f5f810c7d3d149fefcfaa127b598d3360f3453a14c97b7f9a0c8",
+      "sha256": "10cc94154aa81ce05be3214b5bcb287ec391770de29f77d653283bd7eb964ef9",
       "ram": "4.9%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "06_FirstSteps",
@@ -305,10 +305,10 @@
       "status": "ok",
       "file": "06_FirstSteps_teensy32.hex",
       "bytes": 150519,
-      "sha256": "70bca215ecb053f06c567002bd14982257098032ac9d1a60b77e91c862614bbb",
+      "sha256": "054d918de8e320317c7e7c970a27a2b36d4cd55424dba1a2eea54a60842c8cd4",
       "ram": "18.8%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "07_Workstation",
@@ -318,8 +318,8 @@
       "bytes": 247787,
       "sha256": "5a47ad299d808f2fa8dba9996e419a661cbf1f2770183986a723ac84ebd94f8a",
       "ram": "60.8%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "07_Workstation",
@@ -329,8 +329,8 @@
       "bytes": 242027,
       "sha256": "34aed1eba222b672dcdf2dd1db6e6347e1b73cb44be9e739ee44a4ce9857a06e",
       "ram": "60.6%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "07_Workstation",
@@ -338,17 +338,17 @@
       "status": "ok",
       "file": "07_Workstation_teensy36.hex",
       "bytes": 210492,
-      "sha256": "ad832021a685abd8f0f2fec719a6ad1281d9c9c002ff786059b99682db1b42a6",
+      "sha256": "be9ce2884499f94bfb75091345c72507e4cac4bc9d73b04fcea4f24cee888c31",
       "ram": "91.5%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "07_Workstation",
       "board": "teensy32",
       "status": "does not fit",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "10_AudioShield",
@@ -358,8 +358,8 @@
       "bytes": 112397,
       "sha256": "f9d3e3fcba1b219c28e51011aee37f7af8fc6ccae56a0b0bc2c2325e1baf0dea",
       "ram": "30.3%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "10_AudioShield",
@@ -369,8 +369,8 @@
       "bytes": 106637,
       "sha256": "869c04bcb04500adbff4c9c4740a1224619d907a016909d14b382e062af880d5",
       "ram": "30.1%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "10_AudioShield",
@@ -378,10 +378,10 @@
       "status": "ok",
       "file": "10_AudioShield_teensy36.hex",
       "bytes": 80020,
-      "sha256": "542625ebe3ed34efab08d2c97dbc4835c90d807f9d0679c614e98533bbe983db",
+      "sha256": "65cd7809debc40f4f6faf9b9afa0a82e60466ed1baffa0370bb042a32ac1af3e",
       "ram": "48.9%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "10_AudioShield",
@@ -389,10 +389,10 @@
       "status": "ok",
       "file": "10_AudioShield_teensy32.hex",
       "bytes": 86979,
-      "sha256": "741aceba2a06451309661d04c53407cb14f5493214f917f20ed007640d46077f",
+      "sha256": "6d4a959aca4afecd542d1f9f04b2340405abd90bc32aa659e96f1ed9a2537084",
       "ram": "36.1%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "11_I2SAmp",
@@ -402,8 +402,8 @@
       "bytes": 100877,
       "sha256": "2a8545af463f66ea18f23e9aa50e5604423e4056ef7c9cd965e7ce5aa52b5f57",
       "ram": "29.9%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "11_I2SAmp",
@@ -413,8 +413,8 @@
       "bytes": 95117,
       "sha256": "38831cd4ff7101033f8f8146060710fa5f78e74178129cfecfabf8ca040535f2",
       "ram": "29.9%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "11_I2SAmp",
@@ -422,10 +422,10 @@
       "status": "ok",
       "file": "11_I2SAmp_teensy36.hex",
       "bytes": 66197,
-      "sha256": "80d151afa6bf7c59cc3ab2fbc07481490f1b2c51c402973001d76aed297f9aa0",
+      "sha256": "44226ed8be84c456501d03122d86b7950a8373c801530e0449d3acbbae07088a",
       "ram": "48.4%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "11_I2SAmp",
@@ -433,24 +433,24 @@
       "status": "ok",
       "file": "11_I2SAmp_teensy32.hex",
       "bytes": 73426,
-      "sha256": "43c4b5102d18f7e8b6e73e11a5d43931a74183ff9e45a491bec0174dba20089d",
+      "sha256": "80fa428d74f368ba9b085a6afb831aaa37484f1f0a35c1c15df97103658c3982",
       "ram": "34.8%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "12_DacOut",
       "board": "teensy41",
       "status": "n/a",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "12_DacOut",
       "board": "teensy40",
       "status": "n/a",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "12_DacOut",
@@ -458,10 +458,10 @@
       "status": "ok",
       "file": "12_DacOut_teensy36.hex",
       "bytes": 65154,
-      "sha256": "40a1460839fd3c9871bf5d76e090f4180747b5a3cc1271f978339f152825daa5",
+      "sha256": "d05ca8e3d7e25777634a70ab8843570162bc9f9b839292a5aaf56bda0f8d83c5",
       "ram": "48.7%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "12_DacOut",
@@ -469,10 +469,10 @@
       "status": "ok",
       "file": "12_DacOut_teensy32.hex",
       "bytes": 71708,
-      "sha256": "379731921782d41edd055f672561cc1bfcc3115b7b2678135269b72e22c02d66",
+      "sha256": "3f63e5f70c5c26e2cf7df51742859eae05059fe77998676790528673dacdd05c",
       "ram": "34.7%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "13_BareOutput",
@@ -482,8 +482,8 @@
       "bytes": 97997,
       "sha256": "02111bc59316e069cf99085037c7fadb93d485bfa8d2d92883d8289ec881bf10",
       "ram": "29.9%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "13_BareOutput",
@@ -493,8 +493,8 @@
       "bytes": 95117,
       "sha256": "9cfa6ee504fda153d597bc1f401a032ad8bbb89add4f6fd8fa29d2fcf352527c",
       "ram": "29.9%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "13_BareOutput",
@@ -502,10 +502,10 @@
       "status": "ok",
       "file": "13_BareOutput_teensy36.hex",
       "bytes": 64659,
-      "sha256": "1376f060133a5366b8c735e582b70f91a7071e2d4402ffa98a8c456e1503c283",
+      "sha256": "88ea8dd15716dbdd520ce78f5814aefff34b51812a332c96a55efc12ed4cee95",
       "ram": "48.6%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "13_BareOutput",
@@ -513,10 +513,10 @@
       "status": "ok",
       "file": "13_BareOutput_teensy32.hex",
       "bytes": 71904,
-      "sha256": "05c9bbf258d89104b60d1c06e4ccec567c32b4d0885373fb6085d2a972737218",
+      "sha256": "eabce14c0684d60735114e8cf69a43f85e0c97f8c3b251e8237c4b243a50becd",
       "ram": "35.5%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "15_Piezo",
@@ -526,8 +526,8 @@
       "bytes": 169997,
       "sha256": "0b50bf767c6f5730dcf525a5b12312f2f51fac1fecb84fc6791bfebb24fc92cb",
       "ram": "34.2%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "15_Piezo",
@@ -537,8 +537,8 @@
       "bytes": 167117,
       "sha256": "97a6054b26b790d46841d54a92aa49aaf0fd2aed17d6466233c6483fdf7fe745",
       "ram": "34.2%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "15_Piezo",
@@ -546,10 +546,10 @@
       "status": "ok",
       "file": "15_Piezo_teensy36.hex",
       "bytes": 127180,
-      "sha256": "14009056d343dd9f3f21b3391529aaab4758f780c4b2e3084f5f55a01fb04925",
+      "sha256": "0b6628a9ceea254f9fa0293b6315c3473effa0dd71aebe786e7e6de8e3c37cb5",
       "ram": "50.6%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "15_Piezo",
@@ -557,10 +557,10 @@
       "status": "ok",
       "file": "15_Piezo_teensy32.hex",
       "bytes": 136606,
-      "sha256": "5f310d590ed7b94387ace72dbc4117dbb9cc21c67eadbd16bc6e782c52cb9e32",
+      "sha256": "f3a4525aa1eb40a877b26051c954317474c85b06358b0f596f50f87ec8faa98d",
       "ram": "43.7%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "16_WorkstationPiezo",
@@ -570,7 +570,7 @@
       "bytes": 239147,
       "sha256": "4dd9f7d9d81e9027c78d18bd0a1edb22bb43c375049933be0ae2cecbf8e00381",
       "ram": "61.4%",
-      "commit": "2873f24-dirty",
+      "commit": "12f12ef",
       "builtAt": "2026-08-15"
     },
     {
@@ -581,7 +581,7 @@
       "bytes": 236267,
       "sha256": "ff0f4099ceb16e3ebe92733e45218e129aef6e48d4c9044f97de1d40171a5b38",
       "ram": "61.4%",
-      "commit": "2873f24-dirty",
+      "commit": "12f12ef",
       "builtAt": "2026-08-15"
     },
     {
@@ -590,16 +590,16 @@
       "status": "ok",
       "file": "16_WorkstationPiezo_teensy36.hex",
       "bytes": 201995,
-      "sha256": "3b24fcd2afc2124bd7213dbb6514e40498ea4c19ddd20d1d03fdec86985a12b7",
+      "sha256": "5eebd1a996567f16f358baae260f7bd466ffa03e4bb916a2e1f92fe36adce011",
       "ram": "93.2%",
-      "commit": "2873f24-dirty",
+      "commit": "12f12ef",
       "builtAt": "2026-08-15"
     },
     {
       "example": "16_WorkstationPiezo",
       "board": "teensy32",
       "status": "does not fit",
-      "commit": "2873f24-dirty",
+      "commit": "12f12ef",
       "builtAt": "2026-08-15"
     },
     {
@@ -610,8 +610,8 @@
       "bytes": 244907,
       "sha256": "7b61052c133b52ecb83870e3a34a8bd3c22e00220f2ec866b763b3d2811901d6",
       "ram": "60.6%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "17_WorkstationI2S",
@@ -621,8 +621,8 @@
       "bytes": 242027,
       "sha256": "e24bca63119effb95365279653357dc8c43cf18174b464d13aecc439df4d0b32",
       "ram": "60.6%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "17_WorkstationI2S",
@@ -630,17 +630,17 @@
       "status": "ok",
       "file": "17_WorkstationI2S_teensy36.hex",
       "bytes": 204695,
-      "sha256": "50f139af389cbfedfeebced118c4d9813772d678437b780e0ecd821e550b5a2e",
+      "sha256": "ee518564723c59aecb442fcf125e512f6ae61a35750f1b78caa9ec26accdb14a",
       "ram": "91.0%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "17_WorkstationI2S",
       "board": "teensy32",
       "status": "does not fit",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "20_Instruments",
@@ -650,8 +650,8 @@
       "bytes": 334174,
       "sha256": "c5fe974eea352ce251c7a7cb3aa91e08377167686e265623e61865cd6d40a209",
       "ram": "35.4%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "20_Instruments",
@@ -661,8 +661,8 @@
       "bytes": 331307,
       "sha256": "d480e6beaf83e494841d7ad22c65021eacc9084d7bd611b3d7699173c9af642d",
       "ram": "35.4%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "20_Instruments",
@@ -670,17 +670,17 @@
       "status": "ok",
       "file": "20_Instruments_teensy36.hex",
       "bytes": 300402,
-      "sha256": "e9aff8bbecd6ba08bc8c9213a5a5d0bdcaffda896e89871bfa23838deafc9bd6",
+      "sha256": "31d53bdff1cce6092bb399c5eb3aa055c77a2c31d64b31b70e927fd0b2ea8e9c",
       "ram": "26.4%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "20_Instruments",
       "board": "teensy32",
       "status": "does not fit",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "21_Presets",
@@ -690,8 +690,8 @@
       "bytes": 579021,
       "sha256": "aed8a0338636e1ce3f84842376e547902b1332987adc71f15e877fac648554b3",
       "ram": "87.3%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "21_Presets",
@@ -701,22 +701,22 @@
       "bytes": 576154,
       "sha256": "f48c1f2106db0329ec927be2c143e7a952c2afa7f0ad97f06a1f8ed9436632f5",
       "ram": "87.3%",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "21_Presets",
       "board": "teensy36",
       "status": "does not fit",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     },
     {
       "example": "21_Presets",
       "board": "teensy32",
       "status": "does not fit",
-      "commit": "2873f24-dirty",
-      "builtAt": "2026-08-13"
+      "commit": "12f12ef",
+      "builtAt": "2026-08-15"
     }
   ]
 }
