@@ -11,20 +11,26 @@ seed, which is the example to read if you want to know what the library is
 for rather than how one piece of it works.
 **20 is the patch library**: eleven instruments over the ported engines, all
 sharing one note source so that switching patch compares instruments rather
-than the parts they happen to be playing.
+than the parts they happen to be playing, and **21 is the other half of
+that idea**: the 50 instrument presets straight out of the table, one shell
+over eleven engines, which is the sketch that argues the preset port works.
 **10 to 15 get sound out of the board**, one per output path: the audio
 shield, an I2S amplifier or DAC breakout, the built-in DAC, a bare Teensy
 with four passive parts, and a piezo disc. If you are trying to hear
 something for the first time, start at `10_AudioShield` if you own the
 shield and `11_I2SAmp` if you are buying something. `OUTPUTS.md` is the
 guide to choosing, and has the piezo reasoning.
+**16 and 17 are 07 through two of those paths**, and they exist because a
+patch and a converter are separable everywhere except in what you hear: the
+same piece is a different program on a disc that passes nothing under
+1.2 kHz than it is on a speaker.
 
 Every one is a real program: it compiles and links as firmware for the
 boards in the matrix below, and its cost is measured rather than estimated.
-One of them has now been flashed and heard: `07_Workstation` on a Teensy 4.0
-through an I2S amplifier, at 47.2 percent peak CPU. Everything else here is
-still compile-verified and link-verified only, which is what `00_BringUp` is
-for.
+One of them has now been flashed and heard: `17_WorkstationI2S`, which is
+`07_Workstation` summed to mono, on a Teensy 4.0 through a MAX98357A, at
+47.2 percent peak CPU. Everything else here is still compile-verified and
+link-verified only, which is what `00_BringUp` is for.
 
 Start with `00_BringUp`, which is not one of the five. It is the checklist
 for the first session with a board in hand: it prints the real sample rate,
@@ -43,7 +49,10 @@ against a fixed voice budget. See `00_BringUp/README.md`.
 | 04_ScalesAndTuning | the theory layer, 12-EDO against 19-EDO | 8096 B | 30176 B |
 | 05_MidiInstrument | MIDI byte parsing into a voice pool | 30616 B | 3888 B |
 | 07_Workstation | five engines, a Markov melody, a send bus | 42040 B | 225508 B |
+| 16_WorkstationPiezo | 07 through the piezo voicing chain | 42712 B | 230804 B |
+| 17_WorkstationI2S | 07 summed to mono, and a composed arrangement | 42488 B | 225508 B |
 | 20_Instruments | eleven patches over eight engines, one note source | 47912 B | 49904 B |
+| 21_Presets | all 50 presets, eleven engines in one image | 137176 B | 257036 B |
 
 The output examples share one patch, `10_AudioShield/audioshield.h`, so
 that comparing them compares converters rather than programs. Its cost and
@@ -56,13 +65,28 @@ the piezo voicing's are in `OUTPUTS.md`.
 | 12_DacOut | the built-in 12 bit DAC | 3.2, 3.5, 3.6 only, 4.x has no DAC |
 | 13_BareOutput | MQS on 4.x, PWM on 3.x, into an RC filter | all but LC |
 | 15_Piezo | a piezo disc driven differentially | all but LC |
+| 16_WorkstationPiezo | 07's piece onto a disc, MQS or PWM | 3.5, 3.6, 4.0, 4.1, MicroMod |
+| 17_WorkstationI2S | 07's piece into an I2S amplifier, mono | 3.5, 3.6, 4.0, 4.1, MicroMod |
 
 Cortex-M7 at `-Os` with `--gc-sections`, library only: no Arduino core and
 no audio library, so these are the bellows half of the binary and nothing
 else. Reproduce them with `./tools/size-report.sh`, rows `p4_` through
-`p8_` and `p11_` through `p13_`, and `node ../tools/check-docs.mjs --check`
-reads these eight rows back and compares them, because four of the first five
-had drifted before it did.
+`p8_` and `p11_` through `p16_`, and `node ../tools/check-docs.mjs --check`
+reads these eleven rows back and compares them, because four of the first
+five had drifted before it did.
+
+The last three rows arrived after the examples did, and that gap is worth
+naming rather than quietly closing. 16, 17 and 21 were written, built,
+committed, and in 17's case flashed to a board, while nothing measured
+them: no size sketch, no row here, and no entry in the `ALL` list below. A
+figure that is merely absent looks exactly like a figure that agrees, which
+is the one failure a checker cannot report on its own.
+
+16 and 17 also differ from every other row in where their number comes
+from. Both folders are an `.ino` and nothing else, so `p14_` and `p15_`
+reconstruct the composition instead of including a shared header, and the
+sketches say so at the top. Everything else here compiles the same source
+the example does.
 
 Three of these numbers are worth reading rather than skimming. 02, 03 and 05
 all sit near 30 KB because each reaches `BlepOsc`, whose band-limited step
@@ -87,7 +111,7 @@ patterns and the send scratch, comes to under 40 KB together.
 ## Which boards, measured by building
 
 Every cell is a firmware build with the Arduino core and the audio library
-in it, produced by `./build-matrix.sh`, which is 98 builds and takes about
+in it, produced by `./build-matrix.sh`, which is 119 builds and takes over
 an hour. `ok NN%` is RAM used, which is the number that decides whether a
 patch fits.
 
@@ -107,32 +131,48 @@ patch fits.
 | 12_DacOut | RAM | 34.7% | 48.7% | 48.7% | n/a | n/a | n/a |
 | 13_BareOutput | RAM | 35.5% | 48.6% | 48.6% | ok | ok | ok |
 | 15_Piezo | RAM | 43.7% | 50.6% | 50.6% | ok | ok | ok |
+| 16_WorkstationPiezo | RAM | RAM | 93.2% | 93.2% | ok | ok | ok |
+| 17_WorkstationI2S | RAM | RAM | 91.0% | 91.0% | ok | ok | ok |
+| 21_Presets | RAM | RAM | RAM | RAM | ok | ok | ok |
 
 `RAM` is the linker refusing: `region RAM overflowed`. `n/a` is the sketch
 declining on purpose, with an `#error` that says why: Teensy 4.x has no DAC
 at all, so `12_DacOut` cannot exist there and says so rather than failing
 somewhere deep in a header.
 
-07_Workstation shows `RAM` rather than `n/a` on the two it does not fit, and
-that is the distinction those two symbols carry. A Teensy 4.x has no DAC and
+07_Workstation shows `RAM` rather than `n/a` on the two it does not fit, as
+do 16, 17 and 21 on theirs, and that is the distinction those two symbols
+carry. A Teensy 4.x has no DAC and
 never will, which is categorical and worth an `#error`. Not enough memory is
 a quantity, and `region RAM overflowed by N bytes` tells you how much you
 would have to give up to change the answer.
 
 Reading it:
 
-- **Teensy 4.0, 4.1, MicroMod** run everything with room to spare.
-- **Teensy 3.5 and 3.6** run everything, and 07_Workstation at 91.4 and 91.5
-  percent is the tightest fit in the table. It fits and it leaves nothing;
-  it was written expecting to need a 4.x and the build said otherwise. The
-  output examples sit near 49 percent because they carry four strings tuned
+- **Teensy 4.0, 4.1, MicroMod** run everything with room to spare, and they
+  are the only parts that run 21_Presets at all.
+- **Teensy 3.5 and 3.6** run everything except 21_Presets, and the three
+  workstation rows are the tightest fits in the table: 07 at 91.4 and 91.5
+  percent, 17 at 91.0, 16 at 93.2. They fit and they leave nothing; 07 was
+  written expecting to need a 4.x and the build said otherwise. The output
+  examples sit near 49 percent because they carry four strings tuned
   down to 20 Hz; that is a choice in `audioshield.h`, not a floor.
-- **Teensy 3.2** runs everything except 07_Workstation, whose delay line
-  alone is 187 KB against the 64 KB the whole part has. Of the rest,
-  04_ScalesAndTuning at 62.5 percent is the tightest fit.
-- **Teensy LC** runs three of the fourteen, at 81.6, 87.0 and 88.1 percent of
-  its 8 KB. It is not a board to plan a synth around, and 06_FirstSteps only
-  fits because it holds no delay line at all.
+- **Teensy 3.2** runs everything except the three workstation rows and
+  21_Presets. 07's delay line alone is 187 KB against the 64 KB the whole
+  part has. Of the rest, 04_ScalesAndTuning at 62.5 percent is the tightest
+  fit.
+- **Teensy LC** runs three of the seventeen, at 81.6, 87.0 and 88.1 percent
+  of its 8 KB. It is not a board to plan a synth around, and 06_FirstSteps
+  only fits because it holds no delay line at all.
+
+21_Presets is the only row that refuses a 3.6, and it is worth reading as a
+statement about the program rather than about the library. Eleven voice
+pools, eleven parameter tables and a plate tank in one image is 251 KB of
+RAM, against the 256 KB a 3.6 has in total. Nothing there is a fixed cost of
+having presets: a tour that never selects a string preset does not need the
+plate, and a program that names one engine gets the other ten dropped by
+`--gc-sections`. That property is the argument the preset table is split to
+make, and this row is what it costs to decline it.
 
 The 3.5 and 3.6 columns being *higher* than the 3.2 column on rows 10
 through 15 is not an error. `audioshield.h` picks a 20 Hz floor and four

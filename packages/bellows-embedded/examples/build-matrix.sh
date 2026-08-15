@@ -7,7 +7,7 @@
 #   ./build-matrix.sh              every example, every board
 #   ./build-matrix.sh 15_Piezo     one example, every board
 #
-# Takes about an hour for the full sweep: 98 firmware builds, each with the
+# Takes over an hour for the full sweep: 119 firmware builds, each with the
 # Arduino core and the audio library, and PlatformIO does not share objects
 # between board environments. Needs `pio` and the teensy platform:
 #
@@ -33,9 +33,16 @@ set -u
 cd "$(dirname "$0")" || exit 1
 
 BOARDS="teensylc teensy31 teensy35 teensy36 teensy40 teensy41 teensymm"
+# Every folder in examples/ that holds a sketch, and it has to stay that
+# way by hand: nothing derives this from the directory listing, so a new
+# example is invisible to the no-argument sweep until someone adds it here.
+# 16, 17 and 21 were missing from this list for the whole of their first
+# life, which is how three examples came to be committed, built and flashed
+# with no row in the board matrix below.
 ALL="00_BringUp 01_OneKick 02_DrumMachine 03_PolySynth 04_ScalesAndTuning
      05_MidiInstrument 06_FirstSteps 07_Workstation 10_AudioShield 11_I2SAmp
-     12_DacOut 13_BareOutput 15_Piezo 20_Instruments"
+     12_DacOut 13_BareOutput 15_Piezo 16_WorkstationPiezo 17_WorkstationI2S
+     20_Instruments 21_Presets"
 EXAMPLES="${1:-$ALL}"
 
 printf '%-22s' "example"

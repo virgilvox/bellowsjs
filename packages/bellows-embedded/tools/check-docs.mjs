@@ -453,7 +453,13 @@ const OUTPUTS_ROWS = [
 
 /* examples/README.md. Same five logic headers the p4 to p8 sketches
  * compile, and the file says so in a paragraph that was true while four of
- * its five rows had drifted anyway. */
+ * its five rows had drifted anyway.
+ *
+ * The last three rows were added later than the examples they measure, and
+ * that gap is the reason this list is worth keeping complete: 16, 17 and 21
+ * were committed, built and flashed while nothing here could see their
+ * figures at all. A row missing from this array does not fail; it is simply
+ * unchecked, which is the one failure mode a checker cannot report. */
 const EXAMPLES_ROWS = [
   { marker: '| 01_OneKick |', sketch: 'p4_e1_onekick', cols: ['flash', 'ram'] },
   { marker: '| 02_DrumMachine |', sketch: 'p5_e2_drummachine', cols: ['flash', 'ram'] },
@@ -463,6 +469,9 @@ const EXAMPLES_ROWS = [
   { marker: '| 07_Workstation |', sketch: 'p11_e7_workstation', cols: ['flash', 'ram'] },
   { marker: '| 06_FirstSteps |', sketch: 'p12_e6_firststeps', cols: ['flash', 'ram'] },
   { marker: '| 20_Instruments |', sketch: 'p13_e20_instruments', cols: ['flash', 'ram'] },
+  { marker: '| 16_WorkstationPiezo |', sketch: 'p14_e16_workstationpiezo', cols: ['flash', 'ram'] },
+  { marker: '| 17_WorkstationI2S |', sketch: 'p15_e17_workstationi2s', cols: ['flash', 'ram'] },
+  { marker: '| 21_Presets |', sketch: 'p16_e21_presets', cols: ['flash', 'ram'] },
 ];
 
 const DOCS = [

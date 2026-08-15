@@ -109,16 +109,33 @@ Ordered by cost to fix against risk of being wrong later. The first four are
 bookkeeping the session created and did not close; they are cheap and they are
 the kind of gap that rots.
 
-**1. Three examples exist with nothing checking them.** `16_WorkstationPiezo`,
-`17_WorkstationI2S` and `21_Presets` are committed and build, but they have no
-size sketch under `test/sketches`, no row in either table in
-`examples/README.md`, and no entry in the `ALL` list in
-`examples/build-matrix.sh` (which still names 14 of the 17 folders). So
-`check-docs` cannot see their flash and RAM, and `./build-matrix.sh` with no
-argument does not sweep them. Add `p14_e16_*`, `p15_e17_*` and `p16_e21_*`,
-their README rows, their `EXAMPLES_ROWS` entries in `tools/check-docs.mjs`, and
-the three folder names to `ALL`. Remember the `SELF` count in this file and in
-`docs/KICKOFF.md` moves by two per row added.
+**1. Three examples exist with nothing checking them. DONE.**
+`16_WorkstationPiezo`, `17_WorkstationI2S` and `21_Presets` are committed and
+build, and they had no size sketch under `test/sketches`, no row in either
+table in `examples/README.md`, and no entry in the `ALL` list in
+`examples/build-matrix.sh`, which named 14 of the 17 folders. So `check-docs`
+could not see their flash and RAM, and `./build-matrix.sh` with no argument
+did not sweep them.
+
+Closed: `p14_e16_workstationpiezo`, `p15_e17_workstationi2s` and
+`p16_e21_presets` exist, `EXAMPLES_ROWS` went from 8 rows to 11, `ALL` names
+all 17 folders and the full sweep is 119 builds rather than 98, and the `SELF`
+count went 382 to 388. The three new rows were mutated one at a time and
+watched to fail before being reverted, because a row nobody has seen fire is
+the same as no row.
+
+Two things this turned up that are worth carrying forward. 16 and 17 have no
+logic header at all, only an `.ino`, so `p14_` and `p15_` reconstruct the
+composition rather than including the source the example compiles, which is
+the one place in the size table where the number and the code are not the same
+text. Both sketches say so at the top. And 17 costs 448 B of flash more than
+07 for the same patch, because it calls `Piece::Compose()` and 07 does not, so
+`--gc-sections` keeps the mode picker, the progression, the five euclidean
+rhythms and the motif generator that 07 drops.
+
+Measured while adding the rows: 21_Presets is the only example in the set that
+a Teensy 3.6 refuses. Eleven voice pools and a plate tank is 251 KB against
+the 256 KB the part has.
 
 **2. The firmware manifest points at the wrong commit.** The 60 binaries in
 `apps/workbench/public/firmware` were built before the commit that contains
@@ -474,7 +491,7 @@ Run all of them from `packages/bellows-embedded` unless noted.
 | `npm run size` | flash and RAM per sketch, `cortex-m7` or `cortex-m4` | the whole no-registry design argument |
 | `./tools/check-header.sh <h>` | one header compiles standalone, `-Wall -Wextra` | header hygiene; note it instantiates nothing |
 | `node tools/gen-tables.mjs --check` | generated headers match the TypeScript ParamSpecs | new `Eq6` class the moment it appeared |
-| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md` and `docs/ENGINEERING.md`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath` and `vitest list`: 382 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
+| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md` and `docs/ENGINEERING.md`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath` and `vitest list`: 388 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
 | `npx vitest run test/integration/engine-tuning.test.ts` | every pitched engine plays the note it was given, to 2 cents | proves the fractional-delay tuning is real: an integer-rounded loop is 28 cents flat at E7 |
 | `npx vitest run test/integration/nan-safety.test.ts` | one NaN parameter cannot break the audio graph | 10 parameters threw inside `process()` and 191 poisoned the output before it existed |
 
