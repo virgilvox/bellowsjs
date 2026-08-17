@@ -1,8 +1,12 @@
 # HANDOFF
 
-State of the project as of 2026-08-13. Read this first when picking the work back up. Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` and `docs/AUDIT-2.md` and `docs/AUDIT-3.md` (findings with evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists and where this leads), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session), `docs/prototype-0.html` (the original design probe).
+State of the project as of 2026-08-16. Read this first when picking the work back up. Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` and `docs/AUDIT-2.md` and `docs/AUDIT-3.md` (findings with evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists and where this leads), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session), `docs/prototype-0.html` (the original design probe).
 
 ## The 2026-08-13 session, which changed the shape of the project
+
+Still accurate, and everything it says was re-verified on 2026-08-16 except
+where the corrections below say otherwise. Read the four items, then read
+"Still not done", which is the current work.
 
 Four things happened that a reader of the older sections below needs to know
 before trusting them, because each one falsifies something those sections say.
@@ -99,7 +103,7 @@ and `setParam` returns early on an unknown name. Neither warns. If you add a
 control, verify the name against the engine's ParamSpec list and then LISTEN to
 it move, because that is the only thing that catches this.
 
-### New harnesses from this session
+### Harnesses added on 2026-08-13
 
 | command | what it proves |
 | --- | --- |
@@ -107,173 +111,38 @@ it move, because that is the only thing that catches this.
 | `npm run check:embedded` (workbench) | every C++ snippet on the site compiles against the real headers |
 | `node scripts/gen-llm-embedded.mjs` | the embedded LLM reference, from the headers, gaps reported not dropped |
 
+### Harnesses added on 2026-08-15
+
+| command | what it proves |
+| --- | --- |
+| `npm run check:catalogue -w apps/workbench` | `FIRMWARES`, the `case` labels in `buildVoice`, `VOICE_CAVEATS` and `GROUP_ORDER` agree. Both ways of getting it wrong are silent: a bad `group` drops the entry from the picker with no error, a missing `case` throws only when a visitor presses RUN |
+| `npm run check:presets -w apps/workbench` | all 50 instrument presets render offline: audible, finite, at the pitch asked for, naming only parameters the registry knows. That last clause is the point, since a wrong engine parameter name is silent at every layer and has shipped twice |
+
+Both are in `ci.yml` and both were mutation tested before being trusted. The
+preset one is worth knowing about in detail: the mutation that renames a preset
+parameter leaves the preset perfectly audible at the right pitch, and nothing
+else in the repository catches it.
+
 ### Still not done, in the order I would take it
 
-Ordered by cost to fix against risk of being wrong later. The first four were
-bookkeeping one session created and did not close; three are now done and the
-fourth is blocked on hardware being plugged in. What each turned up is kept
-below rather than deleted, because the interesting part of a bookkeeping item
-is usually what it was hiding.
+Ordered by cost to fix against risk of being wrong later. Everything the
+2026-08-15 and 16 sessions closed is summarised at the end of this list rather
+than deleted, because the interesting part of a bookkeeping item is usually
+what it was hiding.
 
-**1. Three examples exist with nothing checking them. DONE.**
-`16_WorkstationPiezo`, `17_WorkstationI2S` and `21_Presets` are committed and
-build, and they had no size sketch under `test/sketches`, no row in either
-table in `examples/README.md`, and no entry in the `ALL` list in
-`examples/build-matrix.sh`, which named 14 of the 17 folders. So `check-docs`
-could not see their flash and RAM, and `./build-matrix.sh` with no argument
-did not sweep them.
-
-Closed: `p14_e16_workstationpiezo`, `p15_e17_workstationi2s` and
-`p16_e21_presets` exist, `EXAMPLES_ROWS` went from 8 rows to 11, `ALL` names
-all 17 folders and the full sweep is 119 builds rather than 98, and the `SELF`
-count went 382 to 388. The three new rows were mutated one at a time and
-watched to fail before being reverted, because a row nobody has seen fire is
-the same as no row.
-
-Two things this turned up that are worth carrying forward. 16 and 17 have no
-logic header at all, only an `.ino`, so `p14_` and `p15_` reconstruct the
-composition rather than including the source the example compiles, which is
-the one place in the size table where the number and the code are not the same
-text. Both sketches say so at the top. And 17's row sits 448 B of flash above
-07's for the same patch, because it calls `Piece::Compose()` and 07 does not, so
-`--gc-sections` keeps the mode picker, the progression, the five euclidean
-rhythms and the motif generator that 07 drops.
-
-That attribution was checked by building twice rather than left as a
-subtraction, because the two sketches differ in two ways and this file has been
-wrong about exactly that before. **`Compose` is 480 B**; the rest of 17,
-including the mono fold, is **minus 32 B** against 07, because calling the
-render through a wrapper changes how the loop inlines. 480 minus 32 is the 448.
-The recipe is in the sketch's header comment.
-
-Measured while adding the rows: 21_Presets is the only example in the set that
-a Teensy 3.6 refuses, by `region RAM overflowed by 8592 bytes`. That is the
-linker's figure. The first version of this line reasoned instead from the
-251 KB the Cortex-M7 size sketch reports against the 256 KB the part has, which
-is a freestanding library-only number standing in for a firmware link that also
-carries the Arduino core and the audio library. It happened to land near the
-right answer, which is exactly how a wrong method survives a review.
-
-**2. The firmware manifest points at the wrong commit. DONE.** The 60 binaries
-in `apps/workbench/public/firmware` were built before the commit that contained
-them, so `manifest.json` recorded `2873f24-dirty`.
-
-Rebuilt from a clean `packages/bellows-embedded` at `12f12ef`: 68 of 68 cells,
-60 ok, 6 that do not fit, 2 that decline on purpose, about an hour. The script
-discovers example folders on disk, so the three added since were already in the
-sweep and no list in it needed editing.
-
-Worth knowing before the next sweep: **the Teensy 3.x images are not
-reproducible.** 28 of the 60 changed content, all of them 3.2 and 3.6, and each
-by exactly three bytes at one address. Decoded rather than assumed, that word is
-`TIME_T`, the compile-time Unix timestamp the teensy3 core writes into `RTC_TSR`
-to set the clock at boot (`pins_teensy.c:425` and `:458`). So every sweep
-produces a diff on those rows whether or not anything changed, and a 3.x binary
-diff is only news if it is more than three bytes. Every 4.x and MicroMod image
-came back byte identical, which is what says no DSP moved.
-
-**3. The development board is running stale firmware. DONE.** It had
-`17_WorkstationI2S` from before the AudioMemory ordering fix, which is the null
-render window described above. Reflashed on 2026-08-15 with the post-fix build:
-
-```
-cd packages/bellows-embedded/examples
-PLATFORMIO_SRC_DIR=17_WorkstationI2S pio run -e probe_teensy40
-~/.platformio/packages/tool-teensy/teensy_loader_cli --mcu=TEENSY40 -w -s -v \
-  .pio/build/probe_teensy40/firmware.hex
-```
-
-The loader printed `Found HalfKay Bootloader`, then `Programming`, then
-`Booting`, which is the sequence to insist on: PlatformIO's default `teensy-gui`
-protocol reports success for having opened an application. The loader is not on
-PATH; it is in the PlatformIO packages tree at the path above. In bootloader
-mode the board is a HID device, VID `0x16c0` PID `0x0478`, and does NOT appear
-in `pio device list`, which is why "no board connected" was the wrong reading
-earlier the same day.
-
-It came back up playing, and the numbers are in `docs/HARDWARE.md`. The
-AudioMemory fix cost nothing measurable.
-
-Three things learned by running it that were not knowable from the source.
-
-`AudioProcessorUsageMax` is a running maximum since boot that nothing resets, so
-a "peak" figure is the highest value seen so far and not a bound. It moved from
-47.2 to 47.3 during the minute it was watched.
-
-The seed is unobservable in practice, which is a real defect in the example. 17
-prints it once in `setup()` and invites you to write it down and put it in
-`kPinnedSeed` to hear the piece again, but a host cannot open the serial port
-before that print happens, so it is discarded. The fix is a short
-`while (!Serial && millis() < 2000);` before the banner. Until then the one
-control that makes a piece reproducible cannot be read.
-
-`teensy_loader_cli -b -s` hangs rather than failing when the serial port is
-already held open by a reader. It has no timeout. Nothing is harmed, but do not
-leave it in a script without one.
-
-**4. The playground catalogue does not offer the new work. DONE.** It had 22
-entries and none of them was `21_Presets`, `16_WorkstationPiezo` or
-`17_WorkstationI2S`. It has 25.
-
-16 and 17 share 07's voice builder, because 07's patch is what both programs
-are; the disc chain and the mono fold are output-stage properties and
-`output-stage.ts` already models both. They keep their own voice keys so they
-can carry their own caveats, which earns its keep: 17 draws a seed at power up
-and composes a fresh arrangement and the other two do not. Both take
-`workstation.h` as their header, because that is the file they include, so the
-export panel writes three values rather than none.
-
-21_Presets got a labelled picker rather than a slider: `Firmware` gained
-`choices` and `RunningVoice` gained `select`, which rebuilds the instrument the
-way `Slot::Load` re-Inits the pool. The list is built from `INSTRUMENT_PRESETS`
-rather than typed out, so it cannot drift from what the page loads.
-
-All 50 were rendered offline through the real library first, four bars each:
-none silent, none non-finite, RMS from 0.0085 to 0.362, and the first note's
-pitch measured from the audio against 220 Hz times the preset's octave shift,
-searched two octaves either side so an octave error could not be absorbed. Every
-preset and fx parameter name resolves against a registered ParamSpec, which is
-the check that exists because a wrong name is silent at every layer. Then seven
-presets across five families were stepped through in the browser while running,
-which is the `select()` path the offline harness cannot reach.
-
-Three defects came out of that and are fixed: `select()` did not reset the step
-counter, so a preset picked during a chord bar could sit silent for thirteen
-sixteenths; `availableOutputs` filtered the global list and so returned
-declaration order, making "first is the default" false and landing both piezo
-entries on MQS; and the output survived a firmware change, so leaving 16 left
-the next program playing through a 1.2 kHz high pass.
-
-`npm run check:catalogue -w apps/workbench` is new and matters more than the
-entries. `FIRMWARES`, the `case` labels in `buildVoice`, `VOICE_CAVEATS` and
-`GROUP_ORDER` are four lists tied by two plain strings, nothing checked they
-agreed, and both failures are silent: a `group` not in `GROUP_ORDER` drops the
-entry from the picker with no error at all, and a `voice` with no `case` throws
-only when a visitor presses RUN. Mutated three ways and watched to fail. It is
-in `ci.yml`, which is a file rather than a control until CI runs.
-
-**5. Hardware breadth, which is the real gap.** One board, one program, one
-session. Nothing on a 3.x, nothing on a Daisy, and the two boards without a
-floating point unit (LC and 3.2) are the whole question, because they emulate
-every float operation in software. `00_BringUp` exists for exactly this and has
-never been run. The other half is that nothing has been compared to the browser
+**1. Hardware breadth, which is the real gap.** One board and one program, now
+run twice. Nothing on a 3.x, nothing on an LC, nothing on a Daisy, and the two
+parts without a floating point unit (LC and 3.2) are the whole question, because
+they emulate every float operation this library performs in software.
+`00_BringUp` exists for exactly this and **has still never been run**, which is
+the single highest-value thing left on this list: it is a checklist sketch with a
+written pass condition per stage, and its last two stages measure the pitch
+dependence of the BLEP oscillator cost, which no test in this repository covers
+and no amount of building will tell you. The other half is that nothing has been compared to the browser
 BY EAR: 40 parity rows and 1054 preset values are a strong position and they are
 not the same as having listened to both.
 
-**6. Milestone 6, publishing the embedded library.** Still `private: true` and
-in neither the Arduino Library Manager nor the PlatformIO registry. The decision
-is recorded under "Decisions, made": a mirror repository holding only
-`packages/bellows-embedded`, pushed by CI on tag. PlatformIO can consume the
-subdirectory today. `dot_a_linkage=true` is gone from `library.properties`: it
-asks the builder to archive compiled library sources into a `.a` and there are
-zero `.cpp` files to archive, so it was meaningless. The Arduino IDE path is
-still untested, and six examples, 11, 12, 13, 15, 16 and 17, include across
-folders (`../10_AudioShield/audioshield.h`), which PlatformIO resolves and the
-Arduino IDE may not, because it preprocesses the `.ino` into a build directory.
-Both are now written down in the embedded README under Installing rather than
-only here, since the person who hits them is reading that file and not this one.
-
-**7. The audit backlog. COUNTED, and now countable.** `docs/AUDIT-2.md` has 51
+**2. The audit backlog. COUNTED, and now countable.** `docs/AUDIT-2.md` has 51
 genuinely open findings: 43 open and 8 partial, against 38 closed, 5 refuted and
 1 not a defect. Each carries its status and evidence under its own heading, so
 that file is the register and this one is not. The figure this entry used to
@@ -299,9 +168,107 @@ fell over, and the pattern in almost all of them was a fix applied to the
 symptom a finding opened with rather than to the cause it named further down.
 Read a finding to its end before calling it closed.
 
-**8. One parity row is weaker than it looks.** `additive_morph` moves only 4.4x
+**3. Milestone 6, publishing the embedded library.** Still `private: true` and
+in neither the Arduino Library Manager nor the PlatformIO registry. The decision
+is recorded under "Decisions, made": a mirror repository holding only
+`packages/bellows-embedded`, pushed by CI on tag. PlatformIO can consume the
+subdirectory today. `dot_a_linkage=true` is gone from `library.properties`: it
+asks the builder to archive compiled library sources into a `.a` and there are
+zero `.cpp` files to archive, so it was meaningless. The Arduino IDE path is
+still untested, and six examples, 11, 12, 13, 15, 16 and 17, include across
+folders (`../10_AudioShield/audioshield.h`), which PlatformIO resolves and the
+Arduino IDE may not, because it preprocesses the `.ino` into a build directory.
+Both are now written down in the embedded README under Installing rather than
+only here, since the person who hits them is reading that file and not this one.
+
+**4. One parity row is weaker than it looks.** `additive_morph` moves only 4.4x
 against a 10x gate for a 0.1 percent `morph` error. It is recorded in the GATES
 comment. A second row driving morph across its range would close it.
+
+**5. `17_WorkstationI2S` prints a seed nobody can read.** The sketch draws a
+seed at power up, composes an arrangement from it, prints it, and invites you to
+put it in `kPinnedSeed` to hear that piece again. In practice the print is
+discarded: a host cannot open the USB serial port before `setup()` runs, and
+Teensy drops output when nothing is listening. So the one control that makes a
+generated piece reproducible cannot be obtained. Found by flashing the board and
+trying to write the number down. The fix is a bounded wait before the banner,
+`while (!Serial && millis() < 2000);`, which costs two seconds at boot and makes
+the feature real. 16 has the same shape and no seed to lose.
+
+**6. Two READMEs are near-identical and nothing syncs them.** The repository
+root `README.md` and `packages/bellows/README.md` are maintained by hand and
+differ by about fifty lines. The second is what npm serves. That drift is not
+hypothetical either: on 2026-08-15 a session asked to document the
+microcontroller port in "the main readme" fixed the root one, and the npm page
+still said nothing about it, which is what 0.1.8 exists to correct. Either
+generate one from the other or add a checker that diffs the shared sections.
+
+**7. `vite-node` is in no `package.json` and no `node_modules` here.** Five npm
+scripts invoke it through `npx`: `parity:check`, `tables:check`, `presets:check`,
+`check:catalogue` and `check:presets`. On this machine it resolves from the npx
+cache and in CI it is fetched from the registry, which works and is green, but it
+is a dependency the lockfile does not pin and it does not work offline. One
+devDependency closes it.
+
+**8. The hardware CPU figure is quoted in nine places and checked in none.**
+`docs/HARDWARE.md` holds the table and names the other eight: this file twice,
+`docs/KICKOFF.md`, `packages/bellows-embedded/examples/README.md`, and four spots
+under `apps/workbench`. No harness prints a number that comes off a serial
+console, so `check-docs` cannot reach any of them. Nothing to do today beyond
+knowing it, and changing `docs/HARDWARE.md` first.
+
+### Closed on 2026-08-15 and 16, and what each one turned up
+
+Kept short. The full record is in the commits.
+
+- **The three unmeasured examples.** `16_WorkstationPiezo`, `17_WorkstationI2S`
+  and `21_Presets` had no size sketch, no README rows and no entry in the `ALL`
+  list. All three now have all of it and `check-docs` covers 388 figures. Two
+  things fell out: 16 and 17 have no logic header at all, so `p14_` and `p15_`
+  reconstruct the composition rather than sharing the example's source, the only
+  rows in the size table where the number and the code are not the same text;
+  and 17 costs 480 B of flash for `Piece::Compose()`, priced by building twice
+  rather than by subtracting, with everything else about it coming to minus 32 B.
+- **The firmware manifest.** Rebuilt from a clean tree, 68 of 68 cells. The
+  Teensy 3.x images are not reproducible: each carries a compile-time `TIME_T`
+  the core writes into `RTC_TSR`, so a 3.x `.hex` differs by exactly three bytes
+  on every sweep and only a larger diff is news. Every 4.x image was byte
+  identical.
+- **The board.** Reflashed with the post-AudioMemory-fix build and measured
+  twice. `AudioProcessorUsageMax` is a running maximum since boot that nothing
+  resets, so a "peak" is the highest value seen so far and not a bound.
+  `teensy_loader_cli -b -s` hangs with no timeout if something else holds the
+  serial port. In bootloader mode the board is a HID device at `16c0:0478` and
+  does not appear in `pio device list`, which is why an earlier check that day
+  concluded "no board connected" and was wrong.
+- **The playground.** 25 entries, with the 50 presets as a labelled picker.
+  `npm run check:catalogue` and `npm run check:presets` are new and both are in
+  CI; the second renders all 50 presets offline and gates them on being audible,
+  finite, at the requested pitch and naming only parameters the registry knows.
+  Browser testing found three defects that typechecking could not: `select()`
+  did not reset the step counter, `availableOutputs` made "first is the default"
+  false, and the output survived a firmware change.
+- **The audit count.** 51 open, not 73, with a status and evidence under every
+  finding. 13 of 51 claimed closures fell over to skeptics.
+- **Two claims that had outlived their truth.** CI has run, 26 times with 7
+  failures all on a feature branch, and a board has been flashed and heard. Both
+  were stated as hard facts in `docs/KICKOFF.md` for weeks after they stopped
+  being true.
+- **`bellowsjs@0.1.8`**, a documentation release, and the release ritual
+  reordered so the version bump precedes the regenerate step rather than
+  following it, which is what made 0.1.5 and 0.1.8 both go stale.
+- **The verify block now names the regenerate-and-diff gates.** `gen:sim`,
+  `gen:llm`, `gen:llm-embedded` and `gen:worklet` were in `ci.yml` and not in
+  the block `docs/KICKOFF.md` hands a new session, so a full local pass could go
+  green with a stale generated file, and on 2026-08-15 one did, on a commit that
+  had already been published to npm. Both the block and the harness table below
+  now list them.
+- **The embedded LLM reference** gained Installing, Build flags and a Targets
+  section derived from the board matrix, and the LLM REF page gained the
+  BROWSER and EMBEDDED switch it was missing. Its Minimal program had been
+  calling `AudioMemory()` before `Init()`, which is the ordering that produced a
+  null render window on a board: the one document written to teach a machine to
+  write this code was teaching the bug.
 
 ## Where things stand
 
@@ -605,6 +572,12 @@ This is the part a new session most needs to know, because these are what let yo
 
 Run all of them from `packages/bellows-embedded` unless noted.
 
+The last four rows are regenerate-and-diff gates rather than tests, and they are
+the ones a local run keeps missing, because they only fail if you regenerate and
+then look. Item 4 of "Still not done" is about exactly that: they are in
+`ci.yml` and not in the verify block `docs/KICKOFF.md` hands a new session, and
+on 2026-08-15 that gap put a stale file on a published release commit.
+
 | Command | What it proves | What it caught |
 | --- | --- | --- |
 | `npm test` (in `packages/bellows`) | the TypeScript, including the golden render and the oscillator band sweep | the regression fixture is the only whole-piece guard; `test/dsp-osc/blep-frequency.test.ts` is the only thing that can see alias rejection collapse above 2637 Hz |
@@ -617,6 +590,12 @@ Run all of them from `packages/bellows-embedded` unless noted.
 | `node tools/gen-tables.mjs --check` | generated headers match the TypeScript ParamSpecs | new `Eq6` class the moment it appeared |
 | `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md` and `docs/ENGINEERING.md`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath` and `vitest list`: 388 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
 | `npx vitest run test/integration/engine-tuning.test.ts` | every pitched engine plays the note it was given, to 2 cents | proves the fractional-delay tuning is real: an integer-rounded loop is 28 cents flat at E7 |
+| `npm run check:catalogue` (workbench) | the four simulator lists agree: `FIRMWARES`, the `case` labels in `buildVoice`, `VOICE_CAVEATS`, `GROUP_ORDER` | nothing yet; built the day three entries were added, because both failures are silent |
+| `npm run check:presets` (workbench) | all 50 presets render offline: audible, finite, at pitch, naming only registered parameters | nothing yet; the mutation that renames a preset parameter leaves it audible at the right pitch and nothing else catches it |
+| `npm run gen:llm -w apps/workbench` then `git diff --exit-code -- apps/workbench/public/llm.txt` | the browser LLM reference matches the built library | a version bump that left it stale, on the 0.1.8 release commit, after the documented verify block had passed |
+| `npm run gen:llm-embedded -w apps/workbench` then a diff | the embedded LLM reference matches the headers and the board matrix | refuses to write at all if it cannot parse the matrix out of `examples/README.md` |
+| `npm run gen:sim -w apps/workbench` then a diff | the simulator shows the examples it claims to | |
+| `npm run gen:worklet -w packages/bellows` then a diff | realtime runs the DSP the tests ran | the whole suite stays green when this is stale, because tests use `renderOffline` |
 | `npx vitest run test/integration/nan-safety.test.ts` | one NaN parameter cannot break the audio graph | 10 parameters threw inside `process()` and 191 poisoned the output before it existed |
 
 Rules learned the hard way about these:

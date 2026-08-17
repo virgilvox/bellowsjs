@@ -18,39 +18,52 @@ strict: no emojis, no em dashes, no stock AI phrasing), `docs/HANDOFF.md`
 (state, harnesses, and the numbered list under "Still not done, in the order I
 would take it"), `docs/AUDIT-3.md` (the standard for honesty in this repo).
 
-The last session closed the four bookkeeping items and gave the audit a status.
-`16_WorkstationPiezo`, `17_WorkstationI2S` and `21_Presets` now have size
-sketches, README rows and matrix rows and are in the `ALL` list; the firmware
-manifest names a real commit; the playground offers all three, with the 50
-presets as a labelled picker, behind a new `check:catalogue` gate; and every one
-of the 95 findings in `docs/AUDIT-2.md` carries a status and its evidence, which
-moved the open count from a claimed 73 to a measured 51.
+The 2026-08-15 and 16 sessions closed every bookkeeping item, flashed and
+measured the board, corrected the audit count from a claimed 73 to a measured
+51, documented the Arduino library, released `bellowsjs@0.1.8`, and gave the
+embedded LLM reference the install half it never had. `docs/HANDOFF.md` under
+"Closed on 2026-08-15 and 16" is the short version.
 
-Two claims this repository stated as hard facts turned out to be false and are
-now corrected in place. CI HAS RUN, twelve green runs, ten of them on a push to
-main. A BOARD HAS BEEN FLASHED AND HEARD. Both were true when written and
-neither was rechecked. Expect more of that: assume any sentence here that begins
-"nothing has" is older than it looks, and check it.
+Three claims this repository stated as hard facts were false when checked, and
+all three were true when written. CI HAS RUN: 26 times, 19 green and 7 failures,
+all seven on a feature branch. A BOARD HAS BEEN FLASHED AND HEARD, twice.
+`llm.txt` claimed to be exact for a version three releases old. Expect more of
+this. **Any sentence in these documents asserting that something has never
+happened is older than it looks: spend the one command it takes.** That is not a
+rhetorical flourish, it is where four of this repository's document defects came
+from.
 
-OBJECTIVE: <replace me. Items 1 to 4 of "Still not done" in HANDOFF are all
-closed, so the list now begins at item 5. If you have a board, take item 5 and
-start with `00_BringUp`, which has still never been run and is the only thing
-that measures the BLEP pitch cost; a Teensy 4.0 is the board that has run
-anything, and a 3.2 or an LC is the interesting question because neither has a
-floating point unit. If you do not, the two with the most left in them are item
-6, publishing the embedded library, and the 22 audit findings tagged
-`[changes audio]`.>
+OBJECTIVE: <replace me. "Still not done" in `docs/HANDOFF.md` has eight items
+and the first three are the real ones; 4 to 8 are small and each names its own
+fix.
 
-WHAT IS STILL TRUE AND WORTH KNOWING BEFORE YOU START:
+If you have a board: item 1, and start with `00_BringUp`. It has still never
+been run, it is a checklist sketch with a written pass condition per stage, and
+its last two stages measure the pitch dependence of the BLEP oscillator cost,
+which no test here covers and no amount of building will tell you. A Teensy 4.0
+is the only part that has run anything; a 3.2 or an LC is the interesting
+question, because neither has a floating point unit and this is a float library.
 
-- 51 audit findings are open, and `docs/AUDIT-2.md` is the register. Do not
-  re-derive that count from HANDOFF; HANDOFF now points at the file.
-- Seventeen of them are tagged `[under ten minutes]` and several are documents
-  describing code that does not exist. `check-docs` cannot see those, because a
-  prose claim about an algorithm is not a figure.
-- One board, one program. Nothing has run on a 3.x, a Daisy, or either part
-  without a floating point unit, and nothing has been compared to the browser by
-  ear.
+If you do not: item 2, the 22 audit findings tagged `[changes audio]`, or item
+3, publishing the embedded library. Items 4 to 8 are an afternoon between them
+and every one was found by this repository biting someone.>
+
+WHAT IS TRUE TODAY, and each of these is checkable in one command:
+
+- 51 audit findings are open, 43 plus 8 partial. `docs/AUDIT-2.md` is the
+  register: every finding carries a status and its evidence under its own
+  heading. Do not re-derive the count from HANDOFF, which points at the file.
+  22 are tagged `[changes audio]` and 20 `[under ten minutes]`.
+- One board, one program, run twice. Nothing has run on a 3.x, an LC, a
+  MicroMod or a Daisy, and **nothing has been compared to the browser by ear**.
+  40 parity rows, 428 value rows and 1054 preset values stand in for that and
+  are not the same thing.
+- `bellowsjs@0.1.8` is on npm, `main` is pushed, CI is green on it, and
+  bellows.live is deployed and current. None of that stays true on its own: the
+  site has no deploy-on-push and needs `doctl` every time.
+- 13 of 51 claimed audit closures fell over to a skeptic. The pattern was almost
+  always a fix applied to the symptom a finding opens with rather than the cause
+  it names four sentences later. Read a finding to its end before closing it.
 
 THE RULES THAT MATTER HERE, learned by being burned:
 
@@ -96,7 +109,22 @@ npm run check:examples -w apps/workbench            49 javascript examples
 npm run check:embedded -w apps/workbench            36 C++ snippets compile
 npm run check:catalogue -w apps/workbench           25 entries, 24 voice builders
 npm run check:presets -w apps/workbench             50 presets sound, at pitch
-npm run gen:sim -w apps/workbench && git diff --exit-code -- apps/workbench/src/lib/sim/sources.gen.ts
+
+# The regenerate-and-diff gates. These only fail if you regenerate and then
+# look, which is why a local run kept missing them and CI kept catching them.
+npm run gen:sim -w apps/workbench          && git diff --exit-code -- apps/workbench/src/lib/sim/sources.gen.ts
+npm run gen:llm -w apps/workbench          && git diff --exit-code -- apps/workbench/public/llm.txt
+npm run gen:llm-embedded -w apps/workbench && git diff --exit-code -- apps/workbench/public/llm-embedded.txt
+npm run gen:worklet -w packages/bellows    && git diff --exit-code -- packages/bellows/src/kernel/worklet-code.gen.ts
+
+# Build AFTER the generators and BEFORE the embedded checks, and not because
+# anything changed. gen:worklet rewrites a file under src/ with identical
+# content, which moves its mtime, and gen-tables --check compares mtimes rather
+# than content, so it then refuses a dist it considers stale. Running this block
+# top to bottom without this line fails on the penultimate step for no reason at
+# all. Measured, not guessed.
+npm run build -w packages/bellows
+
 cd packages/bellows-embedded && npm run parity:check     40 rows, prng exactly 0
 cd packages/bellows-embedded && npm run tables:check     428 value rows
 cd packages/bellows-embedded && npm run presets:check    50 presets, 1054 values
