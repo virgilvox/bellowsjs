@@ -311,8 +311,8 @@ Kept short. The full record is in the commits.
   `Bellows`, from the mirror at `virgilvox/bellows-embedded`; PlatformIO as `virgilvox/Bellows`,
   installable with `lib_deps = virgilvox/Bellows@0.1.0` and verified by building a scratch
   project against it. It stays `private: true` and off npm, which is correct: the npm package is
-  the browser library. Note the PlatformIO artifact was published from the mirror rather than
-  from the package directory, so it has no `daisy_onekick`; see item 3.
+  the browser library. 0.1.0 on PlatformIO was published from the mirror by mistake and has no
+  `daisy_onekick`; 0.1.1 is from the package directory and does.
 - Library test suite: 90 files, 1348 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
@@ -1303,11 +1303,23 @@ first: it builds both and asserts what each must and must not contain.
 2. `npm run check:package -w packages/bellows-embedded`. Needs `pio` on PATH
    for the second half, and says so rather than passing quietly if it is
    absent.
-3. Push a tag on this repository. `.github/workflows/mirror-embedded.yml`
-   rebuilds the mirror and pushes it to `virgilvox/bellows-embedded` with that
-   version as its tag, but only if `MIRROR_TOKEN` is set. **It is not set
-   today**, so until it is, run `tools/build-mirror.sh` and push the mirror by
-   hand.
+3. The mirror. `.github/workflows/mirror-embedded.yml` does this on a tag, but
+   only if `MIRROR_TOKEN` is set, and **it is not set today**, so it is by hand:
+
+   ```
+   git clone https://github.com/virgilvox/bellows-embedded.git /tmp/mirror
+   ./tools/build-mirror.sh /tmp/mirror-build
+   cd /tmp/mirror && find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+   cp -R /tmp/mirror-build/. .
+   git add -A && git commit -m "Bellows X.Y.Z" && git push
+   git tag -a X.Y.Z -m "Bellows X.Y.Z" && git push origin X.Y.Z
+   gh release create X.Y.Z --repo virgilvox/bellows-embedded ...
+   ```
+
+   Build to a temp directory and copy the contents in, keeping `.git`. Pointing
+   `build-mirror.sh` at the clone deletes it, which is what happened the first
+   time; the script now refuses rather than doing it again. Tag without a `v`,
+   matching `0.1.0` and `0.1.1`, because the indexer matched that shape.
 4. **Arduino Library Manager needs nothing further.** It watches the mirror for
    new tags and indexes them within a day. The indexer log is at
    `downloads.arduino.cc/libraries/logs/github.com/virgilvox/bellows-embedded/`,

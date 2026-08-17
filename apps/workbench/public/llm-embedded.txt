@@ -1,4 +1,4 @@
-# bellows-embedded 0.1.0: LLM reference
+# bellows-embedded 0.1.1: LLM reference
 
 The C++17 port of bellowsjs for 32-bit microcontrollers. Header only. Nothing
 allocates and nothing self-registers.

@@ -63,8 +63,8 @@ WHAT IS TRUE TODAY, and each of these is checkable in one command:
   site has no deploy-on-push and needs `doctl` every time.
 - The embedded library is published to BOTH registries: Arduino Library Manager
   as `Bellows`, from the mirror at `virgilvox/bellows-embedded`, and PlatformIO
-  as `virgilvox/Bellows`. It versions independently of the npm package, 0.1.0
-  against 0.1.8, and has its own release ritual in HANDOFF. Publishing it found
+  as `virgilvox/Bellows`, both at 0.1.1. It versions independently of the npm
+  package, 0.1.1 against 0.1.8, and has its own release ritual in HANDOFF. Publishing it found
   that every example failed to compile once installed, which had been true for
   the whole life of the port and which only installing it could reveal.
 - 13 of 51 claimed audit closures fell over to a skeptic. The pattern was almost

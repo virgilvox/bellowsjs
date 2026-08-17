@@ -37,6 +37,20 @@ set -eu
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="${1:-$HERE/../../.mirror}"
 
+# This wipes the destination, which is fine for a temp directory and is not
+# fine for a clone of the mirror. Pointing it at one deletes the .git and
+# leaves you with no remote and no history, which is exactly what happened the
+# first time the release was done by hand. Build somewhere else and copy the
+# contents in, keeping .git; the release ritual in docs/HANDOFF.md spells it out.
+if [ -e "$DEST/.git" ]; then
+  echo "build-mirror: $DEST is a git repository and this script would delete it." >&2
+  echo "              Build to a temp directory and copy the contents over instead:" >&2
+  echo "                ./tools/build-mirror.sh /tmp/mirror-build" >&2
+  echo "                cd <clone> && find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +" >&2
+  echo "                cp -R /tmp/mirror-build/. ." >&2
+  exit 1
+fi
+
 rm -rf "$DEST"
 mkdir -p "$DEST"
 
