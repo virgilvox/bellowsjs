@@ -265,8 +265,10 @@ Kept short. The full record is in the commits.
   green with a stale generated file, and on 2026-08-15 one did, on a commit that
   had already been published to npm. Both the block and the harness table below
   now list them.
-- **Milestone 6, both registries.** Arduino Library Manager as `Bellows`, from
-  the mirror at `virgilvox/bellows-embedded`; PlatformIO as `virgilvox/Bellows`.
+- **Milestone 6, both registries, at 0.1.1.** PlatformIO is live as
+  `virgilvox/Bellows`. The Arduino submission is merged and the mirror is
+  tagged, but the indexer had not run when this was written: see the state
+  section for how to check rather than assume.
   Publishing found the library was BROKEN when installed: every example failed
   to compile, for the port's whole life, because Arduino cannot attribute a
   nested include path to a library and no example used the `<Bellows.h>` that
@@ -307,12 +309,28 @@ Kept short. The full record is in the commits.
   current; it will fall behind again on the next commit that touches `apps/workbench`. See
   "Deployment (bellows.live)" below, which has said this all along; an earlier draft of this
   line said the opposite and was wrong.
-- **`packages/bellows-embedded` is published to both registries.** Arduino Library Manager as
-  `Bellows`, from the mirror at `virgilvox/bellows-embedded`; PlatformIO as `virgilvox/Bellows`,
-  installable with `lib_deps = virgilvox/Bellows@0.1.0` and verified by building a scratch
-  project against it. It stays `private: true` and off npm, which is correct: the npm package is
-  the browser library. 0.1.0 on PlatformIO was published from the mirror by mistake and has no
-  `daisy_onekick`; 0.1.1 is from the package directory and does.
+- **`packages/bellows-embedded` is published, and the two channels are not live at the same
+  moment.** It stays `private: true` and off npm, which is correct: the npm package is the
+  browser library.
+  - **PlatformIO: live.** `virgilvox/Bellows`, and an UNPINNED
+    `lib_deps = virgilvox/Bellows` resolves to `0.1.1`, checked. 0.1.0 went out from the mirror
+    by mistake and has no `daisy_onekick`; 0.1.1 is from the package directory and does.
+  - **Arduino Library Manager: submitted and merged, NOT yet indexed.** Checked on 2026-08-17,
+    about ninety minutes after the merge: `Bellows` is absent from
+    `library_index.json.gz` (53177 entries) and the indexer log 404s, which is what a
+    repository the indexer has never processed looks like. The bot said within a day. When it
+    runs it finds both mirror tags, so `0.1.0` and `0.1.1` should both appear.
+
+    Do not write "it is in Library Manager" into any document until one of these says so:
+    ```
+    curl -s https://downloads.arduino.cc/libraries/library_index.json.gz | gunzip \
+      | python3 -c "import json,sys;print(sorted(l['version'] for l in json.load(sys.stdin)['libraries'] if l['name']=='Bellows') or 'not indexed yet')"
+    curl -sL http://downloads.arduino.cc/libraries/logs/github.com/virgilvox/bellows-embedded/
+    ```
+    If the log appears and the index still does not list it, read the log: that is where a
+    rejected tag explains itself. Both tags pass `arduino-lint` in submission mode at strict
+    compliance, so a rejection would be a surprise, and a surprise is not the same as
+    impossible.
 - Library test suite: 90 files, 1348 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
