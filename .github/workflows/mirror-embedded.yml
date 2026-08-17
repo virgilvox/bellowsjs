@@ -1,0 +1,91 @@
+# Push packages/bellows-embedded to its Arduino Library Manager mirror.
+#
+# The Manager indexes repositories and not subdirectories, so the library is
+# published from virgilvox/bellows-embedded, which is generated from this one.
+# The decision and its reasoning are in docs/HANDOFF.md under "Decisions, made".
+#
+# WHAT TRIGGERS IT
+#
+# A tag on this repository, and then only if it has something to do. The
+# embedded library carries its OWN version in library.properties, which does
+# not track the npm package: bellowsjs was at 0.1.8 while the library was at
+# 0.1.0. So this reads that file and pushes only when the mirror has no tag
+# for that version yet. Tagging v0.1.9 of the npm package therefore does
+# nothing here, which is correct, and bumping library.properties and tagging
+# does the release.
+#
+# WHAT IT NEEDS
+#
+# A MIRROR_TOKEN secret: a fine-grained PAT with contents write on
+# virgilvox/bellows-embedded only. GITHUB_TOKEN cannot push to another
+# repository. Without the secret the job says so and exits green rather than
+# failing every tag, because a red build nobody can fix teaches people to
+# ignore red builds.
+
+name: mirror embedded
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: read the library version
+        id: ver
+        run: |
+          v=$(sed -n 's/^version=//p' packages/bellows-embedded/library.properties)
+          [ -n "$v" ] || { echo "no version= in library.properties"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "library.properties says $v"
+
+      - name: check the token is present
+        id: gate
+        run: |
+          if [ -z "${{ secrets.MIRROR_TOKEN }}" ]; then
+            echo "have=false" >> "$GITHUB_OUTPUT"
+            echo "MIRROR_TOKEN is not set, so there is nothing this job can push."
+            echo "Create a fine-grained PAT with contents:write on"
+            echo "virgilvox/bellows-embedded and add it as MIRROR_TOKEN."
+          else
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: build the mirror
+        if: steps.gate.outputs.have == 'true'
+        run: ./packages/bellows-embedded/tools/build-mirror.sh "$RUNNER_TEMP/mirror"
+
+      - name: push it, and tag if that version is new
+        if: steps.gate.outputs.have == 'true'
+        env:
+          TOKEN: ${{ secrets.MIRROR_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -eu
+          cd "$RUNNER_TEMP/mirror"
+          git init -q -b main
+          git config user.name "bellows mirror"
+          git config user.email "noreply@github.com"
+          git remote add origin "https://x-access-token:${TOKEN}@github.com/virgilvox/bellows-embedded.git"
+
+          if git ls-remote --tags origin "refs/tags/${VERSION}" | grep -q .; then
+            echo "${VERSION} is already tagged on the mirror. Bump version= in"
+            echo "library.properties to publish a new one. Nothing to do."
+            exit 0
+          fi
+
+          # The mirror's history is not interesting and its content is derived,
+          # so each release is one commit rather than a replayed history.
+          git add -A
+          git commit -q -m "Bellows ${VERSION}
+
+          Generated from ${GITHUB_REPOSITORY}@${GITHUB_SHA} by
+          packages/bellows-embedded/tools/build-mirror.sh. See MIRROR.md."
+          git push -q --force origin main
+          git tag -a "${VERSION}" -m "Bellows ${VERSION}"
+          git push -q origin "${VERSION}"
+          echo "pushed and tagged ${VERSION}"

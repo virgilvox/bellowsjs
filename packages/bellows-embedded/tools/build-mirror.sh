@@ -48,6 +48,44 @@ cp "$HERE/keywords.txt" "$DEST/keywords.txt"
 cp "$HERE/README.md" "$DEST/README.md"
 cp "$HERE/LICENSE" "$DEST/LICENSE"
 
+# Everything in the mirror is generated, including these two. They were hand
+# written into the repository once and that was a bug waiting for the next tag:
+# CI force-pushes whatever this script produces, so anything not produced here
+# gets deleted on the next release.
+cat > "$DEST/.gitignore" <<'GITIGNORE'
+.DS_Store
+.pio/
+build/
+GITIGNORE
+
+cat > "$DEST/MIRROR.md" <<'MIRRORDOC'
+# This repository is generated
+
+The source of truth is
+[virgilvox/bellowsjs](https://github.com/virgilvox/bellowsjs), under
+`packages/bellows-embedded`. This repository is a mirror of that directory,
+flattened so `library.properties` sits at the root, because the Arduino Library
+Manager indexes repositories and not subdirectories.
+
+It is rebuilt by `packages/bellows-embedded/tools/build-mirror.sh` and pushed on
+every tag that carries a new `version=`. **Pull requests here will be
+overwritten.** Open them against the monorepo instead.
+
+Two things differ from the source directory, both deliberate and both done by
+that script:
+
+- The development infrastructure is not shipped: `test/`, `tools/`,
+  `package.json`, `compile_flags.txt`, and `examples/daisy_onekick`, which is a
+  Makefile and a `main.cpp` rather than a sketch and would show in the IDE as a
+  folder it cannot open.
+- The six examples that share a patch with a sibling folder have that header
+  copied next to the sketch and the include rewritten. The Arduino IDE
+  preprocesses a sketch into a build directory, so a relative path out of the
+  sketch folder does not survive it: measured, every one of them failed to
+  compile before this step. The monorepo keeps the shared header, which is what
+  a reader reads and what the size report compiles.
+MIRRORDOC
+
 # Examples, minus the ones that are not sketches and the build scaffolding.
 mkdir -p "$DEST/examples"
 for dir in "$HERE"/examples/*/; do
