@@ -44,6 +44,7 @@
 #error "Teensy 4.x has no DAC. Use 13_MqsOut, or an I2S breakout (11_I2SAmp)."
 #endif
 
+#include <Bellows.h>
 #include "bellows/platform/teensy.h"
 #include "../10_AudioShield/audioshield.h"
 

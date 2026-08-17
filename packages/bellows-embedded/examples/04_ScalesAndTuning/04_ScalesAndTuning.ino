@@ -34,6 +34,7 @@
 
 #include <Audio.h>
 
+#include <Bellows.h>
 #include "bellows/platform/teensy.h"
 #include "scalestuning.h"
 

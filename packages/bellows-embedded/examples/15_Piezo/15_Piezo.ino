@@ -54,6 +54,7 @@
 
 #include <Audio.h>
 
+#include <Bellows.h>
 #include "bellows/platform/teensy.h"
 #include "../10_AudioShield/audioshield.h"
 #include "bellows/dsp/oscillators.h"

@@ -29,6 +29,7 @@
 
 #include <Audio.h>
 
+#include <Bellows.h>
 #include "bellows/platform/teensy.h"
 #include "../07_Workstation/workstation.h"
 #include "../15_Piezo/piezo.h"

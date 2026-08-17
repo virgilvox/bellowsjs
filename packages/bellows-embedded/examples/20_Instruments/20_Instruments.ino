@@ -48,6 +48,7 @@
 
 #include <Audio.h>
 
+#include <Bellows.h>
 #include "bellows/bank.h"
 #include "bellows/fx/dynamics.h"
 #include "bellows/platform/teensy.h"

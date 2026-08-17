@@ -41,6 +41,7 @@
 #include <Audio.h>
 #include <string.h>
 
+#include <Bellows.h>
 #include "bellows/platform/teensy.h"
 #include "bringup.h"
 
