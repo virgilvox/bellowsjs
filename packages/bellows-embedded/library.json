@@ -18,6 +18,15 @@
     "flags": ["-std=gnu++17"]
   },
   "export": {
-    "exclude": ["test", "tools"]
+    "exclude": [
+      "test",
+      "tools",
+      "package.json",
+      "compile_flags.txt",
+      ".pio",
+      "**/.pio",
+      "**/build",
+      "**/.DS_Store"
+    ]
   }
 }

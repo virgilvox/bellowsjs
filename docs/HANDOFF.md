@@ -183,8 +183,7 @@ fell over, and the pattern in almost all of them was a fix applied to the
 symptom a finding opened with rather than to the cause it named further down.
 Read a finding to its end before calling it closed.
 
-**3. Milestone 6, publishing the embedded library. MOSTLY DONE.** The Arduino
-Library Manager half is finished. `packages/bellows-embedded` stays
+**3. Milestone 6, publishing the embedded library. DONE, both registries.** `packages/bellows-embedded` stays
 `private: true` and off npm, which is correct and deliberate: the npm package is
 the browser library.
 
@@ -205,10 +204,31 @@ embedded library versions independently of the npm package (0.1.0 against
 only, because `GITHUB_TOKEN` cannot push to another repository. Until that
 secret exists the job says so and exits green rather than failing every tag.
 
-**PlatformIO registry: not done, and it needs you.** `pio account show` returns
-`AccountNotAuthorized`. Publishing needs `pio account login` and then
-`pio pkg publish` from `packages/bellows-embedded`. `library.json` is already
-correct. Nobody but the account owner can do the login step.
+**PlatformIO registry: published.** `virgilvox/Bellows@0.1.0`, at
+`registry.platformio.org/libraries/virgilvox/Bellows`. Verified as an end user
+rather than from the publish output: a scratch project with
+`lib_deps = virgilvox/Bellows@0.1.0` resolves it from the registry and links a
+Teensy 4.1 firmware.
+
+**One thing to know about that artifact, because it is not what you would
+guess.** It was published from the MIRROR directory, not from
+`packages/bellows-embedded`. It carries `MIRROR.md`, the examples have their
+shared patch flattened into each folder, and **`examples/daisy_onekick` is not
+in it**, because `build-mirror.sh` drops that folder on purpose: it is a
+Makefile and a `main.cpp` rather than a sketch, and the Arduino IDE would list a
+folder it cannot open. PlatformIO has no such problem and `library.json` claims
+`ststm32` among its platforms, so the one example a Daisy user wants is the one
+missing. Nothing is broken; the library works and every header is present.
+
+The open question is which directory publishes to PlatformIO from now on.
+Publishing `packages/bellows-embedded` keeps `daisy_onekick` and drops
+`MIRROR.md`, which is a document about a GitHub repository and means nothing
+inside a package. Publishing the mirror keeps the two channels byte-identical.
+Whichever is chosen, `library.json`'s `export.exclude` now covers `.pio`,
+`**/build`, `package.json` and `compile_flags.txt`, which it did not: a pack
+from that directory used to carry a megabyte of `daisy_onekick/build` `.elf`
+and `.map` output. 0.1.0 cannot be republished, so this lands in the next
+version.
 
 **What publishing turned up, and it was not bookkeeping.** Installing the
 library the way a user would and compiling with the real Arduino toolchain
@@ -340,11 +360,12 @@ Kept short. The full record is in the commits.
   current; it will fall behind again on the next commit that touches `apps/workbench`. See
   "Deployment (bellows.live)" below, which has said this all along; an earlier draft of this
   line said the opposite and was wrong.
-- **`packages/bellows-embedded` is in the Arduino Library Manager** as `Bellows`, from the
-  mirror at `virgilvox/bellows-embedded`, accepted on 2026-08-16. It stays `private: true` and
-  off npm, which is correct: the npm package is the browser library. The PlatformIO registry is
-  still open and needs `pio account login`, which only the account owner can do; PlatformIO can
-  consume either the subdirectory or the mirror by URL today.
+- **`packages/bellows-embedded` is published to both registries.** Arduino Library Manager as
+  `Bellows`, from the mirror at `virgilvox/bellows-embedded`; PlatformIO as `virgilvox/Bellows`,
+  installable with `lib_deps = virgilvox/Bellows@0.1.0` and verified by building a scratch
+  project against it. It stays `private: true` and off npm, which is correct: the npm package is
+  the browser library. Note the PlatformIO artifact was published from the mirror rather than
+  from the package directory, so it has no `daisy_onekick`; see item 3.
 - Library test suite: 90 files, 1348 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
