@@ -102,6 +102,17 @@ jobs:
         # reason it exists: a wrong engine parameter name is silent at every
         # layer of this library, and it has already shipped twice.
         run: npm run check:presets -w apps/workbench
+
+      - name: the published artifacts carry what they should
+        # The embedded library ships through two channels with different
+        # shapes, and both were got wrong by hand before this existed: no
+        # LICENSE at all, a megabyte of .elf and .map in a PlatformIO pack, a
+        # mirror carrying files the build script did not generate, and every
+        # example failing to compile once installed. Four packaging faults,
+        # all found by looking. The PlatformIO half needs `pio` and says so
+        # when it is missing rather than passing quietly, so on this runner
+        # only the Arduino mirror half is actually checked.
+        run: npm run check:package -w packages/bellows-embedded
       - name: the LLM reference is in sync with the library
         # public/llm.txt is generated from the built bundle and its type
         # declarations, is served at /llm.txt, and says of itself that it is

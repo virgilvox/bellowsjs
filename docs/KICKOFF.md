@@ -18,11 +18,11 @@ strict: no emojis, no em dashes, no stock AI phrasing), `docs/HANDOFF.md`
 (state, harnesses, and the numbered list under "Still not done, in the order I
 would take it"), `docs/AUDIT-3.md` (the standard for honesty in this repo).
 
-The 2026-08-15 and 16 sessions closed every bookkeeping item, flashed and
+The 2026-08-15 to 17 sessions closed every bookkeeping item, flashed and
 measured the board, corrected the audit count from a claimed 73 to a measured
-51, documented the Arduino library, released `bellowsjs@0.1.8`, and gave the
-embedded LLM reference the install half it never had. `docs/HANDOFF.md` under
-"Closed on 2026-08-15 and 16" is the short version.
+51, released `bellowsjs@0.1.8`, and published the embedded library to the
+Arduino Library Manager and the PlatformIO registry. `docs/HANDOFF.md` under
+"Closed on 2026-08-15 to 17" is the short version.
 
 Three claims this repository stated as hard facts were false when checked, and
 all three were true when written. CI HAS RUN: 26 times, 19 green and 7 failures,
@@ -33,8 +33,8 @@ happened is older than it looks: spend the one command it takes.** That is not a
 rhetorical flourish, it is where four of this repository's document defects came
 from.
 
-OBJECTIVE: <replace me. "Still not done" in `docs/HANDOFF.md` has eight items
-and the first three are the real ones; 4 to 8 are small and each names its own
+OBJECTIVE: <replace me. "Still not done" in `docs/HANDOFF.md` has seven items
+and the first two are the real ones; 3 to 7 are small and each names its own
 fix.
 
 If you have a board: item 1, and start with `00_BringUp`. It has still never
@@ -44,9 +44,9 @@ which no test here covers and no amount of building will tell you. A Teensy 4.0
 is the only part that has run anything; a 3.2 or an LC is the interesting
 question, because neither has a floating point unit and this is a float library.
 
-If you do not: item 2, the 22 audit findings tagged `[changes audio]`, or item
-3, publishing the embedded library. Items 4 to 8 are an afternoon between them
-and every one was found by this repository biting someone.>
+If you do not: item 2, the 22 audit findings tagged `[changes audio]`. Items 3
+to 7 are an afternoon between them and every one was found by this repository
+biting someone.>
 
 WHAT IS TRUE TODAY, and each of these is checkable in one command:
 
@@ -61,6 +61,12 @@ WHAT IS TRUE TODAY, and each of these is checkable in one command:
 - `bellowsjs@0.1.8` is on npm, `main` is pushed, CI is green on it, and
   bellows.live is deployed and current. None of that stays true on its own: the
   site has no deploy-on-push and needs `doctl` every time.
+- The embedded library is published to BOTH registries: Arduino Library Manager
+  as `Bellows`, from the mirror at `virgilvox/bellows-embedded`, and PlatformIO
+  as `virgilvox/Bellows`. It versions independently of the npm package, 0.1.0
+  against 0.1.8, and has its own release ritual in HANDOFF. Publishing it found
+  that every example failed to compile once installed, which had been true for
+  the whole life of the port and which only installing it could reveal.
 - 13 of 51 claimed audit closures fell over to a skeptic. The pattern was almost
   always a fix applied to the symptom a finding opens with rather than the cause
   it names four sentences later. Read a finding to its end before closing it.
@@ -130,6 +136,7 @@ cd packages/bellows-embedded && npm run tables:check     428 value rows
 cd packages/bellows-embedded && npm run presets:check    50 presets, 1054 values
 cd packages/bellows-embedded && node tools/gen-tables.mjs --check
 cd packages/bellows-embedded && node tools/check-docs.mjs --check
+cd packages/bellows-embedded && npm run check:package     both published artifacts
 ```
 
 `gen-tables --check` refuses to run against a stale `dist`, so

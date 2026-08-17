@@ -14,6 +14,7 @@
     "tables": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/tables.mjs",
     "tables:check": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/tables.mjs --check",
     "presets": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/presets.mjs",
-    "presets:check": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/presets.mjs --check"
+    "presets:check": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/presets.mjs --check",
+    "check:package": "node tools/check-package.mjs"
   }
 }
