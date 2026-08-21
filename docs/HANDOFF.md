@@ -165,7 +165,11 @@ did not work.
 run twice. Nothing on a 3.x, nothing on an LC, nothing on a Daisy, and the two
 parts without a floating point unit (LC and 3.2) are the whole question, because
 they emulate every float operation this library performs in software.
-`00_BringUp` exists for exactly this and **has still never been run**, which is
+`00_BringUp` exists for exactly this and **has still never been run**, checked on
+2026-08-20 and again on 2026-08-21 rather than assumed: a `/dev/cu.usbmodem11301`
+node is present both times and cannot be opened, `Errno 6 Device not configured`,
+so nothing is enumerated behind it. It compiles: it passed the Teensy 4.1 sweep
+over the published 0.1.2 package. Compiling is not running, which is
 the single highest-value thing left on this list: it is a checklist sketch with a
 written pass condition per stage, and its last two stages measure the pitch
 dependence of the BLEP oscillator cost, which no test in this repository covers
@@ -338,7 +342,8 @@ Kept short. The full record is in the commits.
   been flashed and heard. Both were stated as hard facts in `docs/KICKOFF.md`
   for weeks after they stopped being true. The correction then went stale in
   its turn: it said 26 runs with every main run green, and by 2026-08-20 it was
-  39 runs with one main failure, `863cd43`. A tally is a dated reading.
+  more runs, and a failure on main, `863cd43`. A tally is a dated reading, which is why the
+  copies of it now give the durable half, the failures, and not the total.
 - **`bellowsjs@0.1.8`**, a documentation release, and the release ritual
   reordered so the version bump precedes the regenerate step rather than
   following it, which is what made 0.1.5 and 0.1.8 both go stale.
@@ -377,9 +382,10 @@ Kept short. The full record is in the commits.
 - **`bellowsjs@0.1.9` is BUILT AND VERIFIED BUT NOT PUBLISHED.** The version is bumped, the
   changelog is written, everything version-stamped is regenerated, the whole verify block is
   green and `npm publish --dry-run` packs a correct 1.0 MB tarball of 170 files. The publish
-  itself fails: the token in `~/.npmrc` has expired, `npm whoami` returns 401 and `npm publish`
-  reports `E404 ... PUT https://registry.npmjs.org/bellowsjs`, which is what npm says instead of
-  401 on a write. **`npm login`, then `npm publish` from `packages/bellows`, then tag `v0.1.9`,
+  itself fails on authentication: `npm whoami` returns 401 and `npm publish` reports
+  `E404 ... PUT https://registry.npmjs.org/bellowsjs`, which is what npm says instead of 401 on
+  a write. There is a token in `~/.npmrc` and the registry does not accept it; whether it
+  expired, was revoked or was replaced is not something this end can tell. **`npm login`, then `npm publish` from `packages/bellows`, then tag `v0.1.9`,
   then deploy the site.** The tag is deliberately not created yet: a tag that names a version npm
   does not have is the same class of false claim this file keeps having to correct. npm still
   serves 0.1.8.
@@ -421,20 +427,19 @@ Kept short. The full record is in the commits.
     going out from the mirror. Publishing is not instant: `pio pkg publish` answers "the package
     has been accepted" and the registry served 0.1.1 as latest for a few minutes after that, so
     check rather than assume.
-  - **Arduino Library Manager: 0.1.0 and 0.1.1 are indexed. 0.1.2 IS TAGGED AND NOT YET
-    INDEXED**, pushed to the mirror on 2026-08-20 with a GitHub release. 0.1.0 and 0.1.1 took
-    three days to appear, so expect days rather than the "within a day" the bot claims, and use
-    the two commands below rather than assuming either way. What follows is about the first two
-    tags. Indexed on 2026-08-20, both of them. This bullet said
-    "merged, NOT yet indexed" until then, which was true when written and stopped being true
-    three days later without anything in the repository noticing, which is the failure mode this
-    file keeps producing. `library_index.json.gz` carries two entries for
-    `Bellows`, 0.1.0 and 0.1.1, and `arduino-cli lib search Bellows` resolves against the real
-    index and reports `Provides includes: Bellows.h`. The indexer log exists now and says
-    `Release Bellows:0.1.0 already loaded, skipping` for both tags.
+  - **Arduino Library Manager: live at 0.1.2.** All three tags are indexed:
+    `library_index.json.gz` carries 0.1.0, 0.1.1 and 0.1.2, and `arduino-cli lib search Bellows`
+    resolves against the real index and reports `Provides includes: Bellows.h`. The indexer log
+    says `Release Bellows:0.1.2 already loaded, skipping`.
 
-    Recheck rather than trusting this line, because the same sentence was wrong in the other
-    direction for three days:
+    **The lag is not predictable and this bullet has now been wrong about it in both
+    directions.** It said "merged, NOT yet indexed" for three days after that stopped being
+    true. Then, on 2026-08-20, it said 0.1.2 was tagged and not indexed and told the reader to
+    expect days, reasoning from 0.1.0 and 0.1.1 having taken three; 0.1.2 was indexed overnight,
+    inside a day. Two samples, three days and one day, and the bot says "within a day". Do not
+    reason from either. Run the commands.
+
+    Recheck rather than trusting this line:
     ```
     curl -s https://downloads.arduino.cc/libraries/library_index.json.gz | gunzip \
       | python3 -c "import json,sys;print(sorted(l['version'] for l in json.load(sys.stdin)['libraries'] if l['name']=='Bellows') or 'not indexed yet')"
@@ -442,18 +447,21 @@ Kept short. The full record is in the commits.
     ```
     If a future tag does not appear, read the log: that is where a rejected tag explains itself.
 
-    **What the registry actually serves was then checked rather than assumed**, on 2026-08-20,
-    and this is the end-user path that no session had ever walked. `Bellows-0.1.1.zip` is
-    420557 B and unpacks to 51 headers and 17 example folders, with `Bellows.h` present, no
-    surviving `../` include, no `test/` or `tools/`, and no `daisy_onekick`, which is exactly
-    what `npm run check:package` asserts. It is byte-identical to the mirror clone that was
-    compiled by hand on 2026-08-17, `diff -rq` reporting only `.git` and `.gitignore`, so the
-    thing that was tested and the thing that is served are the same thing. Then
-    `arduino-cli lib install Bellows@0.1.1` into a throwaway sketchbook, and every example
+    **What the registry actually serves is checked rather than assumed**, and this is the
+    end-user path no session had walked before 2026-08-20. Done twice now, once per release.
+    `Bellows-0.1.2.zip` is 422537 B and unpacks to 51 headers and 17 example folders, with
+    `Bellows.h` present, no surviving `../` include, no `test/` or `tools/`, and no
+    `daisy_onekick`, which is exactly what `npm run check:package` asserts. It carries the
+    0.1.2 content rather than a stale build: `pluck.h` defaults its template rate to
+    `BELLOWS_SAMPLE_RATE`, `17_WorkstationI2S` has the bounded wait for a serial listener, and
+    the README no longer says the library is unlisted. Then
+    `arduino-cli lib install Bellows@0.1.2` into a throwaway sketchbook, and every example
     compiled for a Teensy 4.1 straight from that install: 16 of 17, with `12_DacOut` declining
     by `#error` because a 4.x has no DAC, which is the documented number. Pass and fail read
     off exit codes, not off stdout, because an earlier sweep grepped for `Used platform`, which
-    `arduino-cli` prints on failure too, and called two broken examples fine.
+    `arduino-cli` prints on failure too, and called two broken examples fine. The 0.1.1 run on
+    2026-08-20 also diffed the zip against the mirror clone that had been compiled by hand,
+    `diff -rq` reporting only `.git` and `.gitignore`.
 - Library test suite: 91 files, 1364 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
@@ -729,7 +737,16 @@ Run all of them from `packages/bellows-embedded` unless noted.
 The last four rows are regenerate-and-diff gates rather than tests, and they are
 the ones a local run keeps missing, because they only fail if you regenerate and
 then look. They are in `ci.yml` and, since 2026-08-15, in the verify block
-`docs/KICKOFF.md` hands a new session as well. Before that they were only in CI,
+`docs/KICKOFF.md` hands a new session as well.
+
+**The same gap reopened and was closed again on 2026-08-21.** Six gates were in
+`ci.yml` and not in that block: `params:check`, `ratecheck`, `fastmath`,
+`memsafety`, `memsafety:fastmath` and the library's own `tsc --noEmit`, which is
+the only thing that typechecks the TEST files, since the build's tsconfig
+includes `src` alone. Three of those six were added by the sessions that also
+wrote the block. The check is one command,
+`grep -E "run: npm run |run: node tools" .github/workflows/ci.yml` against the
+block, and it is worth running whenever either changes. Before that they were only in CI,
 and that gap put a stale file on a published release commit. This paragraph
 pointed at "item 4 of Still not done" until 2026-08-20, which was the wrong item
 before the list was renumbered and a dangling one after.
@@ -1066,7 +1083,7 @@ than defects, so they are the natural next chunk.
 - ~~`gen-tables --check` warns about a stale `dist` and then reads it anyway, so it passes on a
   stale checkout (31).~~ CLOSED. `--check` now exits 2 on a stale `dist` rather than comparing
   against the previous build and calling it ok, and `ci.yml` builds the bundle before running
-  it. Both verified in the tree on 2026-08-15, and `ci.yml` has now run 39 times, which is
+  it. Both verified in the tree on 2026-08-15, and `ci.yml` has run many times since, which is
   what the sentence here used to deny. One push to `main` has failed, `863cd43`, on the gate
   this ritual was reordered to satisfy.
 - `chordToRoman` still throws for 6 of the 408 shipped scale and chromatic root pairs: four

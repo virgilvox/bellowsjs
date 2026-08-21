@@ -222,10 +222,8 @@ hides two separate Arduino packaging faults, and both were live: no example incl
 `<Bellows.h>`, and six examples reached a sibling folder for a shared header. Installed into a
 sketchbook, every single example failed to compile. Both are fixed, `tools/check-package.mjs`
 gates them, and the check that matters is done against the published artifact rather than the
-source tree: `arduino-cli lib install Bellows@0.1.1` into an empty sketchbook, then 16 of the
-17 examples compile for a Teensy 4.1. That run was against 0.1.1, which is what the registry
-served when it was done; 0.1.2 changes four headers and two examples and is not separately
-install-tested, because the Library Manager takes up to a few days to index a new tag. The seventeenth is `12_DacOut`, which declines with an
+source tree: `arduino-cli lib install Bellows@0.1.2` into an empty sketchbook, then 16 of the
+17 examples compile for a Teensy 4.1. The seventeenth is `12_DacOut`, which declines with an
 `#error` because a Teensy 4.x has no DAC. `05_MidiInstrument` needs Tools, USB Type, Serial +
 MIDI, which is `--fqbn teensy:avr:teensy41:usb=serialmidi` on the command line, and is not a
 defect either.

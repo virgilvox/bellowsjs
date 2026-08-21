@@ -2,9 +2,10 @@
 
 ## 0.1.9
 
-Two lines of behaviour, both of them a silent failure becoming a loud one, plus the gates and
-the documents behind them. `git diff v0.1.8..v0.1.9 -- packages/bellows/src` is about 200 lines
-and all but three of them are comments, a removed type declaration and two casts.
+Three silent failures become loud ones, plus the gates and the documents behind them.
+`git diff v0.1.8..v0.1.9 -- packages/bellows/src` is 214 insertions across 11 files, of which
+42 are code and the rest are comments; on the other side, 14 of the 30 deletions are code. Most
+of the code is the two reconstruction guards and the helper they share.
 
 ### Fixed
 

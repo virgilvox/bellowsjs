@@ -10,7 +10,10 @@ Read that version as part of the measurement, because the compiler is not interc
 This machine has two: 11.3.1 from the Teensy toolchain, which is where every figure below came
 from, and 9.2.1 from the generic one. Running the whole report under both moves 45 of its 46
 rows, 11.3.1 first in each pair: `s1_kick` 3760 against 3752, `s4_va` 28640 against 29560,
-`s9c_fm` 5384 against 5800. Two earlier revisions of this line were wrong in different ways: the
+`s9c_fm` 5384 against 5800. The one row that does not move is `s0_baseline` at 60 B and 1028 B,
+which is the empty harness and therefore the one row with no library code in it: the exception
+is the proof rather than a let-off. That count was 36 of 37 in this file until 2026-08-21, from
+a report with nine fewer sketches in it, and it was re-measured rather than re-typed. Two earlier revisions of this line were wrong in different ways: the
 first said the two toolchains were byte identical, which was written from a report that had not
 been re-run, and the second quoted `s4_va` at 28576, a figure from an older build that matches
 neither column now. Nothing machine-checks the six figures in this paragraph, which is how 28576

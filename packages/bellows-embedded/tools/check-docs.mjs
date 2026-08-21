@@ -536,15 +536,16 @@ const DOCS = [
    * it, and because a document that states a measured number should be in
    * this list on the day it states it rather than at the next audit. */
   { path: join(REPO, 'docs', 'ENGINEERING.md'), label: 'docs/ENGINEERING.md', rows: [] },
-  /* Five places that quote the board's CPU figures and were reachable by
+  /* Six places that quote the board's CPU figures and were reachable by
    * nothing until 2026-08-20. Two are the near-identical top-level READMEs
-   * that no gate compares, one of which is what npm serves. Three are the
+   * that no gate compares, one of which is what npm serves. Four are the
    * site's own copies, which are TypeScript rather than Markdown and so had
-   * never been in any document checker at all. Two of those three also carry
+   * never been in any document checker at all. Two of those four also carry
    * a size table, which is why they have rows below rather than prose alone:
    * both were quoting a flash figure that had been wrong since the example
    * moved, and being in this list for the CPU claim alone would not have
-   * found it. */
+   * found it. The fifth and sixth, firmware.ts and voices.ts, are a comment
+   * and a visitor-facing caption in the playground. */
   { path: join(REPO, 'README.md'), label: 'README.md (repo root)', rows: [] },
   { path: join(REPO, 'packages', 'bellows', 'README.md'), label: 'packages/bellows/README.md', rows: [] },
   { path: join(REPO, 'apps', 'workbench', 'src', 'docs', 'embedded', 'performance.ts'), label: 'apps/workbench performance.ts', rows: PERFORMANCE_ROWS, code: true },

@@ -28,8 +28,8 @@ and NOT published: the npm token expired mid-release. `docs/HANDOFF.md`
 under "Closed on 2026-08-20" is the short version.
 
 Three claims this repository stated as hard facts were false when checked, and
-all three were true when written. CI HAS RUN: 39 times as of 2026-08-20, 31
-green and 8 failures, seven on a feature branch and one on main. A BOARD HAS
+all three were true when written. CI HAS RUN, dozens of times, and HAS BEEN
+WATCHED TO FAIL: 8 failures, seven on a feature branch and one on main. A BOARD HAS
 BEEN FLASHED AND HEARD, twice.
 `llm.txt` claimed to be exact for a version three releases old. Expect more of
 this. **Any sentence in these documents asserting that something has never
@@ -68,7 +68,9 @@ WHAT IS TRUE TODAY, and each of these is checkable in one command:
   41 parity rows, 428 value rows and 1054 preset values stand in for that and
   are not the same thing.
 - **`bellowsjs@0.1.9` is NOT on npm yet, and npm still serves 0.1.8.** Everything
-  for it is committed and green and the publish failed on an expired token.
+  for it is committed and green and the publish failed on authentication: `npm whoami` returns
+  401 and `npm publish` reports E404 on the PUT, which is what npm says instead of 401 on a
+  write.
   `npm login`, then `npm publish` from `packages/bellows`, then tag `v0.1.9`,
   then deploy the site, in that order. There is no `v0.1.9` tag on purpose: a
   tag naming a version npm does not have is the same class of false claim this
@@ -138,6 +140,8 @@ VERIFY, and none of these is optional:
 
 ```
 npm test -w packages/bellows                        1364 tests
+npx tsc --noEmit -p packages/bellows                clean, and it covers the TESTS,
+                                                    which the build's tsconfig does not
 npx vue-tsc --noEmit -p apps/workbench              clean
 npm run check:examples -w apps/workbench            49 javascript examples
 npm run check:embedded -w apps/workbench            36 C++ snippets compile
@@ -162,10 +166,21 @@ npm run build -w packages/bellows
 cd packages/bellows-embedded && npm run parity:check     41 rows, prng exactly 0
 cd packages/bellows-embedded && npm run tables:check     428 value rows
 cd packages/bellows-embedded && npm run presets:check    50 presets, 1054 values
+cd packages/bellows-embedded && npm run params:check     158 defaults, 26 units
+cd packages/bellows-embedded && npm run ratecheck        9 templates size off the macro
+cd packages/bellows-embedded && npm run fastmath         the polynomial approximations
+cd packages/bellows-embedded && npm run memsafety        ASan and UBSan, 8 rates
+cd packages/bellows-embedded && npm run memsafety:fastmath
 cd packages/bellows-embedded && node tools/gen-tables.mjs --check
 cd packages/bellows-embedded && node tools/check-docs.mjs --check
 cd packages/bellows-embedded && npm run check:package     both published artifacts
 ```
+
+Those six embedded lines from `params:check` down to `memsafety:fastmath` were in `ci.yml`
+and not in this block until 2026-08-21, which is the same gap that put a stale generated file
+on a published release commit six days earlier. If you add a gate, add it here in the same
+commit: `grep -E "run: npm run |run: node tools" .github/workflows/ci.yml` against this block
+is the check, and it is worth running when either changes.
 
 `gen-tables --check` refuses to run against a stale `dist`, so
 `npm run build -w packages/bellows` first if you have touched the library.
@@ -211,9 +226,9 @@ READ FIRST, in this order, before touching anything:
                         That file is the register. Do not re-derive the count from HANDOFF.
   4. docs/AUDIT.md      the earlier audit, findings 1 to 20. Findings 10 and 11 carry a
                         correction saying CI has never run. The correction is stale and the
-                        claim in it is false: CI has run 39 times as of 2026-08-20, 31
-                        green and 8 failures, seven of them pull requests on a feature branch
-                        and one on main. The findings read correctly as written.
+                        claim in it is false: CI has run dozens of times, with 8 failures,
+                        seven of them pull requests on a feature branch and one on main.
+                        The findings read correctly as written.
   5. docs/HARDWARE.md   the embedded port, every flash and RAM number, and "Making it smaller",
                         which records what was measured and deliberately NOT taken.
   6. docs/LANDSCAPE.md  what else exists on the web and in hardware, where this library actually
@@ -242,8 +257,9 @@ WHERE THINGS STAND
     47.3 percent running maximum, measured twice on two builds. That is one
     board and one program. Nothing else has been run, and neither implementation has been
     compared to the other by ear.
-    CI HAS RUN, 39 times as of 2026-08-20: 31 green and 8 failures. Seven of the eight are
-    pull requests on the milestone-2-and-bringup branch. THE EIGHTH IS ON MAIN, `863cd43`,
+    CI HAS RUN, dozens of times, and has failed 8 of them. Seven of the eight are
+    pull requests on the milestone-2-and-bringup branch. The total is deliberately not
+    written here: it moves on every push and it has been stale in this file twice. THE EIGHTH IS ON MAIN, `863cd43`,
     the 0.1.8 release commit, where the `llm.txt` regenerate-and-diff gate went red because
     the version was bumped after the regenerate rather than before. An earlier version of
     this paragraph said every run on main was green, which was false when it was written and
@@ -352,8 +368,8 @@ BELLOWS_SAMPLE_RATE claims to size delay lines and pluck loops and those two har
 
 ```
 OBJECTIVE: DONE, and kept here because the shape of it recurs. ci.yml is on the default
-branch and has run 39 times as of 2026-08-20, 31 green and 8 failures, seven of them pull
-requests on a feature branch and one on main, the 0.1.8 release commit. The sentences in
+branch and has run dozens of times, with 8 failures, seven of them pull requests on a
+feature branch and one on main, the 0.1.8 release commit. The sentences in
 docs/AUDIT.md and
 docs/HANDOFF.md that said CI had never run were corrected on 2026-08-15, after sitting there
 as hard facts for weeks past the point they stopped being true. If you are looking for work
@@ -446,13 +462,16 @@ because the third depends on the first two.
    an AudioContext, samples must be read off the firmware rather than written from memory, and
    KeepAlive means onDeactivated matters.
 
-VERIFY, and none of these is optional:
+VERIFY. This short list belongs to the objective above and is NOT the full block: the
+current one is under "VERIFY, and none of these is optional" near the top of this file, and
+it is roughly twice as long. This one carried "34 audio rows" until 2026-08-21, a figure two
+sessions stale, which is what a second copy of a verify list is for.
   npm test -w packages/bellows                          1364 tests
   npm run typecheck -w apps/workbench                   vue-tsc
   npm run check:examples -w apps/workbench              the 49 site examples still resolve
   npm run gen:sim -w apps/workbench && git diff --exit-code -- apps/workbench/src/lib/sim/sources.gen.ts
   cd packages/bellows-embedded && npm run tables:check   the new markov rows
-  cd packages/bellows-embedded && npm run parity:check   34 audio rows
+  cd packages/bellows-embedded && npm run parity:check   every audio row
   cd packages/bellows-embedded && node tools/check-docs.mjs --check
   cd packages/bellows-embedded/examples && ./build-matrix.sh 07_YourExample
 
