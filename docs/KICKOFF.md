@@ -23,7 +23,8 @@ measured the board, corrected the audit count from a claimed 73 to a measured
 51, and published the embedded library to the Arduino Library Manager and the
 PlatformIO registry. The 2026-08-20 session gated the figures thirteen documents
 quote, closed seventeen audit findings, audited its own work and reopened two of
-them, and released `bellowsjs@0.1.9` and `Bellows@0.1.2`. `docs/HANDOFF.md`
+them, and released `Bellows@0.1.2`. `bellowsjs@0.1.9` is built and committed
+and NOT published: the npm token expired mid-release. `docs/HANDOFF.md`
 under "Closed on 2026-08-20" is the short version.
 
 Three claims this repository stated as hard facts were false when checked, and
@@ -66,6 +67,13 @@ WHAT IS TRUE TODAY, and each of these is checkable in one command:
   MicroMod or a Daisy, and **nothing has been compared to the browser by ear**.
   41 parity rows, 428 value rows and 1054 preset values stand in for that and
   are not the same thing.
+- **`bellowsjs@0.1.9` is NOT on npm yet, and npm still serves 0.1.8.** Everything
+  for it is committed and green and the publish failed on an expired token.
+  `npm login`, then `npm publish` from `packages/bellows`, then tag `v0.1.9`,
+  then deploy the site, in that order. There is no `v0.1.9` tag on purpose: a
+  tag naming a version npm does not have is the same class of false claim this
+  file keeps having to correct. The site deploy is held behind the publish for
+  the same reason, since `llm.txt` in the tree already says 0.1.9.
 - `main` is pushed and CI is green on it. **bellows.live is a separate
   question and it has been behind before.** The site has no deploy-on-push, so
   a commit touching `apps/workbench` leaves it stale until someone runs

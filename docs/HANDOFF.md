@@ -374,8 +374,16 @@ Kept short. The full record is in the commits.
   missing SIMULATOR button; both are shipped. Check with `git rev-list --count origin/main..HEAD`
   rather than trusting this line, which is the sort that goes stale the moment someone
   commits.
-- `bellowsjs@0.1.9` is published on npm and tagged `v0.1.9`, and `main` is current with it. It
-  carries three behaviour fixes, all of them a silent failure becoming a loud one: two window
+- **`bellowsjs@0.1.9` is BUILT AND VERIFIED BUT NOT PUBLISHED.** The version is bumped, the
+  changelog is written, everything version-stamped is regenerated, the whole verify block is
+  green and `npm publish --dry-run` packs a correct 1.0 MB tarball of 170 files. The publish
+  itself fails: the token in `~/.npmrc` has expired, `npm whoami` returns 401 and `npm publish`
+  reports `E404 ... PUT https://registry.npmjs.org/bellowsjs`, which is what npm says instead of
+  401 on a write. **`npm login`, then `npm publish` from `packages/bellows`, then tag `v0.1.9`,
+  then deploy the site.** The tag is deliberately not created yet: a tag that names a version npm
+  does not have is the same class of false claim this file keeps having to correct. npm still
+  serves 0.1.8.
+  0.1.9 carries three behaviour fixes, all of them a silent failure becoming a loud one: two window
   and hop pairs that could not reconstruct and were degrading instead of reporting, and a ramp
   duration that wedged a slot. `CHANGELOG.md` has the detail.
   0.1.8 before it was a documentation release whose code was byte-identical to 0.1.7: `git diff v0.1.7..v0.1.8 --
@@ -406,10 +414,18 @@ Kept short. The full record is in the commits.
 - **`packages/bellows-embedded` is published, and the two channels are not live at the same
   moment.** It stays `private: true` and off npm, which is correct: the npm package is the
   browser library.
-  - **PlatformIO: live.** `virgilvox/Bellows`, and an UNPINNED
-    `lib_deps = virgilvox/Bellows` resolves to `0.1.1`, checked. 0.1.0 went out from the mirror
-    by mistake and has no `daisy_onekick`; 0.1.1 is from the package directory and does.
-  - **Arduino Library Manager: live.** Indexed on 2026-08-20, both tags. This bullet said
+  - **PlatformIO: live at 0.1.2.** `virgilvox/Bellows`, and an UNPINNED
+    `lib_deps = virgilvox/Bellows` resolves to `0.1.2`, checked on 2026-08-20 by installing it
+    into a throwaway storage directory and reading the version back out of the unpacked
+    `library.json`. `examples/daisy_onekick` is in it, which is the thing 0.1.0 got wrong by
+    going out from the mirror. Publishing is not instant: `pio pkg publish` answers "the package
+    has been accepted" and the registry served 0.1.1 as latest for a few minutes after that, so
+    check rather than assume.
+  - **Arduino Library Manager: 0.1.0 and 0.1.1 are indexed. 0.1.2 IS TAGGED AND NOT YET
+    INDEXED**, pushed to the mirror on 2026-08-20 with a GitHub release. 0.1.0 and 0.1.1 took
+    three days to appear, so expect days rather than the "within a day" the bot claims, and use
+    the two commands below rather than assuming either way. What follows is about the first two
+    tags. Indexed on 2026-08-20, both of them. This bullet said
     "merged, NOT yet indexed" until then, which was true when written and stopped being true
     three days later without anything in the repository noticing, which is the failure mode this
     file keeps producing. `library_index.json.gz` carries two entries for
