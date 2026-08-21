@@ -53,6 +53,11 @@ const props = defineProps<{
   predict?: string;
 }>();
 
+/* Unique per instance, so two blocks on one page do not share describedby
+ * ids. useId() is Vue 3.5 and this app is not necessarily on it. */
+let uidCounter = 0;
+const uid = `listen-${++uidCounter}-${Math.random().toString(36).slice(2, 7)}`;
+
 const running = ref(false);
 const busy = ref(false);
 const failed = ref('');
@@ -148,7 +153,13 @@ onBeforeUnmount(stop);
     </p>
 
     <div class="row">
-      <button class="play" :class="{ lit: running }" :disabled="busy" @click="running ? stop() : start()">
+      <button
+        type="button"
+        class="play"
+        :class="{ lit: running }"
+        :disabled="busy"
+        @click="running ? stop() : start()"
+      >
         {{ busy ? 'starting' : running ? 'stop' : 'play' }}
       </button>
       <p v-if="caption" class="caption">{{ caption }}</p>
@@ -156,20 +167,31 @@ onBeforeUnmount(stop);
 
     <p v-if="failed" class="failed">{{ failed }}</p>
 
+    <!--
+      A div rather than a label wrapping everything, and an explicit
+      aria-label on the input. Measured with the accessibility tree: a label
+      around the name, the value and the hint gave the slider the accessible
+      name "decay0.55sHow long the body rings.", which runs three things
+      together and bakes a LIVE value into a name. A range already announces
+      its own value, so the name is the parameter and the hint is a
+      description.
+    -->
     <div v-if="knobs.length" class="knobs">
-      <label v-for="k in knobs" :key="k.key" class="knob">
-        <span class="name">{{ k.label }}</span>
+      <div v-for="k in knobs" :key="k.key" class="knob">
+        <span class="name" aria-hidden="true">{{ k.label }}</span>
         <input
           type="range"
+          :aria-label="k.label"
+          :aria-describedby="`${uid}-${k.key}-hint`"
           :min="k.min"
           :max="k.max"
           :step="k.step"
           :value="k.value"
           @input="onKnob(k, ($event.target as HTMLInputElement).value)"
         />
-        <span class="value">{{ k.value }}<em v-if="k.unit"> {{ k.unit }}</em></span>
-        <span class="hint">{{ k.hint }}</span>
-      </label>
+        <span class="value" aria-hidden="true">{{ k.value }}<em v-if="k.unit"> {{ k.unit }}</em></span>
+        <span :id="`${uid}-${k.key}-hint`" class="hint">{{ k.hint }}</span>
+      </div>
     </div>
   </div>
 </template>

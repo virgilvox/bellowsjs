@@ -4,8 +4,8 @@ const page: DocPage = {
   slug: 'emb-output',
   title: 'Output and wiring',
   blurb: 'Every way of getting sound out of a board, with the exact pins, the parts, and what each one costs in quality.',
-  prev: 'emb-program-shape',
-  next: 'emb-engines',
+  prev: 'emb-theory',
+  next: 'emb-getting-started',
   body: `
 \`bellows\` renders float audio into a block. Everything on this page is what happens after that, which is the Teensy Audio Library's problem rather than this library's, and is also the part that stops people. The library half is one line in every one of these sketches:
 

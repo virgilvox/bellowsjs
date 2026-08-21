@@ -15,6 +15,7 @@
     "check:catalogue": "npx vite-node scripts/check-catalogue.mjs",
     "check:presets": "npx vite-node scripts/check-presets-audio.mjs",
     "check:listen": "npx vite-node scripts/check-listen.mjs",
+    "check:links": "npx vite-node scripts/check-doc-links.mjs",
     "gen:llm-embedded": "node scripts/gen-llm-embedded.mjs"
   },
   "dependencies": {

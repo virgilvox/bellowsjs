@@ -5,7 +5,7 @@ const page: DocPage = {
   title: 'Theory on hardware',
   blurb: 'Scales, chords, tunings, the microtonal trap that sounds right and is not, and the seeded stream.',
   prev: 'emb-sequencing',
-  next: 'emb-performance',
+  next: 'emb-output',
   body: `
 Pitch on a microcontroller is usually a formula. Somewhere in a note handler sits \`440 * powf(2.0f, (n - 69) / 12.0f)\` and that is the end of it. Here pitch is a layer: a \`Scale\` says which degrees of a key are in play, a \`Tuning\` says what frequency each degree actually is, and a phrase written once in degrees plays in either division of the octave without changing a note.
 

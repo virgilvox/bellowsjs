@@ -181,7 +181,7 @@ export const FIRMWARES: Firmware[] = [
     headerName: 'onekick.h',
     params: [
       { key: 'decay', label: 'decay', min: 0.05, max: 2, step: 0.01, value: 0.55, unit: 's', hint: 'How long the body rings.' },
-      { key: 'drive', label: 'drive', min: 0.5, max: 8, step: 0.1, value: 3, hint: 'How hard the body is pushed into the tanh.' },
+      { key: 'drive', label: 'drive', min: 0.5, max: 8, step: 0.1, value: 3, hint: 'How hard the drum is driven into its soft clipper. Low is a clean thud, high is squashed and edgy.' },
       { key: 'tune', label: 'tune', min: 30, max: 120, step: 1, value: 50, unit: 'Hz', hint: 'Starting frequency of the pitch sweep.' },
     ],
     inputs: [],
@@ -202,8 +202,8 @@ export const FIRMWARES: Firmware[] = [
     inoSource: drummachine_ino,
     headerName: 'drummachine.h',
     params: [
-      { key: 'bpm', label: 'tempo', min: 60, max: 180, step: 1, value: 120, unit: 'bpm', hint: 'Also driven by the pot on pin 14.' },
-      { key: 'swing', label: 'swing', min: 0, max: 0.4, step: 0.01, value: 0, hint: 'Delay applied to every other step.' },
+      { key: 'bpm', label: 'tempo', min: 60, max: 180, step: 1, value: 120, unit: 'bpm', hint: 'How fast it plays. The firmware also reads this from a pot on pin 14.' },
+      { key: 'swing', label: 'swing', min: 0, max: 0.4, step: 0.01, value: 0, hint: 'Delays every second step, which is the difference between a drum machine and a drummer.' },
     ],
     inputs: [
       { kind: 'pot', pin: 14, label: 'TEMPO POT', hint: 'A 10k pot on A0 (pin 14). The sketch reads it with analogRead.' },
@@ -225,8 +225,8 @@ export const FIRMWARES: Firmware[] = [
     inoSource: polysynth_ino,
     headerName: 'polysynth.h',
     params: [
-      { key: 'cutoff', label: 'cutoff', min: 200, max: 8000, step: 10, value: 1800, unit: 'Hz', hint: 'Ladder filter corner.' },
-      { key: 'resonance', label: 'resonance', min: 0, max: 0.95, step: 0.01, value: 0.4, hint: 'Ladder feedback. A tall peak, not an oscillator: the loop stays under unity at every setting.' },
+      { key: 'cutoff', label: 'cutoff', min: 200, max: 8000, step: 10, value: 1800, unit: 'Hz', hint: 'Where the filter starts taking the brightness out. Low is muffled, high is open.' },
+      { key: 'resonance', label: 'resonance', min: 0, max: 0.95, step: 0.01, value: 0.4, hint: 'How much the filter emphasises its own edge. A tall peak rather than an oscillator: the loop stays under unity at every setting.' },
       { key: 'detune', label: 'detune', min: 0, max: 30, step: 0.5, value: 8, unit: 'cents', hint: 'Spread between the two oscillators.' },
     ],
     inputs: [
@@ -729,7 +729,7 @@ export const FIRMWARES: Firmware[] = [
     params: [
       { key: 'decay', owner: 'k', label: 'kick decay', min: 0.1, max: 2, step: 0.01, value: 1.1, unit: 's', hint: 'The whole argument of this patch. 0.4 is an ordinary kick.' },
       { key: 'pitch_decay', owner: 'k', label: 'pitch drop', min: 0.005, max: 0.3, step: 0.005, value: 0.045, unit: 's', hint: 'How fast the head detunes. Short values give the click.' },
-      { key: 'drive', owner: 'k', label: 'drive', min: 0.5, max: 8, step: 0.1, value: 2.6, hint: 'How hard the body is pushed into the tanh.' },
+      { key: 'drive', owner: 'k', label: 'drive', min: 0.5, max: 8, step: 0.1, value: 2.6, hint: 'How hard the drum is driven into its soft clipper. Low is a clean thud, high is squashed and edgy.' },
       { key: 'tone', owner: 's', label: 'snare tone', min: 0, max: 1, step: 0.01, value: 0.36, hint: 'Balance between the shells and the noise.' },
     ],
     inputs: [],

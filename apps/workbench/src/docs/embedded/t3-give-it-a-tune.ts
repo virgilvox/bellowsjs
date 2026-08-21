@@ -48,7 +48,7 @@ The \`note_id\` is how a note off finds the voice that a note on started. That i
 
 ## Fifty of them, if you want
 
-The library ships fifty instrument presets, and there is an example that walks through all of them: electric pianos, plucked strings, bells, a clarinet, a choir. They are in the [playground](/simulator) under 21_Presets, and they run on the same eight voices you just heard.
+The library ships fifty instrument presets, and there is an example that walks through all of them: electric pianos, plucked strings, bells, a clarinet, a choir. They are in the [playground](/#sim) under 21_Presets, and they run on the same eight voices you just heard.
 
 That is the point at which most people stop reading documentation and go and make something, which is the correct response.
 

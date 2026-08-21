@@ -20,6 +20,8 @@ You are going to make a drum sound, change it, and hear the difference. It takes
 
 If you already have a Teensy and you want it making noise now, skip ahead to [Put it on a board](/docs/emb-put-it-on-a-board). Everything here works either way, and this page will still be here afterwards.
 
+If you are here to work out whether this library is worth depending on, you want [What the port is, and what it costs](/docs/emb-getting-started) instead: the rules it is built on, the flash and RAM per program, and how it is checked against the browser. This page will not tell you any of that, on purpose.
+
 ## Hear it
 
 The kick below has its decay set to 0.55 seconds. Decay is how long the drum takes to die away.

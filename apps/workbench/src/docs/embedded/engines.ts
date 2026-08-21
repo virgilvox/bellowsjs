@@ -4,7 +4,7 @@ const page: DocPage = {
   slug: 'emb-engines',
   title: 'Engines',
   blurb: 'The ten ported voices, their Params structs, and what each one costs in flash.',
-  prev: 'emb-output',
+  prev: 'emb-how-silent',
   next: 'emb-effects',
   body: `
 By the end of this page you can pick a C++ engine for a job, set every field it has, and know what including it costs before you build.

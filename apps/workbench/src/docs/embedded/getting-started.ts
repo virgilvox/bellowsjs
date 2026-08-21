@@ -4,7 +4,7 @@ const page: DocPage = {
   slug: 'emb-getting-started',
   title: 'What the port is, and what it costs',
   blurb: 'The rules the package is built on, the flash and RAM per program, and how it is checked against the browser.',
-  prev: 'emb-put-it-on-a-board',
+  prev: 'emb-output',
   next: 'emb-program-shape',
   body: `
 The same DSP that runs in this browser also runs on a microcontroller. \`bellows-embedded\` is the C++17 port: header only, nothing allocates, nothing self-registers, and every engine is compared numerically against the TypeScript on every commit (41 engine and effect rows with the PRNG bit exact, plus 428 exactly-compared value rows).

@@ -111,6 +111,15 @@ jobs:
         # reader to drag it cannot be done and the page looks finished.
         run: npm run check:listen -w apps/workbench
 
+      - name: every documentation link resolves and both reading chains match
+        # Found three broken links on its first run, two of them shipped an
+        # hour earlier: a page not written yet, a playground link written as a
+        # path when the playground is a hash route, and a page that was never
+        # written at all. It also checks prev/next against the sidebar order,
+        # because those are separate data and the tutorial being inserted at
+        # the top left the reference pages chained to the previous order.
+        run: npm run check:links -w apps/workbench
+
       - name: the published artifacts carry what they should
         # The embedded library ships through two channels with different
         # shapes, and both were got wrong by hand before this existed: no

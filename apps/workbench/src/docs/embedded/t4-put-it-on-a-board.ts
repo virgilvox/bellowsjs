@@ -21,7 +21,7 @@ const page: DocPage = {
   title: 'Put it on a board',
   blurb: 'A Teensy, a three dollar amplifier and a speaker. What to buy, five wires, and the sketch to upload.',
   prev: 'emb-give-it-a-tune',
-  next: 'emb-getting-started',
+  next: 'emb-how-output',
   body: `
 Everything so far ran in a browser tab. This page is the same library on a chip you can put in a box.
 
