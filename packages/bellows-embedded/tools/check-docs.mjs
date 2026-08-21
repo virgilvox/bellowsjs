@@ -550,6 +550,9 @@ const DOCS = [
   { path: join(REPO, 'packages', 'bellows', 'README.md'), label: 'packages/bellows/README.md', rows: [] },
   { path: join(REPO, 'apps', 'workbench', 'src', 'docs', 'embedded', 'performance.ts'), label: 'apps/workbench performance.ts', rows: PERFORMANCE_ROWS, code: true },
   { path: join(REPO, 'apps', 'workbench', 'src', 'docs', 'embedded', 'getting-started.ts'), label: 'apps/workbench getting-started.ts', rows: GETTING_STARTED_ROWS, code: true },
+  /* The page that exists to explain the parity numbers. It is the one place
+   * they are the point rather than reassurance, so they are gated here too. */
+  { path: join(REPO, 'apps', 'workbench', 'src', 'docs', 'embedded', 'e1-browser-and-board.ts'), label: 'apps/workbench e1-browser-and-board.ts', rows: [], code: true },
   { path: join(REPO, 'apps', 'workbench', 'src', 'lib', 'sim', 'firmware.ts'), label: 'apps/workbench firmware.ts', rows: [], code: true },
   /* A caption in the playground, which is prose a visitor reads rather than a
    * comment, and which quotes the run in full. */
@@ -1189,6 +1192,27 @@ PROSE.push({
   gets: [() => value('p13_e20_instruments', 'flash')],
 });
 
+/* The explanation page argues from the harness counts, so they are compared
+ * against the harnesses that print them rather than typed once and forgotten. */
+PROSE.push({
+  doc: 'apps/workbench e1-browser-and-board.ts',
+  re: /\*\*(\d+) parity rows\.\*\*/,
+  gets: [() => getParity().rows],
+  exact: true,
+});
+PROSE.push({
+  doc: 'apps/workbench e1-browser-and-board.ts',
+  re: /\*\*(\d+) value rows\.\*\*/,
+  gets: [() => getTables().rows],
+  exact: true,
+});
+PROSE.push({
+  doc: 'apps/workbench e1-browser-and-board.ts',
+  re: /every one of the (\d+) value rows/,
+  gets: [() => getTables().rows],
+  exact: true,
+});
+
 /* The parity row count, which thirteen documents quote and two of them
  * checked until 2026-08-20. Adding the 41st row left eleven of them saying 40,
  * and six of those were inside this file and reported as a note rather than a
@@ -1490,7 +1514,15 @@ for (const doc of DOCS) {
    * and flatten() would join "and 2" to "* of 24 audio blocks". Dropping the
    * marker keeps the line count, so reported line numbers stay right. Markdown
    * documents are left alone, where a leading * is a bullet. */
-  if (doc.code) lines = lines.map((l) => l.replace(/^(\s*)\*\s?/, '$1'));
+  /*
+   * The star is only a comment continuation when whitespace or the end of the
+   * line follows it. `\s?` made that optional, so a markdown line opening
+   * `**bold**` lost one star and became `*bold**`. An earlier audit noted
+   * that it mangled seven bold openers and corrupted no figure; it corrupts
+   * one now, because the page explaining the parity numbers opens its claims
+   * in bold. Requiring the whitespace leaves markdown alone.
+   */
+  if (doc.code) lines = lines.map((l) => l.replace(/^(\s*)\*(?: |$)/, '$1'));
   const missing = [];
 
   for (const row of rows) {

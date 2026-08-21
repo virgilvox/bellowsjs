@@ -228,10 +228,15 @@ Two additions, both **(research)**:
   code. The tables stay, underneath.
 - **One line of scenario per engine.** The field study of API learning
   obstacles, over 440 developers, named "matching the API to scenarios" as one
-  of five factors, and it is the one this project has least of. The reference
-  says what `Pluck` is and never says what you would reach for it to make.
-  `Pluck` is a Karplus-Strong loop AND it is guitars, harps, anything with a
-  string. Both sentences, in that order.
+  of five factors.
+
+  **Corrected on 2026-08-21, after reading the page rather than the plan.**
+  This gap is smaller than stated above: the engine sections already carry the
+  scenario sentence. `Kick` says "For kick drums, and for any short pitched
+  thump", `Pluck` says "For guitars, harps, koto, and every plucked thing".
+  What is true is that the sentence comes second, after the mechanism. That is
+  a reordering rather than the rewrite this entry implied, and it is not worth
+  ten section rewrites to do it.
 
 ### 4.4 Explanation, existing, gathered and added to
 

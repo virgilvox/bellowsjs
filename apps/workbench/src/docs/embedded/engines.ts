@@ -221,7 +221,7 @@ Envelopes are grouped rather than per operator: every carrier shares \`attack\`/
 Extended Karplus-Strong. A burst of excitation into a delay line with a one-pole loop filter. For guitars, harps, koto, and every plucked thing. This is the one engine whose flash cost is small and whose RAM cost is a decision.
 
 \`\`\`cpp
-template <int kMinFreqHz = 20, int kSampleRate = 48000> class Pluck;
+template <int kMinFreqHz = 20, int kSampleRate = BELLOWS_SAMPLE_RATE> class Pluck;
 \`\`\`
 
 \`kMinFreqHz\` is the lowest note the instance can hold, and it sizes both the delay line and the excitation buffer. That is the whole memory story. The period at the floor is \`kSampleRate / kMinFreqHz\` samples, the delay line holds four more than that plus the four the cubic reader needs, the excitation buffer holds twice the period, and one voice is therefore \`12 * period + 160\` bytes. That formula lands on both figures HARDWARE.md measured, 28960 for \`Pluck<20>\` and 7360 for \`Pluck<80>\`, each of which is the sketch row minus its 1028 bytes of harness.

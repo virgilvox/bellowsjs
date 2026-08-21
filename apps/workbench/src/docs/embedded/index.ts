@@ -18,6 +18,7 @@ import t3 from './t3-give-it-a-tune';
 import t4 from './t4-put-it-on-a-board';
 import h1 from './h1-why-is-it-silent';
 import h2 from './h2-get-sound-out';
+import e1 from './e1-browser-and-board';
 import gettingStarted from './getting-started';
 import programShape from './program-shape';
 import output from './output-and-wiring';
@@ -45,7 +46,7 @@ export const EMBEDDED_DOC_GROUPS: DocGroup[] = [
   { label: 'Start here', pages: [t1, t2, t3, t4] },
   { label: 'How to', pages: [h2, h1] },
   { label: 'Reference', pages: [engines, effects, voices, sequencing, theory, output] },
-  { label: 'Understanding', pages: [gettingStarted, programShape, performance] },
+  { label: 'Understanding', pages: [gettingStarted, e1, programShape, performance] },
 ];
 
 export const EMBEDDED_DOC_PAGES = EMBEDDED_DOC_GROUPS.flatMap((g) => g.pages);

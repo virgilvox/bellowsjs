@@ -102,8 +102,8 @@ THE RULES THAT MATTER HERE, learned by being burned:
   see it go red, revert, see it go green. If a mutation does not fire, suspect
   the mutation before the gate.
 - Numbers in documents rot exactly like generated files.
-  `node tools/check-docs.mjs --check` is the control, and it now covers 542
-  figures across 13 documents. Note that only the copy of that number lower
+  `node tools/check-docs.mjs --check` is the control, and it now covers 545
+  figures across 14 documents. Note that only the copy of that number lower
   down this file is machine-checked: the gate matches per line, and this
   copy is wrapped, so it has to be edited by hand.
 - A wrong engine parameter name is silent at every layer of the browser
@@ -299,7 +299,7 @@ TRAPS THAT WILL BITE YOU, in the order they are likely to
    DSP. This has already happened once. CI would catch it if CI ran.
 2. Every documented number rots. A change moves a sketch and the tables quoting it are left
    behind; that happened four times in one session, and a second audit then found sixteen more.
-   node tools/check-docs.mjs --check is the control, and it now covers 542 figures across
+   node tools/check-docs.mjs --check is the control, and it now covers 545 figures across
    docs/HARDWARE.md, the embedded README, examples/README.md, docs/HANDOFF.md, docs/ENGINEERING.md,
    this file, both top-level READMEs and two of the site's TypeScript pages, against the size report, the sketch symbol tables, parity, tables, fastmath and
    vitest list.

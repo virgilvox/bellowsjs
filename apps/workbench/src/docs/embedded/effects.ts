@@ -39,7 +39,7 @@ As on the engines page, the range column below is the browser's \`ParamSpec\` ra
 Two independent delay lines with cross feedback and a one-pole damper in the loop. Cubic interpolated reads and a 150 ms smoother on each time, so sweeping a delay time pitch-bends the way a tape machine does instead of clicking.
 
 \`\`\`cpp
-template <uint32_t kMaxMs = 500, uint32_t kSampleRate = 48000> class StereoDelay;
+template <uint32_t kMaxMs = 500, uint32_t kSampleRate = BELLOWS_SAMPLE_RATE> class StereoDelay;
 class StereoDelayExt;   // caller-supplied buffers
 \`\`\`
 
@@ -55,9 +55,9 @@ class StereoDelayExt;   // caller-supplied buffers
 \`\`\`cpp
 #include "bellows/fx/delay.h"
 
-static bellows::StereoDelay<500, 48000> echo;
+static bellows::StereoDelay<500> echo;
 
-bellows::StereoDelay<500, 48000>::Params p;
+bellows::StereoDelay<500>::Params p;
 p.time_l = 0.375f;            // dotted eighth at 120 bpm
 p.time_r = 0.5f;
 p.feedback = 0.45f;
@@ -92,9 +92,9 @@ class PlateExt;   // one caller-supplied float buffer, carved into thirteen
 #include "bellows/fx/plate.h"
 
 // 50 ms of predelay: the practical owning size on a Teensy 4.1.
-static bellows::Plate<48000, 50> room;
+static bellows::Plate<BELLOWS_SAMPLE_RATE, 50> room;
 
-bellows::Plate<48000, 50>::Params p;
+bellows::Plate<BELLOWS_SAMPLE_RATE, 50>::Params p;
 p.decay = 0.85f;
 p.damping = 0.4f;
 p.mix = 1.0f;
@@ -152,10 +152,10 @@ Five independent classes in \`bellows/fx/modfx.h\`, no base class between them. 
 \`\`\`cpp
 #include "bellows/fx/modfx.h"
 
-static bellows::Chorus<48000> chorus;
+static bellows::Chorus<> chorus;
 static bellows::Tremolo trem;
 
-bellows::Chorus<48000>::Params cp;
+bellows::Chorus<>::Params cp;
 cp.rate = 0.3f;
 cp.depth = 0.7f;
 chorus.Init(sr, cp);
@@ -252,10 +252,10 @@ The gate has 3 dB of hysteresis: it opens at the threshold and only closes once 
 \`\`\`cpp
 #include "bellows/fx/dynamics.h"
 
-static bellows::Compressor<10, 48000> comp;
-static bellows::Limiter<48000> lim;
+static bellows::Compressor<10> comp;
+static bellows::Limiter<> lim;
 
-bellows::Compressor<10, 48000>::Params cp;
+bellows::Compressor<10>::Params cp;
 cp.threshold_db = -14.0f;
 cp.ratio = 2.5f;
 cp.attack = 0.02f;

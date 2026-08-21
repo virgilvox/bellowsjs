@@ -120,6 +120,14 @@ jobs:
         # the top left the reference pages chained to the previous order.
         run: npm run check:links -w apps/workbench
 
+      - name: every C++ signature quoted in the docs matches the headers
+        # Release 0.1.2 moved Pluck<> and StereoDelay<> off a hardcoded 48000
+        # and two reference pages went on quoting the old signature. Nothing
+        # caught it: check-docs compares figures against harness output and a
+        # template signature is not a figure. A reader copying either line got
+        # code that compiles and sizes its buffers for the wrong rate.
+        run: npm run check:signatures -w apps/workbench
+
       - name: the published artifacts carry what they should
         # The embedded library ships through two channels with different
         # shapes, and both were got wrong by hand before this existed: no

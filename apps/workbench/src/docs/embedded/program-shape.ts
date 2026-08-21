@@ -4,7 +4,7 @@ const page: DocPage = {
   slug: 'emb-program-shape',
   title: 'The shape of a program',
   blurb: 'The render signature, Init instead of constructors, the ordering rule in setup, and why there is no registry.',
-  prev: 'emb-getting-started',
+  prev: 'emb-parity',
   next: 'emb-performance',
   body: `
 Every sketch in this package has the same shape, and most of that shape is there for a reason you can measure. This page is the contract: what a render is, who clears the buffer, what has to happen before what in \`setup()\`, and the one thing you must never add to the library.
