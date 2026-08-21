@@ -33,7 +33,7 @@
  * of the line, because a rewrap had silently killed five claims; a table
  * row has to carry a figure, because a header line was swallowing a row
  * marker; the toolchain is pinned to the version the document names,
- * because the two installed here disagree on 36 of 37 rows; and the test
+ * because the two installed here disagree on 45 of 46 rows; and the test
  * suite is counted with `vitest list`, because two documents stated its
  * shape and nothing checked it.
  *
@@ -107,7 +107,7 @@ const REPO = join(PKG, '..', '..');
  *
  * The compiler is NOT interchangeable and this file used to assume it was.
  * Running the whole report under both toolchains installed here, 9.2.1 and
- * 11.3.1, moves 36 of the 37 rows: `s1_kick` 3752 against 3760, `s4_va`
+ * 11.3.1, moves 45 of the 46 rows: `s1_kick` 3752 against 3760, `s4_va`
  * 29560 against 28640, `s9c_fm` 5800 against 5384. So which one ran is not
  * provenance trivia, it decides the figures, and a run that picked the
  * other one would rewrite every table in HARDWARE.md by tens to hundreds
@@ -486,6 +486,34 @@ const EXAMPLES_ROWS = [
   { marker: '| 21_Presets |', sketch: 'p16_e21_presets', cols: ['flash', 'ram'] },
 ];
 
+/* The site's two embedded pages carry the same eight-example size table that
+ * examples/README.md carries, and until 2026-08-20 nothing compared either
+ * copy to anything. Both were wrong: `05_MidiInstrument` by 112 bytes, which
+ * the pitch-bend fix moved, and `07_Workstation` by 48, which had been wrong
+ * for longer than anyone can date. A reader on bellows.live saw those numbers
+ * and had no way to know. The two lists differ only in how each file writes a
+ * name: getting-started.ts is a template literal and escapes its backticks. */
+const SITE_EXAMPLES = [
+  ['06_FirstSteps', 'p12_e6_firststeps'],
+  ['01_OneKick', 'p4_e1_onekick'],
+  ['02_DrumMachine', 'p5_e2_drummachine'],
+  ['03_PolySynth', 'p6_e3_polysynth'],
+  ['04_ScalesAndTuning', 'p7_e4_scalestuning'],
+  ['05_MidiInstrument', 'p8_e5_midiinstrument'],
+  ['07_Workstation', 'p11_e7_workstation'],
+  ['20_Instruments', 'p13_e20_instruments'],
+];
+const PERFORMANCE_ROWS = SITE_EXAMPLES.map(([name, sketch]) => ({
+  marker: `| ${name} |`,
+  sketch,
+  cols: ['flash', 'ram'],
+}));
+const GETTING_STARTED_ROWS = SITE_EXAMPLES.map(([name, sketch]) => ({
+  marker: `| \\\`${name}\\\` |`,
+  sketch,
+  cols: ['flash', 'ram'],
+}));
+
 const DOCS = [
   { path: join(REPO, 'docs', 'HARDWARE.md'), label: 'docs/HARDWARE.md', rows: HARDWARE_ROWS, parity: true, tables: true },
   { path: join(PKG, 'README.md'), label: 'README.md', rows: README_ROWS, parity: true },
@@ -508,17 +536,23 @@ const DOCS = [
    * it, and because a document that states a measured number should be in
    * this list on the day it states it rather than at the next audit. */
   { path: join(REPO, 'docs', 'ENGINEERING.md'), label: 'docs/ENGINEERING.md', rows: [] },
-  /* The four places that quote the board's CPU figures and were reachable by
-   * nothing until 2026-08-20. Two of them are the near-identical READMEs that
-   * no gate compares, one of which is what npm serves, and two are the site's
-   * own copies, which are TypeScript rather than Markdown and so had never
-   * been in any document checker at all. They carry no size-table rows; they
-   * are here for the prose claims. */
+  /* Five places that quote the board's CPU figures and were reachable by
+   * nothing until 2026-08-20. Two are the near-identical top-level READMEs
+   * that no gate compares, one of which is what npm serves. Three are the
+   * site's own copies, which are TypeScript rather than Markdown and so had
+   * never been in any document checker at all. Two of those three also carry
+   * a size table, which is why they have rows below rather than prose alone:
+   * both were quoting a flash figure that had been wrong since the example
+   * moved, and being in this list for the CPU claim alone would not have
+   * found it. */
   { path: join(REPO, 'README.md'), label: 'README.md (repo root)', rows: [] },
   { path: join(REPO, 'packages', 'bellows', 'README.md'), label: 'packages/bellows/README.md', rows: [] },
-  { path: join(REPO, 'apps', 'workbench', 'src', 'docs', 'embedded', 'performance.ts'), label: 'apps/workbench performance.ts', rows: [], code: true },
-  { path: join(REPO, 'apps', 'workbench', 'src', 'docs', 'embedded', 'getting-started.ts'), label: 'apps/workbench getting-started.ts', rows: [], code: true },
+  { path: join(REPO, 'apps', 'workbench', 'src', 'docs', 'embedded', 'performance.ts'), label: 'apps/workbench performance.ts', rows: PERFORMANCE_ROWS, code: true },
+  { path: join(REPO, 'apps', 'workbench', 'src', 'docs', 'embedded', 'getting-started.ts'), label: 'apps/workbench getting-started.ts', rows: GETTING_STARTED_ROWS, code: true },
   { path: join(REPO, 'apps', 'workbench', 'src', 'lib', 'sim', 'firmware.ts'), label: 'apps/workbench firmware.ts', rows: [], code: true },
+  /* A caption in the playground, which is prose a visitor reads rather than a
+   * comment, and which quotes the run in full. */
+  { path: join(REPO, 'apps', 'workbench', 'src', 'lib', 'sim', 'voices.ts'), label: 'apps/workbench voices.ts', rows: [], code: true },
 ];
 
 /*
@@ -1028,12 +1062,32 @@ function getHardwareCpu() {
    * matching, and a silent zero-row parse would turn every claim below into a
    * row that is simply never looked at, which is the one failure a checker
    * must not have. */
-  if (runs.length < 2) {
+  /* A minimum only catches a TOTAL parse failure, and the failure that will
+   * actually happen is partial: a third run is measured, its row is written
+   * slightly differently, two old rows still satisfy a floor of 2, and
+   * `latest` goes on pointing at 2026-08-15. Every document quoting the
+   * second run then passes while the newest measurement is uncovered, which
+   * is precisely the drift this exists to catch. So count the date-shaped
+   * rows first and require that every one of them parsed. */
+  const candidates = text.split('\n').filter((l) => /^\| \d{4}-\d{2}-\d{2} \|/.test(l));
+  if (runs.length !== candidates.length || runs.length < 2) {
     throw new Error(
       'check-docs: could not parse the run table in docs/HARDWARE.md. It expects rows shaped\n' +
         '  | 2026-08-15 | after it, 19 samples | 33.8 to 46.5 % | 47.3 % | 2 of 24 |\n' +
-        `and found ${runs.length} of them. Fix the regex or the table, do not delete the check.`,
+        `and matched ${runs.length} of ${candidates.length} date-shaped rows. ` +
+        'Fix the regex or the table, do not delete the check.',
     );
+  }
+  /* `latest` is the last row, so the table has to be in order. Check that
+   * rather than assume it: a run prepended by hand would otherwise blame
+   * every quoting document instead of the table. */
+  for (let i = 1; i < runs.length; i++) {
+    if (runs[i].date < runs[i - 1].date) {
+      throw new Error(
+        `check-docs: the run table in docs/HARDWARE.md is out of order, ${runs[i].date} ` +
+          `follows ${runs[i - 1].date}. The last row is read as the current measurement.`,
+      );
+    }
   }
   hardwareCpu = { first: runs[0], latest: runs[runs.length - 1] };
   return hardwareCpu;
@@ -1066,9 +1120,20 @@ function getBoardMatrix() {
     if (cells.length !== cols.length + 1) break;
     examples++;
     cells.slice(1).forEach((cell, n) => {
-      /* A percentage or `ok` is a build. `RAM` is the linker refusing and
-       * `n/a` is the sketch declining, and neither counts. */
-      if (cell !== 'RAM' && cell !== 'n/a') built.set(cols[n], built.get(cols[n]) + 1);
+      /* An allowlist, not a denylist. `ok` or a percentage is a build, `RAM`
+       * is the linker refusing and `n/a` is the sketch declining. Anything
+       * else stops the run: the case that matters is an EMPTY cell, which a
+       * denylist scores as a build and which changes no count anywhere, so
+       * nothing would ever report it. */
+      if (cell === 'RAM' || cell === 'n/a') return;
+      if (cell !== 'ok' && !/^\d+(\.\d+)?%$/.test(cell)) {
+        throw new Error(
+          `check-docs: the board matrix in examples/README.md has a cell this cannot score: ` +
+            `row ${cells[0]}, column ${cols[n]}, value ${JSON.stringify(cell)}. ` +
+            'Expected ok, a percentage, RAM or n/a.',
+        );
+      }
+      built.set(cols[n], built.get(cols[n]) + 1);
     });
   }
   if (examples < 10) {
@@ -1100,6 +1165,29 @@ for (const doc of ['README.md', 'README.md (repo root)', 'packages/bellows/READM
   }
 }
 
+/* The performance page argues from four of its own table's figures in prose,
+ * and one of them was the wrong one. */
+PROSE.push({
+  doc: 'apps/workbench performance.ts',
+  re: /Its (\d+) B of flash is what reaching almost everything costs/,
+  gets: [() => value('p11_e7_workstation', 'flash')],
+});
+PROSE.push({
+  doc: 'apps/workbench performance.ts',
+  re: /Its (\d+) B of RAM is one object/,
+  gets: [() => value('p11_e7_workstation', 'ram')],
+});
+PROSE.push({
+  doc: 'apps/workbench performance.ts',
+  re: /reaches eight engines for (\d+) B rather than/,
+  gets: [() => value('p13_e20_instruments', 'flash')],
+});
+PROSE.push({
+  doc: 'apps/workbench getting-started.ts',
+  re: /reaches eight engines for (\d+) B rather than/,
+  gets: [() => value('p13_e20_instruments', 'flash')],
+});
+
 /* The parity row count, which thirteen documents quote and two of them
  * checked until 2026-08-20. Adding the 41st row left eleven of them saying 40,
  * and six of those were inside this file and reported as a note rather than a
@@ -1120,12 +1208,6 @@ PROSE.push({
   gets: [() => getParity().rows],
   exact: true,
 });
-PROSE.push({
-  doc: 'docs/KICKOFF.md',
-  re: /npm run parity (\d+) rows against the TypeScript/,
-  gets: [() => getParity().rows],
-  exact: true,
-});
 
 /* Every document that quotes the second run. Adding a document here is what
  * makes its copy checked; leaving one out leaves it unchecked, silently, so
@@ -1136,10 +1218,24 @@ const CPU_QUOTERS = [
   'docs/KICKOFF.md',
   'README.md',
   'examples/README.md',
+  'examples/OUTPUTS.md',
   'README.md (repo root)',
   'packages/bellows/README.md',
   'apps/workbench firmware.ts',
+  'apps/workbench voices.ts',
 ];
+
+/* getting-started.ts quotes the same run in different words, so it takes the
+ * shared RANGE regex and its own for the rest, pushed below. Putting it in the
+ * list above would add a claim that matches nothing, and a claim that matches
+ * nothing is reported rather than passed, which is the right behaviour and the
+ * wrong list. */
+PROSE.push({
+  doc: 'apps/workbench getting-started.ts',
+  re: /([\d.]+) to ([\d.]+) percent(?: CPU| with a)/,
+  gets: [() => getHardwareCpu().latest.lo, () => getHardwareCpu().latest.hi],
+  exact: true,
+});
 
 for (const doc of CPU_QUOTERS) {
   PROSE.push({
@@ -1157,7 +1253,8 @@ for (const doc of CPU_QUOTERS) {
 }
 
 /* The block count, in the four documents that carry it. */
-for (const doc of ['docs/HANDOFF.md', 'README.md', 'README.md (repo root)', 'apps/workbench firmware.ts']) {
+for (const doc of ['docs/HANDOFF.md', 'README.md', 'README.md (repo root)', 'examples/OUTPUTS.md',
+                   'apps/workbench firmware.ts', 'apps/workbench voices.ts']) {
   PROSE.push({
     doc,
     re: /(\d+) of (\d+) audio blocks/,
@@ -1165,6 +1262,44 @@ for (const doc of ['docs/HANDOFF.md', 'README.md', 'README.md (repo root)', 'app
     exact: true,
   });
 }
+
+/* The tutorial page writes the same run in a different shape, so the two
+ * shared regexes above catch only its range. */
+PROSE.push({
+  doc: 'apps/workbench getting-started.ts',
+  re: /running maximum of ([\d.]+) percent/,
+  gets: [() => getHardwareCpu().latest.max],
+  exact: true,
+});
+PROSE.push({
+  doc: 'apps/workbench getting-started.ts',
+  re: /using (\d+) audio blocks of the (\d+)/,
+  gets: [() => getHardwareCpu().latest.blocks, () => getHardwareCpu().latest.ofBlocks],
+  exact: true,
+});
+
+/* docs/HARDWARE.md owns the table and then argues from it three lines below,
+ * in prose that can drift away from the row above it. It is the source, so
+ * this compares the document against itself, which is worth doing: the
+ * argument is where a reader takes the numbers from. */
+PROSE.push({
+  doc: 'docs/HARDWARE.md',
+  re: /typical upper bound of\s+([\d.]+) percent was low; the load reaches ([\d.]+)/,
+  gets: [() => getHardwareCpu().first.hi, () => getHardwareCpu().latest.hi],
+  exact: true,
+});
+PROSE.push({
+  doc: 'docs/HARDWARE.md',
+  re: /so ([\d.]+) is the highest value seen/,
+  gets: [() => getHardwareCpu().latest.max],
+  exact: true,
+});
+PROSE.push({
+  doc: 'docs/HARDWARE.md',
+  re: /had already moved from ([\d.]+) to ([\d.]+) while being watched/,
+  gets: [() => getHardwareCpu().first.max, () => getHardwareCpu().latest.max],
+  exact: true,
+});
 
 /* The embedded docs page states both runs, as a table and then as a sentence
  * of history, so it is the one place where the FIRST row is quoted too. */
@@ -1255,7 +1390,21 @@ function agrees(text, actual, exact = false) {
    * throughout. So this is about a hundred times tighter than the thing that
    * actually decides whether the port still matches.
    */
-  if (!exact && ALLOW_HOST_DRIFT && Number.isFinite(actual) && Number.isFinite(Number(text))) {
+  /*
+   * Integers are excluded here, and that exclusion is the whole point of the
+   * split. This allowance is 25 percent, sized for a parity residual, and a
+   * residual is never a whole number. A byte count always is, and it has its
+   * own allowance of plus or minus 16 in the branch above. Without this test
+   * the loose branch runs after the tight one fails and passes exactly what
+   * the tight one was there to catch: measured, a flash figure on the site's
+   * performance page was wrong by 48 bytes, three times the byte allowance,
+   * and this printed "host drift allowed, measured: doc 41992 against 42040,
+   * 0.1 percent" and went green. That is the third thing this flag was found
+   * to be swallowing, after the board's CPU percentages and the harness row
+   * counts, and the first two were closed by marking claims `exact` one at a
+   * time. This closes the class rather than another instance.
+   */
+  if (!exact && ALLOW_HOST_DRIFT && !Number.isInteger(actual) && Number.isFinite(actual) && Number.isFinite(Number(text))) {
     const want = Number(text);
     if (want !== 0) {
       const rel = Math.abs(actual - want) / Math.abs(want);
@@ -1502,8 +1651,8 @@ for (const doc of DOCS) {
             continue;
           }
           checked += 2;
-          if (!agrees(m[2], group.rows)) report(label, `line ${i + 1} (${m[1]} rows)`, m[2], group.rows);
-          if (!agrees(m[3], group.bad)) report(label, `line ${i + 1} (${m[1]} bad)`, m[3], group.bad);
+          if (!agrees(m[2], group.rows, true)) report(label, `line ${i + 1} (${m[1]} rows)`, m[2], group.rows);
+          if (!agrees(m[3], group.bad, true)) report(label, `line ${i + 1} (${m[1]} bad)`, m[3], group.bad);
         }
       }
       if (seen === 0) {

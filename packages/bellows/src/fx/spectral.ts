@@ -16,7 +16,7 @@
  * lobe intact.
  */
 
-import { StftProcessor } from '../dsp/stft';
+import { StftProcessor, colaNorm } from '../dsp/stft';
 import { RealFft, hann } from '../dsp/fft';
 import { rng } from '../core/prng';
 import { clamp } from '../types';
@@ -598,6 +598,30 @@ export function timeStretch(
   if (input.length === 0 || outLen === 0) return new Float32Array(0);
 
   const win = hann(n);
+  /*
+   * The same reconstruction test Istft applies, and for the same reason: this
+   * is a third overlap-add synthesis path and it had the same hole. Below,
+   * out[p] is acc[p] / norm[p] guarded by `norm[p] > 1e-3`, and the guard
+   * writes a hard zero when it fails. At the output EDGES that is correct,
+   * because no frame covers there. In the STEADY STATE it is a dropout: with
+   * hop = fftSize the Hann window's tails meet at zero, every frame boundary
+   * lands on a position no frame weights, and the result is periodic silence
+   * with no error and no warning. `hop must be in [1, fftSize]` above accepts
+   * exactly that.
+   *
+   * colaNorm is the steady-state sum over one hop period, so it ignores the
+   * edges and tests only the repeating part. Refusing here beats degrading:
+   * the caller asked for a stretch and would otherwise get a comb.
+   */
+  const cola = colaNorm(win, win, hs);
+  for (let j = 0; j < hs; j++) {
+    if (!(cola[j] > 1e-6)) {
+      throw new Error(
+        `window and hop cannot reconstruct: overlap-add sum at offset ${j} of ${hs} ` +
+          `is ${cola[j]}, use a hop of at most ${n >> 1} for the ${n}-point Hann window`
+      );
+    }
+  }
   const fft = new RealFft(n);
   const nb = (n >> 1) + 1;
   const ha = hs / r; // fractional analysis hop

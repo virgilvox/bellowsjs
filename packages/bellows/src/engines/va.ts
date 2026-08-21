@@ -113,6 +113,17 @@ class VaVoice implements Voice {
     const shape = SHAPES[clamp(Math.round(p.shape), 0, 3)];
     this.osc1.setShape(shape);
     this.osc2.setShape(shape);
+    /*
+     * `sustain` is the one argument here that is not click-free on a held
+     * note. Adsr.set takes three times and a level: the times only reshape
+     * the segments still to come, but the level is where the envelope is
+     * heading right now, so moving a sustain slider during a held note steps
+     * the amplitude and a step in an amplitude is a click. See the note on
+     * Adsr.set in dsp/envelopes.ts, and docs/AUDIT-2.md, where the finding
+     * that names this file is PARTIAL rather than closed: both fixes for it,
+     * smoothing the target or latching sustain at note on, change what the
+     * engine renders, so it is a decision rather than an edit.
+     */
     this.ampEnv.set(p.attack, p.decay, p.sustain, p.release);
     this.filtEnv.set(p.fAttack, p.fDecay, p.fSustain, p.fRelease);
     const angle = ((clamp(p.pan, -1, 1) + 1) * Math.PI) / 4;

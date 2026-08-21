@@ -18,19 +18,30 @@ else. Neither enumerated the whole set, `AUDIT-3` closed findings here without
 saying so, and the number everyone quoted, 73 open, was 77 minus 4 where the 77
 was never listed.
 
-**The count on 2026-08-20: 30 open, 5 partial, 54 closed, 5 refuted, 1 not a
-defect.** So 35 are genuinely open. Of those 35, **19 would change rendered
-output** and **4 are closable in under ten minutes**; both are tagged inline,
+**The count on 2026-08-20: 29 open, 7 partial, 53 closed, 5 refuted, 1 not a
+defect.** So 36 are genuinely open. Of those 36, **20 would change rendered
+output** and **3 are closable in under ten minutes**; both are tagged inline,
 and a finding with no tag has been judged neither, rather than unassessed.
 
-The count on 2026-08-15 was 43 open and 8 partial, so 51. Sixteen of the twenty
-tagged `[under ten minutes]` were closed on 2026-08-20, each one investigated
-against the tree, then attacked by a skeptic briefed to refute it, then applied
-and verified here. Three of the remaining four were never reached: the machine
-slept and that group's agent died mid-response, so `voiceLead`'s unequal-size
-branch, `Scheduler.rewind` and the modal table provenance are open because
-nobody looked, which is a different thing from open because someone looked and
-could not fix it.
+The count on 2026-08-15 was 43 open and 8 partial, so 51. Twenty findings
+carried the `[under ten minutes]` tag, seventeen alone and three sharing a line
+with `[changes audio]`, and sixteen of them were closed on 2026-08-20: each
+investigated against the tree, then attacked by a skeptic briefed to refute it,
+then applied and verified here.
+
+Then that day's work was itself audited, and **two of the sixteen came back**.
+The Adsr one had fixed the sentence a finding opens with and left the cause it
+names at the end, in the engine it names, which is the exact pattern that cost
+13 of 51 closures on 2026-08-15. The defOp one gates two links of a three-link
+chain and the middle link cannot be observed in process. Both carry their
+reason. Fourteen of sixteen survived.
+
+The three still tagged `[under ten minutes]` are the modal table provenance,
+`voiceLead`'s unequal-size branch and `Scheduler.rewind`, and none of them was
+ever reached rather than looked at and left: the machine slept and that group's
+agent died mid-response. A fourth, this repository's own release ritual quoting
+a bundle size the command no longer printed, was closed during the 0.1.9
+release by measuring it.
 
 How that was arrived at, because a number produced by reading is worth what the
 reading was worth. All 95 were re-read against the tree at `6d23f58`, with a
@@ -216,7 +227,7 @@ CLAUDE.md: "Dependency direction is one way: types and core at the bottom, then 
 
 **Architecture: Six embedded units' hand-copied Params defaults are gated by nothing, and params.gen.h has no compile-time consumer**
 
-> **CLOSED** as of 2026-08-20. The missing control, with the investigator's two coverage holes closed. Added: an `unmapped` counter, so the count the README claims is printed actually is printed; a per-block row count checked against the `N params.` the block header already states and which the investigator's regex captured and threw away; and a blocksPresent comparison. Changed: `.github/workflows/ci.yml`, `packages/bellows-embedded/package.json`, `packages/bellows-embedded/src/bellows/params.gen.h`, `packages/bellows-embedded/tools/README.md`, `packages/bellows-embedded/tools/check-params.mjs`, `packages/bellows-embedded/tools/gen-tables.mjs`. Gate: `npm run params:check`, and I watched it go red four ways rather than the investigator's three. Read by an investigator and then attacked by a skeptic, which corrected it; applied and verified on 2026-08-20.
+> **CLOSED** as of 2026-08-20. The missing control, with the investigator's two coverage holes closed. Added: an `unmapped` counter, so the count the README claims is printed actually is printed; a per-block row count checked against the `N params.` the block header already states and which the investigator's regex captured and threw away; and a blocksPresent comparison. Changed: `.github/workflows/ci.yml`, `packages/bellows-embedded/package.json`, `packages/bellows-embedded/src/bellows/params.gen.h`, `packages/bellows-embedded/tools/README.md`, `packages/bellows-embedded/tools/check-params.mjs`, `packages/bellows-embedded/tools/gen-tables.mjs`. Gate: `npm run params:check`, and I watched it go red four ways rather than the investigator's three. Read by an investigator and then attacked by a skeptic, which corrected it; applied and verified on 2026-08-20. No compile-time consumer was added and none is intended: `params.gen.h` stays a parity document read by a Node checker rather than by a translation unit, which `tools/README.md` states outright, so the heading's second clause is answered by that decision rather than by an include. Nothing in `src` includes it and nothing references `bellows::params`, checked.
 
 `packages/bellows-embedded/src/bellows/params.gen.h`
 
@@ -451,7 +462,9 @@ Same root cause as the structural leak above, but the damage is cumulative rathe
 
 **Facade, kernel, IO: defOp is evaluated on the MAIN thread by render(), not only in the worklet realm the docs name**
 
-> **CLOSED** as of 2026-08-20. Corrected from the proposal: it asserted that the sink comment used to name the worklet, which it did not (engine.ts:334-336 names no realm), and the standard here is that a citation must say what it is claimed to say. The line-number citation to bellows.ts:602 is dropped as well, because a line number inside a code comment goes stale silently. Changed: `apps/workbench/src/docs/pages/custom-dsp.ts`, `docs/AUDIT.md`, `docs/HANDOFF.md`, `packages/bellows/src/core/serialize.ts`, `packages/bellows/src/kernel/engine.ts`, `packages/bellows/test/kernel/defop-realm.test.ts`. Gate: packages/bellows/test/kernel/defop-realm.test.ts, run with `npx vitest run test/kernel/defop-realm.test.ts` from packages/bellows. Read by an investigator and then attacked by a skeptic, which corrected it; applied and verified on 2026-08-20.
+> **PARTIAL** as of 2026-08-20. Corrected from the proposal: it asserted that the sink comment used to name the worklet, which it did not (engine.ts:334-336 names no realm), and the standard here is that a citation must say what it is claimed to say. The line-number citation to bellows.ts:602 is dropped as well, because a line number inside a code comment goes stale silently. Changed: `apps/workbench/src/docs/pages/custom-dsp.ts`, `docs/AUDIT.md`, `docs/HANDOFF.md`, `packages/bellows/src/core/serialize.ts`, `packages/bellows/src/kernel/engine.ts`, `packages/bellows/test/kernel/defop-realm.test.ts`. Gate: packages/bellows/test/kernel/defop-realm.test.ts, run with `npx vitest run test/kernel/defop-realm.test.ts` from packages/bellows. Read by an investigator and then attacked by a skeptic, which corrected it; applied and verified on 2026-08-20.
+>
+> **Why it is not closed:** the prose is corrected everywhere the finding names and the eval realm is gated, but one link in the chain is not. `test/kernel/defop-realm.test.ts` proves that `renderOffline` evaluates a `defOp` in its caller's realm, and that `defEngine` records one into the setup log; both fire on a one-step mutation. The middle link, `render()` passing `defOp` through the `m.type !== 'events'` filter, is not gated and cannot be observed in process: `defEngine` also calls `registerEngine`, so the offline kernel resolves the engine from this realm's global registry whether the message was replayed or not. Measured on 2026-08-20 by mutating that filter to drop `defOp` as well: both tests stay green. Gating it wants a spy on the array handed to `renderOffline`, or a replay in a realm that never saw the def. Re-opened after an audit of the closure.
 
 `packages/bellows/src/kernel/engine.ts`
 
@@ -655,9 +668,7 @@ Line 70 reads `romanToChord('bVII', cmaj); // borrowed Bb`. The chord is correct
 
 **Docs and claims: docs/HANDOFF.md release ritual quotes the standalone bundle at about 97 KB gzip; it is 104 KB**
 
-> **OPEN** as of 2026-08-15. [under ten minutes] docs/HANDOFF.md:1165 now reads: "3. `npm run build -w packages/bellows`; check `dist/worklet.js` exists and the standalone size is sane. Measure it rather than remembering it: `gzip -9 -c dist/bellows.standalone.js | wc -c` prints 108400 bytes, 106 KB, after the 2026-08-05 fixes, against 106147 before them and about 97 KB at 0.1.0. Compare against the previous release and ask about a jump over roughly ten percent; a fixed threshold from an old version is what turned 97 into a number three releases stale. Nothing checks this one: `check-docs.mjs` cannot, because it needs a built `dist`. Note also that `dist` goes stale against `src` silently (`gen-tables.mjs` warns and reads it anyway), so build before you measure, and before running any pure-library snippet against it." Both halves of the finding (the stale threshold and the stale-dist warning) are addressed. Measured now: `gzip -9 -c packages/bellows/dist/bellows.standalone.js | wc -c` = 108945, within the ten percent band the step now specifies.
->
-> **Why it is not closed:** The mechanism half is genuinely fixed (docs/HANDOFF.md:1165 now says measure-don't-remember, gives a ten-percent-band rule against the previous release, and adds the stale-dist warning). But the step's own most recent figure is stale again, which is the exact defect the finding named. It states that `gzip -9 -c dist/bellows.standalone.js | wc -c` "prints 108400 bytes, 106 KB, after the 2026-08-05 fixes". I ran `npm run build -w packages/bellows` from HEAD and then that command: it prints 108945, not 108400. This is not a stale-dist artifact, the build is fresh. The 108400 figure entered the doc in 78436e3 (Wed Aug 5 2026), and three commits have touched packages/bellows/src since: 95e1815 (4x westcoast fold), c731a90 (BLAMP unit step), 610069b (audit close / barrel fix). So the step still carries a number three library commits stale, and a reader who follows its own 'build before you measure' instruction gets a value the sentence says the command does not print. Per the project's stated standard that a quoted number be one a command printed, this half of the finding survives.
+> **CLOSED** as of 2026-08-20. Measured during the 0.1.9 release and written with its version beside it, which is the half that was missing: the step now reads "prints **109260 bytes at 0.1.9**, against 108945 at 0.1.8, 108400 after the 2026-08-05 fixes, 106147 before them and about 97 KB at 0.1.0", and it says to write the version beside the number because this figure has twice been quoted from a release three behind. The mechanism half was already fixed on 2026-08-15: measure rather than remember, a ten percent band against the PREVIOUS release rather than a fixed threshold, and the stale-dist warning. Nothing gates it and nothing can: `check-docs.mjs` needs a built `dist`, which it does not have. The control is that step 4 of the ritual prints the number every time anyone releases.
 
 `docs/HANDOFF.md`
 
@@ -729,7 +740,9 @@ Line 23 is `while (n < maxSamples + 4) n <<= 1;`. JavaScript's << is a 32-bit op
 
 **DSP core: Adsr.set is documented "Safe to call while running" but stepping sustain mid-note jumps the level instantly**
 
-> **CLOSED** as of 2026-08-20. The sentence claimed safety for all four arguments when it holds for three. This says which is which and points at the smoothing that already exists rather than hiding one inside the envelope. Changed: `packages/bellows/src/dsp/envelopes.ts`, `packages/bellows/test/dsp-filt/envelopes.test.ts`. Gate: `npx vitest run test/dsp-filt/envelopes.test.ts` from packages/bellows. Read by an investigator and then attacked by a skeptic, which corrected it; applied and verified on 2026-08-20.
+> **PARTIAL** as of 2026-08-20. [changes audio] The sentence claimed safety for all four arguments when it holds for three. This says which is which and points at the smoothing that already exists rather than hiding one inside the envelope. Changed: `packages/bellows/src/dsp/envelopes.ts`, `packages/bellows/test/dsp-filt/envelopes.test.ts`. Gate: `npx vitest run test/dsp-filt/envelopes.test.ts` from packages/bellows. Read by an investigator and then attacked by a skeptic, which corrected it; applied and verified on 2026-08-20.
+>
+> **Why it is not closed:** the docstring half is genuinely fixed and the engine half is not, which is the half the finding argues for. Its last sentence names `engines/va.ts` rather than `Adsr`: every `setParam` there runs through `apply()`, which calls `ampEnv.set(attack, decay, sustain, release)` with all four, so moving the sustain slider on a held note still steps the amplitude envelope and a step in an amplitude envelope is a click. `va.ts` was not touched. Both fixes for it change audio, holding the target in a `Smoother` or latching sustain at note on, so this wants a decision rather than an edit. Re-opened on 2026-08-20 after an audit of the closure, which is the same pattern that cost 13 of 51 closures on 2026-08-15: a fix applied to the sentence a finding opens with and not to the cause it names at the end.
 
 `packages/bellows/src/dsp/envelopes.ts`
 
@@ -817,7 +830,7 @@ bellows::Clamp is `v < lo ? lo : (v > hi ? hi : v)`, both comparisons false for 
 
 **Facade, kernel, IO: A sub-block param ramp lands one block LATE, not immediately as documented**
 
-> **CLOSED** as of 2026-08-20. Unchanged from the proposal and verified: oldText appears verbatim exactly once at docs/AUDIT.md:362-364, and it is now the only surviving copy of the false figure. docs/AUDIT.md is not in the check-docs DOCS list (check-docs.mjs:477-498), so no checked figure moves. Changed: `docs/AUDIT.md`, `packages/bellows/src/kernel/engine.ts`, `packages/bellows/test/kernel/paramramp.test.ts`. Gate: The new test 'lands a sub-block ramp one block late' in packages/bellows/test/kernel/paramramp.test.ts, run with `npx vitest run test/kernel/paramramp.test.ts`. Read by an investigator and then attacked by a skeptic, which corrected it; applied and verified on 2026-08-20.
+> **CLOSED** as of 2026-08-20. Unchanged from the proposal and verified: oldText appears verbatim exactly once at docs/AUDIT.md:362-364, and it is now the only surviving copy of the false figure. docs/AUDIT.md is not in the check-docs DOCS list (the DOCS list in check-docs.mjs), so no checked figure moves. Changed: `docs/AUDIT.md`, `packages/bellows/src/kernel/engine.ts`, `packages/bellows/test/kernel/paramramp.test.ts`. Gate: The new test 'lands a sub-block ramp one block late' in packages/bellows/test/kernel/paramramp.test.ts, run with `npx vitest run test/kernel/paramramp.test.ts`. Read by an investigator and then attacked by a skeptic, which corrected it; applied and verified on 2026-08-20.
 
 `packages/bellows/src/kernel/engine.ts`
 

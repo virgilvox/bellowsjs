@@ -489,8 +489,9 @@ export class KernelEngine {
      * isSafeInteger rather than isFinite, because 1e300 seconds is finite and
      * just as wedged. It tests endFrame rather than the ramp length so that an
      * unusable startFrame is caught too. That costs nothing, because both
-     * terms are integers: Math.round returns one, and this.frame is only ever
-     * a block count offline or AudioWorkletGlobalScope.currentFrame in the
+     * terms are integers: Math.round returns one, and this.frame is a SAMPLE
+     * count in both realms, advanced to blockStart + from inside the render
+     * loop offline and set from AudioWorkletGlobalScope.currentFrame in the
      * worklet (the setFrame call in worklet-entry.ts). So every duration a
      * human types passes, and 2^53 frames is about 5900 years at 48k.
      */

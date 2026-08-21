@@ -224,7 +224,8 @@ Fixed, with a caveat added later that undoes most of it:
 
 IT HAS NEVER RUN, as of 2026-08-04. **No longer true, and the rest of this finding now reads
 correctly as written**: on 2026-08-15 `gh run list --workflow=ci.yml --limit 200` returns 26
-runs, 19 green and 7 failures, 11 of them pushes to `main`. The file is on the default branch
+runs, 19 green and 7 failures, 11 of them pushes to `main` (39, 31 and 8 by 2026-08-20, with
+one of the failures now on `main`: see docs/LANDSCAPE.md). The file is on the default branch
 and the gates below are enforced. The two consequences named in the next sentence were both
 found by inspection and both have since been fixed. Everything from here to the end of this
 finding is kept as the record of what was true when it was written.

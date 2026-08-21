@@ -141,6 +141,9 @@ AudioWorklet is required (Chrome 66+, Firefox 76+, Safari 14.1+). Web MIDI is Ch
 
 The same DSP core is also a header-only C++17 library for 32-bit
 microcontrollers: **[packages/bellows-embedded](packages/bellows-embedded/README.md)**.
+It is not on npm and is not meant to be. It ships through the two registries
+that microcontroller people use: `lib_deps = virgilvox/Bellows` in PlatformIO,
+or `Bellows` in the Arduino Library Manager.
 Not a rewrite and not a subset that drifted. The C++ is diffed against this
 library on every commit: 41 engine and effect rows rendered from both sides and
 compared sample by sample, 428 exactly-compared value rows for the parts that

@@ -39,8 +39,8 @@ Cortex-M7 at \`-Os\` with \`--gc-sections\`, library only: no Arduino core and n
 | \`02_DrumMachine\` | a compile-time bank, euclidean patterns | 30120 B | 1620 B |
 | \`03_PolySynth\` | a voice pool, a swept filter | 30280 B | 3876 B |
 | \`04_ScalesAndTuning\` | the theory layer, 12-EDO against 19-EDO | 8096 B | 30176 B |
-| \`05_MidiInstrument\` | MIDI byte parsing into a voice pool | 30616 B | 3888 B |
-| \`07_Workstation\` | five engines, a Markov melody, a send bus | 41992 B | 225508 B |
+| \`05_MidiInstrument\` | MIDI byte parsing into a voice pool | 30728 B | 3888 B |
+| \`07_Workstation\` | five engines, a Markov melody, a send bus | 42040 B | 225508 B |
 | \`20_Instruments\` | eleven patches over eight engines | 47912 B | 49904 B |
 
 A bare \`Kick\` with stock parameters is the floor of that table at 3760 B of flash and 1100 B of RAM. \`01_OneKick\` is 16 bytes over it, which is its wrapper class and two changed parameters.
@@ -55,17 +55,19 @@ Three rows are worth reading rather than skimming.
 
 ## Install under PlatformIO
 
-This is the verified path. Point at the repository and let PlatformIO find the library subdirectory:
+It is in the registry:
 
 \`\`\`ini
 [env:teensy41]
 platform = teensy
 board = teensy41
 framework = arduino
-lib_deps = https://github.com/virgilvox/bellowsjs.git
+lib_deps = virgilvox/Bellows
 build_flags = -std=gnu++17
 build_unflags = -std=gnu++14 -std=gnu++11
 \`\`\`
+
+Pin a version with \`virgilvox/Bellows@0.1.1\` if you want one, or point at the repository with \`lib_deps = https://github.com/virgilvox/bellowsjs.git\` to take \`main\`.
 
 The \`build_unflags\` line is not optional. The PlatformIO Teensy platform still defaults to \`gnu++14\` on some releases, and this library needs C++17 for inline \`constexpr\` variables. Setting \`build_flags\` alone leaves both standards on the command line and the last one wins.
 
@@ -73,7 +75,9 @@ Two more traps on that platform. \`board_build.usb_type\` is silently ignored, s
 
 ## Install under the Arduino IDE
 
-Clone the repository and copy \`packages/bellows-embedded\` into your \`libraries\` folder as \`Bellows\`. The examples then appear under File, Examples, Bellows.
+It is in the Library Manager. Sketch, Include Library, Manage Libraries, search for \`Bellows\`, install. On the command line that is \`arduino-cli lib install Bellows\`. The examples then appear under File, Examples, Bellows.
+
+**Include \`<Bellows.h>\` first**, before any \`<bellows/...>\` header. The Arduino builder works out which libraries a sketch needs by matching include names, and a nested path on its own does not name this library, so the include path never gets set and the build fails on the first header. Every example here got that wrong until 2026-08-16 and none of them compiled once installed; PlatformIO passes an include path that hides it.
 
 The IDE does not expose the language standard anywhere in its interface, so set it in a file: put a \`platform.local.txt\` beside your platform's \`platform.txt\` containing
 

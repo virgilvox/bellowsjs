@@ -122,10 +122,15 @@ scaffolding for a masking-aware or roughness-aware analyser exists.
   pays a permanent tax and keeps it visible with harnesses instead.
 - No FFT or spectral processing on hardware yet.
 - ~~CI has never run, so none of the quality claims are mechanically enforced.~~ CORRECTED
-  2026-08-15: it has run 26 times, 19 green and 7 failures, all seven of them pull requests
-  on a feature branch, with every run on main green. The gates are enforced. This line stood
-  for weeks after it stopped being true, which is the failure mode the harnesses in this
-  repository exist to prevent and the one class of claim none of them can reach.
+  2026-08-20: it has run 39 times, 31 green and 8 failures. Seven of the eight are pull
+  requests on a feature branch; the eighth is on main, `863cd43`, the 0.1.8 release commit,
+  where the regenerate-and-diff gate on `llm.txt` went red because the version was bumped
+  after the regenerate step rather than before it. The gates are enforced, and one of them
+  caught a published release. This line said 26 runs with every main run green until
+  2026-08-20, and it stood for weeks before that saying CI had never run at all, which is the
+  failure mode the harnesses in this repository exist to prevent and the one class of claim
+  none of them can reach. The tally is a dated reading, not a fact: check it with
+  `gh run list --workflow=ci.yml --limit 200`.
 
 ## What the research implies, in priority order
 

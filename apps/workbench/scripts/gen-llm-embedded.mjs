@@ -298,30 +298,37 @@ defaults, because the two are compared numerically on every commit.
 
 ## Installing
 
-PlatformIO, from the repository:
+It is in both registries. PlatformIO:
 
-    lib_deps = https://github.com/virgilvox/bellowsjs.git#main
+    lib_deps = virgilvox/Bellows
 
-If you have cloned the monorepo, point lib_extra_dirs at
-packages/bellows-embedded instead. Not on npm, and not meant to be: the npm
-package bellowsjs is the browser library, a different artefact from this.
+Arduino, from the Library Manager, by name, or on the command line:
 
-Arduino IDE: copy packages/bellows-embedded into your sketchbook's libraries/
-folder and rename it Bellows, so the folder matches name=Bellows in
-library.properties. The layout is the Arduino 1.5 format, everything under
-src/, so #include <bellows/engines/drums.h> resolves once installed and
-#include <Bellows.h> pulls in the umbrella header. There are no .cpp files at
+    arduino-cli lib install Bellows
+
+Not on npm, and not meant to be: the npm package bellowsjs is the browser
+library, a different artefact from this. To build against a working copy
+instead, point lib_extra_dirs at packages/bellows-embedded in a clone of the
+monorepo, or take main with
+lib_deps = https://github.com/virgilvox/bellowsjs.git#main.
+
+The layout is the Arduino 1.5 format, everything under src/, so
+#include <bellows/engines/drums.h> resolves once installed. Include
+<Bellows.h> FIRST, before any <bellows/...> header: the Arduino builder
+attributes a sketch's includes to libraries by name, and a nested path alone
+does not tell it which library to put on the include path. Getting that wrong
+is not a warning, it is a sketch that does not compile, and it was true of
+every example in this library until 2026-08-16. There are no .cpp files at
 all, so nothing is archived and dot_a_linkage is deliberately not set.
 
-Two things to know before relying on the IDE path. It has not been tested:
-every build in the repository goes through PlatformIO. And six examples
-include across folders, 11, 12, 13, 15, 16 and 17, each reaching a sibling for
-a shared header such as "../10_AudioShield/audioshield.h". PlatformIO resolves
-that; the IDE preprocesses a sketch into a build directory first, so it may
-not. If one of those six fails there, copy the header next to the sketch.
-
-Not in the Arduino Library Manager: it indexes whole repositories and this is
-one package inside a monorepo.
+The Arduino package and the PlatformIO package are not byte-identical, in one
+respect. Six examples share a patch with a sibling folder, reaching it as
+"../10_AudioShield/audioshield.h" and two of that shape, so that comparing two
+output examples compares converters rather than programs. PlatformIO compiles
+a folder in place and resolves that. The Arduino IDE preprocesses a sketch
+into a build directory first and does not, measured rather than assumed, so
+the Arduino package carries a copy of the header next to each sketch with the
+include rewritten. Everything else is the same file.
 
 ## Build flags
 

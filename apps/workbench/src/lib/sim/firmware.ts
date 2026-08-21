@@ -226,7 +226,7 @@ export const FIRMWARES: Firmware[] = [
     headerName: 'polysynth.h',
     params: [
       { key: 'cutoff', label: 'cutoff', min: 200, max: 8000, step: 10, value: 1800, unit: 'Hz', hint: 'Ladder filter corner.' },
-      { key: 'resonance', label: 'resonance', min: 0, max: 0.95, step: 0.01, value: 0.4, hint: 'Ladder feedback. High values self oscillate.' },
+      { key: 'resonance', label: 'resonance', min: 0, max: 0.95, step: 0.01, value: 0.4, hint: 'Ladder feedback. A tall peak, not an oscillator: the loop stays under unity at every setting.' },
       { key: 'detune', label: 'detune', min: 0, max: 30, step: 0.5, value: 8, unit: 'cents', hint: 'Spread between the two oscillators.' },
     ],
     inputs: [

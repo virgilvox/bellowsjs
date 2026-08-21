@@ -56,9 +56,12 @@ export function colaNorm(winA: Float32Array, winS: Float32Array, hop: number): F
  * Below this the analysis contributed essentially nothing at that offset,
  * so the reciprocal amplifies rounding noise instead of recovering signal.
  * It is also where the cliff is: measured at fftSize 1024 with hann on both
- * sides, hop 1000 keeps every position above the guard and reconstructs to
- * about 2e-5, and hop 1020 puts 17 positions under it and loses those
- * samples outright.
+ * sides, hop 1000 keeps every position above the guard and reconstructs a
+ * full scale 431 Hz sine to a worst error of 8.9e-5 over one second, past the
+ * first three windows, and hop 1020 puts 17 positions under it and loses
+ * those samples outright. Take that 8.9e-5 as the steady state figure: a
+ * single buffer reads lower, and quoting one buffer is how this comment came
+ * to say 2e-5.
  */
 const COLA_GUARD = 1e-6;
 

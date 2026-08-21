@@ -1,6 +1,6 @@
 {
   "name": "Bellows",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Header-only audio synthesis, music theory, and sequencing for 32-bit microcontrollers. The DSP core of bellowsjs, with no allocation and no global registry: include one header and you link one engine.",
   "keywords": [
     "audio",

@@ -15,14 +15,24 @@
  *
  * Nothing runs here. Every check is a static_assert, so a template default
  * that goes back to a literal fails the compile at the second rate instead
- * of quietly under-sizing a buffer. The four units that already read the
- * macro are asserted too, so the next one to drift is caught in the same
- * place rather than in another audit.
+ * of quietly under-sizing a buffer.
+ *
+ * The list is every template in src/bellows that defaults kSampleRate to the
+ * macro, which is nine of them, and it is complete by construction rather
+ * than by intention: `grep -rn "kSampleRate = BELLOWS_SAMPLE_RATE" src` is
+ * the list, and a template missing from it here is a buffer nothing watches.
+ * Two of the nine are the ones this file exists for, Pluck and StereoDelay.
+ * The other seven already read the macro and are asserted anyway, so the next
+ * one to drift back to a literal is caught here rather than in another audit.
+ * An earlier draft of this comment said four, and asserted five units in
+ * total, which is how a gate ends up describing coverage it does not have.
  */
 #include "bellows/config.h"
 #include "bellows/engines/pluck.h"
 #include "bellows/engines/tube.h"
+#include "bellows/engines/waveguide.h"
 #include "bellows/fx/delay.h"
+#include "bellows/fx/dynamics.h"
 #include "bellows/fx/modfx.h"
 #include "bellows/fx/plate.h"
 
@@ -37,5 +47,13 @@ static_assert(bellows::Chorus<>::kLineSamples == (31u * BELLOWS_SAMPLE_RATE + 99
 static_assert(bellows::Plate<>::kStoreSamples ==
                   bellows::plate_detail::TotalSamples(BELLOWS_SAMPLE_RATE, 250),
               "Plate<> does not default its template rate to BELLOWS_SAMPLE_RATE");
+static_assert(bellows::Flanger<>::kLineSamples == (11u * BELLOWS_SAMPLE_RATE + 999u) / 1000u,
+              "Flanger<> does not default its template rate to BELLOWS_SAMPLE_RATE");
+static_assert(bellows::Compressor<>::kMaxLookSamples == (10u * BELLOWS_SAMPLE_RATE) / 1000u,
+              "Compressor<> does not default its template rate to BELLOWS_SAMPLE_RATE");
+static_assert(bellows::Limiter<>::kLatency == (5 * BELLOWS_SAMPLE_RATE + 999) / 1000,
+              "Limiter<> does not default its template rate to BELLOWS_SAMPLE_RATE");
+static_assert(bellows::Waveguide<20>::kMaxSamples == (BELLOWS_SAMPLE_RATE + 19) / 20 + 8,
+              "Waveguide<> does not default its template rate to BELLOWS_SAMPLE_RATE");
 
 int main() { return 0; }

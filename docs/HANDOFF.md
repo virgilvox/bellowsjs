@@ -173,19 +173,19 @@ and no amount of building will tell you. The other half is that nothing has been
 BY EAR: 41 parity rows and 1054 preset values are a strong position and they are
 not the same as having listened to both.
 
-**2. The audit backlog. 35 open, down from 51.** `docs/AUDIT-2.md` has 30 open
-and 5 partial, against 54 closed, 5 refuted and 1 not a defect. Each carries its
+**2. The audit backlog. 36 open, down from 51.** `docs/AUDIT-2.md` has 29 open
+and 7 partial, against 53 closed, 5 refuted and 1 not a defect. Each carries its
 status and evidence under its own heading, so that file is the register and this
 one is not. The figure this entry gave two revisions ago, roughly 73, was wrong
 by 22 and could not be reproduced from any document.
 
-Nineteen of the 35 would change rendered output and are tagged
-`[changes audio]` in the file. Only 4 are still tagged `[under ten minutes]`,
-because 16 of the 20 were closed on 2026-08-20; three of those four were never
-looked at rather than looked at and left. A finding with no tag has been judged
-neither, rather than left unassessed: all 35 carry an explicit verdict on both.
+Twenty of the 36 would change rendered output and are tagged
+`[changes audio]` in the file. Only 3 are still tagged `[under ten minutes]`,
+and none of those three was ever looked at. A finding with no tag has been
+judged neither, rather than left unassessed: all 36 carry an explicit verdict
+on both.
 
-The 19 tagged `[changes audio]` are now the bulk of what is left, and they are
+The 20 tagged `[changes audio]` are now the bulk of what is left, and they are
 the expensive kind: the string waveguide's bass pitch, the `rng` capture
 lifetime, the engine parameters that are silent when misspelled. None of them is
 a ten-minute job and several need a decision rather than a fix.
@@ -202,7 +202,7 @@ fell over, and the pattern in almost all of them was a fix applied to the
 symptom a finding opened with rather than to the cause it named further down.
 Read a finding to its end before calling it closed.
 
-**3. Three findings nobody has looked at.** The 2026-08-20 pass took the twenty
+**3. Three quick findings nobody has looked at.** The 2026-08-20 pass took the twenty
 findings tagged `[under ten minutes]`, investigated each against the tree,
 handed every proposal to a skeptic briefed to refute it, and applied what
 survived: sixteen closed. Three were never reached, because the machine slept
@@ -210,10 +210,18 @@ and that group's agent died mid-response, so they are open for want of a reader
 rather than for want of a fix: the modal glass and wood mode tables having no
 physical source (`docs/AUDIT-2.md`, the provenance one), `voiceLead`'s
 unequal-size branch and its crossing penalty never executing, and
-`Scheduler.rewind()` having no test while sitting on the `b.start()` path. The
-fourth still-tagged one is `SampleZone` against `SamplerZoneData`, which the
-pass reached and partly closed. An hour, and the same shape of work that already
+`Scheduler.rewind()` having no test while sitting on the `b.start()` path. A
+fourth was closed during the 0.1.9 release, by measuring the thing it was about:
+this file's own release ritual had been quoting a bundle size the command no
+longer printed. An hour for the three, and the same shape of work that already
 worked sixteen times.
+
+Two of the sixteen closed that day came back when the day's own work was
+audited: the `Adsr` one had fixed the sentence a finding opens with and left the
+cause it names at the end, and the `defOp` one gates two links of a three-link
+chain. Both are PARTIAL in the register with the reason. Fourteen of sixteen
+survived, which is a better rate than the 38 of 51 on 2026-08-15 and is still
+not a rate to assume.
 
 Worth knowing before starting: the skeptic overturned a byte measurement in the
 first finding it looked at, because the investigator had measured with the 9.2.1
@@ -247,14 +255,15 @@ biting inside the session that was auditing it, and it is fixed now, in
   through `npx`, which prefers the local install and no longer reaches the
   registry.
 - **The hardware CPU figure is gated, and so is a good deal more.** This was
-  entry 7, "nothing to do today beyond knowing it". There was something to do.
+  entry 7: "Nothing to do today beyond knowing it, and changing
+  `docs/HARDWARE.md` first." The second half was right and the first was not.
   `docs/HARDWARE.md` owns the run table and `check-docs.mjs` now parses it and
-  compares every other copy against it, which needed four documents added to the
-  checker that had never been in it: both top-level `README.md` files and two of
-  the site's TypeScript pages. The same pass gated the parity row count in nine
+  compares every other copy against it, which needed five documents added to the
+  checker that had never been in it: both top-level `README.md` files and three
+  of the site's TypeScript pages. The same pass gated the parity row count in nine
   more places and the board support summary in three, deriving the latter by
   counting the build matrix in `examples/README.md` rather than trusting the
-  summaries. 388 figures across 7 documents became 487 across 12.
+  summaries. 388 figures across 7 documents became 542 across 13, after an audit of that work the next day widened it again.
 
   Two things fell out of building it, and both are worth more than the gate:
 
@@ -266,9 +275,9 @@ biting inside the session that was auditing it, and it is fixed now, in
      or a parity residual. A number read off a serial console is not that.
      There is an `exact` flag now and every CPU claim carries it.
   2. **The integer allowance was swallowing counts.** It is plus or minus 16,
-     for byte figures. Adding the 41st parity row left eleven documents saying
-     40 and six of those were already inside the checker, passing, reported as a
-     note. Every count claim is `exact` now, and the first run after that found
+     for byte figures. Adding the 41st parity row left ten documents saying 40
+     across seventeen lines, and six checked rows in four of those documents
+     passed it, reported as a note rather than a mismatch. Every count claim is `exact` now, and the first run after that found
      this file's own WASM argument still quoting the parity and value row
      counts from two revisions back, in a sentence nothing had ever looked at.
      Both figures are corrected and both are gated. That sentence is
@@ -282,7 +291,7 @@ biting inside the session that was auditing it, and it is fixed now, in
   drift silently is the numbers, and every number they share is now checked
   against its source: the CPU figures, the parity and value row counts, and all
   seven board rows against the build matrix. Checked today, the two board tables
-  agree cell for cell and differ only in bold markup and two words on the Daisy
+  agree cell for cell and differ only in bold markup and one word on the Daisy
   row. The remaining prose is still hand-maintained and still worth a glance
   when either is touched.
 - **The Arduino Library Manager listing, and the artifact it serves.** See the
@@ -297,7 +306,7 @@ Kept short. The full record is in the commits.
 - **The three unmeasured examples.** `16_WorkstationPiezo`, `17_WorkstationI2S`
   and `21_Presets` had no size sketch, no README rows and no entry in the `ALL`
   list. All three now have all of it and `check-docs` covered 388 figures at the
-  time, 487 now. Two
+  time, 542 now. Two
   things fell out: 16 and 17 have no logic header at all, so `p14_` and `p15_`
   reconstruct the composition rather than sharing the example's source, the only
   rows in the size table where the number and the code are not the same text;
@@ -325,10 +334,11 @@ Kept short. The full record is in the commits.
 - **The audit count.** 51 open, not 73, with a status and evidence under every
   finding. 13 of 51 claimed closures fell over to skeptics. Now 35, after the
   2026-08-20 pass over the `[under ten minutes]` tag.
-- **Two claims that had outlived their truth.** CI has run, 26 times with 7
-  failures all on a feature branch, and a board has been flashed and heard. Both
-  were stated as hard facts in `docs/KICKOFF.md` for weeks after they stopped
-  being true.
+- **Two claims that had outlived their truth.** CI has run, and a board has
+  been flashed and heard. Both were stated as hard facts in `docs/KICKOFF.md`
+  for weeks after they stopped being true. The correction then went stale in
+  its turn: it said 26 runs with every main run green, and by 2026-08-20 it was
+  39 runs with one main failure, `863cd43`. A tally is a dated reading.
 - **`bellowsjs@0.1.8`**, a documentation release, and the release ritual
   reordered so the version bump precedes the regenerate step rather than
   following it, which is what made 0.1.5 and 0.1.8 both go stale.
@@ -364,8 +374,11 @@ Kept short. The full record is in the commits.
   missing SIMULATOR button; both are shipped. Check with `git rev-list --count origin/main..HEAD`
   rather than trusting this line, which is the sort that goes stale the moment someone
   commits.
-- `bellowsjs@0.1.8` is published on npm and tagged `v0.1.8`, and `main` is current with it. It is
-  a documentation release and the code is byte-identical to 0.1.7: `git diff v0.1.7..v0.1.8 --
+- `bellowsjs@0.1.9` is published on npm and tagged `v0.1.9`, and `main` is current with it. It
+  carries three behaviour fixes, all of them a silent failure becoming a loud one: two window
+  and hop pairs that could not reconstruct and were degrading instead of reporting, and a ramp
+  duration that wedged a slot. `CHANGELOG.md` has the detail.
+  0.1.8 before it was a documentation release whose code was byte-identical to 0.1.7: `git diff v0.1.7..v0.1.8 --
   packages/bellows/src` is empty. It exists because the README is one of the three things the
   tarball ships, alongside `dist` and `LICENSE`, and it did not mention the microcontroller port
   at all. That gap survived a session that had just been asked to fix exactly it, because there
@@ -379,11 +392,15 @@ Kept short. The full record is in the commits.
 - **bellows.live does not catch up on its own, and that has not changed.** The app pulls the
   public repo with a plain `git.repo_clone_url`, so there is no deploy-on-push. Shipping site
   changes takes `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d` after the
-  push, every time. **The site is BEHIND as of 2026-08-20**, and knowing that is the point of
-  this bullet: `735785f` changed six files under `apps/workbench`, including both LLM
-  references and two of the embedded documentation pages, and nothing deployed them. Check
-  with `git diff --name-only <last deployed>..HEAD -- apps/workbench` rather than trusting
-  this line. It was deployed on 2026-08-15 and was current until that commit. See
+  push, every time. **The site was found four days and three commits BEHIND on 2026-08-20**,
+  and knowing that is the point of this bullet. It was last deployed on 2026-08-15 at
+  `9a8e272` and stopped being current the next day at `4ecd02a`, which put `#include
+  <Bellows.h>` into the simulator's source strings; `9269c46` moved the embedded LLM
+  reference to 0.1.1 the same day, and `735785f` changed four more files. The give-away was
+  that `curl -s https://bellows.live/llm-embedded.txt | head -1` returned 0.1.0 while the
+  tree said 0.1.1, which is a one-command check anyone can run and nobody had. Do not trust
+  this line either: run that curl, and
+  `git diff --name-only <last deployed>..HEAD -- apps/workbench`. See
   "Deployment (bellows.live)" below, which has said this all along; an earlier draft of this
   line said the opposite and was wrong.
 - **`packages/bellows-embedded` is published, and the two channels are not live at the same
@@ -395,8 +412,8 @@ Kept short. The full record is in the commits.
   - **Arduino Library Manager: live.** Indexed on 2026-08-20, both tags. This bullet said
     "merged, NOT yet indexed" until then, which was true when written and stopped being true
     three days later without anything in the repository noticing, which is the failure mode this
-    file keeps producing. `library_index.json.gz` now carries 53262 entries and two of them are
-    `Bellows` 0.1.0 and 0.1.1, and `arduino-cli lib search Bellows` resolves against the real
+    file keeps producing. `library_index.json.gz` carries two entries for
+    `Bellows`, 0.1.0 and 0.1.1, and `arduino-cli lib search Bellows` resolves against the real
     index and reports `Provides includes: Bellows.h`. The indexer log exists now and says
     `Release Bellows:0.1.0 already loaded, skipping` for both tags.
 
@@ -421,10 +438,10 @@ Kept short. The full record is in the commits.
     by `#error` because a 4.x has no DAC, which is the documented number. Pass and fail read
     off exit codes, not off stdout, because an earlier sweep grepped for `Used platform`, which
     `arduino-cli` prints on failure too, and called two broken examples fine.
-- Library test suite: 91 files, 1361 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- Library test suite: 91 files, 1364 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
-- Embedded: 43 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All five examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library.
+- Embedded: 51 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All seventeen examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library, except `12_DacOut`, which declines with an `#error` because a 4.x has no DAC. This line said 43 and five until 2026-08-20, while the state section fourteen lines up said 51 and 17.
 - Parity against the TypeScript passes on 41 rows with the PRNG bit exact and the effect input bit exact, plus 428 exactly-compared value rows for the parts that make no sound.
 - The embedded package went through a size pass whose findings are in `docs/HARDWARE.md` under "Making it smaller". Delay buffers are sized exactly rather than rounded to a power of two, which took 25 percent off RAM library-wide with bit-identical output; the oscillator gained per-shape entry points so the linker can drop the residual table a program never reads; and every transcendental now routes through `fm::`, which is what the docs had claimed for months and was not true, so `BELLOWS_FAST_MATH` went from saving nothing on any sketch with an oscillator to saving 23 to 75 percent. Read that section before optimising anything: it also records what was measured and deliberately NOT taken, and why attributing firmware bytes to a header-only library by symbol name does not work.
 
@@ -695,9 +712,11 @@ Run all of them from `packages/bellows-embedded` unless noted.
 
 The last four rows are regenerate-and-diff gates rather than tests, and they are
 the ones a local run keeps missing, because they only fail if you regenerate and
-then look. Item 4 of "Still not done" is about exactly that: they are in
-`ci.yml` and not in the verify block `docs/KICKOFF.md` hands a new session, and
-on 2026-08-15 that gap put a stale file on a published release commit.
+then look. They are in `ci.yml` and, since 2026-08-15, in the verify block
+`docs/KICKOFF.md` hands a new session as well. Before that they were only in CI,
+and that gap put a stale file on a published release commit. This paragraph
+pointed at "item 4 of Still not done" until 2026-08-20, which was the wrong item
+before the list was renumbered and a dangling one after.
 
 | Command | What it proves | What it caught |
 | --- | --- | --- |
@@ -709,7 +728,7 @@ on 2026-08-15 that gap put a stale file on a published release commit.
 | `npm run size` | flash and RAM per sketch, `cortex-m7` or `cortex-m4` | the whole no-registry design argument |
 | `./tools/check-header.sh <h>` | one header compiles standalone, `-Wall -Wextra` | header hygiene; note it instantiates nothing |
 | `node tools/gen-tables.mjs --check` | generated headers match the TypeScript ParamSpecs | new `Eq6` class the moment it appeared |
-| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md`, `docs/ENGINEERING.md`, both near-identical top-level `README.md` files and the site's two embedded pages, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath`, `vitest list`, the board's CPU table and the board build matrix: 487 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
+| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md`, `docs/ENGINEERING.md`, `examples/OUTPUTS.md`, both near-identical top-level `README.md` files and four files under `apps/workbench`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath`, `vitest list`, the board's CPU table and the board build matrix: 542 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 45 of 46 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
 | `npx vitest run test/integration/engine-tuning.test.ts` | every pitched engine plays the note it was given, to 2 cents | proves the fractional-delay tuning is real: an integer-rounded loop is 28 cents flat at E7 |
 | `npm run check:catalogue` (workbench) | the four simulator lists agree: `FIRMWARES`, the `case` labels in `buildVoice`, `VOICE_CAVEATS`, `GROUP_ORDER` | nothing yet; built the day three entries were added, because both failures are silent |
 | `npm run check:presets` (workbench) | all 50 presets render offline: audible, finite, at pitch, naming only registered parameters | nothing yet; the mutation that renames a preset parameter leaves it audible at the right pitch and nothing else catches it |
@@ -729,7 +748,7 @@ Rules learned the hard way about these:
 5. **Sample-wise RMS is the wrong instrument for a time-modulating effect.** The chorus is bit-identical with modulation off, and the modulated row used to drift in proportion to depth. That cause is now fixed (the fixed point phase in Milestone 2 took it from 4e-2 to 2.0e-4), but the principle stands and `chorus_static` is still the row that would actually catch a broken chorus. What remains in the modulated row is the read position, computed in float here and double there.
 6. **A gate that only looks at one frequency is not a gate on an oscillator.** `test/dsp-osc/oscillators.test.ts` measured alias rejection at 2637 Hz only, so a kernel cap could cost 39 dB at 7040 Hz and 73 dB at 17 kHz with the whole repository still green. `test/dsp-osc/blep-frequency.test.ts` now sweeps 55 Hz to 19 kHz with per-frequency floors set from measurement.
 7. **Alias floors do not gate the filter, only its failure.** They look at what is NOT a harmonic, so a wrong Fourier coefficient, a flipped BLAMP drift sign and any change to `CUTOFF` or `KAISER_BETA` all passed everything. The band-edge test in `blep-frequency.test.ts` measures a low note's harmonics against the ideal saw and pins the half-amplitude point at the cutoff, which catches `CUTOFF` moving by 1.2 percent. If you change the kernel, that is the test that should fail first.
-8. **A number in a document rots exactly like a stale generated file.** Four times in one session a change moved a sketch and the tables quoting it were left behind, each caught by hand afterwards. Finding 11 in `docs/AUDIT.md` already said a warning in a document is not a control; the same is true of a figure in one. `tools/check-docs.mjs` is the control, and `ci.yml` runs it on the day CI first runs. It does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the standalone bundle size in the release ritual, and those still rot by hand. When you add a figure to a document, add it there first: the second audit found sixteen document findings and every one of them was a number a command could have printed. Two of that pass's lessons are about the checker rather than the documents. A claim it cannot find is worse than no claim, so it reports a marker that matches nothing instead of passing quietly: a hard rewrap had switched off five prose claims, and a table header whose first cell matched a row marker had switched off a sixth. And the provenance line is load bearing, not decoration: the two `arm-none-eabi-g++` installs on this machine disagree on 36 of the 37 size rows, so the checker now pins the report to the compiler `docs/HARDWARE.md` names rather than to whatever `PATH` offers.
+8. **A number in a document rots exactly like a stale generated file.** Four times in one session a change moved a sketch and the tables quoting it were left behind, each caught by hand afterwards. Finding 11 in `docs/AUDIT.md` already said a warning in a document is not a control; the same is true of a figure in one. `tools/check-docs.mjs` is the control, and `ci.yml` runs it on the day CI first runs. It does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the standalone bundle size in the release ritual, and those still rot by hand. When you add a figure to a document, add it there first: the second audit found sixteen document findings and every one of them was a number a command could have printed. Two of that pass's lessons are about the checker rather than the documents. A claim it cannot find is worse than no claim, so it reports a marker that matches nothing instead of passing quietly: a hard rewrap had switched off five prose claims, and a table header whose first cell matched a row marker had switched off a sixth. And the provenance line is load bearing, not decoration: the two `arm-none-eabi-g++` installs on this machine disagree on 45 of the 46 size rows, so the checker now pins the report to the compiler `docs/HARDWARE.md` names rather than to whatever `PATH` offers.
 9. **You cannot attribute firmware bytes to a header-only library by symbol name.** Three revisions of the same paragraph in `docs/HARDWARE.md` claimed bellows was 31, then 42, then 34.7 percent of a Teensy image, each fixing a different flaw in a method that does not work: bellows code inlines into the sketch's functions and takes the sketch's names, while sketch code that mentions a bellows type takes a bellows-looking one. The claim is withdrawn. If you want to know what a change costs a real image, build the image twice and subtract, which attributes nothing.
 10. **Do not quote wall-clock ns from a microbenchmark as a property of the code.** The same shipping oscillator through two harnesses on one machine gave 22.6 and 59.8 ns per sample at 7040 Hz. Quote the ratio, measure both ends in one process, and prefer a countable quantity: for the BLEP sum that is `2 * KERNEL_HALF * dt` edges, which is exact.
 
@@ -914,8 +933,8 @@ can disagree with the reasoning rather than reopen the question from nothing.
 **The count lives in `docs/AUDIT-2.md` now, not here.** Every finding in it carries
 a status blockquote under its own heading, so the question "is this still open"
 is answered where the finding is rather than in a list somewhere else that has
-to be kept in step. As of 2026-08-15: **43 open, 8 partial, 38 closed, 5
-refuted, 1 not a defect.** Fifty-one genuinely open.
+to be kept in step. As of 2026-08-20: **30 open, 7 partial, 52 closed, 5
+refuted, 1 not a defect.** Thirty-seven genuinely open, down from fifty-one.
 
 That replaces the figure this section carried for ten days, which was 73, and
 which nobody could reproduce. It came from a 2026-08-05 tally of 8 fixed, 8
@@ -1031,8 +1050,9 @@ than defects, so they are the natural next chunk.
 - ~~`gen-tables --check` warns about a stale `dist` and then reads it anyway, so it passes on a
   stale checkout (31).~~ CLOSED. `--check` now exits 2 on a stale `dist` rather than comparing
   against the previous build and calling it ok, and `ci.yml` builds the bundle before running
-  it. Both verified in the tree on 2026-08-15, and `ci.yml` has now run 26 times: green on
-  `f48dbd3` and on every other push to `main`, which is what the sentence here used to deny.
+  it. Both verified in the tree on 2026-08-15, and `ci.yml` has now run 39 times, which is
+  what the sentence here used to deny. One push to `main` has failed, `863cd43`, on the gate
+  this ritual was reordered to satisfy.
 - `chordToRoman` still throws for 6 of the 408 shipped scale and chromatic root pairs: four
   scales have four-semitone gaps, so a root in the middle is more than one accidental from any
   degree. A genuine limit of single-accidental spelling, and the message now says so.
@@ -1125,7 +1145,7 @@ that no local command could, which is the whole argument for it:
    the script never created it. Every document listing it as a verification command was wrong for
    anyone who had not already built.
 3. **The compiler decides the size tables.** The workflow installed GCC 12.3 while the documents
-   record 11.3.1, and 36 of 37 sketches move between toolchains. CI installs PlatformIO's Teensy
+   record 11.3.1, and 45 of 46 sketches move between toolchains. CI installs PlatformIO's Teensy
    toolchain now, the one that builds the actual firmware.
 4. **So does the host.** With the SAME toolchain package and version, Linux comes back exactly 8
    bytes heavier than macOS on five sketches, every RAM figure matching. Byte figures are
@@ -1386,7 +1406,7 @@ hypothetical: it is what 0.1.8 did. The steps are in this order for that reason.
    - `npm run gen:worklet -w packages/bellows` if anything kernel-reachable
      changed.
    - `npm run gen:sim -w apps/workbench` if any embedded example changed.
-4. `npm run build -w packages/bellows`; check `dist/worklet.js` exists and the standalone size is sane. Measure it rather than remembering it: `gzip -9 -c dist/bellows.standalone.js | wc -c` prints **108945 bytes at 0.1.8**, against 108400 after the 2026-08-05 fixes, 106147 before them and about 97 KB at 0.1.0. The 0.1.8 rise is 0.50 percent for a release whose source is byte-identical to 0.1.7, so it is toolchain drift rather than code: worth knowing that this figure moves on its own, and worth not reading a sub-one-percent change as a regression. Compare against the previous release and ask about a jump over roughly ten percent; a fixed threshold from an old version is what turned 97 into a number three releases stale. Nothing checks this one: `check-docs.mjs` cannot, because it needs a built `dist`. Note also that `dist` goes stale against `src` silently (`gen-tables.mjs` warns and reads it anyway), so build before you measure, and before running any pure-library snippet against it.
+4. `npm run build -w packages/bellows`; check `dist/worklet.js` exists and the standalone size is sane. Measure it rather than remembering it, and write the version beside the number, because this figure has twice been quoted from a release three behind: `gzip -9 -c dist/bellows.standalone.js | wc -c` prints **109260 bytes at 0.1.9**, against 108945 at 0.1.8, 108400 after the 2026-08-05 fixes, 106147 before them and about 97 KB at 0.1.0. The 0.1.8 rise was 0.50 percent for a release whose source is byte-identical to 0.1.7, so that one was toolchain drift rather than code, and 0.1.9 adds 0.29 percent for three lines of behaviour and a good deal of comment: worth knowing that this figure moves on its own, and worth not reading a sub-one-percent change as a regression. Compare against the previous release and ask about a jump over roughly ten percent; a fixed threshold from an old version is what turned 97 into a number three releases stale. Nothing checks this one: `check-docs.mjs` cannot, because it needs a built `dist`. Note also that `dist` goes stale against `src` silently (`gen-tables.mjs` warns and reads it anyway), so build before you measure, and before running any pure-library snippet against it.
 5. Run the full verify block, including `npm run check:examples`, `check:embedded`,
    `check:catalogue` and `check:presets` in `apps/workbench`. `check:examples`
    reads the BUILT library, so it needs step 4 first.

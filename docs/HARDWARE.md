@@ -8,7 +8,7 @@ Arduino core and no BSP, so the figures are the library and nothing else.
 
 Read that version as part of the measurement, because the compiler is not interchangeable here.
 This machine has two: 11.3.1 from the Teensy toolchain, which is where every figure below came
-from, and 9.2.1 from the generic one. Running the whole report under both moves 36 of its 37
+from, and 9.2.1 from the generic one. Running the whole report under both moves 45 of its 46
 rows, 11.3.1 first in each pair: `s1_kick` 3760 against 3752, `s4_va` 28640 against 29560,
 `s9c_fm` 5384 against 5800. Two earlier revisions of this line were wrong in different ways: the
 first said the two toolchains were byte identical, which was written from a report that had not
@@ -652,12 +652,22 @@ Each boot draws a fresh seed and composes a different arrangement, so the two ru
 the same piece. That the figures agree across two arrangements is worth more than either
 figure alone.
 
-**These figures are quoted in nine places across six files and not one of them is
-machine-checked**, because no harness prints a number that comes off a serial console.
-This table is the one to change first; the others are `docs/HANDOFF.md` twice,
-`docs/KICKOFF.md`, `packages/bellows-embedded/examples/README.md`, and four spots in
-`apps/workbench`. That spread is a known liability and the reason `check-docs` exists for
-everything it can reach.
+**These figures are quoted in thirteen files, and twelve of them are machine-checked against
+this table.** No harness prints a number that comes off a serial console, so nothing can check
+that 47.3 is what the Teensy said. What `check-docs.mjs` does instead is parse the row above
+and compare every other copy to it, which catches the failure that actually happens: a second
+run is measured, this table gets the new row, and the copies keep the old number. That was the
+state until 2026-08-20, when this paragraph said nine places across six files and not one of
+them checked. Both halves were wrong.
+
+**This table is still the one to change first**, and now the rest follows from it rather than
+from someone remembering. The prose three lines above is compared to the table too, because a
+reader takes the numbers from the argument rather than from the row.
+
+One quoter is deliberately NOT checked: `CHANGELOG.md`, whose 0.1.8 entry records what the
+README said at that release. A changelog is a historical record, so pinning it to the current
+run would force a wrong edit the first time a third measurement lands. If these figures move,
+leave it alone.
 
 WHAT HAS NOT BEEN DONE: nothing else has been flashed to a board and listened to, on either
 platform. Everything is compile-verified, link-verified and numerically verified against the

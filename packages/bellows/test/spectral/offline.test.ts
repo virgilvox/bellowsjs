@@ -4,6 +4,30 @@ import { sine, rms, maxAbs, dominantFreq } from './helpers';
 
 const SR = 44100;
 
+/*
+ * timeStretch is the third overlap-add synthesis path in this library, after
+ * Istft and StftProcessor, and it had the same hole they did: its per-sample
+ * guard `norm[p] > 1e-3` writes a hard zero rather than reporting, which is
+ * correct at the output edges where no frame covers and is a periodic dropout
+ * in the steady state. `hop must be in [1, fftSize]` accepted the dropout.
+ * Measured before the guard, by deleting it and running the call: fftSize 1024
+ * with hop 1024 stretching one second of a 220 Hz sine to two returned 10121
+ * exact zeros in 88200 samples, 11.5 percent of the output.
+ */
+describe('timeStretch refuses a hop it cannot reconstruct', () => {
+  it('throws at hop = fftSize rather than returning a comb', () => {
+    const input = sine(220, SR, SR);
+    expect(() => timeStretch(input, SR, 2, { fftSize: 1024, hop: 1024 })).toThrow(/reconstruct/);
+  });
+
+  it('accepts the default hop and every hop up to half the window', () => {
+    const input = sine(220, SR, SR >> 2);
+    expect(() => timeStretch(input, SR, 2, { fftSize: 1024, hop: 512 })).not.toThrow();
+    expect(() => timeStretch(input, SR, 2, { fftSize: 1024, hop: 256 })).not.toThrow();
+    expect(() => timeStretch(input, SR, 2)).not.toThrow();
+  });
+});
+
 describe('timeStretch', () => {
   it('stretching one second by 2 gives about two seconds of tone', () => {
     const input = sine(440, SR, SR, 0.8);

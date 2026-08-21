@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.1.9
+
+Two lines of behaviour, both of them a silent failure becoming a loud one, plus the gates and
+the documents behind them. `git diff v0.1.8..v0.1.9 -- packages/bellows/src` is about 200 lines
+and all but three of them are comments, a removed type declaration and two casts.
+
+### Fixed
+
+- **`Istft` and `StftProcessor` no longer accept a window and hop that cannot reconstruct.** The
+  overlap-add normaliser divides by the per-position sum of `analysisWindow * synthesisWindow`,
+  and where that sum was at or below 1e-6 it used a reciprocal of zero, which drops those output
+  positions to silence with no error and no warning. `hop = fftSize` with the default Hann window
+  is exactly that case, because a Hann window is zero at both ends. Both constructors now throw,
+  naming the offset and the sum. A hop that reconstructed before reconstructs identically: the
+  normaliser is unchanged for every position above the guard, and every caller inside this
+  library uses `fftSize / 4`.
+- **`timeStretch` had the same hole and now has the same guard.** It is a third overlap-add
+  synthesis path and its documented range accepted `hop = fftSize`, where the result is a comb:
+  measured, stretching one second of a 220 Hz sine at `fftSize` 1024 and `hop` 1024 returned
+  10121 exact zeros in 88200 samples, 11.5 percent of the output.
+- **A parameter ramp with a duration large enough to overflow the frame arithmetic no longer
+  wedges a ramp slot.** `endFrame = frame + round(seconds * sampleRate)` is `Infinity` for
+  `seconds = 1e308` at any real rate, so the slot's end never arrives, the interpolation factor
+  is always zero and the parameter never moves, and the slot is never freed. Thirty-two of those
+  exhaust the table and every later ramp on that kernel silently becomes a jump. `startRamp`
+  refuses a non safe-integer end frame and the caller takes the same immediate-apply path a full
+  table takes. A finite-duration test does not close this: whether a finite duration survives
+  depends on the sample rate, and only that one line holds both terms.
+
+### Changed
+
+- **`TempoPoint` is gone from `src/types.ts`.** It was declared in the contracts file and used by
+  nothing, in a file where a declaration reads as a contract somebody is honouring. It was never
+  re-exported from the package barrel, and the `exports` map admits only `.` and `./worklet.js`,
+  so no supported import path could reach it. It was visible in the shipped `dist/types.d.ts`,
+  and therefore in `llm.txt`, which is why this is a note rather than nothing.
+- **`SamplerZoneData` is no longer bridged to `SampleZone` by an unchecked cast.** The two are
+  field-for-field twins, and the cast is what let them stay twins without anything noticing if
+  one moved. A compile-time assertion now fails the build if their shapes diverge, and the two
+  casts it replaces are gone. No runtime behaviour changes.
+- Several docstrings now say what the code does rather than what it was meant to do. The
+  `LadderFilter` comment claimed self-oscillation near resonance 1; the loop stays under unity at
+  every setting and the comment now gives the measured peak heights instead. `Adsr.set` was
+  documented as safe to call while running, which holds for the three times and not for the
+  sustain level.
+
 ## 0.1.8
 
 A documentation release, and the code is byte-identical to 0.1.7. `git diff v0.1.7..v0.1.8 --

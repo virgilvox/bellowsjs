@@ -22,8 +22,8 @@ Cortex-M7 at \`-Os\` with \`--gc-sections\`, library only: no Arduino core and n
 | 02_DrumMachine | a compile-time Bank, euclidean patterns | 30120 B | 1620 B |
 | 03_PolySynth | VoicePool, a swept filter | 30280 B | 3876 B |
 | 04_ScalesAndTuning | the theory layer, 12-EDO against 19-EDO | 8096 B | 30176 B |
-| 05_MidiInstrument | MIDI byte parsing into a voice pool | 30616 B | 3888 B |
-| 07_Workstation | five engines, a Markov melody, a send bus | 41992 B | 225508 B |
+| 05_MidiInstrument | MIDI byte parsing into a voice pool | 30728 B | 3888 B |
+| 07_Workstation | five engines, a Markov melody, a send bus | 42040 B | 225508 B |
 | 20_Instruments | eleven patches over eight engines, one note source | 47912 B | 49904 B |
 
 Reproduce them with \`./tools/size-report.sh\`, rows \`p4_\` through \`p8_\` and \`p11_\` through \`p13_\`. \`node tools/check-docs.mjs --check\` reads those eight rows back and compares them against the repository's own documents, because four of the first five had drifted before it existed.
@@ -36,7 +36,7 @@ Three of these are worth reading rather than skimming.
 
 **04 is 8096 B of flash** because a plucked string needs no such table, and its 30176 B of RAM is the delay line that IS the string.
 
-**07 is the outlier in both columns, for two different reasons.** Its 41992 B of flash is what reaching almost everything costs: drums, a VA, a plucked string, a delay, an EQ, a limiter, plus the theory and sequencing layers, in one program. Its 225508 B of RAM is one object, a 500 ms stereo delay line at 187 KB. Everything else in it, four strings, the chain, the patterns and the send scratch, comes to under 40 KB together.
+**07 is the outlier in both columns, for two different reasons.** Its 42040 B of flash is what reaching almost everything costs: drums, a VA, a plucked string, a delay, an EQ, a limiter, plus the theory and sequencing layers, in one program. Its 225508 B of RAM is one object, a 500 ms stereo delay line at 187 KB. Everything else in it, four strings, the chain, the patterns and the send scratch, comes to under 40 KB together.
 
 Per module, for sizing your own program:
 

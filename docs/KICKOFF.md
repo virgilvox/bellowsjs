@@ -20,13 +20,16 @@ would take it"), `docs/AUDIT-3.md` (the standard for honesty in this repo).
 
 The 2026-08-15 to 17 sessions closed every bookkeeping item, flashed and
 measured the board, corrected the audit count from a claimed 73 to a measured
-51, released `bellowsjs@0.1.8`, and published the embedded library to the
-Arduino Library Manager and the PlatformIO registry. `docs/HANDOFF.md` under
-"Closed on 2026-08-15 to 17" is the short version.
+51, and published the embedded library to the Arduino Library Manager and the
+PlatformIO registry. The 2026-08-20 session gated the figures thirteen documents
+quote, closed seventeen audit findings, audited its own work and reopened two of
+them, and released `bellowsjs@0.1.9` and `Bellows@0.1.2`. `docs/HANDOFF.md`
+under "Closed on 2026-08-20" is the short version.
 
 Three claims this repository stated as hard facts were false when checked, and
-all three were true when written. CI HAS RUN: 26 times, 19 green and 7 failures,
-all seven on a feature branch. A BOARD HAS BEEN FLASHED AND HEARD, twice.
+all three were true when written. CI HAS RUN: 39 times as of 2026-08-20, 31
+green and 8 failures, seven on a feature branch and one on main. A BOARD HAS
+BEEN FLASHED AND HEARD, twice.
 `llm.txt` claimed to be exact for a version three releases old. Expect more of
 this. **Any sentence in these documents asserting that something has never
 happened is older than it looks: spend the one command it takes.** That is not a
@@ -45,33 +48,43 @@ which no test here covers and no amount of building will tell you. A Teensy 4.0
 is the only part that has run anything; a 3.2 or an LC is the interesting
 question, because neither has a floating point unit and this is a float library.
 
-If you do not: item 2, the 22 audit findings tagged `[changes audio]`. Items 3
-to 7 are an afternoon between them and every one was found by this repository
+If you do not: item 2, the 20 audit findings tagged `[changes audio]`. Item 3
+is an hour and every one of the small ones was found by this repository
 biting someone.>
 
 WHAT IS TRUE TODAY, and each of these is checkable in one command:
 
-- 35 audit findings are open, 30 plus 5 partial. `docs/AUDIT-2.md` is the
+- 36 audit findings are open, 29 plus 7 partial. `docs/AUDIT-2.md` is the
   register: every finding carries a status and its evidence under its own
   heading. Do not re-derive the count from HANDOFF, which points at the file.
-  19 are tagged `[changes audio]` and 4 `[under ten minutes]`. It was 51 on
-  2026-08-15; 16 of the 20 quick ones were closed on 2026-08-20, each one
-  investigated, attacked by a skeptic, applied and verified.
+  20 are tagged `[changes audio]` and 3 `[under ten minutes]`. It was 51 on
+  2026-08-15; 17 of the 20 quick ones were closed on 2026-08-20, each one
+  investigated, attacked by a skeptic, applied and verified. Then that day's
+  own work was audited and two of the sixteen came back as PARTIAL, which is
+  why the arithmetic is 51 minus 17 plus 2.
 - One board, one program, run twice. Nothing has run on a 3.x, an LC, a
   MicroMod or a Daisy, and **nothing has been compared to the browser by ear**.
   41 parity rows, 428 value rows and 1054 preset values stand in for that and
   are not the same thing.
-- `bellowsjs@0.1.8` is on npm, `main` is pushed, CI is green on it, and
-  bellows.live is deployed and current. None of that stays true on its own: the
-  site has no deploy-on-push and needs `doctl` every time.
+- `main` is pushed and CI is green on it. **bellows.live is a separate
+  question and it has been behind before.** The site has no deploy-on-push, so
+  a commit touching `apps/workbench` leaves it stale until someone runs
+  `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`. On
+  2026-08-20 it was found four days and three commits behind, still serving an
+  embedded LLM reference two versions old, while this file said it was current.
+  Check rather than trust:
+  `curl -s https://bellows.live/llm-embedded.txt | head -1` against
+  `head -1 apps/workbench/public/llm-embedded.txt`.
 - The embedded library is INSTALLABLE from both registries, which is a stronger
   claim than published and was checked on 2026-08-20 by installing it: Arduino
   Library Manager as `Bellows`, from the mirror at `virgilvox/bellows-embedded`,
-  and PlatformIO as `virgilvox/Bellows`, both at 0.1.1. `arduino-cli lib install
-  Bellows@0.1.1` into a clean sketchbook, then 16 of 17 examples compiled for a
-  Teensy 4.1, the seventeenth being `12_DacOut` declining by `#error` because a
-  4.x has no DAC. It versions independently of the npm package, 0.1.1 against
-  0.1.8, and has its own release ritual in HANDOFF. Publishing it found that
+  and PlatformIO as `virgilvox/Bellows`. 0.1.2 is the current version; the
+  install-and-compile check was run against the published 0.1.1, where
+  `arduino-cli lib install Bellows@0.1.1` into a clean sketchbook was followed
+  by 16 of 17 examples compiling for a Teensy 4.1, the seventeenth being
+  `12_DacOut` declining by `#error` because a 4.x has no DAC. It versions
+  independently of the npm package, 0.1.2 against 0.1.9, and has its own release
+  ritual in HANDOFF. Publishing it found that
   every example failed to compile once installed, which had been true for the
   whole life of the port and which only installing it could reveal.
 - 13 of 51 claimed audit closures fell over to a skeptic. The pattern was almost
@@ -84,8 +97,8 @@ THE RULES THAT MATTER HERE, learned by being burned:
   see it go red, revert, see it go green. If a mutation does not fire, suspect
   the mutation before the gate.
 - Numbers in documents rot exactly like generated files.
-  `node tools/check-docs.mjs --check` is the control, and it now covers 487
-  figures across 12 documents. Note that only the copy of that number lower
+  `node tools/check-docs.mjs --check` is the control, and it now covers 542
+  figures across 13 documents. Note that only the copy of that number lower
   down this file is machine-checked: the gate matches per line, and this
   copy is wrapped, so it has to be edited by hand.
 - A wrong engine parameter name is silent at every layer of the browser
@@ -116,7 +129,7 @@ THE RULES THAT MATTER HERE, learned by being burned:
 VERIFY, and none of these is optional:
 
 ```
-npm test -w packages/bellows                        1361 tests
+npm test -w packages/bellows                        1364 tests
 npx vue-tsc --noEmit -p apps/workbench              clean
 npm run check:examples -w apps/workbench            49 javascript examples
 npm run check:embedded -w apps/workbench            36 C++ snippets compile
@@ -185,14 +198,14 @@ READ FIRST, in this order, before touching anything:
                         the most time are "The verification harnesses" and "Things that are not
                         obvious from the code".
   3. docs/AUDIT-2.md    the current audit. 95 findings from a whole-repo pass, each carrying a
-                        status blockquote under its heading with the evidence for it: 43 open,
-                        8 partial, 38 closed, 5 refuted, 1 not a defect, as of 2026-08-15.
+                        status blockquote under its heading with the evidence for it: 30 open,
+                        7 partial, 52 closed, 5 refuted, 1 not a defect, as of 2026-08-20.
                         That file is the register. Do not re-derive the count from HANDOFF.
   4. docs/AUDIT.md      the earlier audit, findings 1 to 20. Findings 10 and 11 carry a
                         correction saying CI has never run. The correction is stale and the
-                        claim in it is false: CI has run 26 times, 19 green and 7 failures,
-                        all seven of them pull requests on a feature branch, with every run
-                        on main green. The findings read correctly as written.
+                        claim in it is false: CI has run 39 times as of 2026-08-20, 31
+                        green and 8 failures, seven of them pull requests on a feature branch
+                        and one on main. The findings read correctly as written.
   5. docs/HARDWARE.md   the embedded port, every flash and RAM number, and "Making it smaller",
                         which records what was measured and deliberately NOT taken.
   6. docs/LANDSCAPE.md  what else exists on the web and in hardware, where this library actually
@@ -206,9 +219,11 @@ WHERE THINGS STAND
   green, and the whole suite passing. The file and test counts live in docs/HANDOFF.md and
   nowhere else, because nothing checks them and two copies of a count are two chances to be
   wrong: this prompt used to carry a third and a fourth, and all four disagreed.
-- packages/bellows-embedded is the C++ port. 43 headers, compiling standalone and combined for
-  Cortex-M7 and M4. All five examples plus a bring-up rig build as real Teensy 4.1 firmware, and
-  examples/daisy_onekick links against real libDaisy.
+- packages/bellows-embedded is the C++ port. 51 headers, compiling standalone and combined for
+  Cortex-M7 and M4. All seventeen examples build as real Teensy 4.1 firmware except the one that
+  declines with an #error because a 4.x has no DAC, and examples/daisy_onekick links against real
+  libDaisy. This line said 43 headers and five examples until 2026-08-20, thirteen lines away
+  from another that said 51.
 - Parity passes on 41 rows with the PRNG bit exact, plus 428 exactly-compared value
   rows for the parts that make no sound.
 - BOTH OF THE THINGS THIS SECTION USED TO SAY HAD NOT HAPPENED HAVE NOW HAPPENED, and the
@@ -219,11 +234,16 @@ WHERE THINGS STAND
     47.3 percent running maximum, measured twice on two builds. That is one
     board and one program. Nothing else has been run, and neither implementation has been
     compared to the other by ear.
-    CI HAS RUN, 26 times: 19 green and 7 failures, 11 push, 11 pull_request, 4 manual. All
-    seven failures are pull requests on the milestone-2-and-bringup branch and every run on
-    main is green, most recently f48dbd3. The failures are the part that matters, because a
-    gate nobody has watched fail is a gate nobody should trust and this one has been watched.
-    Check with `gh run list --workflow=ci.yml --limit 200` rather than believing this line.
+    CI HAS RUN, 39 times as of 2026-08-20: 31 green and 8 failures. Seven of the eight are
+    pull requests on the milestone-2-and-bringup branch. THE EIGHTH IS ON MAIN, `863cd43`,
+    the 0.1.8 release commit, where the `llm.txt` regenerate-and-diff gate went red because
+    the version was bumped after the regenerate rather than before. An earlier version of
+    this paragraph said every run on main was green, which was false when it was written and
+    contradicted this repository's own account of that release. The failures are the part
+    that matters, because a gate nobody has watched fail is a gate nobody should trust, and
+    this one has been watched, including on a commit that had already been published.
+    Check with `gh run list --workflow=ci.yml --limit 200` rather than believing this line:
+    it is a dated reading and it has been wrong in both directions.
     The first attempt at this correction said "twelve runs, all green" because it read the
     list at its default limit, which is the same error one line up in a shorter form.
 
@@ -260,7 +280,7 @@ TRAPS THAT WILL BITE YOU, in the order they are likely to
    DSP. This has already happened once. CI would catch it if CI ran.
 2. Every documented number rots. A change moves a sketch and the tables quoting it are left
    behind; that happened four times in one session, and a second audit then found sixteen more.
-   node tools/check-docs.mjs --check is the control, and it now covers 487 figures across
+   node tools/check-docs.mjs --check is the control, and it now covers 542 figures across
    docs/HARDWARE.md, the embedded README, examples/README.md, docs/HANDOFF.md, docs/ENGINEERING.md,
    this file, both top-level READMEs and two of the site's TypeScript pages, against the size report, the sketch symbol tables, parity, tables, fastmath and
    vitest list.
@@ -268,7 +288,7 @@ TRAPS THAT WILL BITE YOU, in the order they are likely to
    capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release
    ritual. If you write a figure a command can print, add it to check-docs.mjs in the same
    commit. Note that it pins the ARM toolchain to the version docs/HARDWARE.md names: the two
-   installed on this machine disagree on 36 of the 37 size rows, so a report run under the other
+   installed on this machine disagree on 45 of the 46 size rows, so a report run under the other
    one looks like a repository-wide regression and is not one.
 3. Never add a global registry to the C++ port. One kick through a string-keyed registry of five
    engines costs 30488 bytes of flash and 30872 of RAM against 3760 and 1100 direct.
@@ -324,8 +344,9 @@ BELLOWS_SAMPLE_RATE claims to size delay lines and pluck loops and those two har
 
 ```
 OBJECTIVE: DONE, and kept here because the shape of it recurs. ci.yml is on the default
-branch and has run 26 times, 19 green and 7 failures, all seven of them pull requests on a
-feature branch. Every run on main is green. The sentences in docs/AUDIT.md and
+branch and has run 39 times as of 2026-08-20, 31 green and 8 failures, seven of them pull
+requests on a feature branch and one on main, the 0.1.8 release commit. The sentences in
+docs/AUDIT.md and
 docs/HANDOFF.md that said CI had never run were corrected on 2026-08-15, after sitting there
 as hard facts for weeks past the point they stopped being true. If you are looking for work
 of this kind, the general form is: grep the documents for a sentence asserting an absence,
@@ -418,7 +439,7 @@ because the third depends on the first two.
    KeepAlive means onDeactivated matters.
 
 VERIFY, and none of these is optional:
-  npm test -w packages/bellows                          1361 tests
+  npm test -w packages/bellows                          1364 tests
   npm run typecheck -w apps/workbench                   vue-tsc
   npm run check:examples -w apps/workbench              the 49 site examples still resolve
   npm run gen:sim -w apps/workbench && git diff --exit-code -- apps/workbench/src/lib/sim/sources.gen.ts
