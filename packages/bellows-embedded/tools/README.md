@@ -1,6 +1,6 @@
 # tools
 
-Three scripts. Run all of them from `packages/bellows-embedded`.
+Run every script here from `packages/bellows-embedded`.
 
 ## gen-tables.mjs
 
@@ -86,6 +86,31 @@ as a syntax check. A header is not done until this is clean.
 ./tools/check-header.sh bellows/fx/delay.h bellows/fx/saturator.h
 ```
 
+## check-params.mjs
+
+Compares each C++ `struct Params` default against the TypeScript ParamSpec
+default it was hand-copied from, and exits 1 on any disagreement. It reads
+`src/bellows/params.gen.h` for both the TypeScript number and the C++ field
+name the generator matched it to, so the JS-name to C++-field mapping is not
+written a second time here.
+
+```
+node tools/check-params.mjs
+```
+
+`npm run params:check` is the same thing. It reports three shapes of drift: a
+default that no longer matches, a field `params.gen.h` maps to that no longer
+exists, and a default written in a form the tool cannot read as a number,
+which would otherwise go unchecked in silence.
+
+What it did not compare is printed too, and two of those counts are checked
+rather than reported. Params that fold into an array field (`ratio1..ratio6`
+into `ratio[]`) and params with no C++ field at all are counted and skipped;
+the rows read per block are compared against the count the block header
+states, and the blocks parsed against the blocks present. Without those two
+the tool passes while reading nothing, which is the failure a checker cannot
+report on its own.
+
 ## size-report.sh
 
 Builds every sketch in `test/sketches` freestanding, with no Arduino core and
@@ -94,3 +119,12 @@ numbers the library's size claims rest on. It takes an optional target
 (`cortex-m7` by default, also `cortex-m4`, `cortex-m33`, `cortex-m0plus`).
 Because it compiles the whole sketch directory into one shared build tree, do
 not run it while someone else is adding sketches.
+
+The compiler is part of the measurement: the rows move between GCC 11.3.1 and
+9.2.1, so the script picks one rather than taking whatever turns up first.
+Order: `BELLOWS_CXX`, then `arm-none-eabi-g++` on `PATH`, then the install
+under `~/.platformio/packages` whose `-dumpversion` matches the version
+`docs/HARDWARE.md` names, then the first install in sorted order with a
+warning on stderr. The second line of the report says which one it used, and
+`check-docs.mjs` reads that line back and refuses to compare figures against a
+report from a different compiler.

@@ -200,10 +200,18 @@ Status: open, bounded, worth fixing when MIDI file playback lands.
   `play()` for the life of the page.
 - `defOp` evaluates a string with `new Function`. That is documented for CSP reasons, and it is
   also an eval sink: an application that lets users author `defEngine` bodies has given them
-  code execution in the worklet realm. Worth an explicit line in the tier 3 documentation.
+  code execution. Not only in the worklet realm, which is what this finding first said and what
+  the correction is: `render()` replays the setup log through `renderOffline` on the calling
+  thread, so the same string is evaluated again on the main thread, next to DOM, fetch, cookies
+  and localStorage. Worth an explicit line in the tier 3 documentation.
 - `engines/soundfont.ts` imports types from `io/sf2` and `io/sfz`, which runs against the stated
-  dependency direction. It is type-only, so it costs nothing at runtime, but it is the one place
-  the layering rule is bent.
+  dependency direction. It is type-only, so it costs nothing at runtime. It was recorded here as
+  the one place the layering rule is bent, and that was wrong twice over: `core/scheduler.ts`
+  imports the `Transport` type from `seq/transport` in the same shape, and `core/register.ts` held
+  22 runtime imports from `engines/` and `fx/` until it moved to `src/register.ts` beside the
+  facade. What is left is three type-only upward imports across two files, all erased at compile
+  time, and `packages/bellows/test/integration/layering.test.ts` now names those three, fails on a
+  fourth, and fails on any upward import from a subdirectory of `src/` that survives to runtime.
 
 ### 10. No CI
 
@@ -359,9 +367,15 @@ is the kind of observation that sends someone hunting a phantom.
   nothing observable changed. It is the more useful semantic and it is a real difference.
 - `createBus`, `registerBank`, `registerGrain` and `defOp` are not collapsed, which is correct for
   one-shot loads but still grows for an app that creates a bus per reforge.
-- Param ramps advance at block granularity, so one shorter than a block lands on its destination
-  immediately, and a ramp on a parameter the pool has never held a value for applies at once
-  because there is no starting point to glide from.
+- Param ramps advance at block granularity, and the block a ramp starts in is not one of the
+  blocks it moves in: `advanceRamps(blockStart)` runs at the top of `process()`, before that
+  block's events are applied, so no slot exists yet when the pass goes by. The parameter holds
+  its old value for the whole of the starting block and the destination arrives at the top of
+  the next one. A ramp shorter than a block therefore lands one block late (2.7 ms at 48k with
+  128 frames), not immediately, which is what this line used to claim. Measured and pinned by
+  'lands a sub-block ramp one block late' in `packages/bellows/test/kernel/paramramp.test.ts`.
+  A ramp on a parameter the pool has never held a value for does still apply at once, because
+  there is no starting point to glide from.
 - `SetupLog` is exported from the public index. It is an implementation detail of the facade;
   `VoicePool` set the precedent, but trimming both would keep the public surface honest.
 - The small items in finding 9.

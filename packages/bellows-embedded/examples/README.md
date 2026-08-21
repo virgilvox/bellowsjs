@@ -48,12 +48,12 @@ against a fixed voice budget. See `00_BringUp/README.md`.
 | 02_DrumMachine | a compile-time Bank, euclidean patterns | 30120 B | 1620 B |
 | 03_PolySynth | VoicePool, a swept filter | 30280 B | 3876 B |
 | 04_ScalesAndTuning | the theory layer, 12-EDO against 19-EDO | 8096 B | 30176 B |
-| 05_MidiInstrument | MIDI byte parsing into a voice pool | 30616 B | 3888 B |
+| 05_MidiInstrument | MIDI byte parsing into a voice pool | 30728 B | 3888 B |
 | 07_Workstation | five engines, a Markov melody, a send bus | 42040 B | 225508 B |
 | 16_WorkstationPiezo | 07 through the piezo voicing chain | 42712 B | 230804 B |
 | 17_WorkstationI2S | 07 summed to mono, and a composed arrangement | 42488 B | 225508 B |
 | 20_Instruments | eleven patches over eight engines, one note source | 47912 B | 49904 B |
-| 21_Presets | all 50 presets, eleven engines in one image | 137176 B | 257036 B |
+| 21_Presets | all 50 presets, eleven engines in one image | 137240 B | 257036 B |
 
 The output examples share one patch, `10_AudioShield/audioshield.h`, so
 that comparing them compares converters rather than programs. Its cost and

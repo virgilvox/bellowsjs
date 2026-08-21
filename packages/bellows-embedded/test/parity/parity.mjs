@@ -130,6 +130,30 @@ const GATES = {
   // nothing amplifies it. A morph error large enough to be a transcription
   // fault rather than a rounding slip (1 percent) does trip it.
   additive_morph: { rel: 1.1e-3, abs: 6.2e-4, note: 'stretch, cents, morph, Nyquist cut' },
+  // The same params again with morph off the halfway point, and it is here
+  // because of what morph = 0.5 cannot see. The lerp is
+  // lvl = a + (b - a) * morph, so at exactly 0.5 the weight is its own
+  // reflection: a port that wrote 1 - morph, which is the likeliest way to
+  // transcribe this line wrong, renders a note the row above cannot tell
+  // from a correct one. Mutating additive.h:197 to (1.0f - morph) leaves
+  // additive_morph at 1.12e-4, its usual figure, passing. This row goes to
+  // 5.50e-1, about 5100 times its own baseline.
+  //
+  // The `additive` row does fail on that same mutation, and that is luck
+  // rather than cover: its morph is the default 0, so inverting the weight
+  // sends it to 1, the largest move available. It is the default-record row
+  // and not a morph test, so anything that later gives that record a morph
+  // value takes the coverage away with no warning. 13/16 is dyadic, so the
+  // weight here is the same number in float and in double before the engine
+  // touches it.
+  //
+  // measured 1.07e-4 / 6.52e-5, gates at ten times each. This does not close
+  // the sensitivity note above, and nothing in the amplitude domain can: a
+  // 0.1 percent error in a lerp weight moves the levels by 0.1 percent and
+  // nothing amplifies it, so it will always sit near a 1e-4 baseline. What
+  // these two rows together pin is the DIRECTION and the ENDPOINTS of the
+  // morph, which is where a transcription fault actually lands.
+  additive_morph_hi: { rel: 1.07e-3, abs: 6.5e-4, note: 'morph off the symmetric point, pins direction' },
   // Rel RMS is 1.7e-3. The abs gate is looser because the 0.4 percent of
   // samples that exceed it sit on the waveform's steep edges, spaced twice
   // per period at 220 Hz, where a sub-sample timing difference reads as a
@@ -518,6 +542,7 @@ async function renderTs(voice, frames, freq, vel) {
     harmonic: [join(src, 'engines/harmonic.ts'), 'harmonicEngine'],
     additive: [join(src, 'engines/additive.ts'), 'additiveEngine'],
     additive_morph: [join(src, 'engines/additive.ts'), 'additiveEngine'],
+    additive_morph_hi: [join(src, 'engines/additive.ts'), 'additiveEngine'],
     tube: [join(src, 'engines/waveguide.ts'), 'tubeEngine'],
     waveguide: [join(src, 'engines/waveguide.ts'), 'stringEngine'],
     wavetable: [join(src, 'engines/wavetable.ts'), 'makeWavetableEngine'],
@@ -643,6 +668,21 @@ const VOICE_PARAMS = {
    * constant at 0.1 s, long enough that partial 26 is still ringing at the
    * end of the render rather than having decayed out of the measurement.
    */
+  /* Identical to additive_morph except for the weight. Kept as a separate
+   * literal rather than spread from it, because the C++ side mirrors these
+   * by hand and a reader comparing the two files should see both lists. */
+  additive_morph_hi: {
+    morph: 0.8125,
+    inharm: 0.015625,
+    decay: 3,
+    rolloff: 0.875,
+    attack: 0.00390625,
+    release: 0.25,
+    gain: 0.75,
+    detune2: 7,
+    detune3: -5,
+    detune5: 12,
+  },
   additive_morph: {
     morph: 0.5,
     inharm: 0.015625,

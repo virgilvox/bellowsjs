@@ -9,5 +9,8 @@
     "test": "npm run test -w packages/bellows",
     "build": "npm run build -w packages/bellows",
     "dev": "npm run dev -w apps/workbench"
+  },
+  "devDependencies": {
+    "vite-node": "^6.0.0"
   }
 }

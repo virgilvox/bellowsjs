@@ -53,6 +53,42 @@ describe('Adsr', () => {
     expect(env.active).toBe(true);
   });
 
+  /*
+   * The two halves of what set() documents. Sustain is a level and lands on
+   * the next sample; the times are rates and bend the curve without moving
+   * it. Smoothing the sustain step inside Adsr would be a change to the
+   * contract, not a bug fix: callers who need a glide have Smoother in the
+   * same file.
+   */
+  it('a sustain change while sustaining lands on the very next sample', () => {
+    const env = new Adsr(SR);
+    env.set(0.001, 0.005, 0.8, 0.1);
+    env.trigger();
+    for (let n = 0; n < Math.round(0.1 * SR); n++) env.next();
+    expect(env.level).toBe(0.8);
+    env.set(0.001, 0.005, 0.2, 0.1);
+    expect(env.next()).toBe(0.2);
+  });
+
+  it('a release time change while releasing bends the curve without stepping the level', () => {
+    const env = new Adsr(SR);
+    env.set(0.001, 0.01, 0.7, 0.5);
+    env.trigger();
+    for (let n = 0; n < Math.round(0.05 * SR); n++) env.next();
+    env.release();
+    for (let n = 0; n < Math.round(0.05 * SR); n++) env.next();
+    const before = env.level;
+    env.set(0.001, 0.01, 0.7, 0.05);
+    const after = env.next();
+    // The very next sample moves by the new one-pole coefficient and by
+    // nothing else: 1 - exp(-ln(100) / (0.05 * SR)) is 1.917e-3, ten times
+    // the 1.919e-4 the old 0.5 s release was using. A loose upper bound
+    // here would pass a set() that ignored the release argument entirely.
+    const frac = (before - after) / before;
+    expect(frac).toBeGreaterThan(1.5e-3);
+    expect(frac).toBeLessThan(2.5e-3);
+  });
+
   it('release decays monotonically to idle within a few release times', () => {
     const env = new Adsr(SR);
     env.set(0.005, 0.05, 0.8, 0.1);

@@ -178,9 +178,27 @@ export class LadderFilter {
   }
 
   /**
-   * cutoffHz in Hz, resonance 0..1 (self-oscillation near 1), drive >= 1
-   * saturates harder. A call carrying any non-finite argument is ignored
-   * whole: see the header.
+   * cutoffHz in Hz, resonance 0..1, drive >= 1 saturates harder. A call
+   * carrying any non-finite argument is ignored whole: see the header.
+   *
+   * Resonance across 0..1 is a peak, not an oscillator. An impulse always
+   * decays there, because k tops out at 4, the feedback reads s4 one sample
+   * late at the internal 2x rate, and the half input compensation below
+   * subtracts part of the drive back out, which together hold the loop
+   * under unity.
+   *
+   * How tall the peak is depends on both cutoff and level, because every
+   * stage sits inside a tanh. Driven quietly enough to stay linear, the
+   * response at cutoff at resonance 1 is about 35 dB at 125 Hz, 21 dB at
+   * 1 kHz and 5 dB at 8 kHz; driven with a full scale sine the same
+   * setting reads about 2.8 dB above its resonance 0 value at every
+   * cutoff. Measured with the responseDb helper in
+   * test/dsp-filt/filters.test.ts.
+   *
+   * The clamp accepts up to 1.05 as headroom. At the top of that headroom
+   * the loop does hold on, at 1.05 for cutoffs up to about 700 Hz and at
+   * 1.02 only up to about 250, but nothing above 1 is specified and
+   * nothing in the library passes it. For a sine, use an oscillator.
    */
   set(cutoffHz: number, resonance: number, drive = 1): void {
     if (!Number.isFinite(cutoffHz) || !Number.isFinite(resonance) || !Number.isFinite(drive)) return;

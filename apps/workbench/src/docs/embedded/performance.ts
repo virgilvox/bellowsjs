@@ -185,7 +185,7 @@ It has been run twice, on two builds and two arrangements, and the numbers above
 
 - **No other board has run anything.** A Teensy 3.2 and an LC have no floating point unit and emulate every float operation in software; whether they keep up is unknown. A Daisy Seed has been linked to a complete firmware image and never run.
 - **No other program has been measured.** One patch on one board is one data point. The output examples, the instrument set and the polysynth are all compile-verified and link-verified only.
-- **Nothing has been compared by ear.** The numerical comparison against the TypeScript, 40 engine and effect rows plus 428 exactly-compared value rows, stands in for that and is not the same thing.
+- **Nothing has been compared by ear.** The numerical comparison against the TypeScript, 41 engine and effect rows plus 428 exactly-compared value rows, stands in for that and is not the same thing.
 
 A build matrix proves that code is valid for a part and fits in its memory. It says nothing about keeping up. Every cell of the board table in [On hardware](/docs/on-hardware) is a link, not a run.
 

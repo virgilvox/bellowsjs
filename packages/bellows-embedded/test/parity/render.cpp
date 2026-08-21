@@ -291,6 +291,24 @@ int main(int argc, char** argv) {
     p.detune[4] = 12.0f;
     v.Init(sr, p);
     RenderVoice(v, frames, freq, vel);
+  } else if (strcmp(which, "additive_morph_hi") == 0) {
+    /* additive_morph with the weight off the halfway point. At morph = 0.5
+     * the lerp is symmetric, so writing 1 - morph here renders the same note
+     * and that row cannot see it. See the comment on the gate in parity.mjs. */
+    static bellows::Additive<32> v;
+    bellows::Additive<32>::Params p;
+    p.morph = 0.8125f;
+    p.inharm = 0.015625f;
+    p.decay = 3.0f;
+    p.rolloff = 0.875f;
+    p.attack = 0.00390625f;
+    p.release = 0.25f;
+    p.gain = 0.75f;
+    p.detune[1] = 7.0f;
+    p.detune[2] = -5.0f;
+    p.detune[4] = 12.0f;
+    v.Init(sr, p);
+    RenderVoice(v, frames, freq, vel);
   } else if (strcmp(which, "formant") == 0) {
     rng.Init(LabelFromEnv("parity"));
     bellows::Formant v;

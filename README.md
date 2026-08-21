@@ -142,7 +142,7 @@ AudioWorklet is required (Chrome 66+, Firefox 76+, Safari 14.1+). Web MIDI is Ch
 The same DSP core is also a header-only C++17 library for 32-bit
 microcontrollers: **[packages/bellows-embedded](packages/bellows-embedded/README.md)**.
 Not a rewrite and not a subset that drifted. The C++ is diffed against this
-library on every commit: 40 engine and effect rows rendered from both sides and
+library on every commit: 41 engine and effect rows rendered from both sides and
 compared sample by sample, 428 exactly-compared value rows for the parts that
 make no sound, and all 50 instrument presets compared value by value, 1054 of
 them, with the PRNG bit exact.

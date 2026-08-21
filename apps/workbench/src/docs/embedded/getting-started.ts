@@ -7,7 +7,7 @@ const page: DocPage = {
   prev: null,
   next: 'emb-program-shape',
   body: `
-The same DSP that runs in this browser also runs on a microcontroller. \`bellows-embedded\` is the C++17 port: header only, nothing allocates, nothing self-registers, and every engine is compared numerically against the TypeScript on every commit (40 engine and effect rows with the PRNG bit exact, plus 428 exactly-compared value rows).
+The same DSP that runs in this browser also runs on a microcontroller. \`bellows-embedded\` is the C++17 port: header only, nothing allocates, nothing self-registers, and every engine is compared numerically against the TypeScript on every commit (41 engine and effect rows with the PRNG bit exact, plus 428 exactly-compared value rows).
 
 By the end of this page you will have the library installed, one sketch built, and one kick drum playing out of a board.
 

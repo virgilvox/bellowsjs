@@ -94,6 +94,11 @@
  * make every sketch able to include an example by accident. */
 #include "../../examples/00_BringUp/bringup.h"
 
+/* The flagship MIDI example. It is here because its pitch wheel is the one
+ * behaviour in the tree that neither the size report nor a parity row can
+ * see: both build the image without ever sending it a bend. */
+#include "../../examples/05_MidiInstrument/midiinstrument.h"
+
 namespace {
 
 constexpr int kBlock = 128;
@@ -482,6 +487,67 @@ void CheckLfoSampleHold() {
 
   printf("  ok %-14s %d holds, span %.2f, tremolo gain %.2f..%.2f\n", "Lfo S+H", steps,
          static_cast<double>(hi - lo), static_cast<double>(gmin), static_cast<double>(gmax));
+}
+
+/* ------------------------------------------------------------------ */
+/* 05_MidiInstrument, with the wheel actually moved                     */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The example's header comment said bend retunes every sounding voice once
+ * per block. It did not: bend_ratio_ was read only by HzOf, and HzOf was
+ * called only from the note-on branch, so moving the wheel over a held
+ * chord did nothing at all until the next note.
+ *
+ * Two instruments, seeded identically and driven identically, except that
+ * one gets a pitch bend after the note is already sounding. Rendering them
+ * against each other is the only assertion that can tell the difference: an
+ * instrument that ignores the wheel produces a bit-identical stream, so the
+ * difference below is exactly zero when the retune is missing.
+ */
+void CheckMidiBend() {
+  const int before = g_failures;
+  auto* plain = new midiinstrument::Instrument();
+  auto* bent = new midiinstrument::Instrument();
+  plain->Init(kDesignRate);
+  bent->Init(kDesignRate);
+
+  const uint8_t note_on[3] = {0x90, 60, 100};
+  /* 0x00, 0x7F is the top of the 14 bit range, so a full two semitones up. */
+  const uint8_t wheel_up[3] = {0xE0, 0x00, 0x7F};
+  plain->HandleBytes(note_on, 3);
+  bent->HandleBytes(note_on, 3);
+
+  float al[kBlock], ar[kBlock], bl[kBlock], br[kBlock];
+  for (int i = 0; i < kBlock; ++i) al[i] = ar[i] = bl[i] = br[i] = 0.0f;
+  (*plain)(al, ar, 0, kBlock);
+  (*bent)(bl, br, 0, kBlock);
+
+  bent->HandleBytes(wheel_up, 3);
+
+  float diff = 0.0f;
+  float energy = 0.0f;
+  for (int blk = 0; blk < 8; ++blk) {
+    for (int i = 0; i < kBlock; ++i) al[i] = ar[i] = bl[i] = br[i] = 0.0f;
+    (*plain)(al, ar, 0, kBlock);
+    (*bent)(bl, br, 0, kBlock);
+    for (int i = 0; i < kBlock; ++i) {
+      diff += fabsf(al[i] - bl[i]);
+      energy += fabsf(al[i]);
+    }
+  }
+  Check(energy > 1.0f, "the held note is still sounding when the wheel moves", energy, 1.0f);
+  Check(diff > 0.01f * energy, "moving the wheel over a held note changes the audio", diff,
+        0.01f * energy);
+  Check(bent->ActiveCount() == 1, "and it does not restart or steal the voice",
+        static_cast<float>(bent->ActiveCount()), 1.0f);
+
+  if (g_failures == before) {
+    printf("  ok %-14s difference %.1f against energy %.1f\n", "MIDI bend",
+           static_cast<double>(diff), static_cast<double>(energy));
+  }
+  delete plain;
+  delete bent;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1233,6 +1299,7 @@ int main() {
   CheckOversamplerBound();
   CheckLfoSampleHold();
   CheckKernelSchedule();
+  CheckMidiBend();
   CheckBringUpStages();
   CheckBringUpUnderRenderThread();
 

@@ -11,10 +11,12 @@
     "fastmath": "mkdir -p test/parity/build && c++ -std=c++17 -O2 -Wall -Wextra -DBELLOWS_FAST_MATH=1 -I src test/parity/fastmath_test.cpp -o test/parity/build/fastmath && test/parity/build/fastmath",
     "memsafety": "mkdir -p test/safety/build && c++ -std=c++17 -O1 -g -Wall -Wextra -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -I src test/safety/memsafety.cpp -o test/safety/build/memsafety && test/safety/build/memsafety",
     "memsafety:fastmath": "mkdir -p test/safety/build && c++ -std=c++17 -O1 -g -Wall -Wextra -DBELLOWS_FAST_MATH=1 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -I src test/safety/memsafety.cpp -o test/safety/build/memsafety_fm && test/safety/build/memsafety_fm",
+    "ratecheck": "c++ -std=c++17 -Wall -Wextra -fsyntax-only -I src test/safety/ratecheck.cpp && c++ -std=c++17 -Wall -Wextra -fsyntax-only -DBELLOWS_SAMPLE_RATE=96000 -I src test/safety/ratecheck.cpp",
     "tables": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/tables.mjs",
     "tables:check": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/tables.mjs --check",
     "presets": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/presets.mjs",
     "presets:check": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/presets.mjs --check",
+    "params:check": "node tools/check-params.mjs",
     "check:package": "node tools/check-package.mjs"
   }
 }

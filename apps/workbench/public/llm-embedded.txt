@@ -285,6 +285,7 @@ template <class V, int kPoly>
 class VoicePool
   public:
     V& at(int i)
+    int NoteIdAt(int i) const
     void NoteOn(int note_id, float freq, float vel, uint32_t frame)
     void NoteOff(int note_id)
     void Process(float* l, float* r, int from, int to)
@@ -750,7 +751,7 @@ class Modal
 ### bellows/engines/pluck.h
 Transcription of src/engines/pluck.ts.
 
-template <int kMinFreqHz = 20, int kSampleRate = 48000>
+template <int kMinFreqHz = 20, int kSampleRate = BELLOWS_SAMPLE_RATE>
 class Pluck
   Params:
     float damp = 0.35f
@@ -811,6 +812,7 @@ class Va
     void Init(float sample_rate, Rng* rng)
     void Init(float sample_rate, Rng* rng, const Params& p)
     void SetParams(const Params& p)
+    void SetFreq(float freq)
     void NoteOn(float freq, float vel)
     void NoteOff()
     void Process(float* l, float* r, int from, int to)
@@ -930,7 +932,7 @@ class StereoDelayExt
     void Process(float* l, float* r, int from, int to)
     void Reset()
 
-template <uint32_t kMaxMs = 500, uint32_t kSampleRate = 48000>
+template <uint32_t kMaxMs = 500, uint32_t kSampleRate = BELLOWS_SAMPLE_RATE>
 class StereoDelay
   public:
     void Init(float sample_rate)

@@ -293,7 +293,7 @@ export class Bellows {
   /** Build a sampler instrument from a parsed or raw SF2 preset. */
   sf2Instrument(data: ArrayBuffer | SoundFont, bank: number, program: number): Instrument {
     const sf = data instanceof SoundFont ? data : SoundFont.parse(data);
-    const zones = samplerBankFromSf2(sf, bank, program).zones as SamplerZoneData[];
+    const zones = samplerBankFromSf2(sf, bank, program).zones;
     return this.samplerInstrument(zones, 'sf2-' + bank + '-' + program + '-' + this.nextChannel);
   }
 

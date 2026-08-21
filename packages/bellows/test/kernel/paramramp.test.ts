@@ -91,6 +91,28 @@ describe('kernel param ramps', () => {
     expect(at(left, 0.15)).toBeCloseTo(0.875, 2);
   });
 
+  it('lands a sub-block ramp one block late, not inside the block it starts in', () => {
+    // Block granularity costs a block of latency at the start, and
+    // docs/AUDIT.md described that as landing "immediately" until it was
+    // measured. advanceRamps(blockStart) runs at the top of process(), before
+    // the block's events are applied, so the block the ramp starts in has no
+    // slot to advance and renders whole at the old value; the destination
+    // arrives at the top of the next block.
+    const BLOCK = 128; // KernelEngine's default blockSize
+    const start = 3 * BLOCK + 40; // mid block
+    const msgs = setup([
+      // 40 frames, well under a block, so the ramp is over inside block 3
+      { time: start / SR, kind: EventKind.ParamRamp, target: 0, a: AMP, b: 1, c: 40 / SR },
+    ]);
+    const { left } = render(msgs, 0.02);
+    // every sample of the starting block still reads the old value, including
+    // the ones after the event frame and after the ramp's own end frame
+    expect(left[start + 1]).toBeCloseTo(0.5, 6);
+    expect(left[4 * BLOCK - 1]).toBeCloseTo(0.5, 6);
+    // and the first sample of the next block is already the destination
+    expect(left[4 * BLOCK]).toBeCloseTo(1, 6);
+  });
+
   it('applies immediately when the duration is zero or negative', () => {
     for (const c of [0, -1]) {
       const msgs = setup([
@@ -261,6 +283,50 @@ describe('kernel param ramps', () => {
     for (let id = 0; id < RAMP_SLOTS; id++) msgs.push({ type: 'channelGain', id, gain: 0 });
     const { left } = render(msgs, 0.3);
     // mid ramp it is between the two ends, not already parked on 1
+    expect(at(left, 0.15)).toBeGreaterThan(0.5);
+    expect(at(left, 0.15)).toBeLessThan(0.99);
+    expect(at(left, 0.29)).toBeCloseTo(1, 5);
+  });
+
+  it('refuses a ramp whose end frame overflows, and applies the destination at once', () => {
+    // The applyEvent guard tests the input; this tests what the input becomes.
+    // 1e308 is a finite number of seconds, and 1e308 * 48000 is Infinity, so
+    // endFrame was Infinity and the slot wedged exactly as it did for Infinity
+    // itself. 1e300 stays finite at 4.8e304 and wedges just as hard, because
+    // no render reaches that frame. Reachable as
+    // rampParam(name, value, { seconds: 1e308 }): the facade passes the object
+    // form through unvalidated, and it cannot do better, because whether a
+    // finite duration overflows depends on a sample rate it does not know.
+    for (const c of [1e308, 1e300]) {
+      expect(Number.isFinite(c)).toBe(true);
+      const msgs = setup([
+        { time: 0.01, kind: EventKind.ParamRamp, target: 0, a: AMP, b: 0.25, c },
+      ]);
+      const { left } = render(msgs, 0.05);
+      expect(at(left, 0.005)).toBeCloseTo(0.5, 5);
+      expect(left[Math.round(0.01 * SR) + 1]).toBeCloseTo(0.25, 5);
+      // and it stays there, rather than creeping toward a destination it can
+      // never reach
+      expect(at(left, 0.04)).toBeCloseTo(0.25, 5);
+    }
+  });
+
+  it('does not let an overflowing ramp exhaust the slot table', () => {
+    // Same shape as the Infinity slot test above, with the durations that the
+    // Number.isFinite(e.c) guard lets through. One per channel, because a
+    // repeat on one channel retargets its own slot instead of claiming
+    // another. If any of the 32 holds a slot, channel 32's real 0.2 s ramp
+    // finds the table full and jumps straight to 1.
+    const n = RAMP_SLOTS + 1;
+    const events: KernelEvent[] = [];
+    for (let id = 0; id < RAMP_SLOTS; id++) {
+      events.push({ time: 0, kind: EventKind.ParamRamp, target: id, a: AMP, b: 0.5, c: 1e300 });
+    }
+    events.push({ time: 0.05, kind: EventKind.ParamRamp, target: RAMP_SLOTS, a: AMP, b: 1, c: 0.2 });
+    const msgs = setup(events, n);
+    // silence every channel but the last, so the output is its ramp alone
+    for (let id = 0; id < RAMP_SLOTS; id++) msgs.push({ type: 'channelGain', id, gain: 0 });
+    const { left } = render(msgs, 0.3);
     expect(at(left, 0.15)).toBeGreaterThan(0.5);
     expect(at(left, 0.15)).toBeLessThan(0.99);
     expect(at(left, 0.29)).toBeCloseTo(1, 5);

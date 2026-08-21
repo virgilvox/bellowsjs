@@ -5,13 +5,14 @@
  * the range they need. Pluck<> at 20 Hz is 16 KB; Pluck<80> is 4 KB. */
 #pragma once
 #include <math.h>
+#include "bellows/config.h"
 #include "bellows/core/prng.h"
 #include "bellows/dsp/delayline.h"
 #include "bellows/core/fastmath.h"
 
 namespace bellows {
 
-template <int kMinFreqHz = 20, int kSampleRate = 48000>
+template <int kMinFreqHz = 20, int kSampleRate = BELLOWS_SAMPLE_RATE>
 class Pluck {
  public:
   struct Params {
@@ -208,7 +209,21 @@ class Pluck {
   Rng* rng_ = nullptr;
   Params p_;
   DelayLine<kMaxPeriod> delay_;
-  float excite_[kExciteLen];
+  /* Zeroed at the declaration, not left to whatever backs the storage.
+   * Nothing can read it before NoteOn writes it: Process reads excite_ only
+   * under `excite_pos_ < excite_len_` and excite_len_ starts at 0, so this
+   * is hygiene rather than a fix. It is here because excite_ was the one
+   * buffer in the class with neither an initialiser nor an Init or Clear
+   * path, so its safety was an argument spread over two other members
+   * instead of a property of the declaration. It costs no RAM and no
+   * .data: every instance that ships is static and the initialiser is all
+   * zeros, so the array stays in .bss and no store is emitted. Measured
+   * with arm-none-eabi-g++ 11.3.1 for Cortex-M7 at the size report's
+   * flags, .text is unchanged on every sketch except p16_e21_presets,
+   * which moves 64 bytes because the change perturbs inlining inside an
+   * unrelated Bank fold. That row is 21_Presets in examples/README.md and
+   * tools/check-docs.mjs reads it. */
+  float excite_[kExciteLen] = {};
   int excite_len_ = 0, excite_pos_ = 0;
   float read_delay_ = 2.0f, lp_a_ = 1.0f, lp_b_ = 0.0f, lp_state_ = 0.0f;
   float gs_ = 0.0f, freq_ = 440.0f, tracker_ = 0.0f, track_coef_ = 0.0f;

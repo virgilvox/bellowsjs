@@ -1,8 +1,11 @@
 /*
  * Serializes an EngineDef or EffectDef to a source string for transport
- * into the worklet realm (tier 3 defOp). Functions are emitted via
- * toString(), so defs must be self-contained: no captured closures, no
- * imports, numeric params only. The kernel rehydrates with new Function.
+ * into the kernel (tier 3 defOp). Functions are emitted via toString(), so
+ * defs must be self-contained: no captured closures, no imports, numeric
+ * params only. The kernel rehydrates with new Function: in the worklet
+ * during playback, and on whatever thread called render() during an export,
+ * so neither end of this is a sandbox. See the defOp case in
+ * kernel/engine.ts.
  */
 
 export function serializeDef(def: object): string {

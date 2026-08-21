@@ -334,6 +334,21 @@ export class KernelEngine {
         // Tier 3: user DSP. The code string must evaluate to an EngineDef or
         // EffectDef object. Documented constraint: self-contained, numeric
         // params only. Blocked by CSP in some hosts; that is the host's call.
+        //
+        // Which realm runs it: not only the worklet. This comment named no
+        // realm, and the documents that did name one (HANDOFF item 8, AUDIT
+        // finding 9, the header of core/serialize.ts) all named the worklet.
+        // KernelEngine.apply runs on whatever thread calls it, and
+        // Bellows.render() replays the recorded setup log through
+        // renderOffline on the calling thread (render() filters 'events' out
+        // of that log and nothing else), so every defOp is evaluated a second
+        // time on the main thread. That realm has DOM, fetch, cookies and
+        // localStorage; the worklet has none of them. An app that lets its
+        // users author defs has handed them main-thread code execution the
+        // first time it exports audio, not sandboxed execution. A host CSP
+        // that blocks eval breaks both paths, and this line throws out of
+        // apply() rather than degrading, because nothing here catches it.
+        // Pinned by test/kernel/defop-realm.test.ts.
         const def = new Function('return (' + msg.code + ')')();
         if (msg.kind === 'engine') this.localEngines.set(def.id, def);
         else this.localEffects.set(def.id, def);
@@ -428,10 +443,11 @@ export class KernelEngine {
         ) {
           break;
         }
-        // Immediate fallback, for three cases: a duration that is not a
+        // Immediate fallback, for four cases: a duration that is not a
         // positive finite number of seconds (c <= 0 is the documented
         // meaning), a parameter with no known current value to interpolate
-        // from, or every ramp slot busy.
+        // from, every ramp slot busy, or a finite duration whose end frame is
+        // not a safe integer, which startRamp refuses.
         // Landing early beats dropping the automation on the floor.
         this.clearRamps(e.target, e.a);
         c.pool.setParam(name, e.b);
@@ -454,6 +470,32 @@ export class KernelEngine {
   private startRamp(target: number, param: number, from: number, to: number, seconds: number): boolean {
     const startFrame = this.frame;
     const endFrame = startFrame + Math.max(1, Math.round(seconds * this.sampleRate));
+    /*
+     * The wedge is a property of this arithmetic and not of the input, which
+     * is why the Number.isFinite(e.c) test in applyEvent does not close it on
+     * its own: whether a finite `seconds` survives depends on the sample rate,
+     * and this is the only place that holds both terms. seconds = 1e308 is
+     * finite and 1e308 * 48000 is Infinity, so endFrame is Infinity,
+     * `frame >= s.endFrame` in advanceRamps never fires, the slot is never
+     * freed, and t = (frame - startFrame) / Infinity is 0 so the parameter
+     * never moves either. seconds = 1e300 is no better: a finite 4.8e304 that
+     * no render ever reaches. Refuse it here, above the retarget loop, because
+     * otherwise one bad call writes the poisoned endFrame over a slot that was
+     * ramping correctly. Returning false hands the caller the same
+     * immediate-apply path a full table takes; thirty-two leaked slots would
+     * otherwise exhaust RAMP_SLOTS and silently downgrade every later ramp on
+     * this kernel to a jump.
+     *
+     * isSafeInteger rather than isFinite, because 1e300 seconds is finite and
+     * just as wedged. It tests endFrame rather than the ramp length so that an
+     * unusable startFrame is caught too. That costs nothing, because both
+     * terms are integers: Math.round returns one, and this.frame is only ever
+     * a block count offline or AudioWorkletGlobalScope.currentFrame in the
+     * worklet (the setFrame call in worklet-entry.ts). So every duration a
+     * human types passes, and 2^53 frames is about 5900 years at 48k.
+     */
+    if (!Number.isSafeInteger(endFrame)) return false;
+
     // A second ramp on the same channel and parameter would fight the first,
     // two setParam calls per block with neither winning. Retarget instead: the
     // new ramp picks up from where the old one had got to.
@@ -502,6 +544,19 @@ export class KernelEngine {
    * audio it improves. One update per block is 2.7 ms at 48k with 128 frames,
    * below the ear's resolution for parameter movement. Gain and pan, where
    * stepping matters, already have their own per-sample Ramp.
+   *
+   * The block a ramp starts in is not one of the blocks it moves in. This runs
+   * at the top of process(), before that block's events are applied, so the
+   * slot does not exist yet when the pass goes by, and the frame <= startFrame
+   * test below skips a slot claimed mid-block for the same reason. The
+   * parameter therefore holds its old value for the rest of the starting block
+   * and the first movement lands at the top of the next one. A ramp shorter
+   * than a block lands on its destination one block late, not immediately:
+   * docs/AUDIT.md said immediately until it was measured, and the test 'lands
+   * a sub-block ramp one block late' in test/kernel/paramramp.test.ts is what
+   * now says otherwise. Landing inside the starting block would mean splitting
+   * the block at the ramp's end frame, which is a rendering change, so it is
+   * not something to do by moving this call.
    */
   private advanceRamps(frame: number): void {
     for (const s of this.ramps) {

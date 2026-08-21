@@ -33,9 +33,10 @@ happened is older than it looks: spend the one command it takes.** That is not a
 rhetorical flourish, it is where four of this repository's document defects came
 from.
 
-OBJECTIVE: <replace me. "Still not done" in `docs/HANDOFF.md` has seven items
-and the first two are the real ones; 3 to 7 are small and each names its own
-fix.
+OBJECTIVE: <replace me. "Still not done" in `docs/HANDOFF.md` has three items.
+1 and 2 are the real ones. 3 is an hour: three findings that the 2026-08-20 pass
+never reached because the machine slept, in a shape of work that closed sixteen
+others that day.
 
 If you have a board: item 1, and start with `00_BringUp`. It has still never
 been run, it is a checklist sketch with a written pass condition per stage, and
@@ -50,23 +51,29 @@ biting someone.>
 
 WHAT IS TRUE TODAY, and each of these is checkable in one command:
 
-- 51 audit findings are open, 43 plus 8 partial. `docs/AUDIT-2.md` is the
+- 35 audit findings are open, 30 plus 5 partial. `docs/AUDIT-2.md` is the
   register: every finding carries a status and its evidence under its own
   heading. Do not re-derive the count from HANDOFF, which points at the file.
-  22 are tagged `[changes audio]` and 20 `[under ten minutes]`.
+  19 are tagged `[changes audio]` and 4 `[under ten minutes]`. It was 51 on
+  2026-08-15; 16 of the 20 quick ones were closed on 2026-08-20, each one
+  investigated, attacked by a skeptic, applied and verified.
 - One board, one program, run twice. Nothing has run on a 3.x, an LC, a
   MicroMod or a Daisy, and **nothing has been compared to the browser by ear**.
-  40 parity rows, 428 value rows and 1054 preset values stand in for that and
+  41 parity rows, 428 value rows and 1054 preset values stand in for that and
   are not the same thing.
 - `bellowsjs@0.1.8` is on npm, `main` is pushed, CI is green on it, and
   bellows.live is deployed and current. None of that stays true on its own: the
   site has no deploy-on-push and needs `doctl` every time.
-- The embedded library is published to BOTH registries: Arduino Library Manager
-  as `Bellows`, from the mirror at `virgilvox/bellows-embedded`, and PlatformIO
-  as `virgilvox/Bellows`, both at 0.1.1. It versions independently of the npm
-  package, 0.1.1 against 0.1.8, and has its own release ritual in HANDOFF. Publishing it found
-  that every example failed to compile once installed, which had been true for
-  the whole life of the port and which only installing it could reveal.
+- The embedded library is INSTALLABLE from both registries, which is a stronger
+  claim than published and was checked on 2026-08-20 by installing it: Arduino
+  Library Manager as `Bellows`, from the mirror at `virgilvox/bellows-embedded`,
+  and PlatformIO as `virgilvox/Bellows`, both at 0.1.1. `arduino-cli lib install
+  Bellows@0.1.1` into a clean sketchbook, then 16 of 17 examples compiled for a
+  Teensy 4.1, the seventeenth being `12_DacOut` declining by `#error` because a
+  4.x has no DAC. It versions independently of the npm package, 0.1.1 against
+  0.1.8, and has its own release ritual in HANDOFF. Publishing it found that
+  every example failed to compile once installed, which had been true for the
+  whole life of the port and which only installing it could reveal.
 - 13 of 51 claimed audit closures fell over to a skeptic. The pattern was almost
   always a fix applied to the symptom a finding opens with rather than the cause
   it names four sentences later. Read a finding to its end before closing it.
@@ -77,8 +84,8 @@ THE RULES THAT MATTER HERE, learned by being burned:
   see it go red, revert, see it go green. If a mutation does not fire, suspect
   the mutation before the gate.
 - Numbers in documents rot exactly like generated files.
-  `node tools/check-docs.mjs --check` is the control, and it now covers 388
-  figures across 7 documents. Note that only the copy of that number lower
+  `node tools/check-docs.mjs --check` is the control, and it now covers 487
+  figures across 12 documents. Note that only the copy of that number lower
   down this file is machine-checked: the gate matches per line, and this
   copy is wrapped, so it has to be edited by hand.
 - A wrong engine parameter name is silent at every layer of the browser
@@ -109,7 +116,7 @@ THE RULES THAT MATTER HERE, learned by being burned:
 VERIFY, and none of these is optional:
 
 ```
-npm test -w packages/bellows                        1348 tests
+npm test -w packages/bellows                        1361 tests
 npx vue-tsc --noEmit -p apps/workbench              clean
 npm run check:examples -w apps/workbench            49 javascript examples
 npm run check:embedded -w apps/workbench            36 C++ snippets compile
@@ -131,7 +138,7 @@ npm run gen:worklet -w packages/bellows    && git diff --exit-code -- packages/b
 # all. Measured, not guessed.
 npm run build -w packages/bellows
 
-cd packages/bellows-embedded && npm run parity:check     40 rows, prng exactly 0
+cd packages/bellows-embedded && npm run parity:check     41 rows, prng exactly 0
 cd packages/bellows-embedded && npm run tables:check     428 value rows
 cd packages/bellows-embedded && npm run presets:check    50 presets, 1054 values
 cd packages/bellows-embedded && node tools/gen-tables.mjs --check
@@ -202,7 +209,7 @@ WHERE THINGS STAND
 - packages/bellows-embedded is the C++ port. 43 headers, compiling standalone and combined for
   Cortex-M7 and M4. All five examples plus a bring-up rig build as real Teensy 4.1 firmware, and
   examples/daisy_onekick links against real libDaisy.
-- Parity passes on 40 rows with the PRNG bit exact, plus 428 exactly-compared value
+- Parity passes on 41 rows with the PRNG bit exact, plus 428 exactly-compared value
   rows for the parts that make no sound.
 - BOTH OF THE THINGS THIS SECTION USED TO SAY HAD NOT HAPPENED HAVE NOW HAPPENED, and the
   correction is worth reading rather than skipping, because both were stated here as hard
@@ -235,7 +242,7 @@ VERIFY EVERYTHING WITH THESE. Run them before you claim anything works.
   packages/bellows:            npm test                     all green, no count quoted here
                                npx tsc --noEmit
                                npm run gen:worklet          then confirm no git diff
-  packages/bellows-embedded:   npm run parity               40 rows against the TypeScript
+  packages/bellows-embedded:   npm run parity               41 rows against the TypeScript
                                npm run tables               428 value rows, compared exactly
                                npm run fastmath             polynomial accuracy against libm
                                npm run memsafety            ASan and UBSan, 0.5x to 4x rate
@@ -253,9 +260,9 @@ TRAPS THAT WILL BITE YOU, in the order they are likely to
    DSP. This has already happened once. CI would catch it if CI ran.
 2. Every documented number rots. A change moves a sketch and the tables quoting it are left
    behind; that happened four times in one session, and a second audit then found sixteen more.
-   node tools/check-docs.mjs --check is the control, and it now covers 388 figures across
-   docs/HARDWARE.md, the embedded README, examples/README.md, docs/HANDOFF.md, docs/ENGINEERING.md
-   and this file, against the size report, the sketch symbol tables, parity, tables, fastmath and
+   node tools/check-docs.mjs --check is the control, and it now covers 487 figures across
+   docs/HARDWARE.md, the embedded README, examples/README.md, docs/HANDOFF.md, docs/ENGINEERING.md,
+   this file, both top-level READMEs and two of the site's TypeScript pages, against the size report, the sketch symbol tables, parity, tables, fastmath and
    vitest list.
    It does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board
    capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release
@@ -411,7 +418,7 @@ because the third depends on the first two.
    KeepAlive means onDeactivated matters.
 
 VERIFY, and none of these is optional:
-  npm test -w packages/bellows                          1348 tests
+  npm test -w packages/bellows                          1361 tests
   npm run typecheck -w apps/workbench                   vue-tsc
   npm run check:examples -w apps/workbench              the 49 site examples still resolve
   npm run gen:sim -w apps/workbench && git diff --exit-code -- apps/workbench/src/lib/sim/sources.gen.ts

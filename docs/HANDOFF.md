@@ -25,7 +25,7 @@ maximum since boot rather than a bound.
 
 **2. The engine set is complete.** `additive`, `harmonic`, `waveguide` and
 `wavetable` are ported, so every engine the browser ships now exists in C++. The
-parity table is **40 rows, not 34**, and all of them pass:
+parity table is **41 rows, up from 34**, and all of them pass:
 
     harmonic         3.63e-5    additive        1.30e-4
     additive_morph   1.12e-4    waveguide       1.98e-4
@@ -138,12 +138,28 @@ hides all of them. `05_MidiInstrument` needs
 `--fqbn teensy:avr:teensy41:usb=serialmidi`, which is Tools, USB Type, Serial +
 MIDI in the IDE, and is not a defect.
 
+### Harnesses added on 2026-08-20
+
+| command | what it proves |
+| --- | --- |
+| `node tools/check-docs.mjs --check` (extended) | the board's CPU figures, the parity and value row counts and the board support summaries agree with the one place that owns each, across 12 documents including two TypeScript pages and both top-level READMEs. `docs/HARDWARE.md` owns the run table, `examples/README.md` owns the build matrix, and the summaries are counted from it rather than read |
+| `npm run parity` row `additive_morph_hi` | the morph lerp runs in the right DIRECTION. The existing row renders at morph = 0.5, where `1 - morph` is indistinguishable from `morph` |
+| `arduino-cli lib install Bellows@0.1.1` then compile | the artifact the Arduino registry SERVES, rather than the tree that was submitted. Not automated, and the only thing that catches a packaging fault in the published zip |
+
+The first of those is the one to know about, and not for the figures it now
+covers: building it turned up that `--allow-host-drift`, the flag CI runs with,
+was granting a 25 percent relative allowance to every prose figure and plus or
+minus 16 to every integer one. A CPU percentage read off a serial console and a
+count of harness rows were both going through it. There is an `exact` flag now.
+
 ### Still not done, in the order I would take it
 
-Ordered by cost to fix against risk of being wrong later. Everything the
-2026-08-15 and 16 sessions closed is summarised at the end of this list rather
-than deleted, because the interesting part of a bookkeeping item is usually
-what it was hiding.
+Ordered by cost to fix against risk of being wrong later. Three items, and the
+first two are the ones that matter. Everything the 2026-08-15, 16 and 20
+sessions closed is summarised at the end of this list rather than deleted,
+because the interesting part of a bookkeeping item is usually what it was
+hiding, and twice now an entry that read as bookkeeping was covering a gate that
+did not work.
 
 **1. Hardware breadth, which is the real gap.** One board and one program, now
 run twice. Nothing on a 3.x, nothing on an LC, nothing on a Daisy, and the two
@@ -154,22 +170,25 @@ the single highest-value thing left on this list: it is a checklist sketch with 
 written pass condition per stage, and its last two stages measure the pitch
 dependence of the BLEP oscillator cost, which no test in this repository covers
 and no amount of building will tell you. The other half is that nothing has been compared to the browser
-BY EAR: 40 parity rows and 1054 preset values are a strong position and they are
+BY EAR: 41 parity rows and 1054 preset values are a strong position and they are
 not the same as having listened to both.
 
-**2. The audit backlog. COUNTED, and now countable.** `docs/AUDIT-2.md` has 51
-genuinely open findings: 43 open and 8 partial, against 38 closed, 5 refuted and
-1 not a defect. Each carries its status and evidence under its own heading, so
-that file is the register and this one is not. The figure this entry used to
-give, roughly 73, was wrong by 22 and could not be reproduced from any document.
+**2. The audit backlog. 35 open, down from 51.** `docs/AUDIT-2.md` has 30 open
+and 5 partial, against 54 closed, 5 refuted and 1 not a defect. Each carries its
+status and evidence under its own heading, so that file is the register and this
+one is not. The figure this entry gave two revisions ago, roughly 73, was wrong
+by 22 and could not be reproduced from any document.
 
-Twenty-two of the 51 would change rendered output and are tagged
-`[changes audio]` in the file. Twenty are closable in under ten minutes and are
-tagged `[under ten minutes]`; several of those are documents that describe code
-the repository does not have, which is the failure mode `check-docs` exists for
-and cannot see, because a prose claim about an algorithm is not a figure. A
-finding with no tag has been judged neither, rather than left unassessed: all 51
-carry an explicit verdict on both.
+Nineteen of the 35 would change rendered output and are tagged
+`[changes audio]` in the file. Only 4 are still tagged `[under ten minutes]`,
+because 16 of the 20 were closed on 2026-08-20; three of those four were never
+looked at rather than looked at and left. A finding with no tag has been judged
+neither, rather than left unassessed: all 35 carry an explicit verdict on both.
+
+The 19 tagged `[changes audio]` are now the bulk of what is left, and they are
+the expensive kind: the string waveguide's bass pitch, the `rng` capture
+lifetime, the engine parameters that are silent when misspelled. None of them is
+a ten-minute job and several need a decision rather than a fix.
 
 The largest single one is unchanged and is still the string waveguide being up
 to 23 cents flat below 165 Hz, which matters more than it did: the engine is
@@ -183,41 +202,93 @@ fell over, and the pattern in almost all of them was a fix applied to the
 symptom a finding opened with rather than to the cause it named further down.
 Read a finding to its end before calling it closed.
 
-**3. One parity row is weaker than it looks.** `additive_morph` moves only 4.4x
-against a 10x gate for a 0.1 percent `morph` error. It is recorded in the GATES
-comment. A second row driving morph across its range would close it.
+**3. Three findings nobody has looked at.** The 2026-08-20 pass took the twenty
+findings tagged `[under ten minutes]`, investigated each against the tree,
+handed every proposal to a skeptic briefed to refute it, and applied what
+survived: sixteen closed. Three were never reached, because the machine slept
+and that group's agent died mid-response, so they are open for want of a reader
+rather than for want of a fix: the modal glass and wood mode tables having no
+physical source (`docs/AUDIT-2.md`, the provenance one), `voiceLead`'s
+unequal-size branch and its crossing penalty never executing, and
+`Scheduler.rewind()` having no test while sitting on the `b.start()` path. The
+fourth still-tagged one is `SampleZone` against `SamplerZoneData`, which the
+pass reached and partly closed. An hour, and the same shape of work that already
+worked sixteen times.
 
-**4. `17_WorkstationI2S` prints a seed nobody can read.** The sketch draws a
-seed at power up, composes an arrangement from it, prints it, and invites you to
-put it in `kPinnedSeed` to hear that piece again. In practice the print is
-discarded: a host cannot open the USB serial port before `setup()` runs, and
-Teensy drops output when nothing is listening. So the one control that makes a
-generated piece reproducible cannot be obtained. Found by flashing the board and
-trying to write the number down. The fix is a bounded wait before the banner,
-`while (!Serial && millis() < 2000);`, which costs two seconds at boot and makes
-the feature real. 16 has the same shape and no seed to lose.
+Worth knowing before starting: the skeptic overturned a byte measurement in the
+first finding it looked at, because the investigator had measured with the 9.2.1
+toolchain rather than the 11.3.1 the documents pin. That is the toolchain finding
+biting inside the session that was auditing it, and it is fixed now, in
+`tools/size-report.sh`.
 
-**5. Two READMEs are near-identical and nothing syncs them.** The repository
-root `README.md` and `packages/bellows/README.md` are maintained by hand and
-differ by about fifty lines. The second is what npm serves. That drift is not
-hypothetical either: on 2026-08-15 a session asked to document the
-microcontroller port in "the main readme" fixed the root one, and the npm page
-still said nothing about it, which is what 0.1.8 exists to correct. Either
-generate one from the other or add a checker that diffs the shared sections.
+### Closed on 2026-08-20, and what each one turned up
 
-**6. `vite-node` is in no `package.json` and no `node_modules` here.** Five npm
-scripts invoke it through `npx`: `parity:check`, `tables:check`, `presets:check`,
-`check:catalogue` and `check:presets`. On this machine it resolves from the npx
-cache and in CI it is fetched from the registry, which works and is green, but it
-is a dependency the lockfile does not pin and it does not work offline. One
-devDependency closes it.
+- **The parity row that could not see morph.** `additive_morph` renders at
+  morph = 0.5, which is the FIXED POINT of the likeliest way to transcribe a
+  lerp wrong: `a + (b - a) * (1 - morph)` at 0.5 is `a + (b - a) * 0.5`, the
+  same note. Measured, by making that exact mutation in `additive.h:197`: the
+  row reads 1.12e-4 and passes, unchanged. `additive_morph_hi` renders the same
+  params at 13/16 and reads 5.50e-1, about 5100 times its own baseline. The
+  `additive` row does fail on that mutation, and that is luck rather than cover:
+  its morph is the default 0, so the inversion sends it to 1. Parity is 41 rows
+  now. The old entry asked for a row that would catch a 0.1 percent `morph`
+  error, and nothing in the amplitude domain can do that: a 0.1 percent error in
+  a lerp weight moves the levels by 0.1 percent. Direction and endpoints are
+  what a second row can pin, and now does.
+- **The seed nobody could read.** `17_WorkstationI2S` waits up to two seconds
+  for `Serial` before its banner, after `AudioMemory()` so the piece is already
+  playing while it waits, and the seed now rides the two-second report as well,
+  so a console attached in the middle of a piece still shows it. That second
+  half is the part the old entry did not ask for and is what makes the feature
+  actually usable, because the bounded wait only helps someone who was already
+  attached at boot. 16 is unchanged: it draws no seed.
+- **`vite-node` is declared.** One devDependency at the root, `^6.0.0`, and the
+  lockfile pins 6.0.0 with its integrity hash. The five scripts still call it
+  through `npx`, which prefers the local install and no longer reaches the
+  registry.
+- **The hardware CPU figure is gated, and so is a good deal more.** This was
+  entry 7, "nothing to do today beyond knowing it". There was something to do.
+  `docs/HARDWARE.md` owns the run table and `check-docs.mjs` now parses it and
+  compares every other copy against it, which needed four documents added to the
+  checker that had never been in it: both top-level `README.md` files and two of
+  the site's TypeScript pages. The same pass gated the parity row count in nine
+  more places and the board support summary in three, deriving the latter by
+  counting the build matrix in `examples/README.md` rather than trusting the
+  summaries. 388 figures across 7 documents became 487 across 12.
 
-**7. The hardware CPU figure is quoted in nine places and checked in none.**
-`docs/HARDWARE.md` holds the table and names the other eight: this file twice,
-`docs/KICKOFF.md`, `packages/bellows-embedded/examples/README.md`, and four spots
-under `apps/workbench`. No harness prints a number that comes off a serial
-console, so `check-docs` cannot reach any of them. Nothing to do today beyond
-knowing it, and changing `docs/HARDWARE.md` first.
+  Two things fell out of building it, and both are worth more than the gate:
+
+  1. **The first version of the gate was fake and looked green.** Mutating the
+     source table from 47.3 to 47.9 changed nothing, because
+     `--allow-host-drift`, which is what CI runs, grants a 25 percent RELATIVE
+     allowance to every prose figure. It exists for numbers this machine
+     measured and another machine would measure differently, a flash byte count
+     or a parity residual. A number read off a serial console is not that.
+     There is an `exact` flag now and every CPU claim carries it.
+  2. **The integer allowance was swallowing counts.** It is plus or minus 16,
+     for byte figures. Adding the 41st parity row left eleven documents saying
+     40 and six of those were already inside the checker, passing, reported as a
+     note. Every count claim is `exact` now, and the first run after that found
+     this file's own WASM argument still quoting the parity and value row
+     counts from two revisions back, in a sentence nothing had ever looked at.
+     Both figures are corrected and both are gated. That sentence is
+     paraphrased here rather than quoted, because the gate cannot tell a
+     quotation from a claim and would read the old numbers as a live one.
+- **Two READMEs, and what actually needed syncing.** Entry 5 asked for a checker
+  that diffs the shared sections of the root `README.md` and
+  `packages/bellows/README.md`. A textual differ is the wrong instrument: the
+  npm copy deliberately uses absolute GitHub links, drops the repository layout
+  and compresses several paragraphs, so it would report those forever. What can
+  drift silently is the numbers, and every number they share is now checked
+  against its source: the CPU figures, the parity and value row counts, and all
+  seven board rows against the build matrix. Checked today, the two board tables
+  agree cell for cell and differ only in bold markup and two words on the Daisy
+  row. The remaining prose is still hand-maintained and still worth a glance
+  when either is touched.
+- **The Arduino Library Manager listing, and the artifact it serves.** See the
+  state section. Indexed on 2026-08-20; the published zip was downloaded,
+  unpacked, diffed against the tree that was compiled by hand, installed from
+  the registry into a throwaway sketchbook and compiled example by example.
 
 ### Closed on 2026-08-15 to 17, and what each one turned up
 
@@ -225,7 +296,8 @@ Kept short. The full record is in the commits.
 
 - **The three unmeasured examples.** `16_WorkstationPiezo`, `17_WorkstationI2S`
   and `21_Presets` had no size sketch, no README rows and no entry in the `ALL`
-  list. All three now have all of it and `check-docs` covers 388 figures. Two
+  list. All three now have all of it and `check-docs` covered 388 figures at the
+  time, 487 now. Two
   things fell out: 16 and 17 have no logic header at all, so `p14_` and `p15_`
   reconstruct the composition rather than sharing the example's source, the only
   rows in the size table where the number and the code are not the same text;
@@ -251,7 +323,8 @@ Kept short. The full record is in the commits.
   did not reset the step counter, `availableOutputs` made "first is the default"
   false, and the output survived a firmware change.
 - **The audit count.** 51 open, not 73, with a status and evidence under every
-  finding. 13 of 51 claimed closures fell over to skeptics.
+  finding. 13 of 51 claimed closures fell over to skeptics. Now 35, after the
+  2026-08-20 pass over the `[under ten minutes]` tag.
 - **Two claims that had outlived their truth.** CI has run, 26 times with 7
   failures all on a feature branch, and a board has been flashed and heard. Both
   were stated as hard facts in `docs/KICKOFF.md` for weeks after they stopped
@@ -265,10 +338,11 @@ Kept short. The full record is in the commits.
   green with a stale generated file, and on 2026-08-15 one did, on a commit that
   had already been published to npm. Both the block and the harness table below
   now list them.
-- **Milestone 6, both registries, at 0.1.1.** PlatformIO is live as
-  `virgilvox/Bellows`. The Arduino submission is merged and the mirror is
-  tagged, but the indexer had not run when this was written: see the state
-  section for how to check rather than assume.
+- **Milestone 6, both registries, at 0.1.1, and both live.** PlatformIO as
+  `virgilvox/Bellows`, Arduino Library Manager as `Bellows`, indexed on
+  2026-08-20 with both tags. The state section has what was checked, including
+  an install straight from Library Manager into a clean sketchbook and a
+  compile sweep over the published examples.
   Publishing found the library was BROKEN when installed: every example failed
   to compile, for the port's whole life, because Arduino cannot attribute a
   nested include path to a library and no example used the `<Bellows.h>` that
@@ -315,27 +389,40 @@ Kept short. The full record is in the commits.
   - **PlatformIO: live.** `virgilvox/Bellows`, and an UNPINNED
     `lib_deps = virgilvox/Bellows` resolves to `0.1.1`, checked. 0.1.0 went out from the mirror
     by mistake and has no `daisy_onekick`; 0.1.1 is from the package directory and does.
-  - **Arduino Library Manager: submitted and merged, NOT yet indexed.** Checked on 2026-08-17,
-    about ninety minutes after the merge: `Bellows` is absent from
-    `library_index.json.gz` (53177 entries) and the indexer log 404s, which is what a
-    repository the indexer has never processed looks like. The bot said within a day. When it
-    runs it finds both mirror tags, so `0.1.0` and `0.1.1` should both appear.
+  - **Arduino Library Manager: live.** Indexed on 2026-08-20, both tags. This bullet said
+    "merged, NOT yet indexed" until then, which was true when written and stopped being true
+    three days later without anything in the repository noticing, which is the failure mode this
+    file keeps producing. `library_index.json.gz` now carries 53262 entries and two of them are
+    `Bellows` 0.1.0 and 0.1.1, and `arduino-cli lib search Bellows` resolves against the real
+    index and reports `Provides includes: Bellows.h`. The indexer log exists now and says
+    `Release Bellows:0.1.0 already loaded, skipping` for both tags.
 
-    Do not write "it is in Library Manager" into any document until one of these says so:
+    Recheck rather than trusting this line, because the same sentence was wrong in the other
+    direction for three days:
     ```
     curl -s https://downloads.arduino.cc/libraries/library_index.json.gz | gunzip \
       | python3 -c "import json,sys;print(sorted(l['version'] for l in json.load(sys.stdin)['libraries'] if l['name']=='Bellows') or 'not indexed yet')"
     curl -sL http://downloads.arduino.cc/libraries/logs/github.com/virgilvox/bellows-embedded/
     ```
-    If the log appears and the index still does not list it, read the log: that is where a
-    rejected tag explains itself. Both tags pass `arduino-lint` in submission mode at strict
-    compliance, so a rejection would be a surprise, and a surprise is not the same as
-    impossible.
-- Library test suite: 90 files, 1348 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+    If a future tag does not appear, read the log: that is where a rejected tag explains itself.
+
+    **What the registry actually serves was then checked rather than assumed**, on 2026-08-20,
+    and this is the end-user path that no session had ever walked. `Bellows-0.1.1.zip` is
+    420557 B and unpacks to 51 headers and 17 example folders, with `Bellows.h` present, no
+    surviving `../` include, no `test/` or `tools/`, and no `daisy_onekick`, which is exactly
+    what `npm run check:package` asserts. It is byte-identical to the mirror clone that was
+    compiled by hand on 2026-08-17, `diff -rq` reporting only `.git` and `.gitignore`, so the
+    thing that was tested and the thing that is served are the same thing. Then
+    `arduino-cli lib install Bellows@0.1.1` into a throwaway sketchbook, and every example
+    compiled for a Teensy 4.1 straight from that install: 16 of 17, with `12_DacOut` declining
+    by `#error` because a 4.x has no DAC, which is the documented number. Pass and fail read
+    off exit codes, not off stdout, because an earlier sweep grepped for `Used platform`, which
+    `arduino-cli` prints on failure too, and called two broken examples fine.
+- Library test suite: 91 files, 1361 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
 - Embedded: 43 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All five examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library.
-- Parity against the TypeScript passes on 40 rows with the PRNG bit exact and the effect input bit exact, plus 428 exactly-compared value rows for the parts that make no sound.
+- Parity against the TypeScript passes on 41 rows with the PRNG bit exact and the effect input bit exact, plus 428 exactly-compared value rows for the parts that make no sound.
 - The embedded package went through a size pass whose findings are in `docs/HARDWARE.md` under "Making it smaller". Delay buffers are sized exactly rather than rounded to a power of two, which took 25 percent off RAM library-wide with bit-identical output; the oscillator gained per-shape entry points so the linker can drop the residual table a program never reads; and every transcendental now routes through `fm::`, which is what the docs had claimed for months and was not true, so `BELLOWS_FAST_MATH` went from saving nothing on any sketch with an oscillator to saving 23 to 75 percent. Read that section before optimising anything: it also records what was measured and deliberately NOT taken, and why attributing firmware bytes to a header-only library by symbol name does not work.
 
 **Two things that have not happened, and both are load bearing.**
@@ -353,7 +440,7 @@ Kept short. The full record is in the commits.
    point: no other board has run anything (a 3.2 and an LC have no FPU and emulate every
    float operation, and a Daisy Seed has been linked to an image but never run), no other
    program has been measured, and neither implementation has been compared to the other
-   by ear. The numerical comparison, 40 engine and effect rows plus 428 exactly-compared
+   by ear. The numerical comparison, 41 engine and effect rows plus 428 exactly-compared
    value rows, is what stands in for that and is not the same thing.
    
    These CPU figures are hand-recorded from a serial console. No harness prints them, so
@@ -612,14 +699,14 @@ on 2026-08-15 that gap put a stale file on a published release commit.
 | Command | What it proves | What it caught |
 | --- | --- | --- |
 | `npm test` (in `packages/bellows`) | the TypeScript, including the golden render and the oscillator band sweep | the regression fixture is the only whole-piece guard; `test/dsp-osc/blep-frequency.test.ts` is the only thing that can see alias rejection collapse above 2637 Hz |
-| `npm run parity` | 40 rows match the TypeScript numerically, four of them exactly | the `eq.h` three-band-mislabelled-as-port, the `StereoDelay` clamp bug, and three rows of its own that measured nothing until their input was fixed |
+| `npm run parity` | 41 rows match the TypeScript numerically, four of them exactly | the `eq.h` three-band-mislabelled-as-port, the `StereoDelay` clamp bug, and three rows of its own that measured nothing until their input was fixed |
 | `npm run tables` | euclid, scales, chords, notes, CA, arp, tempo map, MIDI compared EXACTLY | nothing yet, but it is the only thing that can see a wrong scale table |
 | `npm run fastmath` | every polynomial in `core/fastmath.h` against libm | `fm::Log2` wrong by 213 cents, inherited by every `Pow` |
 | `npm run memsafety` (and `memsafety:fastmath`) | ASan and UBSan over the buffer-owning classes at 0.5x to 4x their template rate, and at NaN, zero and negative rates | the `Pluck::NoteOn` overflow, then four undefined float-to-int casts reached through a NaN. Nothing else could: parity compares numbers at one rate, and `check-header.sh` instantiates nothing. Build it for x86-64 as well as arm64: the NaN cast saturates harmlessly on arm64 and only faults on x86-64 |
 | `npm run size` | flash and RAM per sketch, `cortex-m7` or `cortex-m4` | the whole no-registry design argument |
 | `./tools/check-header.sh <h>` | one header compiles standalone, `-Wall -Wextra` | header hygiene; note it instantiates nothing |
 | `node tools/gen-tables.mjs --check` | generated headers match the TypeScript ParamSpecs | new `Eq6` class the moment it appeared |
-| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md` and `docs/ENGINEERING.md`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath` and `vitest list`: 388 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
+| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md`, `docs/ENGINEERING.md`, both near-identical top-level `README.md` files and the site's two embedded pages, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath`, `vitest list`, the board's CPU table and the board build matrix: 487 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 36 of 37 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
 | `npx vitest run test/integration/engine-tuning.test.ts` | every pitched engine plays the note it was given, to 2 cents | proves the fractional-delay tuning is real: an integer-rounded loop is 28 cents flat at E7 |
 | `npm run check:catalogue` (workbench) | the four simulator lists agree: `FIRMWARES`, the `case` labels in `buildVoice`, `VOICE_CAVEATS`, `GROUP_ORDER` | nothing yet; built the day three entries were added, because both failures are silent |
 | `npm run check:presets` (workbench) | all 50 presets render offline: audible, finite, at pitch, naming only registered parameters | nothing yet; the mutation that renames a preset parameter leaves it audible at the right pitch and nothing else catches it |
@@ -652,7 +739,7 @@ Rules learned the hard way about these:
 5. Determinism contract: all randomness flows through `NamedRng` forks (`src/core/prng.ts`). `b.rng(label)` returns per-context streams; `render()` uses a fresh cache so a render equals a fresh page load of the same seed.
 6. The fork rule is literal string concatenation: `rng(label).fork(child) === rng(label + '::' + child)`. This is why the C++ needs no `Fork()` method: write the full label path into `Rng::Init(const char*)` and you land on the same stream the browser is on. Documented in `bellows/core/prng.h`. A harness that faked fork as a shared stream produced three wrong verdicts in one run.
 7. The scheduler (`src/core/scheduler.ts`) stretches its lookahead to the observed timer cadence and reaches back up to the observed gap, which is what survives background-tab throttling. `pause()/resume()` rely on `Scheduler.resyncTo`.
-8. `defEngine`/`defEffect` serialize defs with `serializeDef` (functions via toString, rehydrated with `new Function` in the worklet). Defs must be self-contained. CSP that blocks eval breaks tier 3 in realtime; offline still works. It is also an eval sink: an app that lets users author defs has given them code execution in the worklet realm.
+8. `defEngine`/`defEffect` serialize defs with `serializeDef` (functions via toString, rehydrated with `new Function` in the kernel). Defs must be self-contained. It is an eval sink, and not a worklet-sandboxed one: `render()` replays the setup log through `renderOffline` on the calling thread (`bellows.ts` filters `events` out of that log and nothing else), so an app that lets users author defs has given them code execution on the MAIN thread, next to DOM, fetch, cookies and localStorage, the first time that app exports audio. A host CSP that blocks eval therefore breaks tier 3 in both places, playback in the worklet and `render()`, and `render()` throws out of `KernelEngine.apply` rather than degrading. Rendering offline in Node has no CSP and is unaffected. `test/kernel/defop-realm.test.ts` pins which realm evaluates the string.
 9. Voices ADD into `(outL, outR, from, to)`; effects process IN PLACE; nothing allocates on the audio path at steady state.
 10. `Bellows.setup` is a `SetupLog` (`src/kernel/setuplog.ts`), not an array. Idempotent setters collapse last-write-wins by identity key, updated in place so non-idempotent ordering survives. Anything added to `KernelMessage` needs a decision in `collapseKey`: append or collapse. Getting it wrong silently changes what `render()` replays.
 11. `Instrument.dispose()` is the only way `removeChannel` is ever posted, and it prunes the channel from the setup log. Without it every channel leaks its whole voice pool, which is what the workbench engine swap used to do at about 400 KB a time. `dispose({ releaseSeconds })` defers the removal so a ringing tail decays instead of being cut.
@@ -771,7 +858,7 @@ can disagree with the reasoning rather than reopen the question from nothing.
    needs nothing.
 2. **The TypeScript stays the source of truth.** Compiling the C++ to WASM would end parity drift
    permanently, and it costs the tier 3 JavaScript story, most of the suite's ergonomics, and it
-   is a rewrite. The harnesses work: 34 parity rows, four of them exact, plus 318 value rows.
+   is a rewrite. The harnesses work: 41 parity rows, four of them exact, plus 428 value rows.
    Revisit only if parity maintenance starts costing more than the harnesses save, which it does
    not.
 3. **`SetupLog` and `VoicePool` come out of the public index at 0.2.0, with the barrel.** Both are
@@ -1339,9 +1426,12 @@ first: it builds both and asserts what each must and must not contain.
    time; the script now refuses rather than doing it again. Tag without a `v`,
    matching `0.1.0` and `0.1.1`, because the indexer matched that shape.
 4. **Arduino Library Manager needs nothing further.** It watches the mirror for
-   new tags and indexes them within a day. The indexer log is at
+   new tags and indexes them. 0.1.0 and 0.1.1 were submitted on 2026-08-17 and
+   appeared on 2026-08-20, so "within a day", which is what the bot says, is
+   the floor and not the ceiling. The indexer log is at
    `downloads.arduino.cc/libraries/logs/github.com/virgilvox/bellows-embedded/`,
-   which is where to look when a version does not appear.
+   which is where to look when a version does not appear. It 404s until the
+   indexer has processed the repository once.
 5. PlatformIO: `pio account login` if needed, then `pio pkg publish` **from
    `packages/bellows-embedded`, not from the mirror**. That is a decision, not
    an accident: PlatformIO resolves the cross-folder includes the Arduino IDE

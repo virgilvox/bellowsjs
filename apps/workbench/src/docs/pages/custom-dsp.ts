@@ -158,7 +158,7 @@ console.log('peak', peak.toFixed(3)); // nonzero, deterministic on every run
 
 In Node, \`registerEngine\` and \`registerEffect\` put your defs in the same registry \`registerBuiltins\` fills, and \`renderOffline\` drives them through the real kernel with no browser anywhere. Renders are deterministic, so you can assert exact peaks or diff whole buffers against a golden file, which is how the library tests its own DSP. It is the fastest loop for developing an op: edit, render, listen or assert, repeat, then paste the finished def into \`b.defEngine\` for the [live kernel](/docs/getting-started).
 
-One deployment note: serialized defs are evaluated inside the worklet, so hosts with a CSP that blocks blob or eval need \`Bellows.boot({ workletUrl })\` pointed at the packaged \`bellowsjs/worklet.js\`.
+One deployment note: serialized defs are rehydrated with new Function, in the worklet during playback and on the calling thread inside b.render(), so a CSP that blocks eval breaks tier 3 in both places. A CSP that blocks blob URLs is the separate case, and the one fixed by \`Bellows.boot({ workletUrl })\` pointed at the packaged \`bellowsjs/worklet.js\`.
 `,
 };
 

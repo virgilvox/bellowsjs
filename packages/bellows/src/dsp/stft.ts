@@ -6,7 +6,11 @@
  * synthesis. Synthesis divides by the exact per-position sum of
  * analysisWindow * synthesisWindow across overlapping frames (colaNorm),
  * so unmodified frames reconstruct at unity gain for any hop where that
- * sum stays above zero, not only for hops with a constant COLA sum.
+ * sum stays above zero, not only for hops with a constant COLA sum. Where
+ * it does not stay above zero the pair cannot reconstruct at all, and
+ * Istft and StftProcessor say so in the constructor rather than emit
+ * silence at those offsets: see invColaNorm. Stft is analysis only and
+ * takes any hop in [1, fftSize].
  *
  * Nothing here allocates on the audio path at steady state: rings,
  * scratch buffers, and frame pools are built in the constructors.
@@ -46,6 +50,46 @@ export function colaNorm(winA: Float32Array, winS: Float32Array, hop: number): F
     norm[j] = s;
   }
   return norm;
+}
+
+/**
+ * Below this the analysis contributed essentially nothing at that offset,
+ * so the reciprocal amplifies rounding noise instead of recovering signal.
+ * It is also where the cliff is: measured at fftSize 1024 with hann on both
+ * sides, hop 1000 keeps every position above the guard and reconstructs to
+ * about 2e-5, and hop 1020 puts 17 positions under it and loses those
+ * samples outright.
+ */
+const COLA_GUARD = 1e-6;
+
+/**
+ * Reciprocal per-position COLA sum for the synthesis side, or a throw.
+ *
+ * A position whose sum reaches zero cannot be normalized back to unity, and
+ * the old behaviour was to write a zero there, which is one dropped output
+ * sample at that offset in every frame for as long as the unit runs, with
+ * nothing thrown and nothing logged. Hann on both sides reaches it at
+ * hop = fftSize, where the window is zero at its first sample: measured at
+ * fftSize 256 that puts 5 of the 256 offsets under the guard, so 5 of every
+ * 256 output samples come back as hard zeros. The test is on the window and
+ * the hop together, not on the hop alone, because a rectangular window at
+ * hop = fftSize sums to 1 everywhere and reconstructs exactly. Analysis is
+ * unaffected: Stft never builds one of these, so a no-overlap analysis is
+ * still allowed.
+ */
+function invColaNorm(winA: Float32Array, winS: Float32Array, hop: number): Float32Array {
+  const norm = colaNorm(winA, winS, hop);
+  const inv = new Float32Array(hop);
+  for (let j = 0; j < hop; j++) {
+    if (!(norm[j] > COLA_GUARD)) {
+      throw new Error(
+        `window and hop cannot reconstruct: overlap-add sum at offset ${j} of ${hop} ` +
+          `is ${norm[j]}, use a smaller hop or a window that does not taper to zero`
+      );
+    }
+    inv[j] = 1 / norm[j];
+  }
+  return inv;
 }
 
 /**
@@ -179,9 +223,7 @@ export class Istft {
     this.bins = (fftSize >> 1) + 1;
     this.winS = window ?? hann(fftSize);
     const winA = analysisWindow ?? this.winS;
-    const norm = colaNorm(winA, this.winS, hop);
-    this.invNorm = new Float32Array(hop);
-    for (let j = 0; j < hop; j++) this.invNorm[j] = norm[j] > 1e-6 ? 1 / norm[j] : 0;
+    this.invNorm = invColaNorm(winA, this.winS, hop);
     this.fft = new RealFft(fftSize);
     this.accum = new Float32Array(fftSize);
     this.scratch = new Float32Array(fftSize);
@@ -247,9 +289,7 @@ export class StftProcessor {
     this.latency = fftSize;
     this.winA = window ?? hann(fftSize);
     this.winS = this.winA;
-    const norm = colaNorm(this.winA, this.winS, hop);
-    this.invNorm = new Float32Array(hop);
-    for (let j = 0; j < hop; j++) this.invNorm[j] = norm[j] > 1e-6 ? 1 / norm[j] : 0;
+    this.invNorm = invColaNorm(this.winA, this.winS, hop);
     this.fft = new RealFft(fftSize);
     this.inFifo = new Float32Array(fftSize);
     this.outFifo = new Float32Array(hop);

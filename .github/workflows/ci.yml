@@ -223,6 +223,14 @@ jobs:
       - name: generated headers are in sync with the TypeScript
         working-directory: packages/bellows-embedded
         run: node tools/gen-tables.mjs --check
+      - name: hand-copied C++ Params defaults match the TypeScript
+        working-directory: packages/bellows-embedded
+        # params.gen.h carries the TypeScript default and the C++ field it was
+        # copied into, and until this ran nothing read either column: the
+        # generated constants were compiled by the standalone-header check and
+        # used by no code, so a re-defaulted param was caught only by whoever
+        # happened to read the regenerated diff.
+        run: npm run params:check
       - name: memory safety, ASan and UBSan over the buffer-owning classes
         working-directory: packages/bellows-embedded
         # Added after the Pluck::NoteOn overflow and four undefined float-to-int
@@ -231,6 +239,15 @@ jobs:
         run: |
           npm run memsafety
           npm run memsafety:fastmath
+      - name: BELLOWS_SAMPLE_RATE sizes every compile-time buffer
+        working-directory: packages/bellows-embedded
+        # config.h says the flag sizes "delay lines, pluck loops". Those two
+        # were the ones it did not reach: a 96 kHz build resized the bore, the
+        # chorus and flanger lines, the compressor lookahead, the limiter
+        # window and the plate tank, and left Pluck<> and StereoDelay<> at half
+        # the rate, where every read clamps instead of reporting. static
+        # asserts only, compiled at two rates.
+        run: npm run ratecheck
       - name: parity gates
         working-directory: packages/bellows-embedded
         # Renders the same note from both implementations and diffs them. The

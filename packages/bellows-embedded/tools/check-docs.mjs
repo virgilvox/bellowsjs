@@ -101,13 +101,14 @@ const REPO = join(PKG, '..', '..');
  * ------------------------------------------------------------------ */
 
 /* Every `arm-none-eabi-g++` this machine can offer: the PATH copy first,
- * then everything under the PlatformIO packages, which is the order
- * size-report.sh's own find_tool considers them in.
+ * then everything under the PlatformIO packages. Order decides nothing
+ * here, because pinToolchain() below picks by the version
+ * docs/HARDWARE.md names, which is what size-report.sh now does too.
  *
  * The compiler is NOT interchangeable and this file used to assume it was.
  * Running the whole report under both toolchains installed here, 9.2.1 and
  * 11.3.1, moves 36 of the 37 rows: `s1_kick` 3752 against 3760, `s4_va`
- * 29560 against 28576, `s9c_fm` 5800 against 5384. So which one ran is not
+ * 29560 against 28640, `s9c_fm` 5800 against 5384. So which one ran is not
  * provenance trivia, it decides the figures, and a run that picked the
  * other one would rewrite every table in HARDWARE.md by tens to hundreds
  * of bytes and call it a regression. */
@@ -174,6 +175,17 @@ function sizes(extra) {
   if (extra) env.EXTRA_CXXFLAGS = extra;
   else delete env.EXTRA_CXXFLAGS;
   const out = execFileSync(join(HERE, 'size-report.sh'), [], { env, encoding: 'utf8' });
+  /* The report now names the compiler it ran, and this reads it back.
+   * Pinning PATH above is only half of the guarantee: the pin is silent if
+   * the script ever stops honouring it, and the two toolchains a PlatformIO
+   * machine tends to have disagree on all but one row. */
+  const used = out.match(/^compiler: .* \(([\d.]+)\)$/m);
+  if (!used) throw new Error('size-report.sh did not name the compiler it ran');
+  if (used[1] !== TOOLCHAIN.version) {
+    throw new Error(
+      `size-report.sh ran arm-none-eabi-g++ ${used[1]}, not the ${TOOLCHAIN.version} docs/HARDWARE.md names`,
+    );
+  }
   const map = {};
   for (const line of out.split('\n')) {
     const m = line.match(/^([sp]\d\S*)\s+(\d+)\s+(\d+)\s*$/);
@@ -496,6 +508,17 @@ const DOCS = [
    * it, and because a document that states a measured number should be in
    * this list on the day it states it rather than at the next audit. */
   { path: join(REPO, 'docs', 'ENGINEERING.md'), label: 'docs/ENGINEERING.md', rows: [] },
+  /* The four places that quote the board's CPU figures and were reachable by
+   * nothing until 2026-08-20. Two of them are the near-identical READMEs that
+   * no gate compares, one of which is what npm serves, and two are the site's
+   * own copies, which are TypeScript rather than Markdown and so had never
+   * been in any document checker at all. They carry no size-table rows; they
+   * are here for the prose claims. */
+  { path: join(REPO, 'README.md'), label: 'README.md (repo root)', rows: [] },
+  { path: join(REPO, 'packages', 'bellows', 'README.md'), label: 'packages/bellows/README.md', rows: [] },
+  { path: join(REPO, 'apps', 'workbench', 'src', 'docs', 'embedded', 'performance.ts'), label: 'apps/workbench performance.ts', rows: [], code: true },
+  { path: join(REPO, 'apps', 'workbench', 'src', 'docs', 'embedded', 'getting-started.ts'), label: 'apps/workbench getting-started.ts', rows: [], code: true },
+  { path: join(REPO, 'apps', 'workbench', 'src', 'lib', 'sim', 'firmware.ts'), label: 'apps/workbench firmware.ts', rows: [], code: true },
 ];
 
 /*
@@ -704,6 +727,7 @@ const PROSE = [
     doc: 'docs/HARDWARE.md',
     re: /The harness prints (\d+) rows in all/,
     gets: [() => getParity().rows],
+    exact: true,
   },
   /* The "after" column of the uint32 phase table is the current parity
    * measurement, so it is the same figure as the block above and can only
@@ -772,11 +796,13 @@ const PROSE = [
     doc: 'README.md',
     re: /(\d+) rows in all, plus `npm run tables`/,
     gets: [() => getParity().rows],
+    exact: true,
   },
   {
     doc: 'README.md',
     re: /than by tolerance: (\d+) rows, (\d+) mismatched/,
     gets: [() => getTables().rows, () => getTables().bad],
+    exact: true,
   },
 
   // ---- examples/README.md ----
@@ -865,6 +891,7 @@ const PROSE = [
     doc: 'docs/HANDOFF.md',
     re: /Library test suite: (\d+) files, (\d+) tests/,
     gets: [() => getSuite().files, () => getSuite().cases],
+    exact: true,
   },
   {
     doc: 'docs/HANDOFF.md',
@@ -880,16 +907,19 @@ const PROSE = [
     doc: 'docs/HANDOFF.md',
     re: /passes on (\d+) rows with the PRNG bit exact/,
     gets: [() => getParity().rows],
+    exact: true,
   },
   {
     doc: 'docs/HANDOFF.md',
     re: /(\d+) rows match the TypeScript numerically/,
     gets: [() => getParity().rows],
+    exact: true,
   },
   {
     doc: 'docs/HANDOFF.md',
     re: /plus (\d+) exactly-compared value rows/,
     gets: [() => getTables().rows],
+    exact: true,
   },
   {
     doc: 'docs/HANDOFF.md',
@@ -931,21 +961,25 @@ const PROSE = [
     doc: 'docs/KICKOFF.md',
     re: /Parity passes on (\d+) rows/,
     gets: [() => getParity().rows],
+    exact: true,
   },
   {
     doc: 'docs/KICKOFF.md',
     re: /plus (\d+) exactly-compared value rows/,
     gets: [() => getTables().rows],
+    exact: true,
   },
   {
     doc: 'docs/KICKOFF.md',
     re: /npm run parity\s+(\d+) rows against the TypeScript/,
     gets: [() => getParity().rows],
+    exact: true,
   },
   {
     doc: 'docs/KICKOFF.md',
     re: /npm run tables\s+(\d+) value rows, compared exactly/,
     gets: [() => getTables().rows],
+    exact: true,
   },
 ];
 
@@ -963,6 +997,195 @@ const FASTMATH_ROWS = [
   { doc: 'docs/HARDWARE.md', re: /\| `Atan2` \| ([\d.e-]+) abs \| ([\d.e-]+) \|/, fns: ['Atan2'] },
   { doc: 'docs/HARDWARE.md', re: /\| `CentsRatio` \| ([\d.]+) cents \| ([\d.]+) cents \|/, fns: ['CentsRatio'] },
 ];
+
+/* ------------------------------------------------------------------ *
+ * The hardware CPU figures.
+ *
+ * These are the one class of number in this repository that no harness can
+ * produce: they are read off a serial console by a person watching a board.
+ * So this cannot check that 47.3 is what the Teensy said. What it CAN check
+ * is that the nine other places quoting it still say the same thing as the
+ * table that owns it, which is the failure that actually happens: a second
+ * run is measured, docs/HARDWARE.md gets the new row, and eight copies
+ * elsewhere keep the old number with nothing to notice.
+ *
+ * docs/HARDWARE.md is the source by rule, not by accident. Change it first.
+ * ------------------------------------------------------------------ */
+let hardwareCpu = null;
+function getHardwareCpu() {
+  if (hardwareCpu) return hardwareCpu;
+  const text = readFileSync(join(REPO, 'docs', 'HARDWARE.md'), 'utf8');
+  const re = /^\| (\d{4}-\d{2}-\d{2}) \| [^|]+ \| ([\d.]+) to ([\d.]+) % \| ([\d.]+) % \| (\d+) of (\d+) \|/gm;
+  const runs = [...text.matchAll(re)].map((m) => ({
+    date: m[1],
+    lo: Number(m[2]),
+    hi: Number(m[3]),
+    max: Number(m[4]),
+    blocks: Number(m[5]),
+    ofBlocks: Number(m[6]),
+  }));
+  /* Refuse rather than check nothing. If the table is reformatted this stops
+   * matching, and a silent zero-row parse would turn every claim below into a
+   * row that is simply never looked at, which is the one failure a checker
+   * must not have. */
+  if (runs.length < 2) {
+    throw new Error(
+      'check-docs: could not parse the run table in docs/HARDWARE.md. It expects rows shaped\n' +
+        '  | 2026-08-15 | after it, 19 samples | 33.8 to 46.5 % | 47.3 % | 2 of 24 |\n' +
+        `and found ${runs.length} of them. Fix the regex or the table, do not delete the check.`,
+    );
+  }
+  hardwareCpu = { first: runs[0], latest: runs[runs.length - 1] };
+  return hardwareCpu;
+}
+
+/* ------------------------------------------------------------------ *
+ * The board support summary, three copies of it.
+ *
+ * examples/README.md holds the real thing: one row per example, one column
+ * per board, each cell either a RAM percentage, `ok`, `RAM` for the linker
+ * refusing, or `n/a` for a sketch declining by #error. Three documents then
+ * summarise it as "16 of 17" per board, and two of those three are the
+ * near-identical top-level READMEs that nothing compares, one of which is
+ * what npm serves. Counting the matrix is the whole check: a board's number
+ * is how many of its cells are neither RAM nor n/a.
+ * ------------------------------------------------------------------ */
+let boardMatrix = null;
+function getBoardMatrix() {
+  if (boardMatrix) return boardMatrix;
+  const text = readFileSync(join(PKG, 'examples', 'README.md'), 'utf8');
+  const lines = text.split('\n');
+  const head = lines.findIndex((l) => /^\| example \| LC \| 3\.2 \|/.test(l));
+  if (head < 0) throw new Error('check-docs: the board matrix header is not in examples/README.md');
+  const cols = lines[head].split('|').slice(2, -1).map((c) => c.trim());
+  const built = new Map(cols.map((c) => [c, 0]));
+  let examples = 0;
+  for (let i = head + 2; i < lines.length; i++) {
+    if (!lines[i].startsWith('|')) break;
+    const cells = lines[i].split('|').slice(1, -1).map((c) => c.trim());
+    if (cells.length !== cols.length + 1) break;
+    examples++;
+    cells.slice(1).forEach((cell, n) => {
+      /* A percentage or `ok` is a build. `RAM` is the linker refusing and
+       * `n/a` is the sketch declining, and neither counts. */
+      if (cell !== 'RAM' && cell !== 'n/a') built.set(cols[n], built.get(cols[n]) + 1);
+    });
+  }
+  if (examples < 10) {
+    throw new Error(`check-docs: read only ${examples} rows out of the board matrix in examples/README.md`);
+  }
+  boardMatrix = { examples, built };
+  return boardMatrix;
+}
+
+/* The board name each summary writes, against the column the matrix uses. */
+const BOARD_NAMES = [
+  ['Teensy LC', 'LC'],
+  ['Teensy 3.2', '3.2'],
+  ['Teensy 3.5', '3.5'],
+  ['Teensy 3.6', '3.6'],
+  ['Teensy 4.0', '4.0'],
+  ['Teensy 4.1', '4.1'],
+  ['Teensy MicroMod', 'MicroMod'],
+];
+
+for (const doc of ['README.md', 'README.md (repo root)', 'packages/bellows/README.md']) {
+  for (const [written, col] of BOARD_NAMES) {
+    PROSE.push({
+      doc,
+      re: new RegExp(`\\| ${written.replace('.', '\\.')} \\| (\\d+) of (\\d+) \\|`),
+      gets: [() => getBoardMatrix().built.get(col), () => getBoardMatrix().examples],
+      exact: true,
+    });
+  }
+}
+
+/* The parity row count, which thirteen documents quote and two of them
+ * checked until 2026-08-20. Adding the 41st row left eleven of them saying 40,
+ * and six of those were inside this file and reported as a note rather than a
+ * mismatch, because the integer host allowance is plus or minus 16 and a count
+ * went through it. Both halves of that are fixed: the claims below, and
+ * exact on every count. */
+for (const doc of ['docs/HANDOFF.md', 'README.md (repo root)', 'packages/bellows/README.md',
+                   'apps/workbench performance.ts', 'apps/workbench getting-started.ts']) {
+  PROSE.push({ doc, re: /(\d+) engine and effect rows/, gets: [() => getParity().rows], exact: true });
+}
+for (const doc of ['docs/HANDOFF.md', 'docs/KICKOFF.md']) {
+  PROSE.push({ doc, re: /(\d+) parity rows/, gets: [() => getParity().rows], exact: true });
+  PROSE.push({ doc, re: /(\d+) value rows/, gets: [() => getTables().rows], exact: true });
+}
+PROSE.push({
+  doc: 'docs/KICKOFF.md',
+  re: /parity:check (\d+) rows, prng exactly 0/,
+  gets: [() => getParity().rows],
+  exact: true,
+});
+PROSE.push({
+  doc: 'docs/KICKOFF.md',
+  re: /npm run parity (\d+) rows against the TypeScript/,
+  gets: [() => getParity().rows],
+  exact: true,
+});
+
+/* Every document that quotes the second run. Adding a document here is what
+ * makes its copy checked; leaving one out leaves it unchecked, silently, so
+ * the list is the thing to keep complete. `grep -rn "46.5" .` finds the ones
+ * that have drifted out of it. */
+const CPU_QUOTERS = [
+  'docs/HANDOFF.md',
+  'docs/KICKOFF.md',
+  'README.md',
+  'examples/README.md',
+  'README.md (repo root)',
+  'packages/bellows/README.md',
+  'apps/workbench firmware.ts',
+];
+
+for (const doc of CPU_QUOTERS) {
+  PROSE.push({
+    doc,
+    re: /([\d.]+) to ([\d.]+) percent(?: CPU| with a)/,
+    gets: [() => getHardwareCpu().latest.lo, () => getHardwareCpu().latest.hi],
+    exact: true,
+  });
+  PROSE.push({
+    doc,
+    re: /([\d.]+) percent (?:peak|running maximum)/,
+    gets: [() => getHardwareCpu().latest.max],
+    exact: true,
+  });
+}
+
+/* The block count, in the four documents that carry it. */
+for (const doc of ['docs/HANDOFF.md', 'README.md', 'README.md (repo root)', 'apps/workbench firmware.ts']) {
+  PROSE.push({
+    doc,
+    re: /(\d+) of (\d+) audio blocks/,
+    gets: [() => getHardwareCpu().latest.blocks, () => getHardwareCpu().latest.ofBlocks],
+    exact: true,
+  });
+}
+
+/* The embedded docs page states both runs, as a table and then as a sentence
+ * of history, so it is the one place where the FIRST row is quoted too. */
+PROSE.push({
+  doc: 'apps/workbench performance.ts',
+  re: /\| CPU, across 19 samples \| ([\d.]+) to ([\d.]+) % \|/,
+  gets: [() => getHardwareCpu().latest.lo, () => getHardwareCpu().latest.hi],
+  exact: true,
+});
+PROSE.push({
+  doc: 'apps/workbench performance.ts',
+  re: /\| CPU, running maximum \| ([\d.]+) % \|/,
+  gets: [() => getHardwareCpu().latest.max],
+  exact: true,
+});
+PROSE.push({
+  doc: 'apps/workbench performance.ts',
+  re: /The first read ([\d.]+) to ([\d.]+) percent with a ([\d.]+) percent maximum/,
+  gets: [() => getHardwareCpu().first.lo, () => getHardwareCpu().first.hi, () => getHardwareCpu().first.max],
+  exact: true,
+});
 
 /* This file's own figure count, quoted in two documents that tell a reader
  * what it covers. Checked last and deliberately not counted in the total,
@@ -985,7 +1208,22 @@ function sigDigits(text) {
   return digits.length;
 }
 
-function agrees(text, actual) {
+/* `exact` refuses both host-drift allowances. They exist for figures this
+ * machine measured and another machine would measure slightly differently:
+ * flash bytes from a different toolchain build, parity residuals from a
+ * different libm. A number read off a serial console is not that. It is a
+ * fact about one run on one board, the same on every host that reads this
+ * document, and under --allow-host-drift the relative allowance is 25
+ * percent, which would have let 47.3 stand against anything from 37.8 to
+ * 59.1. Measured: the first version of the CPU check passed a mutation that
+ * moved the source table from 47.3 to 47.9, silently, and looked green.
+ *
+ * The same applies to every COUNT: how many parity rows a harness prints is
+ * the same number on every host, and the integer allowance is plus or minus
+ * 16 because it exists for a byte figure. Measured, on the day the flag was
+ * added: adding a 41st parity row left thirteen documents saying 40, and six
+ * of those were inside this checker and passed, reported only as a note. */
+function agrees(text, actual, exact = false) {
   if (typeof actual === 'string') return text === actual;
   if (actual === undefined || Number.isNaN(actual)) return false;
   const sig = sigDigits(text);
@@ -995,7 +1233,7 @@ function agrees(text, actual) {
    * into a sentence. Whole numbers only: a tolerance on a ratio, a percentage
    * or an error bound would be meaningless, and those are the other things
    * prose carries. */
-  if (ALLOW_HOST_DRIFT && Number.isInteger(actual) && Number.isInteger(Number(text))) {
+  if (!exact && ALLOW_HOST_DRIFT && Number.isInteger(actual) && Number.isInteger(Number(text))) {
     const delta = actual - Number(text);
     if (delta !== 0 && Math.abs(delta) <= HOST_DRIFT_BYTES) {
       driftAllowed++;
@@ -1017,7 +1255,7 @@ function agrees(text, actual) {
    * throughout. So this is about a hundred times tighter than the thing that
    * actually decides whether the port still matches.
    */
-  if (ALLOW_HOST_DRIFT && Number.isFinite(actual) && Number.isFinite(Number(text))) {
+  if (!exact && ALLOW_HOST_DRIFT && Number.isFinite(actual) && Number.isFinite(Number(text))) {
     const want = Number(text);
     if (want !== 0) {
       const rel = Math.abs(actual - want) / Math.abs(want);
@@ -1097,7 +1335,12 @@ function report(label, where, docText, actual) {
 
 for (const doc of DOCS) {
   const { path, label, rows } = doc;
-  const lines = readFileSync(path, 'utf8').split('\n');
+  let lines = readFileSync(path, 'utf8').split('\n');
+  /* A claim inside a block comment is broken by the ` * ` that continues it,
+   * and flatten() would join "and 2" to "* of 24 audio blocks". Dropping the
+   * marker keeps the line count, so reported line numbers stay right. Markdown
+   * documents are left alone, where a leading * is a bullet. */
+  if (doc.code) lines = lines.map((l) => l.replace(/^(\s*)\*\s?/, '$1'));
   const missing = [];
 
   for (const row of rows) {
@@ -1180,7 +1423,7 @@ for (const doc of DOCS) {
         checked++;
         const docText = hit.m[g + 1];
         const actual = claim.gets[g]();
-        if (!agrees(docText, actual)) report(label, `line ${hit.line}`, docText, actual);
+        if (!agrees(docText, actual, claim.exact)) report(label, `line ${hit.line}`, docText, actual);
       }
     }
   }

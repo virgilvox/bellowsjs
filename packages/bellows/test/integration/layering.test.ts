@@ -160,3 +160,37 @@ describe('dependency direction', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('the contracts file', () => {
+  it('has no export in it that nothing consumes', () => {
+    /*
+     * CLAUDE.md names src/types.ts as the contract every domain touches, so
+     * a declaration sitting there unused does not read as dead code, it
+     * reads as a contract somebody is honouring. TempoPoint was one:
+     * declared, never imported, never re-exported, while seq/tempomap.ts
+     * carried its own Point shape the whole time.
+     *
+     * A name counts as consumed when any other .ts file under src/ or test/
+     * spells it out. That is crude in the safe direction: an importer has no
+     * way to avoid naming it, so this cannot report a live export as dead.
+     * This file is excluded from the search, or the comment above would
+     * count as a consumer of the very name it is about.
+     */
+    const typesFile = join(SRC, 'types.ts');
+    const selfFile = fileURLToPath(import.meta.url);
+    const declared = [
+      ...readFileSync(typesFile, 'utf8').matchAll(
+        /^export (?:interface|type|const enum|function) ([A-Za-z0-9_]+)/gm,
+      ),
+    ].map((m) => m[1]);
+    expect(declared.length).toBeGreaterThan(10);
+    const others = [...allSources(SRC), ...allSources(join(SRC, '..', 'test'))].filter(
+      (p) => p !== typesFile && p !== selfFile,
+    );
+    const bodies = others.map((p) => readFileSync(p, 'utf8'));
+    const unused = declared.filter(
+      (name) => !bodies.some((b) => new RegExp(`\\b${name}\\b`).test(b)),
+    );
+    expect(unused).toEqual([]);
+  });
+});

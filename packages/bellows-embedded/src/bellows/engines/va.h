@@ -52,6 +52,19 @@ class Va {
 
   void SetParams(const Params& p) { p_ = p; Apply(); }
 
+  /* Retune a sounding voice without restarting it. UpdateControl derives
+   * every oscillator frequency from freq_ on the next control tick, 16
+   * samples away at most, so the new pitch lands there and no envelope,
+   * filter state or oscillator phase is disturbed. That is what a pitch
+   * wheel and a glide both need, and NoteOn was the only writer of freq_.
+   * `!(freq > 0)` rather than `freq <= 0` so a NaN is rejected too: both
+   * comparisons are false for NaN, and a NaN freq_ turns every sample from
+   * here on into a NaN with no way back. */
+  void SetFreq(float freq) {
+    if (!(freq > 0.0f)) return;
+    freq_ = freq;
+  }
+
   void NoteOn(float freq, float vel) {
     freq_ = freq;
     vel_ = vel;

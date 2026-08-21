@@ -13,6 +13,13 @@ class VoicePool {
 
   V& at(int i) { return slots_[i].voice; }
 
+  /* The note id a slot took, or -1 if it never took one. Paired with
+   * at(i).Active() this is how a caller reaches the voices that are
+   * actually sounding: the pool picks the slot by the steal order, so the
+   * caller cannot derive which slot holds which note from the order the
+   * note ons arrived in. */
+  int NoteIdAt(int i) const { return slots_[i].note_id; }
+
   void NoteOn(int note_id, float freq, float vel, uint32_t frame) {
     Slot* pick = nullptr;
     for (auto& s : slots_) if (!s.voice.Active()) { pick = &s; break; }

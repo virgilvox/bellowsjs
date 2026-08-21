@@ -32,11 +32,31 @@ function svf(mode: SvfMode, cutoff: number, q: number, gainDb = 0): Svf {
   return f;
 }
 
+/*
+ * Half power, 10 * log10(0.5). The trapezoidal SVF prewarps with
+ * g = tan(pi * fc / fs), which maps the analog cutoff exactly onto fc, so
+ * at Butterworth q the lowpass and the highpass both sit here and sit at
+ * the same level as each other. Measured with the responseDb helper above
+ * at SR = 48000, both read -3.010299957 to within 2e-13 dB at 80, 250,
+ * 1000, 3000, 6000 and 12000 Hz, so a 0.01 dB band is ten orders of
+ * magnitude above the float noise and still fails on a g that is 0.12
+ * percent off. The -4 to -2 dB band this replaced passed a g mistuned by
+ * 10 percent and only failed at about 12, which is the whole point of
+ * pinning it here: these are the tests that name cutoff, so these are the
+ * tests that have to fail when cutoff moves.
+ *
+ * The tolerance is on the filter, not on the measurement. responseDb sums
+ * over a whole number of periods only when the frequency divides the
+ * sample rate exactly; at 44100 and 80 Hz the same reading comes back
+ * 2.6e-4 dB off for that reason alone, which is still far inside 0.01 but
+ * is not the filter moving.
+ */
+const HALF_POWER_DB = 10 * Math.log10(0.5);
+
 describe('Svf lowpass', () => {
-  it('is about -3 dB at cutoff with Butterworth q', () => {
+  it('is at the half power point at cutoff with Butterworth q', () => {
     const db = responseDb(svf('lp', 1000, Math.SQRT1_2), 1000);
-    expect(db).toBeGreaterThan(-4);
-    expect(db).toBeLessThan(-2);
+    expect(Math.abs(db - HALF_POWER_DB)).toBeLessThan(0.01);
   });
 
   it('is well down an octave above cutoff', () => {
@@ -51,10 +71,9 @@ describe('Svf lowpass', () => {
 });
 
 describe('Svf highpass', () => {
-  it('is about -3 dB at cutoff with Butterworth q', () => {
+  it('is at the half power point at cutoff with Butterworth q', () => {
     const db = responseDb(svf('hp', 1000, Math.SQRT1_2), 1000);
-    expect(db).toBeGreaterThan(-4);
-    expect(db).toBeLessThan(-2);
+    expect(Math.abs(db - HALF_POWER_DB)).toBeLessThan(0.01);
   });
 
   it('is well down an octave below cutoff', () => {
@@ -65,6 +84,32 @@ describe('Svf highpass', () => {
   it('is flat well above cutoff', () => {
     const db = responseDb(svf('hp', 1000, Math.SQRT1_2), 8000);
     expect(Math.abs(db)).toBeLessThan(0.5);
+  });
+});
+
+describe('Svf cutoff tuning', () => {
+  it('lands on the half power point at every cutoff, to a hundredth of a dB', () => {
+    for (const fc of [80, 250, 3000, 6000]) {
+      const lp = responseDb(svf('lp', fc, Math.SQRT1_2), fc);
+      const hp = responseDb(svf('hp', fc, Math.SQRT1_2), fc);
+      expect(Math.abs(lp - HALF_POWER_DB)).toBeLessThan(0.01);
+      expect(Math.abs(hp - HALF_POWER_DB)).toBeLessThan(0.01);
+    }
+  });
+
+  /*
+   * A tuning check that no overall gain error can hide in: whatever the
+   * level, the two outputs cross at cutoff. Measured, g mistuned by 0.1
+   * percent opens this gap to 0.0174 dB and by 1 percent to 0.173 dB, so
+   * this one catches about twice as fine a tuning error as the two
+   * assertions above.
+   */
+  it('crosses lowpass and highpass at the same level at cutoff', () => {
+    for (const fc of [80, 1000, 6000]) {
+      const lp = responseDb(svf('lp', fc, Math.SQRT1_2), fc);
+      const hp = responseDb(svf('hp', fc, Math.SQRT1_2), fc);
+      expect(Math.abs(lp - hp)).toBeLessThan(0.01);
+    }
   });
 });
 
@@ -184,6 +229,32 @@ describe('LadderFilter', () => {
     const flat = responseDb(ladder(1000, 0), 1000, 0.02);
     const peaked = responseDb(ladder(1000, 0.9), 1000, 0.02);
     expect(peaked - flat).toBeGreaterThan(5);
+  });
+
+  /*
+   * The peak does not become an oscillator anywhere in the documented
+   * range, which is what set() now says. Measured on an impulse followed
+   * by silence, at resonance 1 the peak over the second half second is
+   * 2.3e-4 at fc 250, 7e-25 at 1000 and 0 at 4000, each far below the peak
+   * over the first half second. Raising k past 4 puts fc 250 into a steady
+   * 9e-2 tail that never decays, which is what this catches.
+   *
+   * Do not add a lower cutoff to the list. The decay is slower the lower
+   * the cutoff goes: fc 125 reads 1.3e-3 at the same point, which is still
+   * decaying (3e-9 by nine seconds) but is over the bound below.
+   */
+  it('does not self-oscillate at the top of the documented resonance range', () => {
+    const half = Math.round(SR * 0.5);
+    for (const fc of [250, 1000, 4000]) {
+      const f = ladder(fc, 1);
+      f.next(1);
+      let early = 0;
+      for (let n = 0; n < half; n++) early = Math.max(early, Math.abs(f.next(0)));
+      let late = 0;
+      for (let n = 0; n < half; n++) late = Math.max(late, Math.abs(f.next(0)));
+      expect(late).toBeLessThan(1e-3);
+      expect(late).toBeLessThan(early * 0.5);
+    }
   });
 
   it('stays bounded under loud input at high resonance for one second', () => {

@@ -62,8 +62,8 @@ The freestanding figure for the same voice, measured by
 `tools/size-report.sh` with no SDK at all, is 3776 B of flash and 1100 B of
 RAM, of which 1024 B is the test harness's own scratch buffers. That is what
 the documented command prints on a stock checkout, because `size-report.sh`
-finds whichever `arm-none-eabi-g++` is first under `~/.platformio/packages`
-and that is the 11.3 Teensy toolchain. Building it with the 9.2.1 xPack
+picks the `arm-none-eabi-g++` whose version `docs/HARDWARE.md` names and that
+is the 11.3 Teensy toolchain. Building it with the 9.2.1 xPack
 compiler this Daisy image uses gives 3768 B and 1088 B instead. The gap is
 the compiler, not the code, which is worth knowing before treating an eight
 byte drift as a regression. The freestanding and whole-firmware numbers are

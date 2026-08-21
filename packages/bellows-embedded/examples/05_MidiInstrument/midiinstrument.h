@@ -18,9 +18,13 @@
  *   Pitch bend is 14 bits across two 7-bit bytes, and its centre is 8192,
  *   not 8191 or 8193. MidiMessage::Bend() returns -1..1 already scaled.
  *
- * Bend is applied by retuning every sounding voice once per block, which
- * is the same rate a param ramp steps at in the TypeScript kernel and far
- * finer than a pitch wheel is played. */
+ * Bend retunes every sounding voice on the first block after the wheel
+ * moves, and Va picks the new pitch up on its next control tick, 16
+ * samples away at most. Nothing restarts: SetFreq writes freq_ and the
+ * envelopes, the filter state and the oscillator phases carry on. The pool
+ * chooses the slot, so the note a slot is holding comes back from
+ * VoicePool::NoteIdAt and not from note_of_[], which this file fills in
+ * arrival order for all-notes-off and which does not track slot order. */
 #pragma once
 
 #include "bellows/config.h"
@@ -82,6 +86,7 @@ class Instrument {
       case bellows::midi::Kind::kPitchBend:
         /* Two semitones either way, the near-universal default range. */
         bend_ratio_ = bellows::fm::SemisRatio(m.Bend() * 2.0f);
+        bend_dirty_ = true;
         break;
       case bellows::midi::Kind::kControlChange:
         if (m.data1 == 74) {                 /* CC74 is the MPE brightness CC */
@@ -109,6 +114,12 @@ class Instrument {
     if (dirty_) {
       for (int i = 0; i < kPoly; ++i) pool_.at(i).SetParams(base_);
       dirty_ = false;
+    }
+    if (bend_dirty_) {
+      for (int i = 0; i < kPoly; ++i) {
+        if (pool_.at(i).Active()) pool_.at(i).SetFreq(HzOf(pool_.NoteIdAt(i)));
+      }
+      bend_dirty_ = false;
     }
     pool_.Process(l, r, from, to);
     frame_ += static_cast<uint32_t>(to - from);
@@ -139,6 +150,7 @@ class Instrument {
   float bend_ratio_ = 1.0f;
   uint32_t frame_ = 0;
   bool dirty_ = false;
+  bool bend_dirty_ = false;
 };
 
 }  // namespace midiinstrument

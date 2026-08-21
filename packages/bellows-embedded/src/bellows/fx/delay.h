@@ -5,6 +5,7 @@
  * so the caller pays for the delay range they asked for and nothing
  * more. StereoDelayExt takes caller-placed storage for SDRAM/PSRAM. */
 #pragma once
+#include "bellows/config.h"
 #include "bellows/dsp/delayline.h"
 #include "bellows/dsp/envelopes.h"
 #include "bellows/dsp/filters.h"
@@ -96,7 +97,7 @@ class StereoDelayExt {
 };
 
 /* Owning form: kMaxMs of delay per side, in .bss. */
-template <uint32_t kMaxMs = 500, uint32_t kSampleRate = 48000>
+template <uint32_t kMaxMs = 500, uint32_t kSampleRate = BELLOWS_SAMPLE_RATE>
 class StereoDelay : public StereoDelayExt {
  public:
   static constexpr uint32_t kCap = (kMaxMs * kSampleRate) / 1000 + 4;

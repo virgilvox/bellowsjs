@@ -36,6 +36,40 @@ describe('colaNorm', () => {
   });
 });
 
+/*
+ * Pairs that cannot reconstruct are refused, and the test is on the pair.
+ * Measured: hann at fftSize 1024 puts 21 positions at or under the guard at
+ * hop 1024 and 17 at hop 1020, and before the guard threw, hann at fftSize
+ * 256 and hop 256 dropped 5 of every 256 output samples to zero. A
+ * rectangular window at the same hop sums to 1 everywhere and reconstructs
+ * to 1.5e-7, which is why a plain bound on hop would be the wrong fix.
+ */
+describe('window and hop pairs that cannot reconstruct', () => {
+  it('refuses hann at and just under hop = fftSize on both synthesis classes', () => {
+    expect(() => new Istft(1024, 1024)).toThrow(/reconstruct/);
+    expect(() => new StftProcessor(1024, 1024)).toThrow(/reconstruct/);
+    expect(() => new Istft(1024, 1020)).toThrow(/reconstruct/);
+  });
+
+  it('accepts hop = fftSize when the window supports it, and reconstructs', () => {
+    const n = 256;
+    const rect = new Float32Array(n).fill(1);
+    const proc = new StftProcessor(n, n, rect);
+    const input = sine(431, SR, 4096, 0.5);
+    const buf = input.slice();
+    proc.process(buf, 0, buf.length);
+    let worst = 0;
+    for (let i = 3 * n; i < buf.length; i++) {
+      worst = Math.max(worst, Math.abs(buf[i] - input[i - n]));
+    }
+    expect(worst).toBeLessThan(1e-4);
+  });
+
+  it('leaves analysis alone: Stft builds no normalization to divide by', () => {
+    expect(() => new Stft(1024, 1024)).not.toThrow();
+  });
+});
+
 describe('Stft', () => {
   it('emits one frame per hop once the window has filled', () => {
     const stft = new Stft(1024, 256);

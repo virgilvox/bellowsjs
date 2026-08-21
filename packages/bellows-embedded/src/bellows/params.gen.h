@@ -7,7 +7,10 @@
  * Regenerate after any ParamSpec change (node tools/gen-tables.mjs): if a
  * param was added, renamed or re-defaulted in TypeScript and the C++ side
  * was not updated, it shows up in this diff. tools/gen-tables.mjs --check
- * fails when the committed copy is stale, so CI catches the omission.
+ * fails when the committed copy is stale, so CI catches the omission, and
+ * tools/check-params.mjs reads the c++ field column back out and fails when
+ * a copied default no longer equals the number above it, so the copy is
+ * checked by a machine and not by whoever happens to read the diff.
  *
  * Param names are comments, never data. A string table of param names
  * would put every name of every unit in flash and invite a string keyed

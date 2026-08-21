@@ -114,13 +114,6 @@ export interface Analyzer {
  */
 export type TimeValue = number | string;
 
-/** A tempo automation point. Interpolation from the previous point is linear in bpm. */
-export interface TempoPoint {
-  /** Position in beats. */
-  beat: number;
-  bpm: number;
-}
-
 /* ------------------------------------------------------------------ */
 /* Kernel events                                                       */
 /* ------------------------------------------------------------------ */

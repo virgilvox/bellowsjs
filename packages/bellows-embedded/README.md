@@ -190,45 +190,52 @@ define them before including any bellows header.
 
 ## Installing
 
-**PlatformIO**, from this repository:
+**Arduino IDE.** It is in the Library Manager. Open Sketch, Include Library, Manage
+Libraries, search for `Bellows`, install. Or from the command line:
 
-```ini
-lib_deps = https://github.com/virgilvox/bellowsjs.git#main
+```
+arduino-cli lib install Bellows
 ```
 
-Point `lib_extra_dirs` at `packages/bellows-embedded` if you have cloned the monorepo.
+**PlatformIO.** It is in the registry:
 
-**Arduino IDE**. Copy `packages/bellows-embedded` into your sketchbook's `libraries/` folder
-and rename it `Bellows`, so the folder name matches `name=Bellows` in `library.properties`.
-Restart the IDE and it appears under Sketch, Include Library.
+```ini
+lib_deps = virgilvox/Bellows
+```
+
+Pin a version with `virgilvox/Bellows@0.1.1` if you want one. To build against a working copy
+instead, point `lib_extra_dirs` at `packages/bellows-embedded` in a clone of the monorepo, or
+take `main` directly with `lib_deps = https://github.com/virgilvox/bellowsjs.git#main`.
 
 The layout is the Arduino 1.5 format: everything is under `src/`, so
 `#include <bellows/engines/drums.h>` resolves once the library is installed, and
 `#include <Bellows.h>` pulls in the convenience umbrella header that `library.properties`
-names in `includes=`. There are no `.cpp` files at all, which is why `dot_a_linkage` is not
-set: it asks the builder to archive compiled library sources into a `.a`, and there are none
-to archive.
+names in `includes=`. Include `<Bellows.h>` first, before any `<bellows/...>` header: the
+Arduino builder attributes a sketch's includes to libraries by name, and a nested path alone
+does not tell it which library to add to the include path. There are no `.cpp` files at all,
+which is why `dot_a_linkage` is not set: it asks the builder to archive compiled library
+sources into a `.a`, and there are none to archive.
 
-Two things about this path are worth knowing before you rely on it.
+**This path is tested now, and it was broken until it was.** Every build in this repository
+went through PlatformIO for the whole life of the port, which passes an include path that
+hides two separate Arduino packaging faults, and both were live: no example included
+`<Bellows.h>`, and six examples reached a sibling folder for a shared header. Installed into a
+sketchbook, every single example failed to compile. Both are fixed, `tools/check-package.mjs`
+gates them, and the check that matters is done against the published artifact rather than the
+source tree: `arduino-cli lib install Bellows@0.1.1` into an empty sketchbook, then 16 of the
+17 examples compile for a Teensy 4.1. The seventeenth is `12_DacOut`, which declines with an
+`#error` because a Teensy 4.x has no DAC. `05_MidiInstrument` needs Tools, USB Type, Serial +
+MIDI, which is `--fqbn teensy:avr:teensy41:usb=serialmidi` on the command line, and is not a
+defect either.
 
-**It has not been tested.** Every build in this repository goes through PlatformIO. Nobody
-has compiled a sketch from the Arduino IDE against an installed copy of this library, so
-treat the paragraph above as the intended path rather than a verified one.
-
-**Six of the examples include across folders** and the Arduino IDE may not resolve them.
-`11_I2SAmp`, `12_DacOut`, `13_BareOutput`, `15_Piezo`, `16_WorkstationPiezo` and
-`17_WorkstationI2S` each reach a sibling example for a shared header, for instance
-`#include "../10_AudioShield/audioshield.h"`. PlatformIO resolves that because it compiles
-the folder in place; the Arduino IDE preprocesses a sketch into a build directory first, so a
-relative path out of the sketch folder is a different question there. If one of those six
-fails to compile in the IDE, copy the header it names next to the sketch. The other eleven
-examples are self-contained.
-
-**Library Manager.** Not listed, and this repository is the reason: the Arduino Library
-Manager indexes whole repositories rather than subdirectories, and this library is one
-package inside a monorepo. Listing needs either a mirror repository holding only this folder
-or a release-zip submission. That decision is recorded as open in `docs/HANDOFF.md` under
-Milestone 6.
+**Two channels, one library, and the examples are not byte-identical between them.** Six
+examples share a patch with a sibling folder, for instance
+`#include "../10_AudioShield/audioshield.h"`, so that comparing two output examples compares
+converters rather than programs. PlatformIO compiles a folder in place and resolves that. The
+Arduino IDE preprocesses a sketch into a build directory first and does not, measured rather
+than assumed, so the Arduino package carries a copy of the header next to each sketch with the
+include rewritten. `tools/build-mirror.sh` does that on every release, from the shared header,
+so the copies cannot drift. Everything else is the same file.
 
 ## Relationship to the JavaScript library
 
@@ -259,7 +266,7 @@ delay         9.54e-8   4.66e-8 0.000001  pass
 plate         1.34e-5   1.00e-5  0.00015  pass
 ```
 
-40 rows in all, plus `npm run tables`, which compares the parts that make no sound
+41 rows in all, plus `npm run tables`, which compares the parts that make no sound
 (scales, chords, euclid, arp, cellular automata, the tempo map, MIDI parsing) exactly rather
 than by tolerance: 428 rows, 0 mismatched.
 

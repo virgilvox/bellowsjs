@@ -48,8 +48,16 @@
  * pieces, not one piece played twice with different noise.
  *
  * The seed still decides everything, which is the library's whole promise,
- * so it is printed at startup. Write down a number you liked and put it in
- * kPinnedSeed to hear that piece again.
+ * so it is printed. Write down a number you liked and put it in kPinnedSeed
+ * to hear that piece again.
+ *
+ * Getting the number off the board is fussier than it sounds and it used to
+ * be impossible. A host cannot open the USB serial port before setup() has
+ * run, and a Teensy throws output away when nothing is listening, so the
+ * startup banner was reliably lost and the seed with it. Two things fix it:
+ * setup() waits up to two seconds for a listener before printing, and the
+ * periodic report carries the seed as well, so a console attached at any
+ * point in the piece still shows it.
  */
 
 #include <Audio.h>
@@ -63,6 +71,9 @@
 static constexpr uint32_t kPinnedSeed = 0;
 
 static workstation::Piece piece;
+
+/* Set by setup() and read by loop(), which reprints it every two seconds. */
+static uint32_t composed_seed = 0;
 
 /*
  * A seed that differs every time the board powers up.
@@ -125,8 +136,8 @@ void setup() {
   const float sr = bellows::TeensySampleRate();
   piece.Init(sr, 96);
 
-  const uint32_t seed = kPinnedSeed != 0u ? kPinnedSeed : BootSeed();
-  piece.Compose(seed);
+  composed_seed = kPinnedSeed != 0u ? kPinnedSeed : BootSeed();
+  piece.Compose(composed_seed);
 
   /* AudioMemory LAST, and this ordering is load bearing.
    *
@@ -139,12 +150,20 @@ void setup() {
    * trap page. */
   AudioMemory(24);
 
+  /* Wait for a console, but not forever: the board has to run standalone.
+   * Serial is true once the host asserts DTR, which is what opening the port
+   * does. Two seconds is long enough to catch a console that was already
+   * open, and short enough that a board on a battery just plays. The audio
+   * is already running by here, so the wait costs nothing but the banner. */
+  while (!Serial && millis() < 2000) {
+  }
+
   if (!piece.Trained()) Serial.println("workstation: markov table full, melody is truncated");
   Serial.println("07_Workstation -> I2S amp, summed to mono");
   Serial.print("sample rate ");
   Serial.println(sr);
   Serial.print("seed ");
-  Serial.print(seed);
+  Serial.print(composed_seed);
   Serial.println("   put this in kPinnedSeed to hear it again");
 }
 
@@ -163,5 +182,7 @@ void loop() {
   Serial.print(AudioProcessorUsageMax(), 1);
   Serial.print("%  mem ");
   Serial.print(AudioMemoryUsageMax());
+  Serial.print("  seed ");
+  Serial.print(composed_seed);
   Serial.println();
 }

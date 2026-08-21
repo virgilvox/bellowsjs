@@ -58,10 +58,19 @@ export class Adsr {
   }
 
   /**
-   * Times in seconds, sustain 0..1. Safe to call while running. A call
-   * carrying any non-finite argument is ignored whole; the coef guard above
-   * and the sustain clamp are the second line, and both still matter for
-   * zero and negative times.
+   * Times in seconds, sustain 0..1. A call carrying any non-finite argument
+   * is ignored whole; the coef guard above and the sustain clamp are the
+   * second line, and both still matter for zero and negative times.
+   *
+   * Safe to call while running covers the three times and not the fourth
+   * argument. The times are rates: a new one changes the slope of the
+   * segment in flight and never its level, so nothing needs a reset and
+   * there is nothing to hear. Sustain is a level, and the Sustain branch
+   * below assigns it every sample, so a voice that is already sustaining
+   * steps to the new value on the very next sample. That is the same jump
+   * any other level would make, and the answer is the same: a control a
+   * player can move during a held note goes through Smoother in this file,
+   * or lands at a note boundary.
    */
   set(attack: number, decay: number, sustain: number, release: number): void {
     if (

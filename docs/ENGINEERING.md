@@ -154,7 +154,7 @@ changes the golden render and every va parity row, so it is a decision and not a
 ### 2.5 Analysis: pitch and onsets
 **YIN:** CMNDF `d'(τ) = d(τ)·τ/Σ_{j≤τ}d(j)`, `d'(0)=1`; threshold **0.10–0.15**; first local minimum below threshold else global min; parabolic interpolation over (τ−1,τ,τ+1); unvoiced if dip > ~0.3–0.5. Window 1024–2048 @ 44.1k, hop W/2–W/4.
 **MPM (default for monophonic realtime):** NSDF via FFT autocorrelation; key maxima between positive-going zero crossings; pick first key max ≥ **0.93**·n_max; clarity = peak value, voiced when > ~0.8–0.9. Window 2048, hop 256–1024.
-**Onsets: spectral flux:** L1 half-wave-rectified magnitude difference with log compression `log(1+γ|X|)`, γ ≈ 1–20; 2048-sample Hann window @ 44.1k, **hop 441 (10 ms)**. Peak picking (Dixon): local max over ±3 frames AND ≥ mean(SF[n−9…n+3]) + δ AND ≥ 30–50 ms since last onset. Optional adaptive threshold `δ + median(SF[n−M…n+M])`, M ≈ 5–10; SuperFlux ±1–2-bin frequency max-filter for vibrato robustness.
+**Onsets: spectral flux (proposal, not what shipped: see the AS BUILT note below):** L1 half-wave-rectified magnitude difference with log compression `log(1+γ|X|)`, γ ≈ 1–20; 2048-sample Hann window @ 44.1k, **hop 441 (10 ms)**. Peak picking (Dixon): local max over ±3 frames AND ≥ mean(SF[n−9…n+3]) + δ AND ≥ 30–50 ms since last onset. Optional adaptive threshold `δ + median(SF[n−M…n+M])`, M ≈ 5–10; SuperFlux ±1–2-bin frequency max-filter for vibrato robustness.
 
 **AS BUILT.** YIN, MPM, the BS.1770 K-weighting prototypes, the Cytomic SVF tick, the Dattorro
 lengths and diffuser gains and the phase-vocoder spec above all match the code; YIN's 0.1
@@ -165,7 +165,15 @@ compression at all, normalises it by the bin count, and picks peaks the "optiona
 than the Dixon way: a three-frame local maximum above `1.5 * median` of the trailing 21 frames
 plus a floor of 0.01, with a 0.08 s refractory period. Frame size, hop, median window,
 multiplier, floor and refractory are all constructor options, so the defaults are the claim here,
-not a limit. No SuperFlux frequency max-filter. `estimateTempo` folds candidates into
+not a limit. No SuperFlux frequency max-filter. Treat that difference as settled rather than as a
+cleanup waiting to happen. The detector timestamps a frame at the sample the frame starts on,
+not at its centre or its end, so a longer frame reports every onset earlier: move the defaults to
+the 2048-sample frame this section asks for and the click-track case in
+`test/analysis/onset.test.ts` fails, because its clicks come back early enough to break the 30 ms
+that test allows. Adopting 2.5 means moving where a frame is timestamped as well as moving two
+numbers, and hop 441 is a 44.1k figure in a class that takes its sample rate at construction.
+Nothing machine-checks this paragraph: `check-docs.mjs` reads one figure in this file, the BLEP
+table size in 2.1, so the six defaults above are kept by hand. `estimateTempo` folds candidates into
 [75, 150) bpm, so 60 and 240 bpm both report 120, which is a property of the fold and not a bug.
 
 ### 2.6 Loudness: EBU R128 / BS.1770

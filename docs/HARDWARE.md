@@ -7,16 +7,29 @@ compiled with `arm-none-eabi-g++` 11.3.1 at `-Os` with `-ffunction-sections -fda
 Arduino core and no BSP, so the figures are the library and nothing else.
 
 Read that version as part of the measurement, because the compiler is not interchangeable here.
-`size-report.sh` takes the first `arm-none-eabi-g++` on `PATH` and otherwise the first under
-`~/.platformio/packages`, and this machine has two: 11.3.1 from the Teensy toolchain, which is
-what a run with an empty `PATH` finds and what every figure below came from, and 9.2.1 from the
-generic one. Running the whole report under both moves 36 of its 37 rows: `s1_kick` 3752 against
-3760, `s4_va` 29560 against 28576, `s9c_fm` 5800 against 5384. An earlier revision of this line
-said the two were byte identical, which was written from a report that had not been re-run.
-`check-docs.mjs` therefore does not just read the version out of whichever compiler it finds; it
-reads this sentence, finds the compiler that reports that version, and puts it at the front of
-`PATH` for the size report, so a machine with two toolchains cannot silently produce a different
-document.
+This machine has two: 11.3.1 from the Teensy toolchain, which is where every figure below came
+from, and 9.2.1 from the generic one. Running the whole report under both moves 36 of its 37
+rows, 11.3.1 first in each pair: `s1_kick` 3760 against 3752, `s4_va` 28640 against 29560,
+`s9c_fm` 5384 against 5800. Two earlier revisions of this line were wrong in different ways: the
+first said the two toolchains were byte identical, which was written from a report that had not
+been re-run, and the second quoted `s4_va` at 28576, a figure from an older build that matches
+neither column now. Nothing machine-checks the six figures in this paragraph, which is how 28576
+survived, so read them against the rows that are checked: `s4_va` 28640 in the fast-math table
+below and `s9c_fm` 5384 in the per-module table.
+
+`size-report.sh` used to take the first `arm-none-eabi-g++` on `PATH` and otherwise the first one
+`find` returned under `~/.platformio/packages`, and that second order is not stable: fifteen
+consecutive runs of that command on this machine returned the two installs in a different order,
+nine times and six, so the first command in the block below silently produced a different
+document on some runs. It now reads the version named at the top of this file, picks the install
+whose `-dumpversion` reports it, prints that compiler as the second line of the report, and warns
+on stderr when it had to settle for another one. `BELLOWS_CXX` and an `arm-none-eabi-g++` already
+on `PATH` still win, in that order.
+
+`check-docs.mjs` pins from the other end: it reads the version out of the first paragraph of this
+document, finds the compiler that reports it, puts that compiler at the front of `PATH` for the
+size report, and reads the report's own compiler line back, so a machine with two toolchains
+cannot silently produce a different document.
 
 Reproduce any of it with:
 
@@ -500,7 +513,7 @@ so they cannot drift from the code:
 | `02_DrumMachine` (bank plus euclid) | 30120 B | 1620 B |
 | `03_PolySynth` (`VoicePool<Va, 8>`) | 30280 B | 3876 B |
 | `04_ScalesAndTuning` | 8096 B | 30176 B |
-| `05_MidiInstrument` | 30616 B | 3888 B |
+| `05_MidiInstrument` | 30728 B | 3888 B |
 
 Against real boards, using the largest profile:
 
@@ -700,7 +713,7 @@ is what `bellows/bank.h` is.
 
 `test/parity/parity.mjs` renders the same note from both implementations and diffs them. It runs
 in CI. The gates sit at roughly ten times the drift actually measured, so they catch a regression
-rather than rubber stamping anything that runs. The harness prints 40 rows in all; the block
+rather than rubber stamping anything that runs. The harness prints 41 rows in all; the block
 below is the engine and effect subset, without the four bit-exact `fxin` input rows or the
 per-curve and per-shape variants.
 
