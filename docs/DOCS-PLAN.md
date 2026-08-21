@@ -9,6 +9,12 @@ suit someone who wants to write music. That is correct, and this document works
 out why, what good looks like, and what to do about it in an order that can be
 executed and checked.
 
+`docs/DOCS-RESEARCH.md` is the evidence behind it, from programming education,
+maker documentation and studies of how developers use documentation. Six of its
+findings changed this plan after it was first written, and each of those is
+marked below with **(research)** so the reason is traceable rather than a matter
+of taste.
+
 ## 1. The diagnosis
 
 ### 1.1 Two of the four kinds of documentation are missing entirely
@@ -157,6 +163,27 @@ Four trees, in Diátaxis order, with the tutorial visually first.
 One narrative. No alternatives, no digressions, no "you could also". Each page
 ends with something audible and one obvious next step.
 
+**(research) Each page follows PRIMM**, which is the mainstream model for
+teaching text-based programming and is built on Use-Modify-Create: predict, run,
+investigate, modify, make. The first draft of this plan had only Use and Modify,
+play a firmware and drag two sliders, and was missing the two stages that turn
+listening into learning.
+
+- **Predict** before every `listen` block. "Decay is 0.35 seconds. What happens
+  if you drag it to 2.0? Decide, then find out." Committing to a guess before
+  seeing the answer is the cheapest intervention available in a written page.
+- **Investigate** after it. Show the code, ask the reader to FIND the line that
+  did what they just heard. Finding, not explaining.
+- **(research) Each page ends by repacking.** Semantic waves: an explanation
+  works by unpacking an abstract idea into something concrete and then packing
+  it back up under its proper name. A tutorial that only ever descends produces
+  somebody who can follow the tutorial and build nothing else. So every page
+  closes with one or two sentences naming what the reader just did in the
+  library's vocabulary.
+- **(research) The pages reuse the same programs** rather than a fresh one each
+  time, so the reader meets a familiar shape repeatedly and starts to chunk it.
+  Chunking is what makes code reading stop costing working memory per token.
+
 1. **Make a sound.** In the browser, no install, no board. A kick drum, a play
    button, then change two numbers and hear the difference. One signposted exit
    at the top for readers who already own a board and want hardware now, because
@@ -192,6 +219,19 @@ form today. Silence with no error is this domain's signature failure.
 reference and mostly stay. The work is subtraction: the explanatory passages
 inside them move to Explanation, so reference is facts and lookup. Keep the
 `Params` tables, the defaults, the costs.
+
+Two additions, both **(research)**:
+
+- **Lead with a snippet, not a table.** An observation study of how developers
+  use documentation found they scan results linearly until one has a code
+  example, repeating up to a dozen times. A reader scanning for code should hit
+  code. The tables stay, underneath.
+- **One line of scenario per engine.** The field study of API learning
+  obstacles, over 440 developers, named "matching the API to scenarios" as one
+  of five factors, and it is the one this project has least of. The reference
+  says what `Pluck` is and never says what you would reach for it to make.
+  `Pluck` is a Karplus-Strong loop AND it is guitars, harps, anything with a
+  string. Both sentences, in that order.
 
 ### 4.4 Explanation, existing, gathered and added to
 
@@ -255,6 +295,13 @@ Instead:
   reader is asking, and the tutorial links to it.
 - **It does not simplify the reference.** A musician who gets three pages in
   wants to know what `bowPressure` does, and the reference already says.
+  **(research)** There is a name for why this would be a mistake: the expertise
+  reversal effect. Guidance that helps a novice measurably harms an expert, who
+  does better with it removed. The nine existing pages are not bad
+  documentation, they are documentation for a reader with prior knowledge, and
+  padding them with hand-holding would make them worse for the people they
+  currently serve. That is also the failure condition for this whole plan: if
+  the tutorial leaks into the reference, the change has done damage.
 - **It does not rename anything published.**
 - **It does not add a claim that has not been checked.** Anything the tutorial
   asserts about hardware has to be true of a board someone has actually run,
@@ -328,7 +375,10 @@ records the new owner, and a `release(id)`. Ten lines, one concept.
 **New: `apps/workbench/src/components/docs/ListenBlock.vue`**
 
 Props: `firmware` (an id from `FIRMWARE_BY_ID`), `params` (an optional list of
-param keys to expose as sliders), `label`.
+param keys to expose as sliders), `label`, and **`predict`**, a question shown
+above the play button and left on screen while it plays. The predict slot is not
+decoration: it is the P in PRIMM and the reason the block exists rather than an
+audio tag.
 
 - One play button, one stop, and the named sliders. Nothing else.
 - `ensureBellows()` **with no seed**, so it reuses the shared instance instead of
@@ -459,11 +509,31 @@ confirm where it lands.
 **New `h1-why-is-it-silent.ts`, slug `emb-how-silent`.** The highest-value page
 in the plan and the one that does not exist in any form. Silence with no error
 is this domain's signature failure and it reads to a beginner as their own
-incompetence. Structure: a checklist ordered by how often each cause is the
-answer, not by the layers of the system. `AudioMemory()` not called or called
-before `Init()`. No output stage. Wrong pins. A codec that needs enabling. Level
-so low it is inaudible. A patch that fits flash but overflows RAM. Every item is
-a symptom, a one-line check, and a fix.
+incompetence.
+
+**(research) It is a bisection, not a checklist**, and this is the largest single
+change the research made. Work on novice debugging finds that beginners default
+to edit-and-test, changing things with no hypothesis, and that the skill actually
+being taught is localisation: subdividing until the problem area is too small to
+hide in. A checklist of causes ordered by frequency automates edit-and-test
+instead of replacing it. So the page halves the signal path at each step:
+
+1. Is the program running at all? The LED, or a serial print.
+2. Is the DSP producing samples? Print a peak from the render callback.
+3. Is anything reaching the pin? Another output path, or headphones on the line.
+4. Is the far end powered and connected? The amplifier, the speaker.
+
+**The first split is one this project can make and its competitors cannot.** The
+same patch runs in the browser. If it sounds right there and silent on the
+board, everything above the DSP is eliminated in a single step and the fault is
+in the board half. That is a real bisection rather than an analogy, because the
+parity harness measures how far apart the two implementations are. Build the
+page around it.
+
+Each item still ends in a symptom, a one-line check and a fix: `AudioMemory()`
+not called or called before `Init()`, no output stage, wrong pins, a codec that
+needs enabling, a level too low to hear, a patch that fits flash and overflows
+RAM.
 
 **New `h2-get-sound-out.ts`, slug `emb-how-output`.** The how-to extracted from
 `emb-output`, which stays as reference. This one answers "I have a Teensy 4.x
@@ -495,6 +565,19 @@ published and the Arduino IDE lists those names.
   musical rather than mechanical phrasing and fix in place.
 - Publish a reading order that is not the numeric order, in the docs and on the
   CODE page rail.
+- **(research) Add "try this" markers to the example headers.** Adafruit's own
+  guide to writing guides says to comment the variables a user may want to
+  change, because users should be able to learn from the code. The bellows
+  headers are heavily commented and the comments explain WHY, which is excellent
+  explanation and is not what somebody wants at the moment they would like the
+  decay longer. Every parameter that `FIRMWARES` exposes as a slider gets a
+  marker at its declaration giving a range worth trying, and that is gateable:
+  a check that every exposed param has one.
+- **(research) Audit coverage before writing anything new.** SparkFun's bar for
+  an Arduino library is that a reader with no other documentation could use
+  almost every feature by working through the examples alone. Which public
+  classes appear in no example? That list is the specification for the new
+  examples, instead of guessing at what would be nice to have.
 - **New musical examples are a separate piece of work with a real cost**: a new
   folder needs a size sketch under `test/sketches`, a row in `examples/README.md`
   and in `check-docs`'s `EXAMPLES_ROWS`, an entry in `build-matrix.sh`, a
