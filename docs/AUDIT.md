@@ -345,7 +345,9 @@ cheaper than float, and it would close most of the chorus gap.
   anywhere in the library. The only `virtual` is the `AudioStream::update()` the Teensy Audio
   Library requires, and it is documented as such.
 - All 43 headers compile standalone with `-Wall -Wextra`, and all of them together in one
-  translation unit, on Cortex-M7 and Cortex-M4.
+  translation unit, on Cortex-M7 and Cortex-M4. (43 was the count when this was written on
+  2026-08-04. It is 51 now, and the property still holds; `docs/HANDOFF.md` carries the current
+  figure.)
 - Every symbol the example sketches reference resolves.
 - 317 value rows across euclid, scales, chords, note parsing, cellular automata, arp, the tempo
   map and MIDI parsing match the TypeScript exactly.
