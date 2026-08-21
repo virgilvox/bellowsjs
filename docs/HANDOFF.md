@@ -379,8 +379,11 @@ Kept short. The full record is in the commits.
 - **bellows.live does not catch up on its own, and that has not changed.** The app pulls the
   public repo with a plain `git.repo_clone_url`, so there is no deploy-on-push. Shipping site
   changes takes `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d` after the
-  push, every time. Deployed on 2026-08-15 immediately after the push above, so the site is
-  current; it will fall behind again on the next commit that touches `apps/workbench`. See
+  push, every time. **The site is BEHIND as of 2026-08-20**, and knowing that is the point of
+  this bullet: `735785f` changed six files under `apps/workbench`, including both LLM
+  references and two of the embedded documentation pages, and nothing deployed them. Check
+  with `git diff --name-only <last deployed>..HEAD -- apps/workbench` rather than trusting
+  this line. It was deployed on 2026-08-15 and was current until that commit. See
   "Deployment (bellows.live)" below, which has said this all along; an earlier draft of this
   line said the opposite and was wrong.
 - **`packages/bellows-embedded` is published, and the two channels are not live at the same
