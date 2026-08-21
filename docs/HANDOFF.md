@@ -379,17 +379,25 @@ Kept short. The full record is in the commits.
   missing SIMULATOR button; both are shipped. Check with `git rev-list --count origin/main..HEAD`
   rather than trusting this line, which is the sort that goes stale the moment someone
   commits.
-- **`bellowsjs@0.1.9` is BUILT AND VERIFIED BUT NOT PUBLISHED.** The version is bumped, the
-  changelog is written, everything version-stamped is regenerated, the whole verify block is
-  green and `npm publish --dry-run` packs a correct 1.0 MB tarball of 170 files. The publish
-  itself fails on authentication: `npm whoami` returns 401 and `npm publish` reports
-  `E404 ... PUT https://registry.npmjs.org/bellowsjs`, which is what npm says instead of 401 on
-  a write. There is a token in `~/.npmrc` and the registry does not accept it; whether it
-  expired, was revoked or was replaced is not something this end can tell. **`npm login`, then `npm publish` from `packages/bellows`, then tag `v0.1.9`,
-  then deploy the site.** The tag is deliberately not created yet: a tag that names a version npm
-  does not have is the same class of false claim this file keeps having to correct. npm still
-  serves 0.1.8.
-  0.1.9 carries three behaviour fixes, all of them a silent failure becoming a loud one: two window
+- **`bellowsjs@0.1.9` is on npm and tagged `v0.1.9`**, published 2026-08-21 and checked rather
+  than assumed: `npm view bellowsjs version` says 0.1.9, a fresh `npm install bellowsjs@latest`
+  into an empty directory resolves 0.1.9, and importing the bare specifier from that install
+  gives 219 exports with `TempoPoint` gone. All three fixes are in the shipped bundle. Note how
+  to check that, because the obvious way is wrong: `grep isSafeInteger(endFrame)` finds nothing,
+  since vite renames locals, and the guard is there as
+  `if (!Number.isSafeInteger(o)) return !1;`. Grep the function name, not the argument name.
+  The tag is on `a0543e5`, the commit the tarball was built from, rather than on the commit that
+  records the publish.
+
+  **Publishing needs a token that bypasses 2FA, and this is a standing property of the account
+  rather than a one-off.** A plain `npm publish` passes the login check, packs the tarball, and
+  only then returns `E403 ... Two-factor authentication or granular access token with bypass
+  2fa enabled is required`, which reads like a permissions problem rather than a missing code.
+  Either `npm publish --otp=<code>` typed by whoever holds the authenticator, or a granular
+  token in `~/.npmrc`, which is what 0.1.9 went out with. Nothing in `.github/workflows`
+  publishes to npm and this is one of the reasons.
+
+  It carries three behaviour fixes, all of them a silent failure becoming a loud one: two window
   and hop pairs that could not reconstruct and were degrading instead of reporting, and a ramp
   duration that wedged a slot. `CHANGELOG.md` has the detail.
   0.1.8 before it was a documentation release whose code was byte-identical to 0.1.7: `git diff v0.1.7..v0.1.8 --
@@ -406,15 +414,17 @@ Kept short. The full record is in the commits.
 - **bellows.live does not catch up on its own, and that has not changed.** The app pulls the
   public repo with a plain `git.repo_clone_url`, so there is no deploy-on-push. Shipping site
   changes takes `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d` after the
-  push, every time. **The site was found four days and three commits BEHIND on 2026-08-20**,
-  and knowing that is the point of this bullet. It was last deployed on 2026-08-15 at
-  `9a8e272` and stopped being current the next day at `4ecd02a`, which put `#include
-  <Bellows.h>` into the simulator's source strings; `9269c46` moved the embedded LLM
-  reference to 0.1.1 the same day, and `735785f` changed four more files. The give-away was
-  that `curl -s https://bellows.live/llm-embedded.txt | head -1` returned 0.1.0 while the
-  tree said 0.1.1, which is a one-command check anyone can run and nobody had. Do not trust
-  this line either: run that curl, and
-  `git diff --name-only <last deployed>..HEAD -- apps/workbench`. See
+  push, every time. **Deployed on 2026-08-21 and current**, checked by fetching rather than by
+  reading the deployment phase: `llm.txt` and `llm-embedded.txt` are byte-identical to the tree
+  copies, and the simulator chunk carries the twelve `#include <Bellows.h>` lines and the
+  seed-wait marker that a stale build does not have.
+
+  It had been **six days and three commits behind** before that, and the way that was found is
+  the useful part: `curl -s https://bellows.live/llm-embedded.txt | head -1` returned 0.1.0
+  against a tree saying 0.1.1. It was last deployed on 2026-08-15 at `9a8e272` and stopped being
+  current the next day at `4ecd02a`, which put `#include <Bellows.h>` into the simulator's source
+  strings. Nobody noticed for six days, in a repository whose documents said the site was
+  current. Run the curl. See
   "Deployment (bellows.live)" below, which has said this all along; an earlier draft of this
   line said the opposite and was wrong.
 - **`packages/bellows-embedded` is published, and the two channels are not live at the same
@@ -1443,7 +1453,12 @@ hypothetical: it is what 0.1.8 did. The steps are in this order for that reason.
 5. Run the full verify block, including `npm run check:examples`, `check:embedded`,
    `check:catalogue` and `check:presets` in `apps/workbench`. `check:examples`
    reads the BUILT library, so it needs step 4 first.
-6. `npm publish` from `packages/bellows`, tag `vX.Y.Z`, push with the tag.
+6. `npm publish --otp=<code>` from `packages/bellows`, tag `vX.Y.Z`, push with the
+   tag. The OTP is not optional: the account has 2FA on publishes and a plain
+   `npm publish` returns `E403 ... Two-factor authentication or granular access
+   token with bypass 2fa enabled is required`, having already passed the login
+   check, so the error arrives after the tarball has been packed and looks like
+   a permissions problem rather than a missing code.
 7. Redeploy the site, because pushes do not auto-deploy:
    `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`. Not
    optional on a release: `llm.txt` is served from there and five documentation

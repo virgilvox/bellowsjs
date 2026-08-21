@@ -23,9 +23,10 @@ measured the board, corrected the audit count from a claimed 73 to a measured
 51, and published the embedded library to the Arduino Library Manager and the
 PlatformIO registry. The 2026-08-20 session gated the figures thirteen documents
 quote, closed seventeen audit findings, audited its own work and reopened two of
-them, and released `Bellows@0.1.2`. `bellowsjs@0.1.9` is built and committed
-and NOT published: the npm token expired mid-release. `docs/HANDOFF.md`
-under "Closed on 2026-08-20" is the short version.
+them, and released `Bellows@0.1.2`. On 2026-08-21 that session's own work was
+audited in turn, `bellowsjs@0.1.9` went to npm, and bellows.live was deployed
+after six days behind. `docs/HANDOFF.md` under "Closed on 2026-08-20" is the
+short version.
 
 Three claims this repository stated as hard facts were false when checked, and
 all three were true when written. CI HAS RUN, dozens of times, and HAS BEEN
@@ -67,22 +68,16 @@ WHAT IS TRUE TODAY, and each of these is checkable in one command:
   MicroMod or a Daisy, and **nothing has been compared to the browser by ear**.
   41 parity rows, 428 value rows and 1054 preset values stand in for that and
   are not the same thing.
-- **`bellowsjs@0.1.9` is NOT on npm yet, and npm still serves 0.1.8.** Everything
-  for it is committed and green and the publish failed on authentication: `npm whoami` returns
-  401 and `npm publish` reports E404 on the PUT, which is what npm says instead of 401 on a
-  write.
-  `npm login`, then `npm publish` from `packages/bellows`, then tag `v0.1.9`,
-  then deploy the site, in that order. There is no `v0.1.9` tag on purpose: a
-  tag naming a version npm does not have is the same class of false claim this
-  file keeps having to correct. The site deploy is held behind the publish for
-  the same reason, since `llm.txt` in the tree already says 0.1.9.
-- `main` is pushed and CI is green on it. **bellows.live is a separate
-  question and it has been behind before.** The site has no deploy-on-push, so
-  a commit touching `apps/workbench` leaves it stale until someone runs
-  `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`. On
-  2026-08-20 it was found four days and three commits behind, still serving an
-  embedded LLM reference two versions old, while this file said it was current.
-  Check rather than trust:
+- `bellowsjs@0.1.9` is on npm and tagged, and `Bellows@0.1.2` is on both embedded registries.
+  Publishing to npm needs a token that bypasses 2FA or an `--otp=<code>`: a plain `npm publish`
+  packs the tarball and then returns E403, which reads like a permissions problem.
+- `main` is pushed and CI is green on it, and bellows.live was deployed on
+  2026-08-21 and serves the current references. **The site is a separate
+  question from the push and it has been behind before.** There is no
+  deploy-on-push, so a commit touching `apps/workbench` leaves it stale until
+  someone runs `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`.
+  It went six days and three commits stale in August while this file said it was
+  current. Check rather than trust:
   `curl -s https://bellows.live/llm-embedded.txt | head -1` against
   `head -1 apps/workbench/public/llm-embedded.txt`.
 - The embedded library is INSTALLABLE from both registries, which is a stronger
