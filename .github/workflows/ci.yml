@@ -103,6 +103,14 @@ jobs:
         # layer of this library, and it has already shipped twice.
         run: npm run check:presets -w apps/workbench
 
+      - name: every listen block in the docs names a real firmware and real params
+        # A listen fence is two plain strings, a firmware id and a list of
+        # param keys, and both fail silently: a wrong id renders a play
+        # button that throws when a reader presses it, and a wrong param
+        # just never shows its slider, so the tutorial step that asks the
+        # reader to drag it cannot be done and the page looks finished.
+        run: npm run check:listen -w apps/workbench
+
       - name: the published artifacts carry what they should
         # The embedded library ships through two channels with different
         # shapes, and both were got wrong by hand before this existed: no

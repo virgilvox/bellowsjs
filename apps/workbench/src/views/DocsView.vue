@@ -9,6 +9,8 @@
 
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
 import { Marked } from 'marked';
+import ListenBlock from '../components/docs/ListenBlock.vue';
+import { stopAll } from '../lib/docs-player';
 import {
   DOC_GROUPS,
   DOC_PAGES,
@@ -81,7 +83,105 @@ function setTree(next: DocTree): void {
 }
 const unknown = computed(() => slug.value !== '' && !page.value);
 
-const html = computed(() => (page.value ? (md.parse(page.value.body) as string) : ''));
+/* ---------------------------------------------------------------- */
+/* listen blocks                                                     */
+/* ---------------------------------------------------------------- */
+
+/*
+ * A page body is markdown with one exception, a fence that mounts a player:
+ *
+ *     ```listen onekick params=decay,drive
+ *     predict: Decay is 0.35 s. What happens at 2.0?
+ *     A kick drum, and the two numbers worth touching.
+ *     ```
+ *
+ * The fence line names the firmware and, optionally, which of its params to
+ * expose as sliders. In the body, a line starting `predict:` is the question
+ * shown before the button; everything else is the caption.
+ *
+ * WHY SPLIT THE BODY RATHER THAN EXTEND THE RENDERER
+ *
+ * `v-html` cannot mount a component, so a marked extension could only emit
+ * inert markup that something would then have to hydrate by hand. Splitting
+ * first and rendering a list of parts keeps the player an ordinary child
+ * with ordinary props and no manual mounting.
+ *
+ * Two things this relies on, both checked before it was written. The
+ * on-this-page list is built from `md.lexer(body)` rather than from the DOM,
+ * and a fence is a `code` token, so splitting changes no heading. And the
+ * article's click handler is delegated from the <article> element, so links
+ * inside any segment still route.
+ *
+ * The one thing it gives up: markdown constructs cannot span a fence, since
+ * each run of text is parsed on its own. Reference-style link definitions
+ * are the case that would bite, and no page here uses them. Keep fences at
+ * column zero with a blank line either side.
+ */
+type Segment =
+  | { kind: 'md'; html: string }
+  | { kind: 'listen'; firmware: string; params: string[]; caption: string; predict: string };
+
+const FENCE_OPEN = /^```listen[ \t]+(\S+)[ \t]*(.*)$/;
+
+function parseOptions(rest: string): { params: string[] } {
+  const params: string[] = [];
+  for (const m of rest.matchAll(/(\w+)=([^\s]+)/g)) {
+    if (m[1] === 'params') params.push(...m[2].split(',').filter(Boolean));
+  }
+  return { params };
+}
+
+function splitBody(body: string): Segment[] {
+  const out: Segment[] = [];
+  const lines = body.split('\n');
+  let buf: string[] = [];
+
+  const flush = (): void => {
+    if (buf.length === 0) return;
+    out.push({ kind: 'md', html: md.parse(buf.join('\n')) as string });
+    buf = [];
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const open = FENCE_OPEN.exec(lines[i]);
+    if (!open) {
+      buf.push(lines[i]);
+      continue;
+    }
+    /* Stop at the close, or at whatever fence opens next if the author
+     * forgot it. scripts/check-listen.mjs refuses the second case, so this
+     * only has to fail small rather than swallow the rest of the page. */
+    const body_: string[] = [];
+    let j = i + 1;
+    for (; j < lines.length; j++) {
+      const line = lines[j].trimEnd();
+      if (line === '```') break;
+      if (line.startsWith('```')) {
+        j--;
+        break;
+      }
+      body_.push(lines[j]);
+    }
+    flush();
+    const predictLine = body_.find((l) => l.startsWith('predict:'));
+    out.push({
+      kind: 'listen',
+      firmware: open[1],
+      params: parseOptions(open[2]).params,
+      predict: predictLine ? predictLine.slice('predict:'.length).trim() : '',
+      caption: body_.filter((l) => l !== predictLine).join(' ').trim(),
+    });
+    i = j;
+  }
+  flush();
+  return out;
+}
+
+const segments = computed<Segment[]>(() => (page.value ? splitBody(page.value.body) : []));
+
+/* Kept for the watcher that re-runs enhanceArticle: it has to change when
+ * the page does, and reading the body is the cheapest thing that does. */
+const html = computed(() => page.value?.body ?? '');
 
 const toc = computed<TocEntry[]>(() => {
   if (!page.value) return [];
@@ -184,6 +284,10 @@ onActivated(() => {
 
 onDeactivated(() => {
   document.title = BASE_TITLE;
+  /* Leaving the docs is silence. Each ListenBlock stops itself too, but this
+   * page is kept alive, so a reader who tabs to the playground and starts a
+   * firmware there would otherwise be hearing two. */
+  stopAll();
 });
 </script>
 
@@ -232,7 +336,25 @@ onDeactivated(() => {
     <div class="main">
       <article v-if="page" ref="articleEl" class="article" @click="onArticleClick">
         <h1>{{ page.title }}</h1>
-        <div v-html="html"></div>
+        <!--
+          Keyed by SLUG and index, not index alone. Measured: with a bare
+          index, navigating from a page whose second segment is a player to
+          another page whose second segment is also a player patched the same
+          component in place instead of remounting it, so the first page's
+          voice went on sounding under the second page and its button already
+          read "stop" to a reader who had never pressed play. Peak 0.53 before
+          the navigation, 0.47 after it.
+        -->
+        <template v-for="(seg, i) in segments" :key="slug + '#' + i">
+          <div v-if="seg.kind === 'md'" v-html="seg.html"></div>
+          <ListenBlock
+            v-else
+            :firmware="seg.firmware"
+            :params="seg.params"
+            :caption="seg.caption"
+            :predict="seg.predict"
+          />
+        </template>
       </article>
 
       <article v-else class="article home">
@@ -241,9 +363,17 @@ onDeactivated(() => {
           No page lives at <code>/docs/{{ slug }}</code>. The full index is below.
         </p>
         <p v-else>
-          Fourteen pages, in reading order, from first sound to writing your own DSP.
+          {{ pagesFor(tree).length }} pages, in reading order.
+          <template v-if="tree === 'embedded'">
+            The first four are a tutorial you can hear without owning a board.
+          </template>
+          <template v-else>From first sound to writing your own DSP.</template>
           Every code snippet is checked against the current release; the machine-readable
-          companion at <a href="/llm.txt">/llm.txt</a> lists every signature exactly.
+          companion at
+          <a :href="tree === 'embedded' ? '/llm-embedded.txt' : '/llm.txt'">{{
+            tree === 'embedded' ? '/llm-embedded.txt' : '/llm.txt'
+          }}</a>
+          lists every signature exactly.
         </p>
         <section v-for="g in groups" :key="g.label" class="home-group">
           <h2>{{ g.label }}</h2>

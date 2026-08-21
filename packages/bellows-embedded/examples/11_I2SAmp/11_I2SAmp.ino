@@ -18,7 +18,7 @@
  *   Teensy 7  (OUT1A / TX)  -> breakout DIN / SD / DATA
  *   Teensy 21 (BCLK)        -> breakout BCLK / SCK / BCK
  *   Teensy 20 (LRCLK)       -> breakout LRC / WS / LCK
- *   Teensy 3.3V             -> breakout VIN   (see the note below)
+ *   Teensy 5V (the VIN pad)  -> breakout VIN   (NOT 3.3V, see below)
  *   Teensy GND              -> breakout GND
  *   speaker across the breakout's + and - (MAX98357A only)
  *

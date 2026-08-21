@@ -4,7 +4,7 @@ const page: DocPage = {
   slug: 'emb-performance',
   title: 'Performance',
   blurb: 'Flash and RAM per program, the fast-math flag, why the delay line is the RAM, and the one CPU figure that was measured.',
-  prev: 'emb-theory',
+  prev: 'emb-program-shape',
   next: null,
   body: `
 Two of the three numbers you want are measured well. The third barely exists.
