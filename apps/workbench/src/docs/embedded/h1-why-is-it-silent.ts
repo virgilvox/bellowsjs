@@ -72,7 +72,9 @@ If it prints zeros, the two usual causes:
 
 \`AudioMemory()\` is what starts the audio interrupt. Anything you initialise after it can be rendered before it is ready, and on a Teensy 4.x reading through a delay line that has not been given its buffer is a read through a null pointer into executable memory.
 
-Every example here calls \`AudioMemory()\` **last** in \`setup()\`, after everything is initialised. If you have moved it, move it back. This is not a style preference: every sketch in this library had it the other way round once, and the fix is the reason the ordering is now commented at every call site.
+Every example here calls \`AudioMemory()\` **after everything bellows owns has been initialised**. Three of them do one more thing afterwards, enabling a codec or starting serial, and that is harmless: those are the output chip and the console, not something the audio interrupt is about to render. What must not come after it is a voice, a delay line or a patch.
+
+This is not a style preference. Every sketch in this library had the ordering the other way round once, which is why it is now commented at every call site.
 
 ## Split 3: is anything reaching the pin?
 

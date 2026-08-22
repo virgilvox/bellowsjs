@@ -24,9 +24,11 @@ measured the board, corrected the audit count from a claimed 73 to a measured
 PlatformIO registry. The 2026-08-20 session gated the figures thirteen documents
 quote, closed seventeen audit findings, audited its own work and reopened two of
 them, and released `Bellows@0.1.2`. On 2026-08-21 that session's own work was
-audited in turn, `bellowsjs@0.1.9` went to npm, and bellows.live was deployed
-after six days behind. `docs/HANDOFF.md` under "Closed on 2026-08-20" is the
-short version.
+audited in turn, `bellowsjs@0.1.9` went to npm, bellows.live was deployed after
+six days behind, and the embedded documentation was restructured from nine pages
+to sixteen around a tutorial you can hear without owning a board. Read
+`docs/DOCS-PLAN.md` and `docs/DOCS-RESEARCH.md` before touching the docs: the
+second is the evidence and the first says what it changed.
 
 Three claims this repository stated as hard facts were false when checked, and
 all three were true when written. CI HAS RUN, dozens of times, and HAS BEEN
@@ -56,6 +58,13 @@ biting someone.>
 
 WHAT IS TRUE TODAY, and each of these is checkable in one command:
 
+- **The embedded docs are four trees now, not one list**: a tutorial, how-to
+  guides, reference and explanation, grouped that way in the sidebar and in that
+  order. The tutorial pages quote no figures on purpose, so nothing in them can
+  rot; the reference pages were deliberately NOT softened, because guidance that
+  helps a beginner measurably slows down somebody who already knows the
+  material. If a future change leaks hand-holding into the reference, that is
+  the failure condition, and `docs/DOCS-PLAN.md` says so.
 - 36 audit findings are open, 29 plus 7 partial. `docs/AUDIT-2.md` is the
   register: every finding carries a status and its evidence under its own
   heading. Do not re-derive the count from HANDOFF, which points at the file.
@@ -142,6 +151,9 @@ npm run check:examples -w apps/workbench            49 javascript examples
 npm run check:embedded -w apps/workbench            36 C++ snippets compile
 npm run check:catalogue -w apps/workbench           25 entries, 24 voice builders
 npm run check:presets -w apps/workbench             50 presets sound, at pitch
+npm run check:listen -w apps/workbench              every listen fence is real
+npm run check:links -w apps/workbench               every doc link resolves
+npm run check:signatures -w apps/workbench          quoted C++ matches the headers
 
 # The regenerate-and-diff gates. These only fail if you regenerate and then
 # look, which is why a local run kept missing them and CI kept catching them.

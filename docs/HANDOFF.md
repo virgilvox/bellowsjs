@@ -50,7 +50,9 @@ generated `params.gen.h` rather than restating them: **50 presets, 1054 values,
 EMBEDDED PLAYGROUND. The CODE page has a JAVASCRIPT / EMBEDDED switch with 36
 embedded examples, every one of them real C++ compiled on every build by
 `npm run check:embedded`, shown beside a browser equivalent you can hear. The
-DOCS page has a BROWSER / EMBEDDED switch over a nine page embedded tree. There
+DOCS page has a BROWSER / EMBEDDED switch over the embedded tree, which was nine
+pages then and is sixteen now, restructured on 2026-08-21 so the first four are
+a tutorial with sound in them. There
 is an embedded LLM reference at `/llm-embedded.txt`, generated from all 50
 headers by `gen-llm-embedded.mjs` with zero unreadable.
 
@@ -152,10 +154,28 @@ was granting a 25 percent relative allowance to every prose figure and plus or
 minus 16 to every integer one. A CPU percentage read off a serial console and a
 count of harness rows were both going through it. There is an `exact` flag now.
 
+### Harnesses added on 2026-08-21
+
+| command | what it proves |
+| --- | --- |
+| `npm run check:listen -w apps/workbench` | every `listen` fence in the docs names a firmware that exists and params that exist on it. Both fail silently otherwise: a wrong id renders a play button that throws when pressed, a wrong param never shows its slider |
+| `npm run check:links -w apps/workbench` | every documentation link resolves, in-app hash links name a mode `App.vue` knows, and both prev/next chains are the same walk as their sidebar |
+| `npm run check:signatures -w apps/workbench` | every `template <...> class X;` quoted in the embedded docs matches the declaration in the headers |
+
+Each found real defects on its first run, which is the only reason to believe
+any of them. `check:links` found three broken links, two of them shipped an
+hour earlier, plus a reading chain that had come apart when the tutorial was
+inserted at the top. `check:signatures` found two template signatures that
+release 0.1.2 had made stale, in the two pages that teach them.
+
+The gap they close is one `check-docs.mjs` cannot: it compares FIGURES against
+harness output, and a link, a fence and a template signature are none of them a
+figure.
+
 ### Still not done, in the order I would take it
 
-Ordered by cost to fix against risk of being wrong later. Three items, and the
-first two are the ones that matter. Everything the 2026-08-15, 16 and 20
+Ordered by cost to fix against risk of being wrong later. Four items, and the
+first two are the ones that matter. Everything the 2026-08-15, 16, 20 and 21
 sessions closed is summarised at the end of this list rather than deleted,
 because the interesting part of a bookkeeping item is usually what it was
 hiding, and twice now an entry that read as bookkeeping was covering a gate that
@@ -220,6 +240,26 @@ this file's own release ritual had been quoting a bundle size the command no
 longer printed. An hour for the three, and the same shape of work that already
 worked sixteen times.
 
+**4. The documentation restructure has a tail, and none of it blocks anything.**
+`docs/DOCS-PLAN.md` steps 1 to 4 and part of 6 are done. What is left, in the
+order the plan puts it:
+
+- The remaining how-to guides: choosing a board, playing notes from MIDI, making
+  a patch louder without clipping, fitting a patch on a board that is too small,
+  hearing a generated piece again.
+- Moving the explanatory passages out of the reference pages, so reference is
+  lookup. Smaller than it sounds and worth doing when one of those pages is next
+  touched rather than as a sweep.
+- Adafruit's rule about commenting the variables a reader may want to change:
+  every parameter `FIRMWARES` exposes as a slider should carry a range worth
+  trying at its declaration in the example header. That is gateable.
+- Two or three examples that are pieces of music rather than demonstrations of
+  a subsystem. **This one is a day, not an afternoon**, and the plan says why: a
+  new example folder needs a size sketch, a row in `examples/README.md` and in
+  `check-docs`, an entry in `build-matrix.sh`, a `FIRMWARES` entry, a
+  `buildVoice` case, `sources.gen.ts` regenerated, and a release to reach
+  anybody.
+
 Two of the sixteen closed that day came back when the day's own work was
 audited: the `Adsr` one had fixed the sentence a finding opens with and left the
 cause it names at the end, and the `defOp` one gates two links of a three-link
@@ -232,6 +272,51 @@ first finding it looked at, because the investigator had measured with the 9.2.1
 toolchain rather than the 11.3.1 the documents pin. That is the toolchain finding
 biting inside the session that was auditing it, and it is fixed now, in
 `tools/size-report.sh`.
+
+### Closed on 2026-08-21, and what each one turned up
+
+- **`bellowsjs@0.1.9` and `Bellows@0.1.2` are out.** Three behaviour fixes in
+  the npm package, all of them a silent failure becoming a loud one, and the
+  embedded library on both registries. Publishing needs a token that bypasses
+  2FA or an `--otp`, which is now in the release ritual rather than in somebody's
+  memory. bellows.live was six days behind when that was checked and is deployed.
+- **The embedded documentation was restructured around what a musician needs
+  first**, from nine pages to sixteen, planned in `docs/DOCS-PLAN.md` and
+  evidenced in `docs/DOCS-RESEARCH.md`. Diataxis, PRIMM, semantic waves, the
+  expertise reversal effect, Adafruit's guide standards and the field studies of
+  how developers actually use documentation. The diagnosis was sharper than
+  "too technical": there was not one tutorial and one half of a how-to, so two
+  of the four documentation modes had simply never been written.
+- **A docs page can make a sound now.** `ListenBlock.vue` plus a `listen` fence,
+  splitting the body into parts because `v-html` cannot mount a component. The
+  four tutorial pages open with a prediction, play a real firmware through the
+  simulator's own `buildVoice`, show the C++ that did it, and end by naming what
+  the reader just did. Measured in a browser rather than assumed: peak 0.45 on
+  page one, and dragging decay from 0.55 to 2.0 moves the fraction of loud
+  samples from 0.456 to 0.971.
+- **The tutorial quotes no figures at all.** Nothing in those four pages for
+  `check-docs` to gate and nothing that can go stale. That is the content rule
+  paying for itself.
+- **Two bugs found by looking rather than by building.** The player first
+  rendered dark on a light page, because it used CSS variables that do not
+  exist and every fallback fired. And segments keyed by index meant navigating
+  between two pages that both hold a player patched the component in place
+  instead of remounting it: the kick went on sounding under the next page at
+  peak 0.47, with a stop button the reader had never started.
+- **Read as four readers.** The musician found five slider hints written by an
+  engineer, including a tempo hint about a potentiometer that is not on the
+  page. The engineer evaluating the library found no signposted way out of the
+  tutorial. The screen reader user found the slider's accessible name was
+  `decay0.55sHow long the body rings.`, with a live value baked into a name, and
+  a play button defaulting to `type=submit`. The phone reader is the one that
+  went unverified: the window resize did not take, so only the worst case was
+  measured, an article squeezed to 390px with the media query not fired.
+- **Three overclaims of mine, caught by auditing my own pages.** "Every ported
+  engine uses the same fixed-point phase accumulator" is false: the LFO and the
+  four most recent ports do, the rest still accumulate in float. "Every example
+  calls `AudioMemory()` last" is false: three do one harmless thing afterwards,
+  and the true rule is that nothing bellows owns may come after it. And the plan
+  itself claimed the reference never says what an engine is FOR, which it does.
 
 ### Closed on 2026-08-20, and what each one turned up
 
@@ -427,6 +512,14 @@ Kept short. The full record is in the commits.
   current. Run the curl. See
   "Deployment (bellows.live)" below, which has said this all along; an earlier draft of this
   line said the opposite and was wrong.
+- **Two shipped files have drifted from the published 0.1.2, both deliberately, neither
+  released.** `git diff c0a1280..HEAD -- packages/bellows-embedded` is the check.
+  `README.md` had its install-test sentence rewritten so it survives a version bump instead of
+  going stale the moment one ships, and `11_I2SAmp.ino`'s wiring list said 3.3V and then said
+  not to use it, so it says 5V once. Both are improvements to text a user reads on the registry
+  pages, both ride the next release, and neither is worth a version on its own. `tools/` is not
+  shipped, so the third changed file does not count. Say no to a 0.1.3 for a paragraph, and
+  remember these two exist when something real needs releasing.
 - **`packages/bellows-embedded` is published, and the two channels are not live at the same
   moment.** It stays `private: true` and off npm, which is correct: the npm package is the
   browser library.

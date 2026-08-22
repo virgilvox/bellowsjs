@@ -77,9 +77,9 @@ consequences for more experienced learners."
 
 **What it changes.** It settles a question the plan was answering on taste.
 
-The existing nine pages are not bad documentation. They are documentation for a
-reader with prior knowledge, and for that reader the tutorial being proposed
-would be worse than what exists, not better. So the correct move is **additive
+The nine pages that existed when this was written are not bad documentation.
+They are documentation for a reader with prior knowledge, and for that reader
+the tutorial being proposed would be worse than what exists, not better. So the correct move is **additive
 and segregated**, which is what the plan does: a tutorial path for the reader
 who needs guidance, the existing reference and explanation kept intact and
 reachable in one click for the reader whom guidance would slow down.

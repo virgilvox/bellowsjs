@@ -42,7 +42,9 @@ The PRNG is bit-exact. So is the effect input, and so is every one of the 428 va
 
 What matters is the size of the difference and whether it grows. A relative RMS around 1e-4 is roughly 80 dB down, which is below the noise floor of the converter you are listening through.
 
-The interesting part is what the gates found when they were tightened. The residual on several engines was not rounding at all: it was a frequency offset from computing an oscillator's phase increment as a double in one implementation and a float in the other. Every ported engine now uses the same fixed-point phase accumulator, because fixed point is closer to double than float is, and the rows moved accordingly. A number that big is not noise, it is a bug with a small amplitude.
+The interesting part is what the gates found when they were tightened. On several engines the residual was not rounding at all: it was a frequency offset, because the browser accumulates an oscillator's phase in double and a float cannot follow it over a long note. The LFO and the four most recently ported engines accumulate phase as a fixed-point \`uint32\` counter instead, which tracks a double more closely than a float does, and their rows moved accordingly. A residual that large is not noise, it is a bug with a small amplitude.
+
+The other engines still accumulate phase in float, and their rows are gated where they measure. That is a difference worth knowing rather than a plan: the fixed-point counter is a change with a cost, and it has been made where the measurement asked for it.
 
 ## What the numbers do not cover
 
