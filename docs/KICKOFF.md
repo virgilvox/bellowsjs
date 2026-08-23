@@ -26,9 +26,12 @@ quote, closed seventeen audit findings, audited its own work and reopened two of
 them, and released `Bellows@0.1.2`. On 2026-08-21 that session's own work was
 audited in turn, `bellowsjs@0.1.9` went to npm, bellows.live was deployed after
 six days behind, and the embedded documentation was restructured from nine pages
-to sixteen around a tutorial you can hear without owning a board. Read
-`docs/DOCS-PLAN.md` and `docs/DOCS-RESEARCH.md` before touching the docs: the
-second is the evidence and the first says what it changed.
+to sixteen around a tutorial you can hear without owning a board, and that work
+was then audited too: three overclaims of mine came out of it and three new
+gates went in. Read `docs/DOCS-PLAN.md` and `docs/DOCS-RESEARCH.md` before
+touching the docs: the second is the evidence and the first says what it
+changed. **The whole state below was re-verified on 2026-08-23 and none of it
+had moved in two days.**
 
 Three claims this repository stated as hard facts were false when checked, and
 all three were true when written. CI HAS RUN, dozens of times, and HAS BEEN
@@ -40,21 +43,29 @@ happened is older than it looks: spend the one command it takes.** That is not a
 rhetorical flourish, it is where four of this repository's document defects came
 from.
 
-OBJECTIVE: <replace me. "Still not done" in `docs/HANDOFF.md` has three items.
-1 and 2 are the real ones. 3 is an hour: three findings that the 2026-08-20 pass
-never reached because the machine slept, in a shape of work that closed sixteen
-others that day.
+OBJECTIVE: <replace me. "Still not done" in `docs/HANDOFF.md` has four items.
 
-If you have a board: item 1, and start with `00_BringUp`. It has still never
-been run, it is a checklist sketch with a written pass condition per stage, and
-its last two stages measure the pitch dependence of the BLEP oscillator cost,
-which no test here covers and no amount of building will tell you. A Teensy 4.0
-is the only part that has run anything; a 3.2 or an LC is the interesting
-question, because neither has a floating point unit and this is a float library.
+If you have a board, item 1 is worth more than the other three together. Start
+with `00_BringUp`: it has never been run, it is a checklist sketch with a
+written pass condition per stage, and its last two stages measure the pitch
+dependence of the BLEP oscillator cost, which no test here covers and no amount
+of building will tell you. A Teensy 4.0 is the only part that has run anything.
+A 3.2 or an LC is the interesting question, because neither has a floating point
+unit and this is a float library.
 
-If you do not: item 2, the 20 audit findings tagged `[changes audio]`. Item 3
-is an hour and every one of the small ones was found by this repository
-biting someone.>
+If you do not have a board, in the order I would take them:
+
+  3. Three audit findings nobody has looked at, roughly an hour. They were
+     never reached rather than looked at and left, and the shape of work that
+     closes them worked sixteen times in one day. Cheapest real progress here.
+  2. The 20 findings tagged `[changes audio]` in `docs/AUDIT-2.md`. The bulk of
+     what is left and the expensive kind: the string waveguide's bass pitch,
+     the `rng` capture lifetime, engine parameters that are silent when
+     misspelled. Several want a decision rather than a fix.
+  4. The documentation tail, none of which blocks anything. The most valuable
+     single piece is Adafruit's rule applied here: every parameter `FIRMWARES`
+     exposes as a slider should carry a range worth trying at its declaration
+     in the example header, and that is gateable.>
 
 WHAT IS TRUE TODAY, and each of these is checkable in one command:
 
@@ -110,6 +121,22 @@ THE RULES THAT MATTER HERE, learned by being burned:
 - A gate you have not watched fail is not a gate. Mutate the thing it guards,
   see it go red, revert, see it go green. If a mutation does not fire, suspect
   the mutation before the gate.
+- **Suspect the probe before the artifact.** Twice in two days a check reported
+  nothing and the check was what was broken. Grepping a published npm tarball
+  for `isSafeInteger(endFrame)` found zero hits and the guard was there: vite
+  renames locals, so it reads `isSafeInteger(o)`. A `sed` mutation of a doc page
+  matched nothing because the fence is inside a TypeScript template literal
+  where every backtick is escaped. Both looked like findings. Neither was.
+- **`check-docs.mjs` compares FIGURES against harness output.** A link, a
+  `listen` fence, a quoted C++ template signature and a claim about the world
+  are none of them figures, which is why there are now four gates over the
+  documentation rather than one. Before concluding that something in a document
+  is checked, find the gate that checks it.
+- **Read the file, not your memory of the handoff.** Three claims written on
+  2026-08-21 were false the next morning and all three came from paraphrasing
+  this repository's own documents instead of opening the code: every ported
+  engine does NOT use the fixed-point phase accumulator, every example does NOT
+  call `AudioMemory()` last, and the reference DOES say what each engine is for.
 - Numbers in documents rot exactly like generated files.
   `node tools/check-docs.mjs --check` is the control, and it now covers 545
   figures across 14 documents. Note that only the copy of that number lower

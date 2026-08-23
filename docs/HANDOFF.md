@@ -1,6 +1,6 @@
 # HANDOFF
 
-State of the project as of 2026-08-16. Read this first when picking the work back up. Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` and `docs/AUDIT-2.md` and `docs/AUDIT-3.md` (findings with evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists and where this leads), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session), `docs/prototype-0.html` (the original design probe).
+State of the project as of 2026-08-23. Read this first when picking the work back up. Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` and `docs/AUDIT-2.md` and `docs/AUDIT-3.md` (findings with evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists and where this leads), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session), `docs/prototype-0.html` (the original design probe).
 
 ## The 2026-08-13 session, which changed the shape of the project
 
@@ -186,9 +186,11 @@ run twice. Nothing on a 3.x, nothing on an LC, nothing on a Daisy, and the two
 parts without a floating point unit (LC and 3.2) are the whole question, because
 they emulate every float operation this library performs in software.
 `00_BringUp` exists for exactly this and **has still never been run**, checked on
-2026-08-20 and again on 2026-08-21 rather than assumed: a `/dev/cu.usbmodem11301`
-node is present both times and cannot be opened, `Errno 6 Device not configured`,
-so nothing is enumerated behind it. It compiles: it passed the Teensy 4.1 sweep
+2026-08-20, 2026-08-21 and 2026-08-23 rather than assumed: a
+`/dev/cu.usbmodem11301` node is present every time and cannot be opened,
+`Errno 6 Device not configured`, so nothing is enumerated behind it. Three
+readings of the same thing is not evidence that it will stay that way; run the
+check rather than quoting this sentence. It compiles: it passed the Teensy 4.1 sweep
 over the published 0.1.2 package. Compiling is not running, which is
 the single highest-value thing left on this list: it is a checklist sketch with a
 written pass condition per stage, and its last two stages measure the pitch
@@ -458,6 +460,14 @@ Kept short. The full record is in the commits.
   write this code was teaching the bug.
 
 ## Where things stand
+
+**Re-checked on 2026-08-23 and nothing had moved**, which is worth recording in a
+file with this one's history. `main` is `e780f39` with a clean tree, nothing
+unpushed and nothing behind. npm serves 0.1.9, PlatformIO and the Arduino
+Library Manager both serve 0.1.2, bellows.live serves LLM references
+byte-identical to the tree, and CI is green on the last three pushes. Every one
+of those is one command, and the commands are in the bullets below. Two days is
+long enough for any of them to have changed; this time none had.
 
 - **Nothing is unpushed.** `origin/main` is current as of 2026-08-15, and CI is green on it:
   all six jobs, run `31873741708`. This bullet used to name two unpushed commits and a
