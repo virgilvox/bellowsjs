@@ -24,7 +24,7 @@ const wavBuf = audio.wav(24); // ArrayBuffer: 16, 24, or 32 bit
 
 ## The fresh-stream rule
 
-During a render, \`b.rng(label)\` hands your callbacks fresh streams seeded exactly as they were at boot. So a render equals what a fresh page load of the same seed would play, provided two things are true: every random choice flows through \`b.rng()\` (never \`Math.random\`), and any other mutable state in your callbacks is derived from \`step\` or reset at a known step. A counter you increment across calls carries its live value into the render; a value computed from \`step\` and a named stream cannot drift. The [seeded piece example](/docs/generative-music) is built to this rule.
+During a render, \`b.rng(label)\` hands your callbacks fresh streams seeded exactly as they were at boot. Capturing the stream once outside the callback, \`const melody = b.rng('melody')\`, is fine and is what the examples do: what \`b.rng\` returns is a stable handle that resolves the right stream for whichever context is drawing. So a render equals what a fresh page load of the same seed would play, provided two things are true: every random choice flows through \`b.rng()\` (never \`Math.random\`), and any other mutable state in your callbacks is derived from \`step\` or reset at a known step. A counter you increment across calls carries its live value into the render; a value computed from \`step\` and a named stream cannot drift. The [seeded piece example](/docs/generative-music) is built to this rule.
 
 ## Downloading in the browser
 

@@ -100,6 +100,8 @@ export class Bellows {
   private transportOps: TransportOp[] = [];
   private subs: Array<{ subdivision: number; cb: TickCallback }> = [];
   private liveRng = new Map<string, NamedRng>();
+  /** One stable handle per label, reused across renders. See rng(). */
+  private rngHandles = new Map<string, NamedRng>();
   private renderCtx: RenderContext | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private nextChannel = 0;
@@ -245,8 +247,9 @@ export class Bellows {
     return this.renderCtx ? this.renderCtx.now : this.ctx.currentTime;
   }
 
-  /** A named random stream forked off the piece seed. Deterministic per seed. */
-  rng(label: string): NamedRng {
+  /** The stream a label resolves to right now: the render's cache during a
+   *  render, the live cache otherwise. */
+  private rngStream(label: string): NamedRng {
     const cache = this.renderCtx ? this.renderCtx.rngCache : this.liveRng;
     let r = cache.get(label);
     if (!r) {
@@ -254,6 +257,41 @@ export class Bellows {
       cache.set(label, r);
     }
     return r;
+  }
+
+  /**
+   * A named random stream forked off the piece seed. Deterministic per seed.
+   *
+   * What comes back is a stable HANDLE, not the stream itself: every draw
+   * resolves the stream for the current context at the moment it is drawn.
+   * That is what makes the form every doc page teaches work, capturing once
+   * outside the tick callback (`const melody = b.rng('melody')`) and drawing
+   * inside it. Returning the raw stream bound the callback to whichever cache
+   * was live at capture time, so a render consumed and advanced live state
+   * instead of reading its own fresh cache, and two renders of one seed
+   * produced different music.
+   *
+   * fork() delegates rather than being handled here on purpose. A fork depends
+   * only on its parent's LABEL, never on the parent's position, so
+   * `rng(label).fork(child) === rng(label + '::' + child)` still holds and the
+   * C++ port can still land on the same stream by writing the full label path.
+   */
+  rng(label: string): NamedRng {
+    const existing = this.rngHandles.get(label);
+    if (existing) return existing;
+    const at = (): NamedRng => this.rngStream(label);
+    const fn = (() => at()()) as NamedRng & { label: string };
+    fn.label = this.seed + '::' + label;
+    fn.fork = (child: string) => at().fork(child);
+    fn.int = (n: number) => at().int(n);
+    fn.pick = <T>(arr: readonly T[]): T => at().pick(arr);
+    fn.range = (lo: number, hi: number) => at().range(lo, hi);
+    fn.chance = (p: number) => at().chance(p);
+    fn.shuffle = <T>(arr: readonly T[]): T[] => at().shuffle(arr);
+    fn.gauss = () => at().gauss();
+    fn.weighted = (weights: ArrayLike<number>) => at().weighted(weights);
+    this.rngHandles.set(label, fn);
+    return fn;
   }
 
   /* ------------------------------------------------------------ */

@@ -199,16 +199,16 @@ and no amount of building will tell you. The other half is that nothing has been
 BY EAR: 41 parity rows and 1054 preset values are a strong position and they are
 not the same as having listened to both.
 
-**2. The audit backlog. 34 open, down from 51.** `docs/AUDIT-2.md` has 26 open
-and 8 partial, against 55 closed, 5 refuted and 1 not a defect. Each carries its
+**2. The audit backlog. 33 open, down from 51.** `docs/AUDIT-2.md` has 25 open
+and 8 partial, against 56 closed, 5 refuted and 1 not a defect. Each carries its
 status and evidence under its own heading, so that file is the register and this
 one is not. The figure this entry gave three revisions ago, roughly 73, was wrong
 by 22 and could not be reproduced from any document.
 
-Twenty of the 34 would change rendered output and are tagged
+Nineteen of the 33 would change rendered output and are tagged
 `[changes audio]` in the file. The `[under ten minutes]` tag is now empty: the
 last three were taken on 2026-08-23. A finding with no tag has been judged
-neither, rather than left unassessed: all 34 carry an explicit verdict on both.
+neither, rather than left unassessed: all 33 carry an explicit verdict on both.
 This makes item 2 the whole of what is left, and every remaining finding is
 either expensive or needs a decision.
 
@@ -305,9 +305,12 @@ proposal before applying it. That last step earned its keep twice.
   `>` to `>=` mutant: 90 differences, which is how the zero is known to be a
   measurement rather than a broken probe. `crossPenalty` is exported, documented,
   defaults to 2, has no caller anywhere in the repository, and does nothing.
-  **Decision wanted**: delete it and the loop (a public type-surface change to
-  `VoiceLeadOptions`) or keep it inert and pinned. Making it live is not really
-  on the table, since a many-to-one nearest match has no crossings to penalise.
+  **Decided on 2026-08-23: kept inert and pinned**, rather than deleted. Removing
+  it would be a public type-surface change to `VoiceLeadOptions` for an option
+  nothing sets, and the test that fails the moment it becomes live is cheaper
+  than the break. Making it live was never on the table: a many-to-one nearest
+  match has no crossings to penalise, so the concept is vacuous here rather than
+  accidentally dead. The finding stays PARTIAL to keep the fact visible.
 - **The facade's transport surface has tests now, which is what the
   `Scheduler.rewind` finding was actually about.** Its headline is that `rewind`
   has no test; its last sentence says `b.start`, `b.stop`, `b.pause`,
@@ -319,6 +322,61 @@ proposal before applying it. That last step earned its keep twice.
   `setInterval` reading `ctx.currentTime`, so a test that owns vitest's fake
   timers and `FakeAudioContext.currentTime` together drives the real path.
   No source file changed. The code was right, only unwitnessed.
+
+Then the first of item 2's `[changes audio]` findings, which was the one the
+docs had the largest stake in:
+
+- **`b.render()` is reproducible now for the form every doc page teaches.**
+  `b.rng(label)` returned the STREAM, so capturing it once outside the tick
+  callback (`const melody = b.rng('melody')`, which is what README.md:68, both
+  package READMEs, `generative-music.ts` and every workbench example do) bound
+  the callback to the LIVE stream. A render installs a fresh `rngCache` that a
+  captured stream never consults, so the render consumed and advanced live
+  state: two renders of one seed produced different music, and an export
+  mid-session differed from a reload. Reproduced before touching anything, with
+  a test that renders twice at one seed and got [255, 168, 484, 395, ...] then
+  [492, 319, 387, 640, ...]. `b.rng` now returns one stable HANDLE per label
+  whose every draw resolves the current stream at the moment it is drawn.
+  `fork` is delegated rather than re-implemented, because a fork depends only
+  on its parent's label and never on its position, so the concatenation rule
+  the C++ port relies on is untouched. Six tests, mutation tested per method:
+  binding `int`, `pick`, `gauss` or `shuffle` to the capture-time stream each
+  fails, and binding `fork` survives as a true equivalent mutant, which the
+  register says rather than leaving as an apparent hole. The two doc claims the
+  finding calls out turned out to need no correction: both were describing the
+  behaviour this fix delivers, so they became true rather than being rewritten.
+
+And one gate that was missing, found by running the CI-versus-block check this
+file recommends rather than by trusting it:
+
+- **`gen:llm-embedded` was in the verification block and not in CI.** Its three
+  siblings all were: `gen:worklet`, `gen:sim` and `gen:llm` each regenerate and
+  then `git diff --exit-code` inside the workflow. The embedded LLM reference
+  had only the local run, and a local run is exactly the thing that gets
+  skipped, which is how a stale generated file reached a published release
+  commit once already. It is in `.github/workflows/ci.yml` now, next to the
+  `gen:llm` step, and the gate was watched to fail: mutating the summary line of
+  `engines/modal.h` and regenerating makes the diff non-empty, and reverting
+  makes it clean again.
+
+  Worth repeating for whoever runs that check next, because it nearly produced a
+  false report here. `grep -E "run: npm run |run: node tools" ci.yml` is an
+  INCOMPLETE probe: eight of the workflow's steps are multi-line `run: |` blocks,
+  and every regenerate-and-diff gate lives inside one, so the single-line grep
+  makes CI look far emptier than it is. Read the blocks before concluding a gate
+  is missing. The one real gap survived that reading.
+
+One operational hazard, learned by tripping it:
+
+- **Do not run anything that touches the embedded headers while
+  `check-docs.mjs` is running.** It shells out to `size-report.sh`, which
+  compiles sketches into a shared build directory, so a concurrent build
+  corrupts the measurement it is comparing against. Mutation-testing the new
+  `gen:llm-embedded` gate at the same time as a background `check-docs` made it
+  report `s9h_saturator` at 2796 / 10124 flash and RAM against the documented
+  5568 / 10136, which reads exactly like a real drift and is not one. Run alone
+  immediately afterwards, with the tree in the same state, it returned ok on all
+  545 figures. Suspect the probe: the run was the thing that was broken.
 
 Two things worth carrying, both from attacking a proposal rather than from
 writing it:
@@ -584,6 +642,25 @@ long enough for any of them to have changed; this time none had.
   current. Run the curl. See
   "Deployment (bellows.live)" below, which has said this all along; an earlier draft of this
   line said the opposite and was wrong.
+- **The browser library has drifted from the published `bellowsjs@0.1.9`, with one
+  behaviour change in it.** `git diff v0.1.9..HEAD -- packages/bellows/src` is the check.
+  `b.rng(label)` returns a stable handle instead of the raw stream, which makes
+  `b.render()` reproducible for the capture-outside-the-callback form that the README and
+  every doc page teach. That is a real fix and not a paragraph, so unlike the two embedded
+  files below it is worth a release on its own when someone is next at a keyboard: until then
+  npm and bellows.live both still ship the version where two renders of one seed can differ.
+  The other two files that moved, `engines/modal.ts` and `theory/voicelead.ts`, are
+  comment-only and change nothing a user hears. See "Closed on 2026-08-23" for the
+  measurement.
+
+  bellows.live was in sync with `HEAD` when this was written, checked rather than assumed,
+  and this commit makes it stale: `apps/workbench/public/llm.txt` and the
+  rendering-and-export doc page both moved. Note that the usual first-line check does NOT
+  reveal it, because the version line still reads `# bellowsjs 0.1.9 LLM reference` on both
+  sides. Use a content probe instead:
+  `curl -s https://bellows.live/llm.txt | grep -c "stable HANDLE"` returns 0 until someone
+  runs the deploy. That is the same lesson as everywhere else in this file: pick a probe that
+  can see the change you actually made.
 - **Two shipped files have drifted from the published 0.1.2, both deliberately, neither
   released.** `git diff c0a1280..HEAD -- packages/bellows-embedded` is the check.
   `README.md` had its install-test sentence rewritten so it survives a version bump instead of
@@ -637,7 +714,7 @@ long enough for any of them to have changed; this time none had.
     `arduino-cli` prints on failure too, and called two broken examples fine. The 0.1.1 run on
     2026-08-20 also diffed the zip against the mirror clone that had been compiled by hand,
     `diff -rq` reporting only `.git` and `.gitignore`.
-- Library test suite: 92 files, 1379 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- Library test suite: 93 files, 1385 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
 - Embedded: 51 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All seventeen examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library, except `12_DacOut`, which declines with an `#error` because a 4.x has no DAC. This line said 43 and five until 2026-08-20, while the state section fourteen lines up said 51 and 17.
