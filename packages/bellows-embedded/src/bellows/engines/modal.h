@@ -17,6 +17,14 @@
  * frequency scales the whole bank. Modes that would land above 0.45 fs
  * are muted rather than aliased.
  *
+ * The five tables do not have the same standing, and each one says which
+ * it is. Bar and membrane are physical: their ratios reproduce the
+ * free-free beam roots and the Bessel zero ratios to three decimals.
+ * Bell is the classical tuned-bell series through the quint. Glass and
+ * wood were voiced by ear and match no plate, bar or shell family, so
+ * they are choices about the sound rather than measurements of a thing.
+ * Changing either of those two changes rendered audio.
+ *
  * Two departures from the JS, both for memory. The material tables are
  * ragged there and fixed width here: every material carries a count plus
  * padded arrays of eight, since the widest shipped material (membrane)
@@ -53,31 +61,39 @@ struct ModalMaterial {
 };
 
 inline constexpr ModalMaterial kModalMaterials[] = {
-    /* Free-free bar transverse modes. */
+    /* Free-free bar transverse modes. Physical: the squared roots of
+       cos(x)cosh(x) = 1 (the Euler-Bernoulli beam), normalised to the
+       first, which gives 1, 2.757, 5.404, 8.933, 13.344, 18.638. */
     {6,
      1.0f,
      {1.0f, 2.756f, 5.404f, 8.933f, 13.345f, 18.638f, 0.0f, 0.0f},
      {1.0f, 0.7f, 0.45f, 0.3f, 0.18f, 0.1f, 0.0f, 0.0f},
      {1.0f, 0.7f, 0.5f, 0.35f, 0.25f, 0.18f, 0.0f, 0.0f}},
-    /* Circular membrane, Bessel zero ratios. */
+    /* Circular membrane, Bessel zero ratios. Physical: the first eight
+       zeros of J(m) by magnitude over the first, 1, 1.593, 2.136,
+       2.295, 2.653, 2.917, 3.155, 3.500. */
     {8,
      0.4f,
      {1.0f, 1.594f, 2.136f, 2.296f, 2.653f, 2.918f, 3.156f, 3.501f},
      {1.0f, 0.8f, 0.65f, 0.5f, 0.4f, 0.32f, 0.25f, 0.2f},
      {1.0f, 0.85f, 0.7f, 0.65f, 0.55f, 0.5f, 0.45f, 0.4f}},
-    /* Bell partials with the minor third at 2.4. */
+    /* Bell partials with the minor third at 2.4. The first four are the
+       hum, prime, tierce and quint of a tuned bell with the prime placed
+       at 2; the upper two are voiced, not the nominal (which would be 4). */
     {6,
      1.8f,
      {1.0f, 2.0f, 2.4f, 3.0f, 4.5f, 5.33f, 0.0f, 0.0f},
      {1.0f, 0.85f, 0.6f, 0.5f, 0.3f, 0.25f, 0.0f, 0.0f},
      {1.0f, 0.8f, 0.7f, 0.55f, 0.4f, 0.35f, 0.0f, 0.0f}},
-    /* Glass: sparse, nearly undamped upper modes. */
+    /* Glass: sparse, nearly undamped upper modes. Voiced by ear, not a
+       measured or textbook mode family. */
     {5,
      1.3f,
      {1.0f, 2.32f, 4.25f, 6.63f, 9.38f, 0.0f, 0.0f, 0.0f},
      {1.0f, 0.55f, 0.3f, 0.18f, 0.1f, 0.0f, 0.0f, 0.0f},
      {1.0f, 0.75f, 0.5f, 0.35f, 0.25f, 0.0f, 0.0f, 0.0f}},
-    /* Wood: fast decay, faster still in the upper modes. */
+    /* Wood: fast decay, faster still in the upper modes. Voiced by ear,
+       not a measured or textbook mode family. */
     {5,
      0.12f,
      {1.0f, 2.572f, 4.644f, 6.984f, 9.723f, 0.0f, 0.0f, 0.0f},

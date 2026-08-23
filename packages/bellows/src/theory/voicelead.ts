@@ -86,8 +86,18 @@ function closedVoicings(pcs: number[], size: number, low: number, high: number):
  * Motion cost from a sorted previous voicing to a candidate voicing.
  * Equal sizes match voice to voice in sorted order (which is the optimal
  * assignment for total absolute motion and never crosses). Unequal sizes
- * match each new note to its nearest old note and penalize crossings in
- * that assignment.
+ * match each new note to its nearest old note.
+ *
+ * "Unequal" here only ever means MORE new notes than old voices, because
+ * voiceLead sizes every candidate to max(prev.length, pcs.length): a
+ * previous voicing with more voices than the chord has pitch classes takes
+ * the equal branch and pays doublePenalty instead.
+ *
+ * The crossing term below cannot fire. prev is sorted ascending and notes
+ * is ascending, and nearest-neighbour assignment from a sorted array to an
+ * ascending query sequence is monotone non-decreasing, so `assigned` never
+ * holds an inversion. crossPenalty changes no output at any setting;
+ * voicelead.test.ts pins that, and docs/AUDIT-2.md carries the measurement.
  */
 function motionCost(prev: readonly number[], notes: readonly number[], crossPenalty: number): number {
   if (prev.length === notes.length) {

@@ -18,10 +18,12 @@ else. Neither enumerated the whole set, `AUDIT-3` closed findings here without
 saying so, and the number everyone quoted, 73 open, was 77 minus 4 where the 77
 was never listed.
 
-**The count on 2026-08-20: 29 open, 7 partial, 53 closed, 5 refuted, 1 not a
-defect.** So 36 are genuinely open. Of those 36, **20 would change rendered
-output** and **3 are closable in under ten minutes**; both are tagged inline,
-and a finding with no tag has been judged neither, rather than unassessed.
+**The count on 2026-08-23: 26 open, 8 partial, 55 closed, 5 refuted, 1 not a
+defect.** So 34 are genuinely open. Of those 34, **20 would change rendered
+output** and **none is still tagged under ten minutes**; both are tagged inline,
+and a finding with no tag has been judged neither, rather than unassessed. The
+counts in this paragraph are derived by counting the status lines in this file,
+not carried forward by arithmetic from the previous revision.
 
 The count on 2026-08-15 was 43 open and 8 partial, so 51. Twenty findings
 carried the `[under ten minutes]` tag, seventeen alone and three sharing a line
@@ -36,12 +38,21 @@ names at the end, in the engine it names, which is the exact pattern that cost
 chain and the middle link cannot be observed in process. Both carry their
 reason. Fourteen of sixteen survived.
 
-The three still tagged `[under ten minutes]` are the modal table provenance,
-`voiceLead`'s unequal-size branch and `Scheduler.rewind`, and none of them was
-ever reached rather than looked at and left: the machine slept and that group's
-agent died mid-response. A fourth, this repository's own release ritual quoting
-a bundle size the command no longer printed, was closed during the 0.1.9
-release by measuring it.
+The last three tagged `[under ten minutes]` were the modal table provenance,
+`voiceLead`'s unequal-size branch and `Scheduler.rewind`. None of them had ever
+been reached rather than looked at and left: the machine slept and that group's
+agent died mid-response. All three were taken on 2026-08-23 and the tag is now
+empty. A fourth, this repository's own release ritual quoting a bundle size the
+command no longer printed, was closed during the 0.1.9 release by measuring it.
+
+Two of the three closed cleanly and one did not. `voiceLead` is PARTIAL, and
+the reason is worth carrying: its coverage hole is closed, but the measurement
+that closed it also showed `crossPenalty` to be unreachable by construction
+rather than merely untested, so a published option changes no output at any
+setting. That is a decision (remove a public option, or keep it inert and
+pinned) rather than a fix, which is why it carries no `[under ten minutes]` tag
+and no `[changes audio]` tag either: removing dead code changes nothing, and
+the measurement behind that claim is in the finding.
 
 How that was arrived at, because a number produced by reading is worth what the
 reading was worth. All 95 were re-read against the tree at `6d23f58`, with a
@@ -596,7 +607,7 @@ STK's Bowed (which the file cites for the friction table, and which it matches e
 
 **Instrument algorithms: Modal glass and wood mode tables have no physical source, unlike the bar and membrane tables**
 
-> **OPEN** as of 2026-08-15. [under ten minutes] packages/bellows/src/engines/modal.ts:58-71 is unchanged, and the two invented tables still carry only descriptive comments with no citation, unlike the two above them: " {\n // Glass: sparse, nearly undamped upper modes.\n ratios: [1, 2.32, 4.25, 6.63, 9.38]," and " {\n // Wood: fast decay, faster still in the upper modes.\n ratios: [1, 2.572, 4.644, 6.984, 9.723],". The contrast the finding draws is still visible in the same block: :39 "// Free-free bar transverse modes." with ratios [1, 2.756, 5.404, 8.933, 13.345, 18.638] and :46 "// Circular membrane, Bessel zero ratios." with [1, 1.594, 2.136, 2.296, 2.653, 2.918, 3.156, 3.501]. Note: closable cheaply only if the fix is a comment saying these two are voiced by ear; replacing the tables with real plate/bar families would change rendered audio.
+> **CLOSED** as of 2026-08-23. The finding's headline is that glass and wood carry no citation; the cause it names at the end is different and wider: "two of the five tables are invented while the first two are real, and a reader cannot tell which is which from the file". So the fix annotates all five, not the two the headline points at, and it annotates them in both trees, because `packages/bellows-embedded/src/bellows/engines/modal.h` carried the same five comments word for word and would have left the C++ reader with the identical problem. Each table now states its standing and the file header says the five do not have the same standing. The two physical claims were re-derived rather than repeated: solving cos(x)cosh(x) = 1 gives betaL 4.7300, 7.8532, 10.9956, 14.1372, 17.2788, 20.4204, whose squares normalised to the first are 1, 2.757, 5.404, 8.933, 13.344, 18.638 against the table's 1, 2.756, 5.404, 8.933, 13.345, 18.638; the first eight zeros of J(m) by magnitude are J0@2.405, J1@3.832, J2@5.136, J0@5.520, J3@6.380, J1@7.016, J4@7.588, J2@8.417, ratioing to 1, 1.593, 2.136, 2.295, 2.653, 2.917, 3.155, 3.500 against the table's 1, 1.594, 2.136, 2.296, 2.653, 2.918, 3.156, 3.501. Both match to rounding, so "physical" is measured and not asserted. The bell table was checked too and is the one the finding described loosely: halved it reads 0.5, 1.0, 1.2, 1.5, 2.25, 2.665, so the first four ARE the hum, prime, tierce and quint of a tuned bell and the upper two are NOT the nominal, which would be 2.0. The comment now says that rather than calling the whole row a bell set. Glass and wood are recorded as voiced by ear, which is the cheap fix the finding sanctions; replacing them with real plate or bar families would change rendered audio and is not done here. Gate: none, and that is stated rather than implied. This is provenance prose, which `check-docs.mjs` does not cover (it compares figures against harness output, and a comment in a source file is neither). What IS gated is that the fix changed no audio: comment-only in both trees, and `tables:check` 428 rows and `presets:check` 50 presets / 1054 values still compare equal, which they would not if a ratio had been touched. Changed: `packages/bellows/src/engines/modal.ts`, `packages/bellows-embedded/src/bellows/engines/modal.h`.
 
 `packages/bellows/src/engines/modal.ts:58-71`
 
@@ -700,7 +711,7 @@ pieceSetup() uses engines va, fm, kick and pluck, and effects saturator (channel
 
 **Coverage and gates: voiceLead's unequal-size branch, including the crossing penalty, is never executed**
 
-> **OPEN** as of 2026-08-15. [under ten minutes] packages/bellows/src/theory/voicelead.ts:92-119 still holds the unequal branch: `if (prev.length === notes.length) { ... return c; }` then the nearest-note assignment plus `if (assigned[i] > assigned[j]) c += crossPenalty;`. voicelead.ts:145 `const size = prev.length > pcs.length ? prev.length : pcs.length;` means motionCost only takes the unequal path when prev.length < pcs.length. Every case in packages/bellows/test/theory/voicelead.test.ts has prev.length >= pcs count: lines 65, 70, 82 (all 3 vs 3), 90 (3 vs 3), 99 `voiceLead([60, 64, 67, 72], [[67, 71, 74]])` (4 vs 3, which sets size=4 and hits the EQUAL branch), 110 (3 vs 3), 122 (empty prev, skips motionCost). No test anywhere else calls voiceLead (grep over packages/bellows/src and test finds only voicelead.test.ts and the export-name list in integration/package.test.ts). Note: the audit's claim that this branch is 'the doubling case' is backwards, doubling takes the equal branch; the coverage hole itself is real.
+> **PARTIAL** as of 2026-08-23. The coverage hole is closed; the crossing penalty is not, and cannot be by a test, which is the news. Reading the finding to its end, its stated cause is wrong twice over and the 2026-08-15 re-verification had already caught one half: doubling takes the EQUAL branch, so the unequal branch is entered only when the previous voicing has FEWER voices than the chord has pitch classes. The half nobody had caught is that `crossPenalty` is unreachable by construction, not merely untested. `voiceLead` sorts `prev` ascending (voicelead.ts:137) and `closedVoicings` emits `notes` ascending, and nearest-neighbour assignment from a sorted array to an ascending query sequence is monotone non-decreasing, so `assigned` never holds an inversion and the `assigned[i] > assigned[j]` test at voicelead.ts:115 never fires. Measured three ways rather than argued: 1670526 exhaustive cases over eight voice-count shapes from 1-vs-2 to 4-vs-5, including duplicated previous voices, produced 0 crossings; 576 sweeps of the real exported `voiceLead` with `crossPenalty` set to 0 and to 1000 produced 0 differences in output; and the probe was validated against a mutant (`>` to `>=`), which produced 90 differences out of the same 576, so a zero here is a measurement and not a broken instrument. `crossPenalty` is therefore a published option, exported through `export * from './theory/voicelead'`, with a documented default of 2, that changes nothing at any setting. Grep finds no caller: not the workbench, not the docs, not the C++ port. DONE: three tests in `packages/bellows/test/theory/voicelead.test.ts`, two entering the unequal branch and one pinning the inertness, plus the corrected docstring on `motionCost`, which had claimed in prose that it penalises crossings. Gate: watched to fail under four separate mutations. The first attempt at the two branch tests asserted only length, pitch classes, ordering and range, and SURVIVED zeroing the branch's motion term (`c += bestD` to `c += 0`), because that leaves every candidate tied at cost 0 and the first one wins while the shape stays legal. That is the symptom-versus-cause pattern reproducing itself inside the fix, and it is why the tests now assert the cost the branch computes, total distance from each new note to its nearest old voice, measured at 5 and 6 against the mutant's 27 and 16. All four mutations now kill tests: `c += 0` (2 fail), `>` to `>=` (2), `d < bestD` to `d > bestD` (3), and an early `return 0` from the branch (2). NOT DONE, and it needs a decision rather than a fix: whether to delete `crossPenalty` and its dead loop, which is a public type-surface change to `VoiceLeadOptions` for an option nothing sets, or to keep it inert and documented. The concept is vacuous in this branch rather than accidentally dead, since a many-to-one nearest match from sorted to sorted has no crossings to penalise, so making it live would mean inventing a meaning for it. Kept for now, pinned by the test, so it cannot become live silently.
 
 `packages/bellows/src/theory/voicelead.ts`
 
@@ -708,7 +719,7 @@ motionCost (src/theory/voicelead.ts:92) has two branches. The equal-sizes branch
 
 **Coverage and gates: Scheduler.rewind() has no test, and it is on the b.start() path**
 
-> **OPEN** as of 2026-08-15. [under ten minutes] packages/bellows/src/core/scheduler.ts:62 `rewind(): void {` (resets lastTick, gap, and every sub's scheduledTo/lastStep) and scheduler.ts:57 `get size()` are still present. packages/bellows/src/bellows.ts:380-382 `start(): void { this.scheduler.rewind(); this.transport.start(this.ctx.currentTime + 0.05); }`. `grep -rn rewind packages/bellows/test` returns nothing, and packages/bellows/test/kernel/scheduler.test.ts covers only: fires every subdivision, late timer, swung tick times, unsubscribe, missed-tick replay, throttled lookahead, resyncTo. `grep -rn '\.start()' packages/bellows/test` returns nothing, so the facade transport surface is still untested as the finding says.
+> **CLOSED** as of 2026-08-23. Fixed at the cause the finding names in its last sentence, not at its headline. The headline is that `rewind()` has no test; the cause is "one instance of a broader hole: the transport control surface of the facade has no test", which is also why `rewind` had none. Both are closed. `packages/bellows/test/kernel/scheduler.test.ts` goes from 7 tests to 11, covering `rewind` and `get size`, and a new `packages/bellows/test/integration/transport-surface.test.ts` carries 8 tests over `b.start`, `b.stop`, `b.pause`, `b.resume`, `b.panic`, `b.bpm`, `b.rampBpm` and `b.swing`. The facade was testable all along: `test/integration/fake-context.ts` already existed, `b.transport` is public, and Bellows drives its scheduler from a 25 ms `setInterval` reading `ctx.currentTime`, so a test owning vitest's fake timers and `FakeAudioContext.currentTime` together drives the real path end to end. `FakeAudioContext.state` is 'running', so boot never awaits the resume timeout and fake timers installed before boot do not deadlock. Gate: every one watched to fail. `rewind` as a whole no-op fails 2 scheduler tests and the facade's second-start test; dropping only `s.lastStep = -1` fails 2; dropping only `this.gap = 0` fails 1; dropping only `s.scheduledTo = -Infinity` fails 1, which needed a test written for it after the first three left it ungated (a 5 s stall pushes the window out to about t = 12.5, and a restart behind that makes `to <= from` so nothing is delivered at all). Removing `this.scheduler.rewind()` from `Bellows.start()` fails the second-start test, removing `this.scheduler.resyncTo(beat)` from `resume()` fails the resume test, and removing `this.panic()` from `stop()` fails the stop test. Two things found on the way. The resume test needed a 32nd-note subdivision to bite: at 62.5 ms against the 120 ms horizon two ticks are always in flight, so the re-anchor invalidates them and `resyncTo` re-issues them, which shows up as delivery resuming at step 9 rather than 11. And a swing expectation of mine was wrong before the code was: '8n' is half a beat, so the offset is 62.5 ms and not the 31.25 ms I first wrote. Residual, stated rather than implied: `s.scheduledTo = -Infinity` inside `resyncTo` (as opposed to inside `rewind`) is still ungated, dropping it fails nothing. Changed: `packages/bellows/test/kernel/scheduler.test.ts`, `packages/bellows/test/integration/transport-surface.test.ts` (new). No source file changed: the code was right, only unwitnessed.
 
 `packages/bellows/src/core/scheduler.ts`
 

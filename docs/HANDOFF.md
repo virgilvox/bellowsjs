@@ -199,17 +199,18 @@ and no amount of building will tell you. The other half is that nothing has been
 BY EAR: 41 parity rows and 1054 preset values are a strong position and they are
 not the same as having listened to both.
 
-**2. The audit backlog. 36 open, down from 51.** `docs/AUDIT-2.md` has 29 open
-and 7 partial, against 53 closed, 5 refuted and 1 not a defect. Each carries its
+**2. The audit backlog. 34 open, down from 51.** `docs/AUDIT-2.md` has 26 open
+and 8 partial, against 55 closed, 5 refuted and 1 not a defect. Each carries its
 status and evidence under its own heading, so that file is the register and this
-one is not. The figure this entry gave two revisions ago, roughly 73, was wrong
+one is not. The figure this entry gave three revisions ago, roughly 73, was wrong
 by 22 and could not be reproduced from any document.
 
-Twenty of the 36 would change rendered output and are tagged
-`[changes audio]` in the file. Only 3 are still tagged `[under ten minutes]`,
-and none of those three was ever looked at. A finding with no tag has been
-judged neither, rather than left unassessed: all 36 carry an explicit verdict
-on both.
+Twenty of the 34 would change rendered output and are tagged
+`[changes audio]` in the file. The `[under ten minutes]` tag is now empty: the
+last three were taken on 2026-08-23. A finding with no tag has been judged
+neither, rather than left unassessed: all 34 carry an explicit verdict on both.
+This makes item 2 the whole of what is left, and every remaining finding is
+either expensive or needs a decision.
 
 The 20 tagged `[changes audio]` are now the bulk of what is left, and they are
 the expensive kind: the string waveguide's bass pitch, the `rng` capture
@@ -228,19 +229,12 @@ fell over, and the pattern in almost all of them was a fix applied to the
 symptom a finding opened with rather than to the cause it named further down.
 Read a finding to its end before calling it closed.
 
-**3. Three quick findings nobody has looked at.** The 2026-08-20 pass took the twenty
-findings tagged `[under ten minutes]`, investigated each against the tree,
-handed every proposal to a skeptic briefed to refute it, and applied what
-survived: sixteen closed. Three were never reached, because the machine slept
-and that group's agent died mid-response, so they are open for want of a reader
-rather than for want of a fix: the modal glass and wood mode tables having no
-physical source (`docs/AUDIT-2.md`, the provenance one), `voiceLead`'s
-unequal-size branch and its crossing penalty never executing, and
-`Scheduler.rewind()` having no test while sitting on the `b.start()` path. A
-fourth was closed during the 0.1.9 release, by measuring the thing it was about:
-this file's own release ritual had been quoting a bundle size the command no
-longer printed. An hour for the three, and the same shape of work that already
-worked sixteen times.
+**3. Three quick findings nobody had looked at. Done on 2026-08-23**, and
+written up under "Closed on 2026-08-23" below. Two closed, one is PARTIAL
+because the measurement turned up something a test cannot fix: `voiceLead`'s
+`crossPenalty` is unreachable by construction, so a published option changes no
+output at any setting, and whether to delete it is a decision waiting on the
+owner. Nothing else in this list depended on these three.
 
 **4. The documentation restructure has a tail, and none of it blocks anything.**
 `docs/DOCS-PLAN.md` steps 1 to 4 and part of 6 are done. What is left, in the
@@ -274,6 +268,74 @@ first finding it looked at, because the investigator had measured with the 9.2.1
 toolchain rather than the 11.3.1 the documents pin. That is the toolchain finding
 biting inside the session that was auditing it, and it is fixed now, in
 `tools/size-report.sh`.
+
+### Closed on 2026-08-23, and what each one turned up
+
+The last three `[under ten minutes]` findings, taken in the shape that worked
+sixteen times on 2026-08-20: read the finding to its END, separate the headline
+symptom from the cause it argues for, propose an exact patch, attack the
+proposal before applying it. That last step earned its keep twice.
+
+- **The modal mode tables now say where they came from, all five of them.**
+  The headline was that glass and wood carry no citation. The cause the finding
+  names at its end is wider: a reader cannot tell which of the five tables are
+  real and which are invented. So all five are annotated, and in BOTH trees,
+  because `packages/bellows-embedded/src/bellows/engines/modal.h` carried the
+  same five comments word for word. The two physical claims were re-derived
+  rather than repeated: the roots of cos(x)cosh(x) = 1 squared and normalised
+  give 1, 2.757, 5.404, 8.933, 13.344, 18.638 against the table's 2.756 and
+  13.345, and the first eight Bessel zeros by magnitude give 1, 1.593, 2.136,
+  2.295, 2.653, 2.917, 3.155, 3.500 against the table's 1.594 and 3.501. Both
+  match to rounding. The bell row turned out to be the one described loosely:
+  halved it reads 0.5, 1.0, 1.2, 1.5, 2.25, 2.665, so the first four ARE the
+  hum, prime, tierce and quint of a tuned bell and the upper two are NOT the
+  nominal. Glass and wood are recorded as voiced by ear, which is the cheap fix
+  the finding sanctions. No gate, and the entry says so: this is provenance
+  prose and `check-docs.mjs` compares figures, not comments.
+- **`voiceLead`'s crossing penalty is dead code, not untested code.** This is
+  the one that did not close. The finding reads as a coverage hole, and half of
+  it is: the unequal-size branch is entered only when the previous voicing has
+  FEWER voices than the chord has pitch classes, and no test had ever done that.
+  Three tests now do. But the crossing penalty inside that branch cannot be
+  covered by any test, because `prev` is sorted and `notes` is ascending, and
+  nearest-neighbour assignment between two ascending sequences is monotone, so
+  the inversion it looks for never exists. 1670526 exhaustive cases over eight
+  voice-count shapes: zero crossings. 576 sweeps of the real exported function
+  with `crossPenalty` at 0 and at 1000: zero differences. The same 576 under a
+  `>` to `>=` mutant: 90 differences, which is how the zero is known to be a
+  measurement rather than a broken probe. `crossPenalty` is exported, documented,
+  defaults to 2, has no caller anywhere in the repository, and does nothing.
+  **Decision wanted**: delete it and the loop (a public type-surface change to
+  `VoiceLeadOptions`) or keep it inert and pinned. Making it live is not really
+  on the table, since a many-to-one nearest match has no crossings to penalise.
+- **The facade's transport surface has tests now, which is what the
+  `Scheduler.rewind` finding was actually about.** Its headline is that `rewind`
+  has no test; its last sentence says `b.start`, `b.stop`, `b.pause`,
+  `b.resume`, `b.panic`, `b.bpm`, `b.rampBpm` and `b.swing` are all uncalled
+  too, and that is why `rewind` had none. `scheduler.test.ts` goes 7 tests to
+  11 and a new `test/integration/transport-surface.test.ts` carries 8. The
+  facade was testable the whole time: `fake-context.ts` already existed,
+  `b.transport` is public, and Bellows drives its scheduler from a 25 ms
+  `setInterval` reading `ctx.currentTime`, so a test that owns vitest's fake
+  timers and `FakeAudioContext.currentTime` together drives the real path.
+  No source file changed. The code was right, only unwitnessed.
+
+Two things worth carrying, both from attacking a proposal rather than from
+writing it:
+
+1. **The first version of the `voiceLead` branch tests passed against a
+   mutant.** They asserted length, pitch classes, ordering and range, and
+   zeroing the branch's motion term (`c += bestD` to `c += 0`) left every
+   candidate tied at cost 0 so the first one won, with the shape still legal.
+   That is this repository's own symptom-versus-cause pattern reproducing
+   itself INSIDE the fix for a finding about that pattern. The tests now assert
+   the cost the branch computes and four separate mutations kill them.
+2. **Three of `rewind`'s four effects were gated by the obvious tests and one
+   was not.** Dropping `s.scheduledTo = -Infinity` failed nothing until a test
+   was written for the case that needs it: a 5 second stall stretches the
+   window out to about t = 12.5, and a restart behind that makes `to <= from`,
+   so nothing is delivered at all. The same line inside `resyncTo` is still
+   ungated and the register says so rather than implying full coverage.
 
 ### Closed on 2026-08-21, and what each one turned up
 
@@ -575,7 +637,7 @@ long enough for any of them to have changed; this time none had.
     `arduino-cli` prints on failure too, and called two broken examples fine. The 0.1.1 run on
     2026-08-20 also diffed the zip against the mirror clone that had been compiled by hand,
     `diff -rq` reporting only `.git` and `.gitignore`.
-- Library test suite: 91 files, 1364 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- Library test suite: 92 files, 1379 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
 - Embedded: 51 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All seventeen examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library, except `12_DacOut`, which declines with an `#error` because a 4.x has no DAC. This line said 43 and five until 2026-08-20, while the state section fourteen lines up said 51 and 17.
