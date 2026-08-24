@@ -199,16 +199,19 @@ and no amount of building will tell you. The other half is that nothing has been
 BY EAR: 41 parity rows and 1054 preset values are a strong position and they are
 not the same as having listened to both.
 
-**2. The audit backlog. 33 open, down from 51.** `docs/AUDIT-2.md` has 25 open
-and 8 partial, against 56 closed, 5 refuted and 1 not a defect. Each carries its
+**2. The audit backlog. 34 open, down from 51.** `docs/AUDIT-2.md` has 26 open
+and 8 partial, against 56 closed, 5 refuted and 1 not a defect. Four were closed
+on 2026-08-23 and one new one was opened by auditing those closures, which is
+the honest arithmetic and the reason the total moved by three and not four. Each carries its
 status and evidence under its own heading, so that file is the register and this
 one is not. The figure this entry gave three revisions ago, roughly 73, was wrong
 by 22 and could not be reproduced from any document.
 
-Nineteen of the 33 would change rendered output and are tagged
-`[changes audio]` in the file. The `[under ten minutes]` tag is now empty: the
+Twenty of the 34 would change rendered output and are tagged
+`[changes audio]` in the file, which is where that figure started the day: one
+was closed and one was found. The `[under ten minutes]` tag is now empty: the
 last three were taken on 2026-08-23. A finding with no tag has been judged
-neither, rather than left unassessed: all 33 carry an explicit verdict on both.
+neither, rather than left unassessed: all 34 carry an explicit verdict on both.
 This makes item 2 the whole of what is left, and every remaining finding is
 either expensive or needs a decision.
 
@@ -361,10 +364,98 @@ file recommends rather than by trusting it:
 
   Worth repeating for whoever runs that check next, because it nearly produced a
   false report here. `grep -E "run: npm run |run: node tools" ci.yml` is an
-  INCOMPLETE probe: eight of the workflow's steps are multi-line `run: |` blocks,
-  and every regenerate-and-diff gate lives inside one, so the single-line grep
-  makes CI look far emptier than it is. Read the blocks before concluding a gate
-  is missing. The one real gap survived that reading.
+  INCOMPLETE probe: most of the workflow's interesting steps are multi-line
+  `run: |` blocks, and all four regenerate-and-diff gates live inside one, so the
+  single-line grep makes CI look far emptier than it is. Read the blocks before
+  concluding a gate is missing. The one real gap survived that reading.
+  `grep -cE "run: \|$" .github/workflows/ci.yml` counts the blocks rather than
+  quoting a number here, because the first draft of this sentence quoted one and
+  the same commit that wrote it added a block and made it wrong.
+
+### What auditing the fix found, which is a new defect next to the old one
+
+**A render can still differ from the playback it claims to reproduce.** Not the
+same bug as the one closed above. That one was two renders disagreeing with each
+other, and it is fixed. This is a render disagreeing with LIVE, and it survives
+the fix because it is not about which stream you read, it is about the ORDER the
+callbacks are called in.
+
+Live, `Scheduler.tick` walks `for (const s of this.subs)` and delivers every tick
+inside the window for one subscription before moving to the next. Offline,
+`bellows.ts:633` flattens every subscription's ticks and sorts them by time.
+Those two agree only while a window holds at most one tick per subscription,
+which is exactly why nobody has hit it: the default horizon is 0.12 s and a
+quarter note at 120 bpm is 0.5 s. Measured with two subscriptions sharing one
+`b.rng('shared')`: at `'4n'` and `'8n'` live and render agree exactly, and at
+`'32n'` and `'16n'` they do not. Live drew A79, A90, B70, A83; the render drew
+A79, B90, A70, A83. Same values, because one stream is drawn in order. Different
+lanes, because a different callback took each one. Different music from one seed.
+
+The reason it is worth filing rather than shrugging at is what the docs promise.
+The rendering page says a render equals a fresh page load provided randomness
+flows through `b.rng()` and other mutable state derives from `step`. The measured
+case satisfies both and diverges anyway, so the guarantee as written is
+incomplete rather than misapplied. Scope it honestly though: one stream per
+concern, which is what every page and example teaches, never hits this, and a
+stalled timer widening the window to `gap * 1.5` is the other way in.
+
+It is in `docs/AUDIT-2.md` with three options, and it wants a decision, because
+two of the three change rendered audio for any piece that shares a stream: sort
+the live scheduler's ticks per wake so live matches the replay, drop the replay's
+sort so the replay matches live, or document the caveat and change no audio.
+This is why the backlog moved by three and not four.
+
+### What auditing this session's own work found
+
+Five defects, in the session's own output, all written the same day, and the
+fifth was found in the sentence that recorded the first. This is the fifth
+session running to find that its work does not survive its own audit, and the
+rate is not improving, so budget for it.
+
+1. **The `voiceLead` fix corrected one of four false claims, and it was the
+   least visible one.** The code does not penalise crossings. Four pieces of
+   prose said it does: `motionCost`'s private docstring, the exported
+   `voiceLead` docstring, the `crossPenalty` option's own doc comment (which is
+   what a user reads in an editor and what flows into the generated `llm.txt`),
+   and the site's Theory page, which told visitors that `voiceLead` returns a
+   voicing "penalizing crossings and doublings". The first pass fixed the
+   private one. This is the register's own recurring pattern reproducing inside
+   a fix for a finding about that pattern, which is now twice in one session:
+   the first version of that finding's tests also passed against a mutant. All
+   four are corrected.
+2. **A sentence about a count was made wrong by the commit that wrote it.** The
+   note warning that grepping CI for single-line `run:` steps is an incomplete
+   probe said there were eight multi-line blocks. Adding the
+   `gen:llm-embedded` gate in the same commit made it nine. It now gives the
+   command that counts them instead of a number, and says why.
+3. **Live figures were quoted where the file's own rule is to paraphrase.** The
+   note about the `check-docs` race quoted the `s9h_saturator` flash and RAM
+   values straight out of `docs/HARDWARE.md`. Those are gated figures with a
+   source of truth, and this file already learned at the `--allow-host-drift`
+   entry that a copy of a number rots and that a gate cannot tell a quotation
+   from a claim. They are described rather than quoted now.
+4. **A vacuous assertion shipped in a new test.**
+   `expect(steps).not.toContain(0 - 1)` in `transport-surface.test.ts` can never
+   fail: a step index is never -1. It was noise sitting next to the assertion
+   that does the work, and it is gone. Removing it does not weaken the test,
+   which still dies under both the `rewind` and `resyncTo` mutations.
+
+5. **An unverified claim inside the entry recording defect 1.** Writing up the
+   `crossPenalty` miss, this session asserted that the option's doc comment
+   "flows into the generated `llm.txt`". It does not. The comment ships in
+   `packages/bellows/dist/theory/voicelead.d.ts`, which is an editor tooltip and
+   part of the npm package, but `llm.txt` carries only a one-line summary of
+   `voiceLead` that never made the crossing claim at all. Checked after the
+   fact, which is the wrong order. The register says so where it happened.
+
+Two of these five (1 and 3) are the same failure at different scales: fixing
+where the finger points instead of where the problem is. Number 5 is the
+sharpest reminder available that this file's rule applies to the file itself:
+the sentence was about being careful and was written carelessly. Number 2 is the one to
+generalise from, because nothing catches it. `check-docs.mjs` gates figures with
+a harness behind them; a count of something in a file this repository edits by
+hand has no harness, so a sentence about the shape of `ci.yml` is only as true
+as the last person to read it. Prefer the command over the number.
 
 One operational hazard, learned by tripping it:
 
@@ -373,10 +464,13 @@ One operational hazard, learned by tripping it:
   compiles sketches into a shared build directory, so a concurrent build
   corrupts the measurement it is comparing against. Mutation-testing the new
   `gen:llm-embedded` gate at the same time as a background `check-docs` made it
-  report `s9h_saturator` at 2796 / 10124 flash and RAM against the documented
-  5568 / 10136, which reads exactly like a real drift and is not one. Run alone
-  immediately afterwards, with the tree in the same state, it returned ok on all
-  545 figures. Suspect the probe: the run was the thing that was broken.
+  report the `s9h_saturator` row with a flash figure about half the documented
+  one and a RAM figure a dozen bytes under, which reads exactly like a real
+  drift and is not one. Run alone immediately afterwards, with the tree in the
+  same state, it returned ok on every figure. The two numbers are described
+  rather than quoted on purpose: they are live figures in `docs/HARDWARE.md`,
+  and this file already learned once that a gate cannot tell a quotation from a
+  claim. Suspect the probe: the run was the thing that was broken.
 
 Two things worth carrying, both from attacking a proposal rather than from
 writing it:

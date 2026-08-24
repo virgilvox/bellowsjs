@@ -131,7 +131,7 @@ describe('facade transport surface', () => {
     await run(ctx, 1.5);
     // resume re-aims at the paused beat: the count carries on, it does not reset
     expect(steps[steps.length - 1]).toBeGreaterThan(atPause);
-    expect(steps).not.toContain(0 - 1);
+    // step 0 was delivered once, at start, and resume did not replay the piece
     expect(steps.filter((s) => s === 0)).toHaveLength(1);
   });
 

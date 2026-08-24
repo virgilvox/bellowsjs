@@ -11,7 +11,13 @@ export interface VoiceLeadOptions {
   low?: number;
   /** Highest allowed midi note. Default 84 (C6). */
   high?: number;
-  /** Cost added per crossed voice pair when voice counts differ. Default 2. */
+  /**
+   * Cost added per crossed voice pair when voice counts differ. Default 2.
+   *
+   * INERT, and kept only because it is published: the crossing it counts
+   * cannot occur. See motionCost for why, and voicelead.test.ts for the test
+   * that fails if it ever starts mattering. Setting it changes no output.
+   */
   crossPenalty?: number;
   /** Cost added per doubled pitch class. Default 3. */
   doublePenalty?: number;
@@ -132,9 +138,11 @@ function motionCost(prev: readonly number[], notes: readonly number[], crossPena
  * Choose the voicing with minimal total voice motion from prevVoicing,
  * searching every candidate chord over its inversions and octave
  * placements within the range. Doubling (needed when the previous voicing
- * has more voices than the chord has pitch classes) and crossing are
- * penalized. With an empty prevVoicing the first candidate is voiced
- * closest to the center of the range. Returns an ascending voicing.
+ * has more voices than the chord has pitch classes) is penalized. Crossing
+ * is not, despite the crossPenalty option: the penalty exists but cannot
+ * fire, and motionCost says why. With an empty prevVoicing the first
+ * candidate is voiced closest to the center of the range. Returns an
+ * ascending voicing.
  */
 export function voiceLead(
   prevVoicing: readonly number[],
