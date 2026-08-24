@@ -413,12 +413,21 @@ quotes the sustain-0.5 number and its body quotes the full-level one; both are
 right for their level and neither is a general figure.
 
 The fix part 1 invites is to test `IDLE_FLOOR` in the `Stage.Sustain` branch the
-way `Stage.Release` already does. It was tried and it breaks documented
-behaviour. `Adsr`'s docstring calls sustain "a control a player can move during
-a held note" and promises the level steps on the next sample; sending a silent
-sustaining voice to Idle makes it unreachable. Measured: raising sustain from 0
-to 0.5 mid-note gives 0.5 and active today, and 0 and inactive under the
-candidate. The voice cannot come back.
+way `Stage.Release` already does. It was tried and it breaks a documented
+statement of fact: `Adsr.set` says "the Sustain branch below assigns it every
+sample, so a voice that is already sustaining steps to the new value on the very
+next sample", and under the candidate a voice sustaining at zero does not,
+because it has left that branch. Measured: raising sustain from 0 to 0.5
+mid-note gives 0.5 and active today, and 0 and inactive under the candidate.
+
+State that at its real strength, because the first write-up of this overstated
+it by paraphrase. The same docstring opens with "Safe to call while running
+covers the three times and not the fourth argument", so sustain is explicitly
+outside the safe-while-running guarantee, and it closes by steering a
+player-moved control through `Smoother` or a note boundary rather than through
+sustain directly. The candidate breaks something the file states, not something
+the file recommends relying on. Somebody could reasonably decide a voice
+sustaining at exactly zero is allowed to become unreachable.
 
 **All 1401 tests passed with that regression applied.** The existing
 sustain-change test moves between 0.8 and 0.2 and never reaches zero, so it saw
@@ -494,10 +503,11 @@ reproducible against itself.
 
 ### What auditing this session's own work found
 
-Seven defects, in the session's own output, all written the same day. The fifth
+Eight defects, in the session's own output, all written the same day. The fifth
 was found in the sentence that recorded the first, the sixth by auditing a
-second time after the first audit had declared itself done, and the seventh by
-auditing the commit that fixed the sixth. This is
+second time after the first audit declared itself done, the seventh by auditing
+the commit that fixed the sixth, and the eighth by auditing the commit that
+recorded the seventh. No pass has yet come back empty. This is
 the fifth session running to find that its work does not survive its own audit,
 the rate is not improving, and the second pass was as productive as the first,
 so budget for both.
@@ -560,8 +570,19 @@ so budget for both.
    unit, and the two the goldens miss are covered by the parity harness and by
    having no callers respectively.
 
-Two of these seven (1 and 3) are the same failure at different scales: fixing
-where the finger points instead of where the problem is. Number 5 is the
+8. **A docstring paraphrased into meaning close to its opposite.** Writing up
+   the sustain investigation, this session said `Adsr`'s docstring "calls
+   sustain a control a player can move during a held note". It says the
+   reverse: such a control should go through `Smoother` or land at a note
+   boundary, and sustain is named as the one argument NOT covered by "safe to
+   call while running". The measured result was unaffected and the case against
+   the candidate survives, but weaker than it was made to sound, which changes
+   the decision being handed over. Quote a docstring or do not lean on it.
+
+Two of these eight (1 and 3) are the same failure at different scales: fixing
+where the finger points instead of where the problem is. Numbers 5, 7 and 8 are
+one failure too: asserting from a plausible reading of a file rather than
+opening it. Number 5 is the
 sharpest reminder available that this file's rule applies to the file itself:
 the sentence was about being careful and was written carelessly. Number 2 is the one to
 generalise from, because nothing catches it. `check-docs.mjs` gates figures with
