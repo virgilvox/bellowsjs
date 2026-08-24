@@ -383,9 +383,16 @@ file recommends rather than by trusting it:
   which is right for a filter where holding is right for an envelope. Fixing
   only the unit the finding named would have been the third repetition of the
   symptom-versus-cause pattern in one session. 32 tests to 48, watched to fail
-  per unit, and the golden renders are unchanged, which is the proof that no
-  correct audio moved: these guards can only alter output that was already
-  non-finite.
+  per unit. No correct audio moved, and that evidence is per unit rather than
+  one blanket claim: a first draft rested it all on the golden renders, and the
+  goldens reach three of the five. `va` holds a `LadderFilter` and an `Svf` and
+  the `saturator` holds two `OnePole`s, so those three are covered and the
+  renders are byte-identical. `EnvelopeFollower` is not in the golden piece at
+  all, because the piece's `compressor` keeps its own `env` field rather than
+  using the class; it is covered by the parity harness instead, whose `gate` and
+  `gate_sweep` rows drive `Gate` and still read 1.25e-6 and 1.70e-6 against an
+  untouched C++ side. `DcBlocker` has no caller in `src`, so nothing of its
+  behaviour can move.
 
   The cost claim had to be measured because the test file's own header said this
   policy costs "nothing per sample" and these guards do not. `Svf.next` over
@@ -451,9 +458,10 @@ reproducible against itself.
 
 ### What auditing this session's own work found
 
-Six defects, in the session's own output, all written the same day. The fifth
-was found in the sentence that recorded the first, and the sixth was found by
-auditing a second time after the first audit had declared itself done. This is
+Seven defects, in the session's own output, all written the same day. The fifth
+was found in the sentence that recorded the first, the sixth by auditing a
+second time after the first audit had declared itself done, and the seventh by
+auditing the commit that fixed the sixth. This is
 the fifth session running to find that its work does not survive its own audit,
 the rate is not improving, and the second pass was as productive as the first,
 so budget for both.
@@ -506,7 +514,17 @@ so budget for both.
    the one above: the first filing reasoned from reading two code paths, and
    the correction came from running them.
 
-Two of these six (1 and 3) are the same failure at different scales: fixing
+7. **A blanket evidence claim that covered three of five cases.** The NaN
+   commit said "the golden renders are unchanged, which is the proof that no
+   correct audio moved" for five guarded units. The golden piece reaches three
+   of them. `EnvelopeFollower` is not in it, because the piece's `compressor`
+   keeps its own `env` field rather than using the class, and `DcBlocker` has no
+   caller anywhere. The claim was true where it applied and vacuous where it did
+   not, which is the worst kind: it reads as complete. The evidence is now per
+   unit, and the two the goldens miss are covered by the parity harness and by
+   having no callers respectively.
+
+Two of these seven (1 and 3) are the same failure at different scales: fixing
 where the finger points instead of where the problem is. Number 5 is the
 sharpest reminder available that this file's rule applies to the file itself:
 the sentence was about being careful and was written carelessly. Number 2 is the one to
