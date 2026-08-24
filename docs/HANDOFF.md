@@ -199,19 +199,18 @@ and no amount of building will tell you. The other half is that nothing has been
 BY EAR: 41 parity rows and 1054 preset values are a strong position and they are
 not the same as having listened to both.
 
-**2. The audit backlog. 34 open, down from 51.** `docs/AUDIT-2.md` has 26 open
-and 8 partial, against 56 closed, 5 refuted and 1 not a defect. Four were closed
+**2. The audit backlog. 33 open, down from 51.** `docs/AUDIT-2.md` has 25 open
+and 8 partial, against 57 closed, 5 refuted and 1 not a defect. Five were closed
 on 2026-08-23 and one new one was opened by auditing those closures, which is
-the honest arithmetic and the reason the total moved by three and not four. Each carries its
+the honest arithmetic and the reason the total moved by four and not five. Each carries its
 status and evidence under its own heading, so that file is the register and this
 one is not. The figure this entry gave three revisions ago, roughly 73, was wrong
 by 22 and could not be reproduced from any document.
 
-Twenty of the 34 would change rendered output and are tagged
-`[changes audio]` in the file, which is where that figure started the day: one
-was closed and one was found. The `[under ten minutes]` tag is now empty: the
+Nineteen of the 33 would change rendered output and are tagged
+`[changes audio]` in the file: two were closed during the day and one was found. The `[under ten minutes]` tag is now empty: the
 last three were taken on 2026-08-23. A finding with no tag has been judged
-neither, rather than left unassessed: all 34 carry an explicit verdict on both.
+neither, rather than left unassessed: all 33 carry an explicit verdict on both.
 This makes item 2 the whole of what is left, and every remaining finding is
 either expensive or needs a decision.
 
@@ -371,6 +370,31 @@ file recommends rather than by trusting it:
   `grep -cE "run: \|$" .github/workflows/ci.yml` counts the blocks rather than
   quoting a number here, because the first draft of this sentence quoted one and
   the same commit that wrote it added a block and made it wrong.
+
+- **A non-finite audio SAMPLE no longer latches a recursive unit, in five of
+  them.** The parameter half of this finding was fixed on an earlier pass; the
+  input half was missed in a way worth recognising, because the guard went on
+  `EnvelopeFollower`'s CONSTRUCTOR, which the finding never mentioned, while the
+  finding's own list named its INPUT. `next()` holds the last good envelope now.
+  Then the cause turned out wider than the unit named: `Svf`, `LadderFilter`,
+  `OnePole` and `DcBlocker` latch identically on a bad sample, measured by
+  feeding each good audio, one NaN, then 4000 more good samples. All four are
+  guarded, treating a bad sample as silence so the recursion keeps evolving,
+  which is right for a filter where holding is right for an envelope. Fixing
+  only the unit the finding named would have been the third repetition of the
+  symptom-versus-cause pattern in one session. 32 tests to 48, watched to fail
+  per unit, and the golden renders are unchanged, which is the proof that no
+  correct audio moved: these guards can only alter output that was already
+  non-finite.
+
+  The cost claim had to be measured because the test file's own header said this
+  policy costs "nothing per sample" and these guards do not. `Svf.next` over
+  2.9M samples, alternating on a quiet machine: 22.9 and 23.0 ms unguarded
+  against 22.7 and 22.8 ms guarded. Free at the resolution available. An earlier
+  run of the same measurement, taken while background jobs were loading the
+  machine, reported a 75 percent penalty and then a 2.4x speedup from the same
+  one-line change, which is why it was taken again rather than reported. A
+  microbenchmark on a busy machine is not a measurement.
 
 ### What auditing the fix found, which is a new defect next to the old one
 
@@ -842,7 +866,7 @@ long enough for any of them to have changed; this time none had.
     `arduino-cli` prints on failure too, and called two broken examples fine. The 0.1.1 run on
     2026-08-20 also diffed the zip against the mirror clone that had been compiled by hand,
     `diff -rq` reporting only `.git` and `.gitignore`.
-- Library test suite: 93 files, 1385 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- Library test suite: 93 files, 1401 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
 - Embedded: 51 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All seventeen examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library, except `12_DacOut`, which declines with an `#error` because a 4.x has no DAC. This line said 43 and five until 2026-08-20, while the state section fourteen lines up said 51 and 17.
