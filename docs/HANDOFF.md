@@ -374,43 +374,65 @@ file recommends rather than by trusting it:
 
 ### What auditing the fix found, which is a new defect next to the old one
 
-**A render can still differ from the playback it claims to reproduce.** Not the
-same bug as the one closed above. That one was two renders disagreeing with each
-other, and it is fixed. This is a render disagreeing with LIVE, and it survives
-the fix because it is not about which stream you read, it is about the ORDER the
-callbacks are called in.
+**A backgrounded tab plays different music from the same seed.** This was filed
+once on 2026-08-23 as "a render can differ from live", and a second audit the
+same day found that diagnosis pointing the wrong way. The replay is fine. LIVE
+playback is the non-deterministic one, and it disagrees with itself.
 
-Live, `Scheduler.tick` walks `for (const s of this.subs)` and delivers every tick
-inside the window for one subscription before moving to the next. Offline,
-`bellows.ts:633` flattens every subscription's ticks and sorts them by time.
-Those two agree only while a window holds at most one tick per subscription,
-which is exactly why nobody has hit it: the default horizon is 0.12 s and a
-quarter note at 120 bpm is 0.5 s. Measured with two subscriptions sharing one
-`b.rng('shared')`: at `'4n'` and `'8n'` live and render agree exactly, and at
-`'32n'` and `'16n'` they do not. Live drew A79, A90, B70, A83; the render drew
-A79, B90, A70, A83. Same values, because one stream is drawn in order. Different
-lanes, because a different callback took each one. Different music from one seed.
+`Scheduler.tick` walks `for (const s of this.subs)` and delivers every tick in
+the wake's window for one subscription before starting the next, so callback
+order inside a wake is grouped by subscription rather than sorted by time. How
+many ticks a wake covers depends on wall-clock timing, not on the piece, so the
+draw order from any stream two subscriptions share depends on how the timer
+happened to fire. Measured with `'4n'` and `'4t'` sharing one `b.rng('shared')`:
 
-The reason it is worth filing rather than shrugging at is what the docs promise.
-The rendering page says a render equals a fresh page load provided randomness
-flows through `b.rng()` and other mutable state derives from `step`. The measured
-case satisfies both and diverges anyway, so the guarantee as written is
-incomplete rather than misapplied. Scope it honestly though: one stream per
-concern, which is what every page and example teaches, never hits this, and a
-stalled timer widening the window to `gap * 1.5` is the other way in.
+    smooth, 25 ms wakes      A78, B69, B85, A83, B21, A29, B58
+    one wake absorbing 1 s   A78, B69, A85, A83, A21, A29, B58, B85, B45, B42
+    the offline render       A78, B69, B85, A83, B21, A29, B58, B85
 
-It is in `docs/AUDIT-2.md` with three options, and it wants a decision, because
-two of the three change rendered audio for any piece that shares a stream: sort
-the live scheduler's ticks per wake so live matches the replay, drop the replay's
-sort so the replay matches live, or document the caveat and change no audio.
-This is why the backlog moved by three and not four.
+The render is identical to smooth playback over every event compared. It is the
+throttled run that is the odd one out, and a backgrounded tab is a normal
+browser condition, not an exotic one.
+
+The mechanism is the anti-throttling defence turning on itself. `scheduler.ts`
+promises that "the lookahead stretches to cover the observed wakeup gap, so
+under background-tab throttling the schedule keeps running ahead of the clamp
+and nothing is missed". That stretch is what makes a wake wide enough to hold
+several ticks of one subscription, which is precisely when grouping by
+subscription stops matching time order. Nothing is missed, exactly as promised.
+The order is what moves. The first wake of every piece gets a milder version for
+free, because `scheduledTo` starts at `-Infinity` so the opening window is the
+whole horizon.
+
+Scope it honestly, and this part was measured too: nothing this repository ships
+hits it. Of the 60 `clock.at` subscriptions across the examples and doc pages,
+exactly two files open two at once, and neither draws anything random. The
+composer behind bellows.live uses one subscription. So it is a real defect a
+user can reach by writing ordinary code, and not an active problem in the
+product. Event placement is never wrong either way, because events carry
+explicit times; what moves is which callback draws which number.
+
+The second audit also narrowed the fix. The first filing offered three options
+and treated live and replay as equally plausible sources of truth; they are not.
+The replay's order is correct, smooth playback already agrees with it, and the
+live grouping is an artifact of iterating a Set inside a loop. So there is one
+option: make `Scheduler.tick` emit a wake's ticks in time order across
+subscriptions, with a preallocated scratch array because it runs every 25 ms on
+the main thread. It is still an audio change and still wants a decision, but it
+is one option rather than three. And documenting it is NOT sufficient, which
+corrects the first filing: no wording on a docs page makes live playback
+reproducible against itself.
 
 ### What auditing this session's own work found
 
-Five defects, in the session's own output, all written the same day, and the
-fifth was found in the sentence that recorded the first. This is the fifth
-session running to find that its work does not survive its own audit, and the
-rate is not improving, so budget for it.
+### What auditing this session's own work found
+
+Six defects, in the session's own output, all written the same day. The fifth
+was found in the sentence that recorded the first, and the sixth was found by
+auditing a second time after the first audit had declared itself done. This is
+the fifth session running to find that its work does not survive its own audit,
+the rate is not improving, and the second pass was as productive as the first,
+so budget for both.
 
 1. **The `voiceLead` fix corrected one of four false claims, and it was the
    least visible one.** The code does not penalise crossings. Four pieces of
@@ -448,7 +470,19 @@ rate is not improving, so budget for it.
    `voiceLead` that never made the crossing claim at all. Checked after the
    fact, which is the wrong order. The register says so where it happened.
 
-Two of these five (1 and 3) are the same failure at different scales: fixing
+6. **The new finding was filed with its diagnosis pointing the wrong way.** The
+   first audit found the draw-order defect and wrote it up as "a render can
+   differ from live", offering three fixes and treating the live path and the
+   replay as equally plausible sources of truth. A second audit measured what
+   the first had only reasoned about, and the replay turned out to be correct:
+   it matches smooth live playback event for event, and it is THROTTLED live
+   playback that disagrees with both. The defect is that a backgrounded tab
+   plays different music from the same seed, which is worse than what was
+   filed and has one fix rather than three. The lesson is narrow and repeats
+   the one above: the first filing reasoned from reading two code paths, and
+   the correction came from running them.
+
+Two of these six (1 and 3) are the same failure at different scales: fixing
 where the finger points instead of where the problem is. Number 5 is the
 sharpest reminder available that this file's rule applies to the file itself:
 the sentence was about being careful and was written carelessly. Number 2 is the one to
@@ -1417,8 +1451,13 @@ than defects, so they are the natural next chunk.
 **Coverage.**
 
 - The `Svf` cutoff gate is a -4 to -2 dB band that admits roughly 11 percent cutoff error (224).
-- `voiceLead`'s unequal-size branch, including the crossing penalty, is never executed (466).
-- `Scheduler.rewind()` has no test and it is on the `b.start()` path (472).
+- ~~`voiceLead`'s unequal-size branch, including the crossing penalty, is never executed (466).~~
+  PARTIAL, 2026-08-23. The branch is covered by three tests. The crossing penalty is not, and cannot
+  be: it is unreachable by construction, so `crossPenalty` is a published option that changes no
+  output. Kept inert and pinned by a test.
+- ~~`Scheduler.rewind()` has no test and it is on the `b.start()` path (472).~~ CLOSED, 2026-08-23,
+  at the cause rather than the headline: the whole facade transport surface has tests now, 8 of them,
+  and all eight methods die under mutation.
 - The Web MIDI runtime path is uncovered; only parsing is tested (478).
 - The gate's range floor and the delay's time smoother are both unreachable from the parity
   output. Recorded next to their rows with the arithmetic; both need an instrument the harness
@@ -1482,8 +1521,12 @@ DSP change is gated behind it.
   it should be done with the measurement above as its acceptance test. Attempted and deliberately
   not shipped on 2026-08-05, because a half fix here is worse than the defect.
 - The bow position comb delay is twice the physical value (123).
-- `b.render()` is not reproducible for the rng pattern the README and every doc page teach (55).
-  A real fix changes what render emits for every piece written the documented way.
+- ~~`b.render()` is not reproducible for the rng pattern the README and every doc page teach (55).~~
+  CLOSED, 2026-08-23. `b.rng` returns a stable handle that resolves the current stream at draw time,
+  so two renders of one seed now agree. It did change what render emits for pieces written the
+  documented way, as this line predicted. Auditing it opened a NEW finding next door, still open: the
+  live scheduler and the offline replay order callbacks differently, so a render can still differ
+  from live when one stream is shared across two subscriptions.
 - The scale layer is hardcoded 12-EDO above a correct tuning layer (93). `degreeFreq` already
   does it right and is called from nowhere.
 - Six buffer-owning C++ classes still disagree silently when the template rate and the `Init()`
