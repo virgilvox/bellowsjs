@@ -403,6 +403,42 @@ file recommends rather than by trusting it:
   one-line change, which is why it was taken again rather than reported. A
   microbenchmark on a busy machine is not a measurement.
 
+### One item 2 finding investigated rather than fixed, because the obvious fix is wrong
+
+**The sustain 0 voice-lifetime finding.** Both halves re-measured and both stand:
+a sustain-0 voice is still `active` after 10 s with `level` exactly 0, and the
+release tail is `log100(level / IDLE_FLOOR)`, which is 2.000x from full level,
+1.850x from sustain 0.5 and 1.699x from sustain 0.25. The finding's heading
+quotes the sustain-0.5 number and its body quotes the full-level one; both are
+right for their level and neither is a general figure.
+
+The fix part 1 invites is to test `IDLE_FLOOR` in the `Stage.Sustain` branch the
+way `Stage.Release` already does. It was tried and it breaks documented
+behaviour. `Adsr`'s docstring calls sustain "a control a player can move during
+a held note" and promises the level steps on the next sample; sending a silent
+sustaining voice to Idle makes it unreachable. Measured: raising sustain from 0
+to 0.5 mid-note gives 0.5 and active today, and 0 and inactive under the
+candidate. The voice cannot come back.
+
+**All 1401 tests passed with that regression applied.** The existing
+sustain-change test moves between 0.8 and 0.2 and never reaches zero, so it saw
+nothing. There is a test for the zero case now, watched to fail against the
+candidate, so whoever picks this up gets told rather than discovering it later.
+
+That relocates the work: slot pressure is `VoicePool`'s problem, not `Adsr`'s.
+`voicepool.ts:43` picks a free voice with `if (!s.voice.active)` and never looks
+at `s.held`, so "a silent voice is stealable before an audible one" belongs
+there, where it costs `active` none of its meaning. Stealing a held-but-silent
+slot is already safe for note tracking: `noteOn` overwrites `pick.noteId` and
+`noteOff` matches on `s.held && s.noteId`, so a stale note-off finds nothing.
+
+It stays OPEN because both halves want a decision and they are not the same
+size. Part 1 at the pool changes stealing only when polyphony is exhausted, and
+in the direction of not cutting off an audible decaying note. Part 2 shortens
+every release tail in the library by up to 2x, audible on every patch, against
+the alternative of leaving it and stating the lifetime consequence next to
+`IDLE_FLOOR`.
+
 ### What auditing the fix found, which is a new defect next to the old one
 
 **A backgrounded tab plays different music from the same seed.** This was filed
@@ -532,6 +568,17 @@ generalise from, because nothing catches it. `check-docs.mjs` gates figures with
 a harness behind them; a count of something in a file this repository edits by
 hand has no harness, so a sentence about the shape of `ci.yml` is only as true
 as the last person to read it. Prefer the command over the number.
+
+A second hazard, from the same family:
+
+- **A rejected candidate can reach a generated file.** Trying the wrong fix for
+  the sustain finding meant running `npm test`, whose pretest build regenerates
+  `worklet-code.gen.ts` from whatever is in `src` at that moment. Restoring the
+  source afterwards does not restore the generated file, so the working tree
+  held a worklet built from a candidate that had just been rejected on purpose.
+  Committing without looking would have shipped it. `npm run gen:worklet` then
+  `git diff --exit-code` is the check, and it is already in the verification
+  block; the point is to run it after experimenting, not only after editing.
 
 One operational hazard, learned by tripping it:
 
@@ -884,7 +931,7 @@ long enough for any of them to have changed; this time none had.
     `arduino-cli` prints on failure too, and called two broken examples fine. The 0.1.1 run on
     2026-08-20 also diffed the zip against the mirror clone that had been compiled by hand,
     `diff -rq` reporting only `.git` and `.gitignore`.
-- Library test suite: 93 files, 1401 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- Library test suite: 93 files, 1402 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
 - Embedded: 51 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All seventeen examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library, except `12_DacOut`, which declines with an `#error` because a 4.x has no DAC. This line said 43 and five until 2026-08-20, while the state section fourteen lines up said 51 and 17.
