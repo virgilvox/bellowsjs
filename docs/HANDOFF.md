@@ -1,6 +1,10 @@
 # HANDOFF
 
-State of the project as of 2026-08-23. Read this first when picking the work back up. Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` and `docs/AUDIT-2.md` and `docs/AUDIT-3.md` (findings with evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists and where this leads), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session), `docs/prototype-0.html` (the original design probe).
+State of the project as of 2026-09-04. Read this first when picking the work back up.
+
+**Read this before anything else: the file you are reading is probably not on `main`.** Everything dated 2026-08-23 below lives on the branch `audit-backlog-2026-08-23`, which is pull request #2, which is OPEN and has not been merged. `origin/main` is still `83b64da` and has not moved since 2026-08-23. So four closed audit findings (a fifth downgraded to partial, and a sixth opened by auditing the others), 38 new tests, one new CI gate and five DSP guards exist in git and in none of the published channels. Re-verified on 2026-09-04, twelve days after the work and ten after the last check, because this file's whole value is that its claims were checked: PR #2 open with 8 commits and CI green on its head (`039f45e`), npm still serving 0.1.9 from 2026-08-21, both embedded registries still on 0.1.2, and bellows.live serving an `llm.txt` byte-identical to `main`'s. Nothing rotted and nothing shipped.
+
+Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` and `docs/AUDIT-2.md` and `docs/AUDIT-3.md` (findings with evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists and where this leads), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session), `docs/prototype-0.html` (the original design probe).
 
 ## The 2026-08-13 session, which changed the shape of the project
 
@@ -172,6 +176,34 @@ The gap they close is one `check-docs.mjs` cannot: it compares FIGURES against
 harness output, and a link, a fence and a template signature are none of them a
 figure.
 
+### Decisions waiting on the owner, which block the next chunk
+
+None of these is a research question. Each was investigated, measured and written
+up on 2026-08-23, and each needs a person to choose because each changes rendered
+audio or ships something.
+
+1. **Merge PR #2, or not.** Eight commits, CI green, tree clean. Everything else
+   in this list assumes it lands.
+2. **The draw-order fix.** One option, not three: make `Scheduler.tick` emit a
+   wake's ticks in time order across subscriptions rather than grouped by
+   subscription, with a preallocated scratch array because it runs every 25 ms on
+   the main thread. Today a backgrounded tab plays different music from the same
+   seed. Nothing this repository ships hits it, measured.
+3. **Sustain part 1**, at `VoicePool` and not `Adsr`. Changes which voice is
+   stolen only when polyphony is exhausted, in the direction of not cutting off
+   an audible decaying note.
+4. **Sustain part 2.** Shorten every release tail in the library by up to 2x, or
+   leave the behaviour and state the voice-lifetime consequence next to
+   `IDLE_FLOOR`. This one is audible on every patch.
+5. **Release `0.1.10`, or not.** The rng reproducibility fix and the five NaN
+   latch guards reach nobody until an npm publish and a site deploy. The publish
+   needs a token that bypasses 2FA or an `--otp`; the deploy is
+   `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`.
+6. **The string waveguide's bass pitch**, still the largest single finding, still
+   needs a call on a measured tradeoff before any code: the obvious fix trades 23
+   cents flat at 41 Hz for 16 cents sharp at 440, which is worse where people
+   play.
+
 ### Still not done, in the order I would take it
 
 Ordered by cost to fix against risk of being wrong later. Four items, and the
@@ -186,11 +218,14 @@ run twice. Nothing on a 3.x, nothing on an LC, nothing on a Daisy, and the two
 parts without a floating point unit (LC and 3.2) are the whole question, because
 they emulate every float operation this library performs in software.
 `00_BringUp` exists for exactly this and **has still never been run**, checked on
-2026-08-20, 2026-08-21 and 2026-08-23 rather than assumed: a
+2026-08-20, 2026-08-21, 2026-08-23 and 2026-09-04 rather than assumed: a
 `/dev/cu.usbmodem11301` node is present every time and cannot be opened,
-`Errno 6 Device not configured`, so nothing is enumerated behind it. Three
-readings of the same thing is not evidence that it will stay that way; run the
-check rather than quoting this sentence. It compiles: it passed the Teensy 4.1 sweep
+`Errno 6 Device not configured`, so nothing is enumerated behind it. The
+stronger form of the same check, `ioreg -p IOUSB -w0 | grep -c "+-o"`, returns 3
+on every one of those dates, which is the root plus two host controllers and no
+device at all: the node is a leftover, not a board. Four readings of the same
+thing is not evidence that it will stay that way; run the check rather than
+quoting this sentence. It compiles: it passed the Teensy 4.1 sweep
 over the published 0.1.2 package. Compiling is not running, which is
 the single highest-value thing left on this list: it is a checklist sketch with a
 written pass condition per stage, and its last two stages measure the pitch
@@ -200,9 +235,14 @@ BY EAR: 41 parity rows and 1054 preset values are a strong position and they are
 not the same as having listened to both.
 
 **2. The audit backlog. 33 open, down from 51.** `docs/AUDIT-2.md` has 25 open
-and 8 partial, against 57 closed, 5 refuted and 1 not a defect. Five were closed
-on 2026-08-23 and one new one was opened by auditing those closures, which is
-the honest arithmetic and the reason the total moved by four and not five. Each carries its
+and 8 partial, against 57 closed, 5 refuted and 1 not a defect. FOUR were closed
+on 2026-08-23, a fifth moved from open to partial, and one new one was opened by
+auditing those closures, so genuinely open went 36 to 33: a move of three. Two
+earlier revisions of this paragraph said five were closed and that the total
+moved by four, and both were wrong. The arithmetic that checks out is
+`grep -c "^> \*\*CLOSED\*\* as of 2026-08-23" docs/AUDIT-2.md`, which returns 4,
+against 1 for PARTIAL, and the counts on either side of the branch:
+29/7/53 on `main` against 25/8/57 here. Each carries its
 status and evidence under its own heading, so that file is the register and this
 one is not. The figure this entry gave three revisions ago, roughly 73, was wrong
 by 22 and could not be reproduced from any document.
@@ -503,11 +543,17 @@ reproducible against itself.
 
 ### What auditing this session's own work found
 
-Eight defects, in the session's own output, all written the same day. The fifth
-was found in the sentence that recorded the first, the sixth by auditing a
-second time after the first audit declared itself done, the seventh by auditing
-the commit that fixed the sixth, and the eighth by auditing the commit that
-recorded the seventh. No pass has yet come back empty. This is
+Nine defects, in the session's own output. Eight were written on 2026-08-23:
+the fifth was found in the sentence that recorded the first, the sixth by
+auditing a second time after the first audit declared itself done, the seventh
+by auditing the commit that fixed the sixth, and the eighth by auditing the
+commit that recorded the seventh. The ninth was found on 2026-09-04 while
+updating this file, twelve days later, and it had been sitting in three
+paragraphs the whole time: the claim that five audit findings were closed. Four
+were. A fifth moved from open to partial, which is not the same thing, and the
+error survived four audit passes because every pass re-read the sentence instead
+of counting the register. `grep -c` on the status lines settles it in one
+command. No pass has yet come back empty. This is
 the fifth session running to find that its work does not survive its own audit,
 the rate is not improving, and the second pass was as productive as the first,
 so budget for both.
@@ -589,6 +635,17 @@ generalise from, because nothing catches it. `check-docs.mjs` gates figures with
 a harness behind them; a count of something in a file this repository edits by
 hand has no harness, so a sentence about the shape of `ci.yml` is only as true
 as the last person to read it. Prefer the command over the number.
+
+A third, which only shows up after a gap:
+
+- **Anything in the scratchpad is gone when you come back.** The 2026-08-23
+  session drove the verification block from a shell script under
+  `/private/tmp/claude-501/...`, and on 2026-09-04 the whole directory was
+  purged, so the script exited 127. Nothing was lost that mattered, because the
+  block itself is written out in this file and in `docs/KICKOFF.md`, which is
+  the reason to keep it there rather than in a helper. If you write a convenience
+  script for the block, treat it as disposable and keep the canonical list in the
+  documents.
 
 A second hazard, from the same family:
 
@@ -819,17 +876,33 @@ Kept short. The full record is in the commits.
 
 ## Where things stand
 
-**Re-checked on 2026-08-23 and nothing had moved**, which is worth recording in a
-file with this one's history. `main` is `e780f39` with a clean tree, nothing
-unpushed and nothing behind. npm serves 0.1.9, PlatformIO and the Arduino
-Library Manager both serve 0.1.2, bellows.live serves LLM references
-byte-identical to the tree, and CI is green on the last three pushes. Every one
-of those is one command, and the commands are in the bullets below. Two days is
-long enough for any of them to have changed; this time none had.
+**Re-checked on 2026-09-04 and nothing had moved in twelve days**, which is worth
+recording in a file with this one's history. `origin/main` is `83b64da` with a
+clean tree. npm serves 0.1.9, published 2026-08-21. PlatformIO and the Arduino
+Library Manager both serve 0.1.2. bellows.live serves an `llm.txt` byte-identical
+to `main`'s, compared by content and not by its version line. CI is green on the
+head of PR #2. Every one of those is one command and the commands are in the
+bullets below. Twelve days is long enough for any of them to have changed; this
+time none had, and the previous revision of this paragraph still said `main` was
+`e780f39` when it had already become `83b64da`, so read the bullets rather than
+this summary.
 
-- **Nothing is unpushed.** `origin/main` is current as of 2026-08-15, and CI is green on it:
-  all six jobs, run `31873741708`. This bullet used to name two unpushed commits and a
-  missing SIMULATOR button; both are shipped. Check with `git rev-list --count origin/main..HEAD`
+**The one thing that HAS changed since 2026-08-23 is where the work lives, and
+it is not in any published channel.** The 2026-08-23 session's output is eight
+commits on `audit-backlog-2026-08-23`, open as pull request #2 and not merged.
+That is deliberate: this repository's CI runs on pull requests and not on pushes
+to `main`, so a branch is the only way the work gets a CI run at all, and the
+owner chose a PR over a direct push. The consequence to hold in mind is that
+`main`, npm, the site and both registries are all still the pre-session state,
+and a reader who checks out `main` will not find any of it, including this
+paragraph.
+
+- **Nothing is unpushed, and eight commits are unmerged.** Everything local is on
+  `origin/audit-backlog-2026-08-23`; `git status -sb` shows no ahead or behind. What is NOT
+  done is the merge: `git rev-list --count origin/main..origin/audit-backlog-2026-08-23`
+  returns 8, and `gh pr view 2` says OPEN. CI is green on that branch head, run for `039f45e`,
+  all six jobs. Pushing to `main` triggers no CI here, which is why the work is on a branch;
+  see "CI, which has now run" below. Check with `git rev-list --count origin/main..HEAD`
   rather than trusting this line, which is the sort that goes stale the moment someone
   commits.
 - **`bellowsjs@0.1.9` is on npm and tagged `v0.1.9`**, published 2026-08-21 and checked rather
@@ -887,12 +960,17 @@ long enough for any of them to have changed; this time none had.
   every doc page teach. That is a real fix and not a paragraph, so unlike the two embedded
   files below it is worth a release on its own when someone is next at a keyboard: until then
   npm and bellows.live both still ship the version where two renders of one seed can differ.
+  Note the drift is on the BRANCH, so the check is
+  `git diff v0.1.9..origin/audit-backlog-2026-08-23 -- packages/bellows/src`; run against
+  `main` it comes back empty, which would read as "nothing to release" and be wrong. Still
+  true on 2026-09-04: npm serves 0.1.9 and the fix is not in it.
   The other two files that moved, `engines/modal.ts` and `theory/voicelead.ts`, are
   comment-only and change nothing a user hears. See "Closed on 2026-08-23" for the
   measurement.
 
-  bellows.live was in sync with `HEAD` when this was written, checked rather than assumed,
-  and this commit makes it stale: `apps/workbench/public/llm.txt` and the
+  bellows.live is in sync with `main` and has been throughout, checked by content on
+  2026-08-23, 2026-08-25 and 2026-09-04 rather than assumed. It is NOT stale against `main`;
+  it simply does not have the branch, and merging is what would make it stale: `apps/workbench/public/llm.txt` and the
   rendering-and-export doc page both moved. Note that the usual first-line check does NOT
   reveal it, because the version line still reads `# bellowsjs 0.1.9 LLM reference` on both
   sides. Use a content probe instead:
