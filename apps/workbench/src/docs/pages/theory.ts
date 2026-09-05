@@ -86,7 +86,7 @@ negativeHarmony(64, 60);   // 63: E reflects to Eb around the C axis
 negativeHarmony(67, 60);   // 60: G reflects to C
 \`\`\`
 
-\`voiceLead(prev, candidates, options?)\` searches every candidate chord over its inversions and octave placements and returns the voicing with the least total finger movement, penalizing crossings and doublings. Pass an empty \`prev\` and the first chord is voiced near the center of the range (defaults C3 to C6, settable via \`{ low, high }\`). \`negativeHarmony(midi, keyRoot)\` reflects a note around the axis between the key's root and fifth, the trick that maps a G7 in C to an Fm6 shape.
+\`voiceLead(prev, candidates, options?)\` searches every candidate chord over its inversions and octave placements and returns the voicing with the least total finger movement, penalizing doublings. Pass an empty \`prev\` and the first chord is voiced near the center of the range (defaults C3 to C6, settable via \`{ low, high }\`). \`negativeHarmony(midi, keyRoot)\` reflects a note around the axis between the key's root and fifth, the trick that maps a G7 in C to an Fm6 shape.
 
 ## A progression walkthrough
 

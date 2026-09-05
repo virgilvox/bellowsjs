@@ -128,4 +128,69 @@ describe('voiceLead', () => {
   it('throws when nothing fits the range', () => {
     expect(() => voiceLead([60], [[60]], { low: 60, high: 59 })).toThrow();
   });
+
+  /*
+   * motionCost's unequal-size branch. It is entered only when the previous
+   * voicing has FEWER voices than the chord has pitch classes: voiceLead
+   * sizes candidates to max(prev.length, pcs.length), so the doubling case
+   * above (more voices than pitch classes) takes the equal branch instead.
+   * Nothing reached this branch before these three.
+   */
+  /*
+   * Shape alone does not gate this branch: zeroing its motion term leaves
+   * every candidate tied at cost 0, the first one wins, and a test that
+   * only checks length, pitch classes and ordering still passes. So these
+   * two assert the cost the branch actually computes, the total distance
+   * from each new note to its nearest old voice. The bounds are the
+   * measured values (5 and 6); the mutant scores 27 and 16.
+   */
+  const motionFrom = (prev: number[], out: number[]): number =>
+    out.reduce((sum, m) => sum + Math.min(...prev.map((p) => Math.abs(m - p))), 0);
+
+  it('grows the voicing when the chord has more pitch classes than the previous voicing', () => {
+    const prev = [60, 67];
+    const out = voiceLead(prev, [[60, 64, 67, 70]]);
+    expect(out).toHaveLength(4);
+    expect(out.map(mod12).sort((a, b) => a - b)).toEqual([0, 4, 7, 10]);
+    for (let i = 1; i < out.length; i++) expect(out[i]).toBeGreaterThan(out[i - 1]);
+    // both previous voices are held, and the two new notes fill in around them
+    expect(out).toContain(60);
+    expect(out).toContain(67);
+    expect(motionFrom(prev, out)).toBeLessThanOrEqual(5);
+    expect(out).toEqual([58, 60, 64, 67]);
+  });
+
+  it('grows from three voices to a five note chord inside the range', () => {
+    const prev = [55, 60, 64];
+    const out = voiceLead(prev, [[60, 62, 66, 69, 71]], { low: 48, high: 84 });
+    expect(out).toHaveLength(5);
+    expect(new Set(out.map(mod12)).size).toBe(5);
+    for (const m of out) {
+      expect(m).toBeGreaterThanOrEqual(48);
+      expect(m).toBeLessThanOrEqual(84);
+    }
+    for (let i = 1; i < out.length; i++) expect(out[i]).toBeGreaterThan(out[i - 1]);
+    expect(motionFrom(prev, out)).toBeLessThanOrEqual(6);
+    expect(out).toEqual([54, 57, 59, 60, 62]);
+  });
+
+  it('crossPenalty is inert, because a sorted-to-ascending nearest match never crosses', () => {
+    /*
+     * Both inputs to the assignment are ascending, so the nearest-old-voice
+     * index is monotone non-decreasing and the crossing loop never adds
+     * anything. This pins it: if the option ever becomes live, this fails
+     * and whoever made it live has to say so on purpose. See the finding in
+     * docs/AUDIT-2.md for the exhaustive measurement behind the claim.
+     */
+    const chords = [[60, 64, 67, 70], [59, 62, 65, 69], [60, 63, 67, 70], [60, 62, 66, 69, 71]];
+    for (const prev of [[60], [60, 67], [55, 60, 64], [52, 59, 68]]) {
+      for (const cand of chords) {
+        for (const low of [40, 48]) {
+          const off = voiceLead(prev, [cand], { low, high: 84, crossPenalty: 0 });
+          const huge = voiceLead(prev, [cand], { low, high: 84, crossPenalty: 1000 });
+          expect(huge).toEqual(off);
+        }
+      }
+    }
+  });
 });

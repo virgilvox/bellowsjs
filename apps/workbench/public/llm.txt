@@ -119,6 +119,8 @@ export declare class Bellows {
     private transportOps;
     private subs;
     private liveRng;
+    /** One stable handle per label, reused across renders. See rng(). */
+    private rngHandles;
     private renderCtx;
     private timer;
     private nextChannel;
@@ -174,7 +176,26 @@ export declare class Bellows {
      * every note in the export lands at roughly the same instant.
      */
     now(): number;
-    /** A named random stream forked off the piece seed. Deterministic per seed. */
+    /** The stream a label resolves to right now: the render's cache during a
+     *  render, the live cache otherwise. */
+    private rngStream;
+    /**
+     * A named random stream forked off the piece seed. Deterministic per seed.
+     *
+     * What comes back is a stable HANDLE, not the stream itself: every draw
+     * resolves the stream for the current context at the moment it is drawn.
+     * That is what makes the form every doc page teaches work, capturing once
+     * outside the tick callback (`const melody = b.rng('melody')`) and drawing
+     * inside it. Returning the raw stream bound the callback to whichever cache
+     * was live at capture time, so a render consumed and advanced live state
+     * instead of reading its own fresh cache, and two renders of one seed
+     * produced different music.
+     *
+     * fork() delegates rather than being handled here on purpose. A fork depends
+     * only on its parent's LABEL, never on the parent's position, so
+     * `rng(label).fork(child) === rng(label + '::' + child)` still holds and the
+     * C++ port can still land on the same stream by writing the full label path.
+     */
     rng(label: string): NamedRng;
     /** Create an instrument channel running the given engine. */
     voice(engineId: string, params?: Record<string, number>, opts?: {

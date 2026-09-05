@@ -70,6 +70,28 @@ describe('Adsr', () => {
     expect(env.next()).toBe(0.2);
   });
 
+  it('a sustain raised from zero mid-note brings the voice back', () => {
+    /*
+     * The zero case, which the test above does not reach because it moves
+     * between two non-zero levels. It is here because it is the one the
+     * obvious fix for the "sustain 0 never goes idle" finding breaks: sending
+     * a silent sustaining voice to Idle also makes it unreachable, and the
+     * Sustain branch that assigns this.lvl = this.sus every sample is what the
+     * class docstring means by a control a player can move during a held note.
+     * That fix was tried on 2026-08-23 and the whole suite stayed green, so
+     * this is the test that would have caught it.
+     */
+    const env = new Adsr(SR);
+    env.set(0.001, 0.005, 0, 0.1);
+    env.trigger();
+    for (let n = 0; n < Math.round(0.5 * SR); n++) env.next();
+    expect(env.level).toBe(0);
+    expect(env.active).toBe(true);
+    env.set(0.001, 0.005, 0.5, 0.1);
+    expect(env.next()).toBe(0.5);
+    expect(env.active).toBe(true);
+  });
+
   it('a release time change while releasing bends the curve without stepping the level', () => {
     const env = new Adsr(SR);
     env.set(0.001, 0.01, 0.7, 0.5);
