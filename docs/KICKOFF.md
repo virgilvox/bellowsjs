@@ -216,6 +216,7 @@ cd packages/bellows-embedded && npm run memsafety:fastmath
 cd packages/bellows-embedded && node tools/gen-tables.mjs --check
 cd packages/bellows-embedded && node tools/check-docs.mjs --check
 cd packages/bellows-embedded && npm run check:package     both published artifacts
+cd packages/bellows-embedded && npm run check:esp32c3     the ESP32-C3 adapter's target guard
 ```
 
 Those six embedded lines from `params:check` down to `memsafety:fastmath` were in `ci.yml`
