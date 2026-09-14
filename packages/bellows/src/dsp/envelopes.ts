@@ -10,6 +10,8 @@
  *
  * Every setter here rejects a non-finite argument outright and keeps the last
  * good setting, the same policy as dsp/filters.ts and VoicePool.setParam.
+ * EnvelopeFollower is the exception that proves the rule: it has no setter,
+ * its bad input arrives as an audio sample, and so its guard sits in next().
  * These are recursive units: a NaN reaching lvl or v stays there for the rest
  * of the session, because no later good value can pull an accumulator back
  * out of NaN and a parameter change does not call reset().
@@ -156,8 +158,20 @@ export class EnvelopeFollower {
     this.rCoef = !(releaseSec > 0) ? 1 : 1 - Math.exp(-1 / (releaseSec * sampleRate));
   }
 
+  /*
+   * The one unit here whose bad input arrives as a SAMPLE rather than through
+   * a setter, so the reject-at-the-setter policy has nowhere to attach and the
+   * guard has to be here. NaN fails `v > this.y`, takes the release branch and
+   * makes y NaN for the rest of the session; an infinite sample poisons y on
+   * the next finite one the same way. Holding the last good envelope is what
+   * the setters do with a bad argument. Measured through gateDef and
+   * transientDef over 120 s of audio: the check costs less than the run to run
+   * spread of the same build, so it is free at the resolution anything here
+   * can measure.
+   */
   next(x: number): number {
     const v = Math.abs(x);
+    if (!Number.isFinite(v)) return this.y;
     this.y += (v > this.y ? this.aCoef : this.rCoef) * (v - this.y);
     return this.y;
   }

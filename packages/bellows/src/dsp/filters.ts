@@ -143,6 +143,7 @@ export class Svf {
   }
 
   next(x: number): number {
+    if (!Number.isFinite(x)) x = 0;
     const v3 = x - this.ic2eq;
     const v1 = this.a1 * this.ic1eq + this.a2 * v3;
     const v2 = this.ic2eq + this.a2 * this.ic1eq + this.a3 * v3;
@@ -220,6 +221,7 @@ export class LadderFilter {
   }
 
   next(x: number): number {
+    if (!Number.isFinite(x)) x = 0;
     // Two half-rate ticks per output sample. The input is held for both;
     // the second tick's output is the decimated result.
     this.tick(x);
@@ -265,6 +267,7 @@ export class OnePole {
   }
 
   next(x: number): number {
+    if (!Number.isFinite(x)) x = 0;
     this.y += this.a * (x - this.y);
     return this.highpass ? x - this.y : this.y;
   }
@@ -286,6 +289,7 @@ export class DcBlocker {
   }
 
   next(x: number): number {
+    if (!Number.isFinite(x)) x = 0;
     const y = x - this.x1 + this.r * this.y1;
     this.x1 = x;
     this.y1 = y;

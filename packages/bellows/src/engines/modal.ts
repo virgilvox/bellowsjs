@@ -10,6 +10,14 @@
  * strike pulse (harder = brighter), brightness tilts mode gains around
  * the fundamental, decay scales every mode's T60, and noteOn frequency
  * scales the whole bank. Modes that would land above 0.45 fs are muted.
+ *
+ * The five tables do not have the same standing, and each one says which
+ * it is. Bar and membrane are physical: their ratios reproduce the
+ * free-free beam roots and the Bessel zero ratios to three decimals.
+ * Bell is the classical tuned-bell series through the quint. Glass and
+ * wood were voiced by ear and match no plate, bar or shell family, so
+ * they are choices about the sound rather than measurements of a thing.
+ * Changing either of those two changes rendered audio.
  */
 
 import type { EngineDef, NamedRng, ParamSpec, Voice } from '../types';
@@ -35,35 +43,43 @@ interface Material {
 
 const MATERIALS: Material[] = [
   {
-    // Free-free bar transverse modes.
+    // Free-free bar transverse modes. Physical: the squared roots of
+    // cos(x)cosh(x) = 1 (the Euler-Bernoulli beam), normalised to the
+    // first, which gives 1, 2.757, 5.404, 8.933, 13.344, 18.638.
     ratios: [1, 2.756, 5.404, 8.933, 13.345, 18.638],
     gains: [1, 0.7, 0.45, 0.3, 0.18, 0.1],
     decays: [1, 0.7, 0.5, 0.35, 0.25, 0.18],
     decayBase: 1,
   },
   {
-    // Circular membrane, Bessel zero ratios.
+    // Circular membrane, Bessel zero ratios. Physical: the first eight
+    // zeros of J(m) by magnitude over the first, 1, 1.593, 2.136,
+    // 2.295, 2.653, 2.917, 3.155, 3.500.
     ratios: [1, 1.594, 2.136, 2.296, 2.653, 2.918, 3.156, 3.501],
     gains: [1, 0.8, 0.65, 0.5, 0.4, 0.32, 0.25, 0.2],
     decays: [1, 0.85, 0.7, 0.65, 0.55, 0.5, 0.45, 0.4],
     decayBase: 0.4,
   },
   {
-    // Bell partials with the minor third at 2.4.
+    // Bell partials with the minor third at 2.4. The first four are the
+    // hum, prime, tierce and quint of a tuned bell with the prime placed
+    // at 2; the upper two are voiced, not the nominal (which would be 4).
     ratios: [1, 2, 2.4, 3, 4.5, 5.33],
     gains: [1, 0.85, 0.6, 0.5, 0.3, 0.25],
     decays: [1, 0.8, 0.7, 0.55, 0.4, 0.35],
     decayBase: 1.8,
   },
   {
-    // Glass: sparse, nearly undamped upper modes.
+    // Glass: sparse, nearly undamped upper modes. Voiced by ear, not a
+    // measured or textbook mode family.
     ratios: [1, 2.32, 4.25, 6.63, 9.38],
     gains: [1, 0.55, 0.3, 0.18, 0.1],
     decays: [1, 0.75, 0.5, 0.35, 0.25],
     decayBase: 1.3,
   },
   {
-    // Wood: fast decay, faster still in the upper modes.
+    // Wood: fast decay, faster still in the upper modes. Voiced by ear,
+    // not a measured or textbook mode family.
     ratios: [1, 2.572, 4.644, 6.984, 9.723],
     gains: [1, 0.6, 0.35, 0.2, 0.12],
     decays: [1, 0.35, 0.18, 0.1, 0.06],

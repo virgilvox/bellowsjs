@@ -1,6 +1,10 @@
 # HANDOFF
 
-State of the project as of 2026-08-23. Read this first when picking the work back up. Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` and `docs/AUDIT-2.md` and `docs/AUDIT-3.md` (findings with evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists and where this leads), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session), `docs/prototype-0.html` (the original design probe).
+State of the project as of 2026-09-04. Read this first when picking the work back up.
+
+**Read this before anything else: the file you are reading is probably not on `main`.** Everything dated 2026-08-23 below lives on the branch `audit-backlog-2026-08-23`, which is pull request #2, which is OPEN and has not been merged. `origin/main` is still `83b64da` and has not moved since 2026-08-23. So four closed audit findings (a fifth downgraded to partial, and a sixth opened by auditing the others), 38 new tests, one new CI gate and five DSP guards exist in git and in none of the published channels. Re-verified on 2026-09-04, twelve days after the work and ten after the last check, because this file's whole value is that its claims were checked: PR #2 open with 8 commits and CI green on its head (`039f45e`), npm still serving 0.1.9 from 2026-08-21, both embedded registries still on 0.1.2, and bellows.live serving an `llm.txt` byte-identical to `main`'s. Nothing rotted and nothing shipped.
+
+Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` and `docs/AUDIT-2.md` and `docs/AUDIT-3.md` (findings with evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists and where this leads), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session), `docs/prototype-0.html` (the original design probe).
 
 ## The 2026-08-13 session, which changed the shape of the project
 
@@ -172,6 +176,34 @@ The gap they close is one `check-docs.mjs` cannot: it compares FIGURES against
 harness output, and a link, a fence and a template signature are none of them a
 figure.
 
+### Decisions waiting on the owner, which block the next chunk
+
+None of these is a research question. Each was investigated, measured and written
+up on 2026-08-23, and each needs a person to choose because each changes rendered
+audio or ships something.
+
+1. **Merge PR #2, or not.** Eight commits, CI green, tree clean. Everything else
+   in this list assumes it lands.
+2. **The draw-order fix.** One option, not three: make `Scheduler.tick` emit a
+   wake's ticks in time order across subscriptions rather than grouped by
+   subscription, with a preallocated scratch array because it runs every 25 ms on
+   the main thread. Today a backgrounded tab plays different music from the same
+   seed. Nothing this repository ships hits it, measured.
+3. **Sustain part 1**, at `VoicePool` and not `Adsr`. Changes which voice is
+   stolen only when polyphony is exhausted, in the direction of not cutting off
+   an audible decaying note.
+4. **Sustain part 2.** Shorten every release tail in the library by up to 2x, or
+   leave the behaviour and state the voice-lifetime consequence next to
+   `IDLE_FLOOR`. This one is audible on every patch.
+5. **Release `0.1.10`, or not.** The rng reproducibility fix and the five NaN
+   latch guards reach nobody until an npm publish and a site deploy. The publish
+   needs a token that bypasses 2FA or an `--otp`; the deploy is
+   `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`.
+6. **The string waveguide's bass pitch**, still the largest single finding, still
+   needs a call on a measured tradeoff before any code: the obvious fix trades 23
+   cents flat at 41 Hz for 16 cents sharp at 440, which is worse where people
+   play.
+
 ### Still not done, in the order I would take it
 
 Ordered by cost to fix against risk of being wrong later. Four items, and the
@@ -186,11 +218,14 @@ run twice. Nothing on a 3.x, nothing on an LC, nothing on a Daisy, and the two
 parts without a floating point unit (LC and 3.2) are the whole question, because
 they emulate every float operation this library performs in software.
 `00_BringUp` exists for exactly this and **has still never been run**, checked on
-2026-08-20, 2026-08-21 and 2026-08-23 rather than assumed: a
+2026-08-20, 2026-08-21, 2026-08-23 and 2026-09-04 rather than assumed: a
 `/dev/cu.usbmodem11301` node is present every time and cannot be opened,
-`Errno 6 Device not configured`, so nothing is enumerated behind it. Three
-readings of the same thing is not evidence that it will stay that way; run the
-check rather than quoting this sentence. It compiles: it passed the Teensy 4.1 sweep
+`Errno 6 Device not configured`, so nothing is enumerated behind it. The
+stronger form of the same check, `ioreg -p IOUSB -w0 | grep -c "+-o"`, returns 3
+on every one of those dates, which is the root plus two host controllers and no
+device at all: the node is a leftover, not a board. Four readings of the same
+thing is not evidence that it will stay that way; run the check rather than
+quoting this sentence. It compiles: it passed the Teensy 4.1 sweep
 over the published 0.1.2 package. Compiling is not running, which is
 the single highest-value thing left on this list: it is a checklist sketch with a
 written pass condition per stage, and its last two stages measure the pitch
@@ -199,17 +234,25 @@ and no amount of building will tell you. The other half is that nothing has been
 BY EAR: 41 parity rows and 1054 preset values are a strong position and they are
 not the same as having listened to both.
 
-**2. The audit backlog. 36 open, down from 51.** `docs/AUDIT-2.md` has 29 open
-and 7 partial, against 53 closed, 5 refuted and 1 not a defect. Each carries its
+**2. The audit backlog. 33 open, down from 51.** `docs/AUDIT-2.md` has 25 open
+and 8 partial, against 57 closed, 5 refuted and 1 not a defect. FOUR were closed
+on 2026-08-23, a fifth moved from open to partial, and one new one was opened by
+auditing those closures, so genuinely open went 36 to 33: a move of three. Two
+earlier revisions of this paragraph said five were closed and that the total
+moved by four, and both were wrong. The arithmetic that checks out is
+`grep -c "^> \*\*CLOSED\*\* as of 2026-08-23" docs/AUDIT-2.md`, which returns 4,
+against 1 for PARTIAL, and the counts on either side of the branch:
+29/7/53 on `main` against 25/8/57 here. Each carries its
 status and evidence under its own heading, so that file is the register and this
-one is not. The figure this entry gave two revisions ago, roughly 73, was wrong
+one is not. The figure this entry gave three revisions ago, roughly 73, was wrong
 by 22 and could not be reproduced from any document.
 
-Twenty of the 36 would change rendered output and are tagged
-`[changes audio]` in the file. Only 3 are still tagged `[under ten minutes]`,
-and none of those three was ever looked at. A finding with no tag has been
-judged neither, rather than left unassessed: all 36 carry an explicit verdict
-on both.
+Nineteen of the 33 would change rendered output and are tagged
+`[changes audio]` in the file: two were closed during the day and one was found. The `[under ten minutes]` tag is now empty: the
+last three were taken on 2026-08-23. A finding with no tag has been judged
+neither, rather than left unassessed: all 33 carry an explicit verdict on both.
+This makes item 2 the whole of what is left, and every remaining finding is
+either expensive or needs a decision.
 
 The 20 tagged `[changes audio]` are now the bulk of what is left, and they are
 the expensive kind: the string waveguide's bass pitch, the `rng` capture
@@ -228,19 +271,12 @@ fell over, and the pattern in almost all of them was a fix applied to the
 symptom a finding opened with rather than to the cause it named further down.
 Read a finding to its end before calling it closed.
 
-**3. Three quick findings nobody has looked at.** The 2026-08-20 pass took the twenty
-findings tagged `[under ten minutes]`, investigated each against the tree,
-handed every proposal to a skeptic briefed to refute it, and applied what
-survived: sixteen closed. Three were never reached, because the machine slept
-and that group's agent died mid-response, so they are open for want of a reader
-rather than for want of a fix: the modal glass and wood mode tables having no
-physical source (`docs/AUDIT-2.md`, the provenance one), `voiceLead`'s
-unequal-size branch and its crossing penalty never executing, and
-`Scheduler.rewind()` having no test while sitting on the `b.start()` path. A
-fourth was closed during the 0.1.9 release, by measuring the thing it was about:
-this file's own release ritual had been quoting a bundle size the command no
-longer printed. An hour for the three, and the same shape of work that already
-worked sixteen times.
+**3. Three quick findings nobody had looked at. Done on 2026-08-23**, and
+written up under "Closed on 2026-08-23" below. Two closed, one is PARTIAL
+because the measurement turned up something a test cannot fix: `voiceLead`'s
+`crossPenalty` is unreachable by construction, so a published option changes no
+output at any setting, and whether to delete it is a decision waiting on the
+owner. Nothing else in this list depended on these three.
 
 **4. The documentation restructure has a tail, and none of it blocks anything.**
 `docs/DOCS-PLAN.md` steps 1 to 4 and part of 6 are done. What is left, in the
@@ -274,6 +310,385 @@ first finding it looked at, because the investigator had measured with the 9.2.1
 toolchain rather than the 11.3.1 the documents pin. That is the toolchain finding
 biting inside the session that was auditing it, and it is fixed now, in
 `tools/size-report.sh`.
+
+### Closed on 2026-08-23, and what each one turned up
+
+The last three `[under ten minutes]` findings, taken in the shape that worked
+sixteen times on 2026-08-20: read the finding to its END, separate the headline
+symptom from the cause it argues for, propose an exact patch, attack the
+proposal before applying it. That last step earned its keep twice.
+
+- **The modal mode tables now say where they came from, all five of them.**
+  The headline was that glass and wood carry no citation. The cause the finding
+  names at its end is wider: a reader cannot tell which of the five tables are
+  real and which are invented. So all five are annotated, and in BOTH trees,
+  because `packages/bellows-embedded/src/bellows/engines/modal.h` carried the
+  same five comments word for word. The two physical claims were re-derived
+  rather than repeated: the roots of cos(x)cosh(x) = 1 squared and normalised
+  give 1, 2.757, 5.404, 8.933, 13.344, 18.638 against the table's 2.756 and
+  13.345, and the first eight Bessel zeros by magnitude give 1, 1.593, 2.136,
+  2.295, 2.653, 2.917, 3.155, 3.500 against the table's 1.594 and 3.501. Both
+  match to rounding. The bell row turned out to be the one described loosely:
+  halved it reads 0.5, 1.0, 1.2, 1.5, 2.25, 2.665, so the first four ARE the
+  hum, prime, tierce and quint of a tuned bell and the upper two are NOT the
+  nominal. Glass and wood are recorded as voiced by ear, which is the cheap fix
+  the finding sanctions. No gate, and the entry says so: this is provenance
+  prose and `check-docs.mjs` compares figures, not comments.
+- **`voiceLead`'s crossing penalty is dead code, not untested code.** This is
+  the one that did not close. The finding reads as a coverage hole, and half of
+  it is: the unequal-size branch is entered only when the previous voicing has
+  FEWER voices than the chord has pitch classes, and no test had ever done that.
+  Three tests now do. But the crossing penalty inside that branch cannot be
+  covered by any test, because `prev` is sorted and `notes` is ascending, and
+  nearest-neighbour assignment between two ascending sequences is monotone, so
+  the inversion it looks for never exists. 1670526 exhaustive cases over eight
+  voice-count shapes: zero crossings. 576 sweeps of the real exported function
+  with `crossPenalty` at 0 and at 1000: zero differences. The same 576 under a
+  `>` to `>=` mutant: 90 differences, which is how the zero is known to be a
+  measurement rather than a broken probe. `crossPenalty` is exported, documented,
+  defaults to 2, has no caller anywhere in the repository, and does nothing.
+  **Decided on 2026-08-23: kept inert and pinned**, rather than deleted. Removing
+  it would be a public type-surface change to `VoiceLeadOptions` for an option
+  nothing sets, and the test that fails the moment it becomes live is cheaper
+  than the break. Making it live was never on the table: a many-to-one nearest
+  match has no crossings to penalise, so the concept is vacuous here rather than
+  accidentally dead. The finding stays PARTIAL to keep the fact visible.
+- **The facade's transport surface has tests now, which is what the
+  `Scheduler.rewind` finding was actually about.** Its headline is that `rewind`
+  has no test; its last sentence says `b.start`, `b.stop`, `b.pause`,
+  `b.resume`, `b.panic`, `b.bpm`, `b.rampBpm` and `b.swing` are all uncalled
+  too, and that is why `rewind` had none. `scheduler.test.ts` goes 7 tests to
+  11 and a new `test/integration/transport-surface.test.ts` carries 8. The
+  facade was testable the whole time: `fake-context.ts` already existed,
+  `b.transport` is public, and Bellows drives its scheduler from a 25 ms
+  `setInterval` reading `ctx.currentTime`, so a test that owns vitest's fake
+  timers and `FakeAudioContext.currentTime` together drives the real path.
+  No source file changed. The code was right, only unwitnessed.
+
+Then the first of item 2's `[changes audio]` findings, which was the one the
+docs had the largest stake in:
+
+- **`b.render()` is reproducible now for the form every doc page teaches.**
+  `b.rng(label)` returned the STREAM, so capturing it once outside the tick
+  callback (`const melody = b.rng('melody')`, which is what README.md:68, both
+  package READMEs, `generative-music.ts` and every workbench example do) bound
+  the callback to the LIVE stream. A render installs a fresh `rngCache` that a
+  captured stream never consults, so the render consumed and advanced live
+  state: two renders of one seed produced different music, and an export
+  mid-session differed from a reload. Reproduced before touching anything, with
+  a test that renders twice at one seed and got [255, 168, 484, 395, ...] then
+  [492, 319, 387, 640, ...]. `b.rng` now returns one stable HANDLE per label
+  whose every draw resolves the current stream at the moment it is drawn.
+  `fork` is delegated rather than re-implemented, because a fork depends only
+  on its parent's label and never on its position, so the concatenation rule
+  the C++ port relies on is untouched. Six tests, mutation tested per method:
+  binding `int`, `pick`, `gauss` or `shuffle` to the capture-time stream each
+  fails, and binding `fork` survives as a true equivalent mutant, which the
+  register says rather than leaving as an apparent hole. The two doc claims the
+  finding calls out turned out to need no correction: both were describing the
+  behaviour this fix delivers, so they became true rather than being rewritten.
+
+And one gate that was missing, found by running the CI-versus-block check this
+file recommends rather than by trusting it:
+
+- **`gen:llm-embedded` was in the verification block and not in CI.** Its three
+  siblings all were: `gen:worklet`, `gen:sim` and `gen:llm` each regenerate and
+  then `git diff --exit-code` inside the workflow. The embedded LLM reference
+  had only the local run, and a local run is exactly the thing that gets
+  skipped, which is how a stale generated file reached a published release
+  commit once already. It is in `.github/workflows/ci.yml` now, next to the
+  `gen:llm` step, and the gate was watched to fail: mutating the summary line of
+  `engines/modal.h` and regenerating makes the diff non-empty, and reverting
+  makes it clean again.
+
+  Worth repeating for whoever runs that check next, because it nearly produced a
+  false report here. `grep -E "run: npm run |run: node tools" ci.yml` is an
+  INCOMPLETE probe: most of the workflow's interesting steps are multi-line
+  `run: |` blocks, and all four regenerate-and-diff gates live inside one, so the
+  single-line grep makes CI look far emptier than it is. Read the blocks before
+  concluding a gate is missing. The one real gap survived that reading.
+  `grep -cE "run: \|$" .github/workflows/ci.yml` counts the blocks rather than
+  quoting a number here, because the first draft of this sentence quoted one and
+  the same commit that wrote it added a block and made it wrong.
+
+- **A non-finite audio SAMPLE no longer latches a recursive unit, in five of
+  them.** The parameter half of this finding was fixed on an earlier pass; the
+  input half was missed in a way worth recognising, because the guard went on
+  `EnvelopeFollower`'s CONSTRUCTOR, which the finding never mentioned, while the
+  finding's own list named its INPUT. `next()` holds the last good envelope now.
+  Then the cause turned out wider than the unit named: `Svf`, `LadderFilter`,
+  `OnePole` and `DcBlocker` latch identically on a bad sample, measured by
+  feeding each good audio, one NaN, then 4000 more good samples. All four are
+  guarded, treating a bad sample as silence so the recursion keeps evolving,
+  which is right for a filter where holding is right for an envelope. Fixing
+  only the unit the finding named would have been the third repetition of the
+  symptom-versus-cause pattern in one session. 32 tests to 48, watched to fail
+  per unit. No correct audio moved, and that evidence is per unit rather than
+  one blanket claim: a first draft rested it all on the golden renders, and the
+  goldens reach three of the five. `va` holds a `LadderFilter` and an `Svf` and
+  the `saturator` holds two `OnePole`s, so those three are covered and the
+  renders are byte-identical. `EnvelopeFollower` is not in the golden piece at
+  all, because the piece's `compressor` keeps its own `env` field rather than
+  using the class; it is covered by the parity harness instead, whose `gate` and
+  `gate_sweep` rows drive `Gate` and still read 1.25e-6 and 1.70e-6 against an
+  untouched C++ side. `DcBlocker` has no caller in `src`, so nothing of its
+  behaviour can move.
+
+  The cost claim had to be measured because the test file's own header said this
+  policy costs "nothing per sample" and these guards do not. `Svf.next` over
+  2.9M samples, alternating on a quiet machine: 22.9 and 23.0 ms unguarded
+  against 22.7 and 22.8 ms guarded. Free at the resolution available. An earlier
+  run of the same measurement, taken while background jobs were loading the
+  machine, reported a 75 percent penalty and then a 2.4x speedup from the same
+  one-line change, which is why it was taken again rather than reported. A
+  microbenchmark on a busy machine is not a measurement.
+
+### One item 2 finding investigated rather than fixed, because the obvious fix is wrong
+
+**The sustain 0 voice-lifetime finding.** Both halves re-measured and both stand:
+a sustain-0 voice is still `active` after 10 s with `level` exactly 0, and the
+release tail is `log100(level / IDLE_FLOOR)`, which is 2.000x from full level,
+1.850x from sustain 0.5 and 1.699x from sustain 0.25. The finding's heading
+quotes the sustain-0.5 number and its body quotes the full-level one; both are
+right for their level and neither is a general figure.
+
+The fix part 1 invites is to test `IDLE_FLOOR` in the `Stage.Sustain` branch the
+way `Stage.Release` already does. It was tried and it breaks a documented
+statement of fact: `Adsr.set` says "the Sustain branch below assigns it every
+sample, so a voice that is already sustaining steps to the new value on the very
+next sample", and under the candidate a voice sustaining at zero does not,
+because it has left that branch. Measured: raising sustain from 0 to 0.5
+mid-note gives 0.5 and active today, and 0 and inactive under the candidate.
+
+State that at its real strength, because the first write-up of this overstated
+it by paraphrase. The same docstring opens with "Safe to call while running
+covers the three times and not the fourth argument", so sustain is explicitly
+outside the safe-while-running guarantee, and it closes by steering a
+player-moved control through `Smoother` or a note boundary rather than through
+sustain directly. The candidate breaks something the file states, not something
+the file recommends relying on. Somebody could reasonably decide a voice
+sustaining at exactly zero is allowed to become unreachable.
+
+**All 1401 tests passed with that regression applied.** The existing
+sustain-change test moves between 0.8 and 0.2 and never reaches zero, so it saw
+nothing. There is a test for the zero case now, watched to fail against the
+candidate, so whoever picks this up gets told rather than discovering it later.
+
+That relocates the work: slot pressure is `VoicePool`'s problem, not `Adsr`'s.
+`voicepool.ts:43` picks a free voice with `if (!s.voice.active)` and never looks
+at `s.held`, so "a silent voice is stealable before an audible one" belongs
+there, where it costs `active` none of its meaning. Stealing a held-but-silent
+slot is already safe for note tracking: `noteOn` overwrites `pick.noteId` and
+`noteOff` matches on `s.held && s.noteId`, so a stale note-off finds nothing.
+
+It stays OPEN because both halves want a decision and they are not the same
+size. Part 1 at the pool changes stealing only when polyphony is exhausted, and
+in the direction of not cutting off an audible decaying note. Part 2 shortens
+every release tail in the library by up to 2x, audible on every patch, against
+the alternative of leaving it and stating the lifetime consequence next to
+`IDLE_FLOOR`.
+
+### What auditing the fix found, which is a new defect next to the old one
+
+**A backgrounded tab plays different music from the same seed.** This was filed
+once on 2026-08-23 as "a render can differ from live", and a second audit the
+same day found that diagnosis pointing the wrong way. The replay is fine. LIVE
+playback is the non-deterministic one, and it disagrees with itself.
+
+`Scheduler.tick` walks `for (const s of this.subs)` and delivers every tick in
+the wake's window for one subscription before starting the next, so callback
+order inside a wake is grouped by subscription rather than sorted by time. How
+many ticks a wake covers depends on wall-clock timing, not on the piece, so the
+draw order from any stream two subscriptions share depends on how the timer
+happened to fire. Measured with `'4n'` and `'4t'` sharing one `b.rng('shared')`:
+
+    smooth, 25 ms wakes      A78, B69, B85, A83, B21, A29, B58
+    one wake absorbing 1 s   A78, B69, A85, A83, A21, A29, B58, B85, B45, B42
+    the offline render       A78, B69, B85, A83, B21, A29, B58, B85
+
+The render is identical to smooth playback over every event compared. It is the
+throttled run that is the odd one out, and a backgrounded tab is a normal
+browser condition, not an exotic one.
+
+The mechanism is the anti-throttling defence turning on itself. `scheduler.ts`
+promises that "the lookahead stretches to cover the observed wakeup gap, so
+under background-tab throttling the schedule keeps running ahead of the clamp
+and nothing is missed". That stretch is what makes a wake wide enough to hold
+several ticks of one subscription, which is precisely when grouping by
+subscription stops matching time order. Nothing is missed, exactly as promised.
+The order is what moves. The first wake of every piece gets a milder version for
+free, because `scheduledTo` starts at `-Infinity` so the opening window is the
+whole horizon.
+
+Scope it honestly, and this part was measured too: nothing this repository ships
+hits it. Of the 60 `clock.at` subscriptions across the examples and doc pages,
+exactly two files open two at once, and neither draws anything random. The
+composer behind bellows.live uses one subscription. So it is a real defect a
+user can reach by writing ordinary code, and not an active problem in the
+product. Event placement is never wrong either way, because events carry
+explicit times; what moves is which callback draws which number.
+
+The second audit also narrowed the fix. The first filing offered three options
+and treated live and replay as equally plausible sources of truth; they are not.
+The replay's order is correct, smooth playback already agrees with it, and the
+live grouping is an artifact of iterating a Set inside a loop. So there is one
+option: make `Scheduler.tick` emit a wake's ticks in time order across
+subscriptions, with a preallocated scratch array because it runs every 25 ms on
+the main thread. It is still an audio change and still wants a decision, but it
+is one option rather than three. And documenting it is NOT sufficient, which
+corrects the first filing: no wording on a docs page makes live playback
+reproducible against itself.
+
+### What auditing this session's own work found
+
+### What auditing this session's own work found
+
+Nine defects, in the session's own output. Eight were written on 2026-08-23:
+the fifth was found in the sentence that recorded the first, the sixth by
+auditing a second time after the first audit declared itself done, the seventh
+by auditing the commit that fixed the sixth, and the eighth by auditing the
+commit that recorded the seventh. The ninth was found on 2026-09-04 while
+updating this file, twelve days later, and it had been sitting in three
+paragraphs the whole time: the claim that five audit findings were closed. Four
+were. A fifth moved from open to partial, which is not the same thing, and the
+error survived four audit passes because every pass re-read the sentence instead
+of counting the register. `grep -c` on the status lines settles it in one
+command. No pass has yet come back empty. This is
+the fifth session running to find that its work does not survive its own audit,
+the rate is not improving, and the second pass was as productive as the first,
+so budget for both.
+
+1. **The `voiceLead` fix corrected one of four false claims, and it was the
+   least visible one.** The code does not penalise crossings. Four pieces of
+   prose said it does: `motionCost`'s private docstring, the exported
+   `voiceLead` docstring, the `crossPenalty` option's own doc comment (which is
+   what a user reads in an editor and what flows into the generated `llm.txt`),
+   and the site's Theory page, which told visitors that `voiceLead` returns a
+   voicing "penalizing crossings and doublings". The first pass fixed the
+   private one. This is the register's own recurring pattern reproducing inside
+   a fix for a finding about that pattern, which is now twice in one session:
+   the first version of that finding's tests also passed against a mutant. All
+   four are corrected.
+2. **A sentence about a count was made wrong by the commit that wrote it.** The
+   note warning that grepping CI for single-line `run:` steps is an incomplete
+   probe said there were eight multi-line blocks. Adding the
+   `gen:llm-embedded` gate in the same commit made it nine. It now gives the
+   command that counts them instead of a number, and says why.
+3. **Live figures were quoted where the file's own rule is to paraphrase.** The
+   note about the `check-docs` race quoted the `s9h_saturator` flash and RAM
+   values straight out of `docs/HARDWARE.md`. Those are gated figures with a
+   source of truth, and this file already learned at the `--allow-host-drift`
+   entry that a copy of a number rots and that a gate cannot tell a quotation
+   from a claim. They are described rather than quoted now.
+4. **A vacuous assertion shipped in a new test.**
+   `expect(steps).not.toContain(0 - 1)` in `transport-surface.test.ts` can never
+   fail: a step index is never -1. It was noise sitting next to the assertion
+   that does the work, and it is gone. Removing it does not weaken the test,
+   which still dies under both the `rewind` and `resyncTo` mutations.
+
+5. **An unverified claim inside the entry recording defect 1.** Writing up the
+   `crossPenalty` miss, this session asserted that the option's doc comment
+   "flows into the generated `llm.txt`". It does not. The comment ships in
+   `packages/bellows/dist/theory/voicelead.d.ts`, which is an editor tooltip and
+   part of the npm package, but `llm.txt` carries only a one-line summary of
+   `voiceLead` that never made the crossing claim at all. Checked after the
+   fact, which is the wrong order. The register says so where it happened.
+
+6. **The new finding was filed with its diagnosis pointing the wrong way.** The
+   first audit found the draw-order defect and wrote it up as "a render can
+   differ from live", offering three fixes and treating the live path and the
+   replay as equally plausible sources of truth. A second audit measured what
+   the first had only reasoned about, and the replay turned out to be correct:
+   it matches smooth live playback event for event, and it is THROTTLED live
+   playback that disagrees with both. The defect is that a backgrounded tab
+   plays different music from the same seed, which is worse than what was
+   filed and has one fix rather than three. The lesson is narrow and repeats
+   the one above: the first filing reasoned from reading two code paths, and
+   the correction came from running them.
+
+7. **A blanket evidence claim that covered three of five cases.** The NaN
+   commit said "the golden renders are unchanged, which is the proof that no
+   correct audio moved" for five guarded units. The golden piece reaches three
+   of them. `EnvelopeFollower` is not in it, because the piece's `compressor`
+   keeps its own `env` field rather than using the class, and `DcBlocker` has no
+   caller anywhere. The claim was true where it applied and vacuous where it did
+   not, which is the worst kind: it reads as complete. The evidence is now per
+   unit, and the two the goldens miss are covered by the parity harness and by
+   having no callers respectively.
+
+8. **A docstring paraphrased into meaning close to its opposite.** Writing up
+   the sustain investigation, this session said `Adsr`'s docstring "calls
+   sustain a control a player can move during a held note". It says the
+   reverse: such a control should go through `Smoother` or land at a note
+   boundary, and sustain is named as the one argument NOT covered by "safe to
+   call while running". The measured result was unaffected and the case against
+   the candidate survives, but weaker than it was made to sound, which changes
+   the decision being handed over. Quote a docstring or do not lean on it.
+
+Two of these eight (1 and 3) are the same failure at different scales: fixing
+where the finger points instead of where the problem is. Numbers 5, 7 and 8 are
+one failure too: asserting from a plausible reading of a file rather than
+opening it. Number 5 is the
+sharpest reminder available that this file's rule applies to the file itself:
+the sentence was about being careful and was written carelessly. Number 2 is the one to
+generalise from, because nothing catches it. `check-docs.mjs` gates figures with
+a harness behind them; a count of something in a file this repository edits by
+hand has no harness, so a sentence about the shape of `ci.yml` is only as true
+as the last person to read it. Prefer the command over the number.
+
+A third, which only shows up after a gap:
+
+- **Anything in the scratchpad is gone when you come back.** The 2026-08-23
+  session drove the verification block from a shell script under
+  `/private/tmp/claude-501/...`, and on 2026-09-04 the whole directory was
+  purged, so the script exited 127. Nothing was lost that mattered, because the
+  block itself is written out in this file and in `docs/KICKOFF.md`, which is
+  the reason to keep it there rather than in a helper. If you write a convenience
+  script for the block, treat it as disposable and keep the canonical list in the
+  documents.
+
+A second hazard, from the same family:
+
+- **A rejected candidate can reach a generated file.** Trying the wrong fix for
+  the sustain finding meant running `npm test`, whose pretest build regenerates
+  `worklet-code.gen.ts` from whatever is in `src` at that moment. Restoring the
+  source afterwards does not restore the generated file, so the working tree
+  held a worklet built from a candidate that had just been rejected on purpose.
+  Committing without looking would have shipped it. `npm run gen:worklet` then
+  `git diff --exit-code` is the check, and it is already in the verification
+  block; the point is to run it after experimenting, not only after editing.
+
+One operational hazard, learned by tripping it:
+
+- **Do not run anything that touches the embedded headers while
+  `check-docs.mjs` is running.** It shells out to `size-report.sh`, which
+  compiles sketches into a shared build directory, so a concurrent build
+  corrupts the measurement it is comparing against. Mutation-testing the new
+  `gen:llm-embedded` gate at the same time as a background `check-docs` made it
+  report the `s9h_saturator` row with a flash figure about half the documented
+  one and a RAM figure a dozen bytes under, which reads exactly like a real
+  drift and is not one. Run alone immediately afterwards, with the tree in the
+  same state, it returned ok on every figure. The two numbers are described
+  rather than quoted on purpose: they are live figures in `docs/HARDWARE.md`,
+  and this file already learned once that a gate cannot tell a quotation from a
+  claim. Suspect the probe: the run was the thing that was broken.
+
+Two things worth carrying, both from attacking a proposal rather than from
+writing it:
+
+1. **The first version of the `voiceLead` branch tests passed against a
+   mutant.** They asserted length, pitch classes, ordering and range, and
+   zeroing the branch's motion term (`c += bestD` to `c += 0`) left every
+   candidate tied at cost 0 so the first one won, with the shape still legal.
+   That is this repository's own symptom-versus-cause pattern reproducing
+   itself INSIDE the fix for a finding about that pattern. The tests now assert
+   the cost the branch computes and four separate mutations kill them.
+2. **Three of `rewind`'s four effects were gated by the obvious tests and one
+   was not.** Dropping `s.scheduledTo = -Infinity` failed nothing until a test
+   was written for the case that needs it: a 5 second stall stretches the
+   window out to about t = 12.5, and a restart behind that makes `to <= from`,
+   so nothing is delivered at all. The same line inside `resyncTo` is still
+   ungated and the register says so rather than implying full coverage.
 
 ### Closed on 2026-08-21, and what each one turned up
 
@@ -461,17 +876,33 @@ Kept short. The full record is in the commits.
 
 ## Where things stand
 
-**Re-checked on 2026-08-23 and nothing had moved**, which is worth recording in a
-file with this one's history. `main` is `e780f39` with a clean tree, nothing
-unpushed and nothing behind. npm serves 0.1.9, PlatformIO and the Arduino
-Library Manager both serve 0.1.2, bellows.live serves LLM references
-byte-identical to the tree, and CI is green on the last three pushes. Every one
-of those is one command, and the commands are in the bullets below. Two days is
-long enough for any of them to have changed; this time none had.
+**Re-checked on 2026-09-04 and nothing had moved in twelve days**, which is worth
+recording in a file with this one's history. `origin/main` is `83b64da` with a
+clean tree. npm serves 0.1.9, published 2026-08-21. PlatformIO and the Arduino
+Library Manager both serve 0.1.2. bellows.live serves an `llm.txt` byte-identical
+to `main`'s, compared by content and not by its version line. CI is green on the
+head of PR #2. Every one of those is one command and the commands are in the
+bullets below. Twelve days is long enough for any of them to have changed; this
+time none had, and the previous revision of this paragraph still said `main` was
+`e780f39` when it had already become `83b64da`, so read the bullets rather than
+this summary.
 
-- **Nothing is unpushed.** `origin/main` is current as of 2026-08-15, and CI is green on it:
-  all six jobs, run `31873741708`. This bullet used to name two unpushed commits and a
-  missing SIMULATOR button; both are shipped. Check with `git rev-list --count origin/main..HEAD`
+**The one thing that HAS changed since 2026-08-23 is where the work lives, and
+it is not in any published channel.** The 2026-08-23 session's output is eight
+commits on `audit-backlog-2026-08-23`, open as pull request #2 and not merged.
+That is deliberate: this repository's CI runs on pull requests and not on pushes
+to `main`, so a branch is the only way the work gets a CI run at all, and the
+owner chose a PR over a direct push. The consequence to hold in mind is that
+`main`, npm, the site and both registries are all still the pre-session state,
+and a reader who checks out `main` will not find any of it, including this
+paragraph.
+
+- **Nothing is unpushed, and eight commits are unmerged.** Everything local is on
+  `origin/audit-backlog-2026-08-23`; `git status -sb` shows no ahead or behind. What is NOT
+  done is the merge: `git rev-list --count origin/main..origin/audit-backlog-2026-08-23`
+  returns 8, and `gh pr view 2` says OPEN. CI is green on that branch head, run for `039f45e`,
+  all six jobs. Pushing to `main` triggers no CI here, which is why the work is on a branch;
+  see "CI, which has now run" below. Check with `git rev-list --count origin/main..HEAD`
   rather than trusting this line, which is the sort that goes stale the moment someone
   commits.
 - **`bellowsjs@0.1.9` is on npm and tagged `v0.1.9`**, published 2026-08-21 and checked rather
@@ -522,6 +953,30 @@ long enough for any of them to have changed; this time none had.
   current. Run the curl. See
   "Deployment (bellows.live)" below, which has said this all along; an earlier draft of this
   line said the opposite and was wrong.
+- **The browser library has drifted from the published `bellowsjs@0.1.9`, with one
+  behaviour change in it.** `git diff v0.1.9..HEAD -- packages/bellows/src` is the check.
+  `b.rng(label)` returns a stable handle instead of the raw stream, which makes
+  `b.render()` reproducible for the capture-outside-the-callback form that the README and
+  every doc page teach. That is a real fix and not a paragraph, so unlike the two embedded
+  files below it is worth a release on its own when someone is next at a keyboard: until then
+  npm and bellows.live both still ship the version where two renders of one seed can differ.
+  Note the drift is on the BRANCH, so the check is
+  `git diff v0.1.9..origin/audit-backlog-2026-08-23 -- packages/bellows/src`; run against
+  `main` it comes back empty, which would read as "nothing to release" and be wrong. Still
+  true on 2026-09-04: npm serves 0.1.9 and the fix is not in it.
+  The other two files that moved, `engines/modal.ts` and `theory/voicelead.ts`, are
+  comment-only and change nothing a user hears. See "Closed on 2026-08-23" for the
+  measurement.
+
+  bellows.live is in sync with `main` and has been throughout, checked by content on
+  2026-08-23, 2026-08-25 and 2026-09-04 rather than assumed. It is NOT stale against `main`;
+  it simply does not have the branch, and merging is what would make it stale: `apps/workbench/public/llm.txt` and the
+  rendering-and-export doc page both moved. Note that the usual first-line check does NOT
+  reveal it, because the version line still reads `# bellowsjs 0.1.9 LLM reference` on both
+  sides. Use a content probe instead:
+  `curl -s https://bellows.live/llm.txt | grep -c "stable HANDLE"` returns 0 until someone
+  runs the deploy. That is the same lesson as everywhere else in this file: pick a probe that
+  can see the change you actually made.
 - **Two shipped files have drifted from the published 0.1.2, both deliberately, neither
   released.** `git diff c0a1280..HEAD -- packages/bellows-embedded` is the check.
   `README.md` had its install-test sentence rewritten so it survives a version bump instead of
@@ -575,7 +1030,7 @@ long enough for any of them to have changed; this time none had.
     `arduino-cli` prints on failure too, and called two broken examples fine. The 0.1.1 run on
     2026-08-20 also diffed the zip against the mirror clone that had been compiled by hand,
     `diff -rq` reporting only `.git` and `.gitignore`.
-- Library test suite: 91 files, 1364 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- Library test suite: 93 files, 1402 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
 - Embedded: 51 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All seventeen examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library, except `12_DacOut`, which declines with an `#error` because a 4.x has no DAC. This line said 43 and five until 2026-08-20, while the state section fourteen lines up said 51 and 17.
@@ -1184,8 +1639,13 @@ than defects, so they are the natural next chunk.
 **Coverage.**
 
 - The `Svf` cutoff gate is a -4 to -2 dB band that admits roughly 11 percent cutoff error (224).
-- `voiceLead`'s unequal-size branch, including the crossing penalty, is never executed (466).
-- `Scheduler.rewind()` has no test and it is on the `b.start()` path (472).
+- ~~`voiceLead`'s unequal-size branch, including the crossing penalty, is never executed (466).~~
+  PARTIAL, 2026-08-23. The branch is covered by three tests. The crossing penalty is not, and cannot
+  be: it is unreachable by construction, so `crossPenalty` is a published option that changes no
+  output. Kept inert and pinned by a test.
+- ~~`Scheduler.rewind()` has no test and it is on the `b.start()` path (472).~~ CLOSED, 2026-08-23,
+  at the cause rather than the headline: the whole facade transport surface has tests now, 8 of them,
+  and all eight methods die under mutation.
 - The Web MIDI runtime path is uncovered; only parsing is tested (478).
 - The gate's range floor and the delay's time smoother are both unreachable from the parity
   output. Recorded next to their rows with the arithmetic; both need an instrument the harness
@@ -1249,8 +1709,12 @@ DSP change is gated behind it.
   it should be done with the measurement above as its acceptance test. Attempted and deliberately
   not shipped on 2026-08-05, because a half fix here is worse than the defect.
 - The bow position comb delay is twice the physical value (123).
-- `b.render()` is not reproducible for the rng pattern the README and every doc page teach (55).
-  A real fix changes what render emits for every piece written the documented way.
+- ~~`b.render()` is not reproducible for the rng pattern the README and every doc page teach (55).~~
+  CLOSED, 2026-08-23. `b.rng` returns a stable handle that resolves the current stream at draw time,
+  so two renders of one seed now agree. It did change what render emits for pieces written the
+  documented way, as this line predicted. Auditing it opened a NEW finding next door, still open: the
+  live scheduler and the offline replay order callbacks differently, so a render can still differ
+  from live when one stream is shared across two subscriptions.
 - The scale layer is hardcoded 12-EDO above a correct tuning layer (93). `degreeFreq` already
   does it right and is called from nowhere.
 - Six buffer-owning C++ classes still disagree silently when the template rate and the `Init()`

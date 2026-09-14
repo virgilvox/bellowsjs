@@ -147,6 +147,16 @@ jobs:
         run: |
           npm run gen:llm -w apps/workbench
           git diff --exit-code -- apps/workbench/public/llm.txt
+      - name: the embedded LLM reference is in sync with the headers
+        # Same control as the line above, for the other reference. It was in
+        # the verification block and not here, which is the gap that put a
+        # stale generated file on a published release commit once already:
+        # only a local run could catch it, and a local run is the thing that
+        # gets skipped. public/llm-embedded.txt is generated from all the
+        # embedded headers and is served at /llm-embedded.txt.
+        run: |
+          npm run gen:llm-embedded -w apps/workbench
+          git diff --exit-code -- apps/workbench/public/llm-embedded.txt
       - run: npm run build -w apps/workbench
 
   embedded:

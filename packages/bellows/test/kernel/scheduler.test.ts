@@ -105,4 +105,77 @@ describe('scheduler resilience (review regressions)', () => {
     const post = steps.slice(delivered);
     for (let i = 0; i < post.length - 1; i++) expect(post[i + 1]).toBe(post[i] + 1);
   });
+
+  /*
+   * rewind() is what Bellows.start() calls before restarting the transport.
+   * Without it the lastStep guard in tick() drops every step the previous
+   * run already delivered, so the second start of a session plays from the
+   * wrong step. Making rewind a no-op used to fail nothing in the suite.
+   */
+  it('rewind replays from step 0 when the transport restarts', () => {
+    const tr = new Transport({ bpm: 120 });
+    tr.start(0);
+    const sched = new Scheduler(tr, { horizon: 0.1 });
+    const steps: number[] = [];
+    sched.at(1, (_t, step) => steps.push(step));
+    for (let now = 0; now < 2; now += 0.05) sched.tick(now);
+    expect(steps[0]).toBe(0);
+    expect(Math.max(...steps)).toBeGreaterThanOrEqual(3);
+
+    steps.length = 0;
+    tr.stop();
+    tr.start(10);
+    sched.rewind();
+    for (let now = 10; now < 12; now += 0.05) sched.tick(now);
+    expect(steps[0]).toBe(0);
+    for (let i = 0; i < steps.length - 1; i++) expect(steps[i + 1]).toBe(steps[i] + 1);
+  });
+
+  it('rewind clears the observed wakeup gap, so a restart does not inherit a stretched horizon', () => {
+    const tr = new Transport({ bpm: 120 });
+    tr.start(0);
+    const sched = new Scheduler(tr, { horizon: 0.1 });
+    const times: number[] = [];
+    sched.at(1, (t) => times.push(t));
+    sched.tick(0);
+    sched.tick(3);            // a long stall inflates gap to about 3 s
+    tr.stop();
+    tr.start(10);
+    sched.rewind();           // gap back to 0
+    times.length = 0;
+    sched.tick(10);
+    // with gap cleared the first window is the 0.1 s horizon, so only the
+    // tick at beat 0 lands; an inherited 3 s gap would deliver several beats
+    expect(times).toEqual([10]);
+  });
+
+  it('rewind clears scheduledTo, so a restart behind a stalled window still fires', () => {
+    const tr = new Transport({ bpm: 120 });
+    tr.start(0);
+    const sched = new Scheduler(tr, { horizon: 0.1 });
+    const steps: number[] = [];
+    sched.at(1, (_t, step) => steps.push(step));
+    sched.tick(0);
+    sched.tick(5);   // a 5 s stall stretches the window out to about t = 12.5
+
+    tr.stop();
+    tr.start(6);     // restart BEHIND the end of that stretched window
+    sched.rewind();
+    steps.length = 0;
+    sched.tick(6);
+    // leaving scheduledTo at 12.5 would make `to <= from` and deliver nothing
+    expect(steps).toEqual([0]);
+  });
+
+  it('size counts live subscriptions', () => {
+    const sched = new Scheduler(new Transport({ bpm: 120 }));
+    expect(sched.size).toBe(0);
+    const offA = sched.at(1, () => {});
+    sched.at(0.5, () => {});
+    expect(sched.size).toBe(2);
+    offA();
+    expect(sched.size).toBe(1);
+    sched.clear();
+    expect(sched.size).toBe(0);
+  });
 });

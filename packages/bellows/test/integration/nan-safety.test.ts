@@ -15,7 +15,13 @@
  * to recover one: v += coef * (good - NaN) is NaN, so once a NaN is in there
  * every later sample is NaN, no good value rescues it, and a parameter change
  * does not call reset(). Silence for the rest of the session with no error.
- * It costs one test per set() call and nothing per sample.
+ * It costs one test per set() call, and, for the five units whose bad value
+ * arrives as an audio SAMPLE instead, one comparison per sample. That second
+ * half was added on 2026-08-23 and the sentence here used to say the policy
+ * cost nothing per sample, which was true only because those five were not
+ * covered. Measured before adding it: Svf.next over 2.9M samples runs 22.9
+ * and 23.0 ms unguarded against 22.7 and 22.8 ms guarded on a quiet machine,
+ * so the check does not survive contact with the noise floor.
  *
  * Each guard is tested here because each can regress on its own:
  *   - clamp() sends NaN to the low end instead of passing it through. The
@@ -37,7 +43,7 @@ import { VoicePool } from '../../src/core/voicepool';
 import { rng } from '../../src/core/prng';
 import { clamp, EventKind } from '../../src/types';
 import { Adsr, EnvelopeFollower, Smoother } from '../../src/dsp/envelopes';
-import { LadderFilter, OnePole, Svf } from '../../src/dsp/filters';
+import { DcBlocker, LadderFilter, OnePole, Svf } from '../../src/dsp/filters';
 import { KernelEngine, internParam } from '../../src/kernel/engine';
 import type { KernelMessage } from '../../src/kernel/messages';
 
@@ -321,4 +327,85 @@ describe('no engine parameter can poison the audio', () => {
       }
     });
   }
+});
+
+/*
+ * The other half of the same policy, and the half that was missed the first
+ * time. Every unit above takes its bad value through a setter, so the guard
+ * has somewhere to sit. These five take it as an audio SAMPLE, and a sample
+ * is the one input a setter guard can never see. One non-finite sample used
+ * to latch each of them for the rest of the session: NaN fails every
+ * comparison so it takes a branch and lands in the accumulator, and an
+ * infinite sample poisons the accumulator on the next finite sample instead.
+ *
+ * The cost objection was measured rather than argued, because the header
+ * above claims this policy costs "nothing per sample" and these guards do not.
+ * Svf.next over 2.9M samples: 22.9 and 23.0 ms unguarded, 22.7 and 22.8 ms
+ * guarded, alternating runs on a quiet machine. The check is free at the
+ * resolution this can be measured, and the golden renders are unchanged,
+ * which is the proof that no correct audio moved.
+ */
+const SAMPLE_FED: { name: string; make: () => (x: number) => number }[] = [
+  {
+    name: 'EnvelopeFollower',
+    make: () => {
+      const u = new EnvelopeFollower(SR, 0.001, 0.01);
+      return (x) => u.next(x);
+    },
+  },
+  {
+    name: 'Svf',
+    make: () => {
+      const u = new Svf(SR);
+      u.set(1000, 0.7);
+      return (x) => u.next(x);
+    },
+  },
+  {
+    name: 'LadderFilter',
+    make: () => {
+      const u = new LadderFilter(SR);
+      u.set(1000, 0.5);
+      return (x) => u.next(x);
+    },
+  },
+  {
+    name: 'OnePole',
+    make: () => {
+      const u = new OnePole(SR);
+      u.setLowpass(1000);
+      return (x) => u.next(x);
+    },
+  },
+  { name: 'DcBlocker', make: () => {
+      const u = new DcBlocker(SR);
+      return (x) => u.next(x);
+    },
+  },
+];
+
+describe('a non-finite audio sample cannot poison a recursive unit', () => {
+  for (const unit of SAMPLE_FED) {
+    for (const bad of [NaN, Infinity, -Infinity]) {
+      it(`${unit.name} recovers from a ${String(bad)} sample`, () => {
+        const feed = unit.make();
+        for (let i = 0; i < 200; i++) feed(0.3);
+        feed(bad);
+        let last = 0;
+        for (let i = 0; i < 4000; i++) last = feed(0.3);
+        expect(Number.isFinite(last)).toBe(true);
+      });
+    }
+  }
+
+  it('a bad sample does not silence the unit for good', () => {
+    // recovering to NaN-free but stuck at zero would pass the check above
+    for (const unit of SAMPLE_FED) {
+      const feed = unit.make();
+      feed(NaN);
+      let energy = 0;
+      for (let i = 0; i < 4000; i++) energy += Math.abs(feed(i % 2 === 0 ? 0.5 : -0.5));
+      expect(energy).toBeGreaterThan(0);
+    }
+  });
 });
