@@ -892,10 +892,13 @@ this summary.
 and the branch-versus-main split ended.** The 2026-08-23 session's output was
 nine commits on `audit-backlog-2026-08-23`, open as pull request #2; it is now
 on `main`, along with the `esp32c3-platform` adapter. Keeping it on a branch had
-been deliberate, because this repository's CI runs on pull requests and not on
-pushes to `main`, so a branch was the only way the work got a CI run at all.
-That reason still holds for the NEXT piece of work: put it on a branch, not on
-`main`, or it gets no CI. What remains true after the merge is the second half
+been deliberate. The reason recorded at the time was that CI ran on pull
+requests and not on pushes to `main`, so a branch was the only way to get a run
+at all. **That reason is false and was false when written**, which is worth
+more than the merge itself as a lesson: `ci.yml` carries `push: branches:
+[main]` at line 4, and `gh run list --workflow=ci.yml --branch main --limit 60`
+returns 35 push runs on `main`, 34 success and 1 failure. A branch is still
+worth using, for review and for a clean revert, but not for that reason. What remains true after the merge is the second half
 of the old warning, which is the half that matters: npm, the site and both
 registries are still the pre-session state, so `main` carrying the work is not
 the same as anyone being able to use it.
@@ -904,10 +907,18 @@ the same as anyone being able to use it.
   `main`. `git rev-list --count origin/main..origin/audit-backlog-2026-08-23` returned 9, not
   the 8 this line claimed for weeks, and `gh pr view 2` now says MERGED. CI was green on the
   branch head `84e7fbb`, all six jobs, and the full local VERIFY block was then run against the
-  merged tree. Pushing to `main` triggers no CI here, which is why work goes on a branch;
-  see "CI, which has now run" below, and put the next piece of work on a branch for the same
-  reason. Check with `git rev-list --count origin/main..HEAD` rather than trusting this line,
-  which is the sort that goes stale the moment someone commits.
+  merged tree. Check with `git rev-list --count origin/main..HEAD` rather than trusting this
+  line, which is the sort that goes stale the moment someone commits.
+  **A correction, because this bullet carried the wrong reason for weeks.** It used to say
+  "pushing to `main` triggers no CI here, which is why the work is on a branch". That is false
+  and the one command it takes settles it: `ci.yml` has `push: branches: [main]` at line 4, and
+  `gh run list --workflow=ci.yml --branch main --limit 60` returns 35 push runs on `main`, 34
+  success and 1 failure. The failure is `863cd43`, the 0.1.8 release commit. The belief came
+  from a real observation, recorded in a comment in `ci.yml` itself, that the first eleven runs
+  were every one of them `pull_request` and neither the merge of PR #1 nor the push after it
+  produced a run on `main`. Whatever was true then is not true now. A branch is still a
+  reasonable place to put work, for review and for a clean revert; it is not required in order
+  to get a CI run.
 - **`bellowsjs@0.1.9` is on npm and tagged `v0.1.9`**, published 2026-08-21 and checked rather
   than assumed: `npm view bellowsjs version` says 0.1.9, a fresh `npm install bellowsjs@latest`
   into an empty directory resolves 0.1.9, and importing the bare specifier from that install
