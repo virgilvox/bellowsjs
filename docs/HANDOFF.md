@@ -2,7 +2,7 @@
 
 State of the project as of 2026-09-04. Read this first when picking the work back up.
 
-**Read this before anything else: the file you are reading is probably not on `main`.** Everything dated 2026-08-23 below lives on the branch `audit-backlog-2026-08-23`, which is pull request #2, which is OPEN and has not been merged. `origin/main` is still `83b64da` and has not moved since 2026-08-23. So four closed audit findings (a fifth downgraded to partial, and a sixth opened by auditing the others), 38 new tests, one new CI gate and five DSP guards exist in git and in none of the published channels. Re-verified on 2026-09-04, twelve days after the work and ten after the last check, because this file's whole value is that its claims were checked: PR #2 open with 8 commits and CI green on its head (`039f45e`), npm still serving 0.1.9 from 2026-08-21, both embedded registries still on 0.1.2, and bellows.live serving an `llm.txt` byte-identical to `main`'s. Nothing rotted and nothing shipped.
+**Read this before anything else: as of 2026-09-13 this file is on `main`, and the branch warning it used to open with is gone.** Both outstanding branches were merged that day: the nine commits of `audit-backlog-2026-08-23`, which was pull request #2, and `esp32c3-platform`, a new ESP32-C3 adapter for the embedded library. Both went in as merge commits after the full VERIFY block in `docs/KICKOFF.md` was run against the merged tree, which is how the one defect neither branch could see on its own was found: the embedded LLM reference had gone out of sync, because one branch added a header and the other added the gate that catches exactly that. **Merging is not shipping, and the two have been confused here before.** npm still serves `bellowsjs@0.1.9` from 2026-08-21, both embedded registries still serve `Bellows@0.1.2`, and bellows.live is now BEHIND `main` rather than level with it, because the audit work touched `apps/workbench` and there is no deploy on push. The embedded source tree also now carries one header more than the published 0.1.2, so the next embedded release has to be 0.1.3 rather than a re-cut of 0.1.2.
 
 Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` and `docs/AUDIT-2.md` and `docs/AUDIT-3.md` (findings with evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists and where this leads), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session), `docs/prototype-0.html` (the original design probe).
 
@@ -182,8 +182,9 @@ None of these is a research question. Each was investigated, measured and writte
 up on 2026-08-23, and each needs a person to choose because each changes rendered
 audio or ships something.
 
-1. **Merge PR #2, or not.** Eight commits, CI green, tree clean. Everything else
-   in this list assumes it lands.
+1. **Merge PR #2. DONE on 2026-09-13**, as a merge commit, together with the
+   `esp32c3-platform` branch. Nine commits, not the eight this line used to
+   claim. Everything else in this list assumed it landed, and it has.
 2. **The draw-order fix.** One option, not three: make `Scheduler.tick` emit a
    wake's ticks in time order across subscriptions rather than grouped by
    subscription, with a preallocated scratch array because it runs every 25 ms on
@@ -241,8 +242,8 @@ auditing those closures, so genuinely open went 36 to 33: a move of three. Two
 earlier revisions of this paragraph said five were closed and that the total
 moved by four, and both were wrong. The arithmetic that checks out is
 `grep -c "^> \*\*CLOSED\*\* as of 2026-08-23" docs/AUDIT-2.md`, which returns 4,
-against 1 for PARTIAL, and the counts on either side of the branch:
-29/7/53 on `main` against 25/8/57 here. Each carries its
+against 1 for PARTIAL. The counts were 29/7/53 on `main` against 25/8/57 on the
+branch until the 2026-09-13 merge made `main` 25/8/57 as well. Each carries its
 status and evidence under its own heading, so that file is the register and this
 one is not. The figure this entry gave three revisions ago, roughly 73, was wrong
 by 22 and could not be reproduced from any document.
@@ -887,24 +888,26 @@ time none had, and the previous revision of this paragraph still said `main` was
 `e780f39` when it had already become `83b64da`, so read the bullets rather than
 this summary.
 
-**The one thing that HAS changed since 2026-08-23 is where the work lives, and
-it is not in any published channel.** The 2026-08-23 session's output is eight
-commits on `audit-backlog-2026-08-23`, open as pull request #2 and not merged.
-That is deliberate: this repository's CI runs on pull requests and not on pushes
-to `main`, so a branch is the only way the work gets a CI run at all, and the
-owner chose a PR over a direct push. The consequence to hold in mind is that
-`main`, npm, the site and both registries are all still the pre-session state,
-and a reader who checks out `main` will not find any of it, including this
-paragraph.
+**That paragraph described the state up to 2026-09-13, when the work was merged
+and the branch-versus-main split ended.** The 2026-08-23 session's output was
+nine commits on `audit-backlog-2026-08-23`, open as pull request #2; it is now
+on `main`, along with the `esp32c3-platform` adapter. Keeping it on a branch had
+been deliberate, because this repository's CI runs on pull requests and not on
+pushes to `main`, so a branch was the only way the work got a CI run at all.
+That reason still holds for the NEXT piece of work: put it on a branch, not on
+`main`, or it gets no CI. What remains true after the merge is the second half
+of the old warning, which is the half that matters: npm, the site and both
+registries are still the pre-session state, so `main` carrying the work is not
+the same as anyone being able to use it.
 
-- **Nothing is unpushed, and eight commits are unmerged.** Everything local is on
-  `origin/audit-backlog-2026-08-23`; `git status -sb` shows no ahead or behind. What is NOT
-  done is the merge: `git rev-list --count origin/main..origin/audit-backlog-2026-08-23`
-  returns 8, and `gh pr view 2` says OPEN. CI is green on that branch head, run for `039f45e`,
-  all six jobs. Pushing to `main` triggers no CI here, which is why the work is on a branch;
-  see "CI, which has now run" below. Check with `git rev-list --count origin/main..HEAD`
-  rather than trusting this line, which is the sort that goes stale the moment someone
-  commits.
+- **Nothing is unpushed and nothing is unmerged, as of 2026-09-13.** Both branches are in
+  `main`. `git rev-list --count origin/main..origin/audit-backlog-2026-08-23` returned 9, not
+  the 8 this line claimed for weeks, and `gh pr view 2` now says MERGED. CI was green on the
+  branch head `84e7fbb`, all six jobs, and the full local VERIFY block was then run against the
+  merged tree. Pushing to `main` triggers no CI here, which is why work goes on a branch;
+  see "CI, which has now run" below, and put the next piece of work on a branch for the same
+  reason. Check with `git rev-list --count origin/main..HEAD` rather than trusting this line,
+  which is the sort that goes stale the moment someone commits.
 - **`bellowsjs@0.1.9` is on npm and tagged `v0.1.9`**, published 2026-08-21 and checked rather
   than assumed: `npm view bellowsjs version` says 0.1.9, a fresh `npm install bellowsjs@latest`
   into an empty directory resolves 0.1.9, and importing the bare specifier from that install
@@ -1033,7 +1036,7 @@ paragraph.
 - Library test suite: 93 files, 1402 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
-- Embedded: 51 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All seventeen examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library, except `12_DacOut`, which declines with an `#error` because a 4.x has no DAC. This line said 43 and five until 2026-08-20, while the state section fourteen lines up said 51 and 17.
+- Embedded: 52 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All seventeen examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library, except `12_DacOut`, which declines with an `#error` because a 4.x has no DAC. This line said 43 and five until 2026-08-20, while the state section fourteen lines up said 51 and 17.
 - Parity against the TypeScript passes on 41 rows with the PRNG bit exact and the effect input bit exact, plus 428 exactly-compared value rows for the parts that make no sound.
 - The embedded package went through a size pass whose findings are in `docs/HARDWARE.md` under "Making it smaller". Delay buffers are sized exactly rather than rounded to a power of two, which took 25 percent off RAM library-wide with bit-identical output; the oscillator gained per-shape entry points so the linker can drop the residual table a program never reads; and every transcendental now routes through `fm::`, which is what the docs had claimed for months and was not true, so `BELLOWS_FAST_MATH` went from saving nothing on any sketch with an oscillator to saving 23 to 75 percent. Read that section before optimising anything: it also records what was measured and deliberately NOT taken, and why attributing firmware bytes to a header-only library by symbol name does not work.
 

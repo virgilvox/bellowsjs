@@ -30,12 +30,27 @@ to sixteen around a tutorial you can hear without owning a board, and that work
 was then audited too: three overclaims of mine came out of it and three new
 gates went in. Read `docs/DOCS-PLAN.md` and `docs/DOCS-RESEARCH.md` before
 touching the docs: the second is the evidence and the first says what it
-changed. **The whole state below was re-verified on 2026-09-04 and none of it
-had moved in twelve days.** One thing did change and it is not in the bullets:
-the 2026-08-23 session's work is eight commits on `audit-backlog-2026-08-23`,
-open as pull request #2 and NOT merged, so `origin/main`, npm, bellows.live and
-both embedded registries are all still the pre-session state. If you are reading
-this on `main` you cannot see that work; `gh pr view 2` is the check.
+changed. **The whole state below was re-verified on 2026-09-04 and had not
+moved in twelve days. It moved on 2026-09-13.** That session merged both
+outstanding branches into `main`: the nine commits of
+`audit-backlog-2026-08-23`, which was pull request #2, and a new
+`esp32c3-platform` carrying an ESP32-C3 adapter for the embedded library. Both
+went in as merge commits, after the whole VERIFY block below was run against the
+merged tree rather than against either branch. So the branch-versus-main split
+this file used to warn about at every turn is GONE. Any sentence you find
+elsewhere still drawing it is older than this paragraph and should be corrected
+rather than believed.
+
+The merge found one thing neither branch could have found alone: the embedded
+LLM reference was out of sync, because the adapter added a header and the gate
+that would have caught it only exists in CI because the OTHER branch added it.
+That is the argument for verifying the merged tree and not the two halves.
+
+What has NOT moved is everything downstream of git. npm still serves
+`bellowsjs@0.1.9`, both embedded registries still serve `Bellows@0.1.2`, and
+bellows.live is now BEHIND `main` rather than level with it, because the audit
+branch touched `apps/workbench` and there is no deploy on push. Merging is not
+shipping, and this file has confused the two before.
 
 Three claims this repository stated as hard facts were false when checked, and
 all three were true when written. CI HAS RUN, dozens of times, and HAS BEEN
@@ -59,10 +74,12 @@ unit and this is a float library.
 
 If you do not have a board, in the order I would take them:
 
-  3. Three audit findings nobody has looked at, roughly an hour. They were
-     never reached rather than looked at and left, and the shape of work that
-     closes them worked sixteen times in one day. Cheapest real progress here.
-  2. The 20 findings tagged `[changes audio]` in `docs/AUDIT-2.md`. The bulk of
+  2. The 19 findings tagged `[changes audio]` in `docs/AUDIT-2.md`, which is 16
+     open and 3 partial, counted from the file rather than from this sentence.
+     This list used to open with a third item, "three audit findings nobody has
+     looked at", and it was stale: those three were taken on 2026-08-23 and
+     `HANDOFF.md` has said "Done" ever since, thirteen lines from this one
+     saying they were the cheapest work available. The bulk of
      what is left and the expensive kind: the string waveguide's bass pitch,
      the `rng` capture lifetime, engine parameters that are silent when
      misspelled. Several want a decision rather than a fix.
@@ -80,8 +97,8 @@ WHAT IS TRUE TODAY, and each of these is checkable in one command:
   helps a beginner measurably slows down somebody who already knows the
   material. If a future change leaks hand-holding into the reference, that is
   the failure condition, and `docs/DOCS-PLAN.md` says so.
-- 33 audit findings are open, 25 plus 8 partial, ON THE BRANCH. On `main` the
-  register still reads 36. `docs/AUDIT-2.md` is the register: every finding
+- 33 audit findings are open, 25 plus 8 partial, and since the 2026-09-13 merge
+  `main` says so too. `docs/AUDIT-2.md` is the register: every finding
   carries a status and its evidence under its own heading. Do not re-derive the
   count from HANDOFF, which points at the file. 19 are tagged `[changes audio]`
   and the `[under ten minutes]` tag is empty for the first time. It was 51 on
@@ -97,10 +114,11 @@ WHAT IS TRUE TODAY, and each of these is checkable in one command:
 - `bellowsjs@0.1.9` is on npm and tagged, and `Bellows@0.1.2` is on both embedded registries.
   Publishing to npm needs a token that bypasses 2FA or an `--otp=<code>`: a plain `npm publish`
   packs the tarball and then returns E403, which reads like a permissions problem.
-- `main` is pushed and CI is green on it, and there are eight unmerged commits
-  behind PR #2 with CI green on their head. bellows.live was deployed on
-  2026-08-21 and serves references byte-identical to `main`, compared by content
-  on 2026-09-04 and not by the version line. **The site is a separate
+- `main` carries everything: there are no unmerged branches, and PR #2 is
+  closed by the merge rather than open. bellows.live was deployed on 2026-08-21
+  and was byte-identical to `main` when compared by content on 2026-09-04, but
+  the 2026-09-13 merge moved `apps/workbench` underneath it, so **the site is
+  STALE right now and needs a deploy.** **The site is a separate
   question from the push and it has been behind before.** There is no
   deploy-on-push, so a commit touching `apps/workbench` leaves it stale until
   someone runs `doctl apps create-deployment 88dc2901-3334-47d9-9cb5-8b2f1105294d`.
@@ -178,7 +196,7 @@ THE RULES THAT MATTER HERE, learned by being burned:
 VERIFY, and none of these is optional:
 
 ```
-npm test -w packages/bellows                        1402 tests on the branch, 1364 on main
+npm test -w packages/bellows                        1402 tests in 93 files, all green
 npx tsc --noEmit -p packages/bellows                clean, and it covers the TESTS,
                                                     which the build's tsconfig does not
 npx vue-tsc --noEmit -p apps/workbench              clean
@@ -285,7 +303,7 @@ WHERE THINGS STAND
   green, and the whole suite passing. The file and test counts live in docs/HANDOFF.md and
   nowhere else, because nothing checks them and two copies of a count are two chances to be
   wrong: this prompt used to carry a third and a fourth, and all four disagreed.
-- packages/bellows-embedded is the C++ port. 51 headers, compiling standalone and combined for
+- packages/bellows-embedded is the C++ port. 52 headers, compiling standalone and combined for
   Cortex-M7 and M4. All seventeen examples build as real Teensy 4.1 firmware except the one that
   declines with an #error because a 4.x has no DAC, and examples/daisy_onekick links against real
   libDaisy. This line said 43 headers and five examples until 2026-08-20, thirteen lines away
@@ -509,7 +527,7 @@ VERIFY. This short list belongs to the objective above and is NOT the full block
 current one is under "VERIFY, and none of these is optional" near the top of this file, and
 it is roughly twice as long. This one carried "34 audio rows" until 2026-08-21, a figure two
 sessions stale, which is what a second copy of a verify list is for.
-  npm test -w packages/bellows                          1402 on branch, 1364 on main
+  npm test -w packages/bellows                          1402 tests in 93 files
   npm run typecheck -w apps/workbench                   vue-tsc
   npm run check:examples -w apps/workbench              the 49 site examples still resolve
   npm run gen:sim -w apps/workbench && git diff --exit-code -- apps/workbench/src/lib/sim/sources.gen.ts

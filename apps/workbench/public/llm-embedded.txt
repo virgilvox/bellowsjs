@@ -1548,6 +1548,23 @@ class DaisyAudio
     template <class Board> static void Start(Board& hw, Render& render)
     void Callback(::daisy::AudioHandle::InputBuffer in, ::daisy::AudioHandle::OutputBuffer out, size_t size)
 
+### bellows/platform/esp32c3.h
+ESP32-C3 glue: a bellows render behind the Arduino ESP_I2S class.
+
+constants:
+  uint32_t kEsp32SampleRateHz = BELLOWS_ESP32_SAMPLE_RATE
+  int kEsp32BlockSize = BELLOWS_ESP32_BLOCK_SIZE
+
+functions:
+  float Esp32SampleRate()
+
+template <class Render>
+class Esp32I2sAudio
+  public:
+    void Init(I2SClass& i2s, Render& render)
+    bool Start(I2SClass& i2s, Render& render, int bclk, int lrclk, int dout)
+    bool Fill()
+
 ### bellows/platform/teensy.h
 Teensy glue: one custom AudioStream node that runs a bellows render.
 
