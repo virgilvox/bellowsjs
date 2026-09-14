@@ -138,6 +138,15 @@ jobs:
         # when it is missing rather than passing quietly, so on this runner
         # only the Arduino mirror half is actually checked.
         run: npm run check:package -w packages/bellows-embedded
+      - name: the ESP32-C3 adapter compiles, on target and off
+        # Two halves. Half one is host only and always runs: off an ESP32 the
+        # adapter has to expand to nothing, and it is what catches a guard
+        # widened to fire on every target, which would make a Teensy build
+        # demand ESP_I2S.h. Half two needs arduino-cli and the esp32 core and
+        # SKIPs here with a message rather than passing quietly, so this
+        # runner checks one of the two guard directions, not both. A guard
+        # narrowed to fire nowhere is caught only by the half that skips.
+        run: npm run check:esp32c3 -w packages/bellows-embedded
       - name: the LLM reference is in sync with the library
         # public/llm.txt is generated from the built bundle and its type
         # declarations, is served at /llm.txt, and says of itself that it is

@@ -86,6 +86,30 @@ as a syntax check. A header is not done until this is clean.
 ./tools/check-header.sh bellows/fx/delay.h bellows/fx/saturator.h
 ```
 
+## check-esp32c3.sh
+
+Compile check for `src/bellows/platform/esp32c3.h`, in two halves, because the
+two things that can break there break for different reasons.
+
+```
+./tools/check-esp32c3.sh
+```
+
+`npm run check:esp32c3` is the same thing.
+
+Half one needs only a host compiler and always runs. It compiles the header
+off target, next to the umbrella `Bellows.h`, with `-Wall -Wextra -Werror`.
+That is the half that catches an edit to the target guard, which is the
+failure mode that would otherwise surface as a Teensy or Daisy build suddenly
+demanding `ESP_I2S.h`.
+
+Half two needs `arduino-cli` and the `esp32:esp32` core, and prints SKIP with
+a reason when either is missing rather than passing in silence. It builds a
+real ESP32-C3 image: one `Kick` through `Esp32I2sAudio`, at the four flags
+this part needs, on the FQBN with `CDCOnBoot=cdc`. That option is not
+decoration. IO20 and IO21 are UART0 and carry I2S on this board, so the
+hardware console does not exist and USB CDC is the only serial.
+
 ## check-params.mjs
 
 Compares each C++ `struct Params` default against the TypeScript ParamSpec

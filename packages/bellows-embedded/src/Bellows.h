@@ -119,6 +119,7 @@
 #include "bellows/kernel.h"
 #include "bellows/voicepool.h"
 
-/* Board glue. Both self-guard and vanish off target. */
+/* Board glue. All three self-guard and vanish off target. */
 #include "bellows/platform/daisy.h"
+#include "bellows/platform/esp32c3.h"
 #include "bellows/platform/teensy.h"

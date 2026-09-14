@@ -5,6 +5,7 @@
   "description": "Header-only C++ port of the bellows DSP core for 32-bit microcontrollers. Not published to npm; distributed through the Arduino Library Manager and PlatformIO registry.",
   "scripts": {
     "gen:tables": "node tools/gen-tables.mjs",
+    "check:esp32c3": "./tools/check-esp32c3.sh",
     "size": "./tools/size-report.sh",
     "parity": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/parity.mjs",
     "parity:check": "cd ../bellows && npx vite-node ../bellows-embedded/test/parity/parity.mjs --check",
