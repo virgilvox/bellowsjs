@@ -33,9 +33,9 @@ Three things follow from the contract and are worth holding on to.
 
 The range column in the tables below is the browser's \`ParamSpec\` range, which is what each default was chosen against. The C++ struct enforces nothing. A few engines clamp internally where a bad value would break the DSP rather than just sound wrong: \`Va\` clamps \`shape\` to 0..3 and \`pan\` to -1..1, \`Pluck\` clamps \`decay\` to 0.05..20 and \`pick_pos\` to 0..0.95, \`Hat\` clamps its highpass to 0.45 of the sample rate. Everywhere else, out of range is your problem.
 
-## Ten of eighteen, and which eight are missing
+## Fourteen of nineteen, and which five are missing
 
-The browser has eighteen engine ids. Ten are ported:
+The browser has nineteen engine ids. Fourteen are ported:
 
 | header | classes |
 | --- | --- |
@@ -47,24 +47,26 @@ The browser has eighteen engine ids. Ten are ported:
 | \`bellows/engines/modal.h\` | \`Modal\` |
 | \`bellows/engines/formant.h\` | \`Formant\` |
 | \`bellows/engines/westcoast.h\` | \`WestCoast\` |
+| \`bellows/engines/additive.h\` | \`Additive<kMaxPartials>\` |
+| \`bellows/engines/harmonic.h\` | \`Harmonic\` |
+| \`bellows/engines/wavetable.h\` | \`Wavetable\` |
+| \`bellows/engines/waveguide.h\` | \`Waveguide<kMinFreqHz, kSampleRate, kSecondPolarization>\`, the browser's \`string\` |
 
 Not ported, with the reason:
 
 | browser id | why not |
 | --- | --- |
-| \`additive\`, \`harmonic\` | double-precision phase accumulators, free on Cortex-M7 and six times the flash on a single-precision part |
-| \`wavetable\` | 320 KB of generated mipmap, which needs a build step to put it in flash |
 | \`granular\` | a buffer to graze on, which means host-side audio |
-| \`string\` | 24 body-mode biquads and two delay lines per voice; medium difficulty, not started |
 | \`noise\` | small and simply not done yet |
 | \`clap\`, \`tom\` | \`drums.ts\` has five drums, \`drums.h\` has three |
+| \`vocal\` | the singing voice is TypeScript first: its consonants and phrase timing are still changing, and \`sing()\` plans lyrics on the main thread. A C++ port is the natural next step |
 | \`sampler:*\`, soundfonts | SF2 and SFZ parsing is host-side work. Parse on a computer and ship a flat binary bank to SD |
 
 This matters when you read the browser docs, because those pages assume two things that stop being true here.
 
-The first is that engines are interchangeable by editing one word. In the browser \`b.voice('modal')\` and \`b.voice('pluck')\` differ by a string, so a sequence written against one plays on any other. Here the engine is a type. Swapping it is a declaration change and a rebuild, and eight of the eighteen have no type to swap to.
+The first is that engines are interchangeable by editing one word. In the browser \`b.voice('modal')\` and \`b.voice('pluck')\` differ by a string, so a sequence written against one plays on any other. Here the engine is a type. Swapping it is a declaration change and a rebuild, and five of the nineteen have no type to swap to.
 
-The second is that everything in the roster exists. A preset built on \`additive\`, or a part written for \`string\`, has no counterpart on a board. The notes port (degrees, scales, patterns, seeds all cross exactly), the renderer may not.
+The second is that everything in the roster exists. A part written for \`granular\`, \`noise\` or \`vocal\` has no counterpart on a board. The notes port (degrees, scales, patterns, seeds all cross exactly), the renderer may not.
 
 ## Kick
 

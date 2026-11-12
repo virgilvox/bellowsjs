@@ -60,6 +60,21 @@ for (const [family, list] of lib.presetsByFamily()) {
   presets += '\n';
 }
 
+/* index: IPA, wrapped, so a reader can set the vocal engine's 'phoneme' param by hand */
+let phonemes = '';
+{
+  let line = '';
+  lib.VOCAL_PHONEMES.forEach((p, i) => {
+    const cell = `${i} ${p}`;
+    if (line.length + cell.length + 2 > 76) {
+      phonemes += line.trimEnd() + '\n';
+      line = '';
+    }
+    line += cell + ', ';
+  });
+  phonemes += line.replace(/, $/, '');
+}
+
 const scaleNames = Object.keys(lib.SCALES).join(', ');
 const chordNames = Object.keys(lib.CHORD_TYPES).join(', ');
 
@@ -70,7 +85,7 @@ analysis, and I/O. One AudioWorklet kernel hosts every voice and effect; musical
 logic runs on the main thread and compiles to sample-accurate events. The DSP
 core has zero browser dependencies, so offline rendering and analysis also run
 in Node. Every stochastic decision flows from named, seeded PRNG streams.
-License Apache-2.0. Site: https://bellows.live  Repo: https://github.com/virgilvox/bellowsjs
+License MIT. Site: https://bellows.live  Repo: https://github.com/virgilvox/bellowsjs
 
 This file is generated from the library source and its type declarations.
 Everything in it is exact for version ${pkgJson.version}.
@@ -107,6 +122,9 @@ Notes on the model:
   2 meaning two beats) or { seconds }.
 - Instrument.on(note, vel?, at?) returns a note id for indefinite holds;
   Instrument.off(id, at?) releases it.
+- Instrument.sing(lyrics, notes, { at, dictionary, scale }) sings on an
+  instrument made with b.voice('vocal') and throws on any other engine. See
+  Singing and lyrics below.
 - b.clock.at('16n', (t, step) => ...) fires ahead of every subdivision tick;
   schedule with the provided t and placement is sample accurate even under
   main-thread load or background-tab timer throttling.
@@ -147,6 +165,53 @@ or b.sf2Instrument(buffer, bank, program) or await b.instrument('sf2:url#0:0').
 Sampler engines expose SAMPLER_PARAMS:
 ${paramTable(lib.SAMPLER_PARAMS)}
 Granular over your own buffer: b.granular(float32Data, sampleRate, params?).
+
+## Singing and lyrics
+
+const singer = b.voice('vocal', { body: 1 });          // 0 male, 1 female, 2 child
+const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
+  { note: 'C4', dur: '4n' }, { note: 'C4', dur: '4n' }, { note: 'G4', dur: '4n' },
+  { note: 'G4', dur: '4n' }, { note: 'A4', dur: '4n' }, { note: 'A4', dur: '4n' },
+  { note: 'G4', dur: '2n' },
+], { at: b.now() + 0.5 });
+
+- notes are laid end to end from 'at' (the first note's beat; default as
+  note()), each dur through the tempo map and each pitch through b.tuning.
+  { note: null, dur } is a rest. vel is per note; a phrase plays at its
+  first note's velocity.
+- lyrics: English words (letter-to-sound rules, or b.dictionary /
+  opts.dictionary, a ReadonlyMap from lowercase word to CMUdict ARPAbet such
+  as parseCmudict(text) returns; bellows ships no dictionary), and IPA
+  between slashes, which sets the sounds directly. A hyphen inside a word splits
+  syllables, a free-standing '-' or '~' holds the vowel onto the next note,
+  and . , ; : ! ? or a line break ends a phrase with a breath. A Syllable[]
+  is accepted in place of text.
+- Each vowel lands on its note time; onset consonants are sung before it.
+  The returned plan has phrases (spans of IPA with start/end seconds, and
+  pitches) and leadIn, the most any phrase starts before its first note:
+  live, call at least that far ahead. plan.unknown lists IPA the engine has
+  no phoneme for; those spans keep the sound before them. plan.trimmed is
+  the seconds cut because the instrument was still singing an earlier line
+  there: leave the next line's leadIn free (a rest, a shorter last note).
+  Any phoneme or bend param() change, untimed included, also reaches a line
+  that is singing at that moment. Live with no at, the line starts as soon
+  as its opening consonants can all still sound.
+- Inside a clock callback, b.render() replays sing() exactly as note().
+- Each phrase is one note with Param events inside: 'phoneme' (an index
+  into VOCAL_PHONEMES; vocalPhonemeIndex(ipa)) and 'bend' in semitones. One
+  instrument sings one line at a time; give a harmony its own voice(). A
+  line sings at its own pitches whatever the channel's bend, and when it
+  ends the channel gets back the phoneme and bend it was created with or
+  last given by an untimed param().
+- Without the facade: planSung(notes in seconds and Hz, syllables) gives the
+  plan, sungEvents(plan, { channel, phonemeParam: internParam('phoneme'),
+  bendParam: internParam('bend') }) gives kernel events for renderOffline.
+  lyricsToSyllables(text, { dictionary }), readLyrics(text, frontEnds) with
+  englishFrontEnd(opts) and ipaFrontEnd, tokenizeIpa(ipa),
+  arpabetToSegments(phones) and parseCmudict(text) are the lyric layer.
+
+VOCAL_PHONEMES ('_' is silence; append only, so a saved index keeps its sound):
+${phonemes}
 
 ## Instrument presets
 

@@ -3,9 +3,9 @@ import type { DocPage } from '../types';
 const page: DocPage = {
   slug: 'engines',
   title: 'Engines',
-  blurb: 'The eighteen built-in instruments and how to shape them.',
+  blurb: 'The nineteen built-in instruments and how to shape them.',
   prev: 'playing-notes',
-  next: 'presets',
+  next: 'singing',
   body: `
 By the end of this page you can pick an engine for any musical job and reshape it while it plays.
 
@@ -55,10 +55,25 @@ Special voices:
 | \`noise\` | filtered noise synth with key tracking, five colors |
 | \`westcoast\` | wavefolder into a vactrol-style low-pass gate |
 | \`formant\` | vowel synthesis with vibrato and breath |
+| \`vocal\` | a singing voice: consonants and vowels for male, female and child bodies, sung from lyrics with \`sing()\` |
 | \`granular\` | 64-grain clouds over a buffer; see [Soundfonts and samples](/docs/soundfonts-and-samples) |
 | \`harmonic\` | harmonic-plus-noise voice with brightness, even/odd balance, and portamento |
 
 Sample-backed engines get ids of the form \`sampler:<bankId>\` and \`granular:<bankId>\` once you register audio with the kernel; the [Soundfonts and samples](/docs/soundfonts-and-samples) page covers them.
+
+## Singing
+
+The \`vocal\` engine plays a note like any other engine, and sings "ah". Give it words with \`sing()\`:
+
+\`\`\`js
+const singer = b.voice('vocal', { body: 1 });   // 0 male, 1 female, 2 child
+singer.sing('twinkle twinkle', [
+  { note: 'C4', dur: '4n' }, { note: 'C4', dur: '4n' },
+  { note: 'G4', dur: '4n' }, { note: 'G4', dur: '4n' },
+], { at: b.now() + 0.5 });
+\`\`\`
+
+[Singing](/docs/singing) covers lyrics, timing, pronunciation, the sounds the voice knows, and harmony.
 
 ## Parameters
 

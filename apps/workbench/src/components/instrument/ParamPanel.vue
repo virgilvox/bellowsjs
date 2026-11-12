@@ -14,15 +14,23 @@ import {
   paramSpecsFor,
   resetParams,
   setParam,
+  stepNamesFor,
   toSlider,
 } from '../../lib/instrument-store';
 
 const specs = computed(() => paramSpecsFor(instState.engineId));
 
+function names(name: string): readonly string[] | null {
+  return stepNamesFor(instState.engineId, name);
+}
+
 function onSlide(name: string, e: Event): void {
   const t = (e.target as HTMLInputElement).valueAsNumber;
   const spec = specs.value.find((s) => s.name === name);
-  if (spec) setParam(name, fromSlider(spec, t));
+  if (!spec) return;
+  const v = fromSlider(spec, t);
+  // a named param moves in whole steps, so the label always matches the sound
+  setParam(name, names(name) ? Math.round(v) : v);
 }
 </script>
 
@@ -44,7 +52,7 @@ function onSlide(name: string, e: Event): void {
             :value="toSlider(spec, instState.params[spec.name] ?? spec.default)"
             @input="onSlide(spec.name, $event)"
           />
-          <output>{{ formatValue(spec, instState.params[spec.name] ?? spec.default) }}</output>
+          <output>{{ formatValue(spec, instState.params[spec.name] ?? spec.default, names(spec.name)) }}</output>
         </div>
       </div>
     </div>

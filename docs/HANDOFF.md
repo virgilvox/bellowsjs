@@ -6,6 +6,24 @@ State of the project as of 2026-09-04. Read this first when picking the work bac
 
 Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` and `docs/AUDIT-2.md` and `docs/AUDIT-3.md` (findings with evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists and where this leads), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session), `docs/prototype-0.html` (the original design probe).
 
+## The 2026-11-11 and 12 session: a singing voice, and a new license
+
+**Superseded the same day, read this first.** The formant voice described below was replaced on 2026-11-12. `vocal` is now an articulatory voice: our planner drives CHIMERA's 17 articulators, CHIMERA's exact geometry gives the shape, and a junction airway (a waveguide that carries the air itself, at the output rate) makes the sound. Design and every measurement: `docs/VOICE-2.md`, sections "The junction airway, in the library" and after. Open there: click events at about 2.6 per render against CHIMERA (most are real bursts at this planner's own times), /θ/ too bright in two bodies, `ring` weaker than the prototype (+1.4 dB), a little allocation when the body changes at note-on and as the planner rebuilds at each phoneme, and the embedded port. The two "not done" items about voice-bar decay and 8 to 16 kHz vowel noise below are done.
+
+Uncommitted at the time of writing; check `git status`. Plan of record and every measurement: `docs/VOICE.md`.
+
+- **What was added.** A `vocal` engine (Klatt-style formant synthesis with consonants; glottal source ported from CHIMERA, MIT), a pure lyric layer in `src/lyrics`, and `Instrument.sing(lyrics, notes, opts)` through `src/sing.ts`. It costs 0.54 of a `formant` voice. The workbench gained a Singing docs page, two examples (`vocal-sing`, `vocal-harmony`), and phoneme names on the instrument page.
+- **How it was checked.** A build workflow, then three reviewers (21 findings, all fixed), then two independent audits of the fixes. Those found and fixed: a mid-move overshoot in `CritDamp.setOmega` (a bend went 57 semitones past its target), a NoteOff ordering bug between lines posted out of order, and early stop releases that deleted a /t/ after a short rest. Every fix has a test that fails without it.
+- **License: MIT since 2026-11-12, by the owner's choice** (PRD item 8), so attribution travels with every copy. The CHIMERA-derived files keep Jameson Hodge's MIT notice in `packages/bellows/THIRD_PARTY_NOTICES.md` and a banner in every bundle. The embedded library has no CHIMERA code. Published versions stay Apache-2.0.
+- **Decided in the owner's place and open to reversal:** the bundle budget moved to 30,000 bytes for the voice (VOICE.md decision 7; the standalone gzip grew 26.6 percent), and no vocal presets.
+- **Not done:**
+  - Nobody has listened to it.
+  - Shorter consonant timings for fast passages: voiceless stops at sixteenths lose about 19 dB.
+  - Voice-bar decay through a closure, and vowel noise from 8 to 16 kHz.
+  - A lyric cursor so patterns and MIDI can sing one syllable per note.
+  - The embedded port: feasible on M7 boards and not on the ESP32-C3 (VOICE.md decision 6).
+  - Asking Jameson Hodge whether he is happy with the credit.
+
 ## The 2026-08-13 session, which changed the shape of the project
 
 Still accurate, and everything it says was re-verified on 2026-08-16 except
@@ -813,7 +831,7 @@ Kept short. The full record is in the commits.
 - **The three unmeasured examples.** `16_WorkstationPiezo`, `17_WorkstationI2S`
   and `21_Presets` had no size sketch, no README rows and no entry in the `ALL`
   list. All three now have all of it and `check-docs` covered 388 figures at the
-  time, 545 now. Two
+  time, 547 now. Two
   things fell out: 16 and 17 have no logic header at all, so `p14_` and `p15_`
   reconstruct the composition rather than sharing the example's source, the only
   rows in the size table where the number and the code are not the same text;
@@ -1044,9 +1062,9 @@ the same as anyone being able to use it.
     `arduino-cli` prints on failure too, and called two broken examples fine. The 0.1.1 run on
     2026-08-20 also diffed the zip against the mirror clone that had been compiled by hand,
     `diff -rq` reporting only `.git` and `.gitignore`.
-- Library test suite: 93 files, 1402 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- Library test suite: 112 files, 1810 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
-- The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 49 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
+- The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 52 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
 - Embedded: 52 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All seventeen examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library, except `12_DacOut`, which declines with an `#error` because a 4.x has no DAC. This line said 43 and five until 2026-08-20, while the state section fourteen lines up said 51 and 17.
 - Parity against the TypeScript passes on 41 rows with the PRNG bit exact and the effect input bit exact, plus 428 exactly-compared value rows for the parts that make no sound.
 - The embedded package went through a size pass whose findings are in `docs/HARDWARE.md` under "Making it smaller". Delay buffers are sized exactly rather than rounded to a power of two, which took 25 percent off RAM library-wide with bit-identical output; the oscillator gained per-shape entry points so the linker can drop the residual table a program never reads; and every transcendental now routes through `fm::`, which is what the docs had claimed for months and was not true, so `BELLOWS_FAST_MATH` went from saving nothing on any sketch with an oscillator to saving 23 to 75 percent. Read that section before optimising anything: it also records what was measured and deliberately NOT taken, and why attributing firmware bytes to a header-only library by symbol name does not work.
@@ -1113,7 +1131,7 @@ that happen to pass:
   the four Dattorro plate constants, the grain pool size, the shelf corner frequency, six
   analysis constants and the voice-stealing order** all now have gates. Every one of them
   survived a one-step mutation before this pass.
-- **The site's 49 examples are checked against the library**, in CI, by
+- **The site's 52 examples are checked against the library**, in CI, by
   `apps/workbench/scripts/check-examples.mjs`.
 
 Two habits from this pass worth keeping, both learned by being burned:
@@ -1343,7 +1361,7 @@ before the list was renumbered and a dangling one after.
 | `npm run size` | flash and RAM per sketch, `cortex-m7` or `cortex-m4` | the whole no-registry design argument |
 | `./tools/check-header.sh <h>` | one header compiles standalone, `-Wall -Wextra` | header hygiene; note it instantiates nothing |
 | `node tools/gen-tables.mjs --check` | generated headers match the TypeScript ParamSpecs | new `Eq6` class the moment it appeared |
-| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md`, `docs/ENGINEERING.md`, `examples/OUTPUTS.md`, both near-identical top-level `README.md` files and four files under `apps/workbench`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath`, `vitest list`, the board's CPU table and the board build matrix: 545 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 45 of 46 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
+| `node tools/check-docs.mjs --check` | every figure the harnesses print, wherever a document quotes it: `docs/HARDWARE.md`, the embedded `README.md`, `examples/README.md`, this file, `docs/KICKOFF.md`, `docs/ENGINEERING.md`, `examples/OUTPUTS.md`, both near-identical top-level `README.md` files and four files under `apps/workbench`, against the size report, the sketch symbol tables, `parity`, `tables`, `fastmath`, `vitest list`, the board's CPU table and the board build matrix: 547 of them | six stale rows in HARDWARE on its first run; then 10 stale README rows and 3 stale prose figures when it was widened; then, when it grew past the size report, 4 of 5 example rows, both symbol-breakdown tables, three parity rows and the toolchain version; then, when prose started matching the paragraph rather than the line, five claims that a rewrap had silently switched off, and the fact that the two ARM toolchains installed here disagree on 45 of 46 rows. Still does NOT cover the whole-firmware Teensy table, the Daisy table, the ns tables, the board capacity table, the newlib-against-fastmath byte comparison or the bundle size in the release ritual |
 | `npx vitest run test/integration/engine-tuning.test.ts` | every pitched engine plays the note it was given, to 2 cents | proves the fractional-delay tuning is real: an integer-rounded loop is 28 cents flat at E7 |
 | `npm run check:catalogue` (workbench) | the four simulator lists agree: `FIRMWARES`, the `case` labels in `buildVoice`, `VOICE_CAVEATS`, `GROUP_ORDER` | nothing yet; built the day three entries were added, because both failures are silent |
 | `npm run check:presets` (workbench) | all 50 presets render offline: audible, finite, at pitch, naming only registered parameters | nothing yet; the mutation that renames a preset parameter leaves it audible at the right pitch and nothing else catches it |

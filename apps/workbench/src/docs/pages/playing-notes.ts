@@ -83,6 +83,10 @@ lead.chord(['C4', 'E4', 'G4'], { dur: '2n', vel: 0.7 });
 
 \`chord(notes, opts)\` plays several notes with shared options. For strums, schedule single notes with staggered \`at\` times. The [Theory](/docs/theory) page builds chord arrays for you from symbols and roman numerals.
 
+## Words
+
+An instrument on the \`vocal\` engine has one more way to play: \`sing(lyrics, notes, opts?)\` takes a lyric and a list of \`{ note, dur }\` and sings the words on the notes, each vowel on its beat. The notes take every pitch form above. [Singing](/docs/singing) has the rest.
+
 ## Channel gain and pan
 
 \`\`\`js

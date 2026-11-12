@@ -5,7 +5,7 @@ analysis, and I/O. One AudioWorklet kernel hosts every voice and effect; musical
 logic runs on the main thread and compiles to sample-accurate events. The DSP
 core has zero browser dependencies, so offline rendering and analysis also run
 in Node. Every stochastic decision flows from named, seeded PRNG streams.
-License Apache-2.0. Site: https://bellows.live  Repo: https://github.com/virgilvox/bellowsjs
+License MIT. Site: https://bellows.live  Repo: https://github.com/virgilvox/bellowsjs
 
 This file is generated from the library source and its type declarations.
 Everything in it is exact for version 0.1.9.
@@ -42,6 +42,9 @@ Notes on the model:
   2 meaning two beats) or { seconds }.
 - Instrument.on(note, vel?, at?) returns a note id for indefinite holds;
   Instrument.off(id, at?) releases it.
+- Instrument.sing(lyrics, notes, { at, dictionary, scale }) sings on an
+  instrument made with b.voice('vocal') and throws on any other engine. See
+  Singing and lyrics below.
 - b.clock.at('16n', (t, step) => ...) fires ahead of every subdivision tick;
   schedule with the provided t and placement is sample accurate even under
   main-thread load or background-tab timer throttling.
@@ -77,6 +80,7 @@ import { Tuning } from './theory/tuning';
 import type { FxSpec, KernelMessage, MeterFrame, SamplerZoneData } from './kernel/messages';
 import { type RenderedAudio } from './render/offline';
 import { SoundFont } from './io/sf2';
+import type { PronouncingDictionary, SungPlan, Syllable } from './lyrics/types';
 export interface BootOptions {
     seed?: string;
     context?: AudioContext;
@@ -107,6 +111,52 @@ export type NoteValue = number | string | {
     degree: number;
     octave?: number;
 };
+/** One note of a sung line. `note: null` is a rest: it takes time and no syllable. */
+export interface SingNote {
+    note: NoteValue | null;
+    /** Beats, notation ('8n', '3/8'), or { seconds }, through the tempo map. */
+    dur: TimeValue | {
+        seconds: number;
+    };
+    /** Velocity 0..1, default 0.8. A phrase plays at its first note's. */
+    vel?: number;
+}
+export interface SingOptions {
+    /**
+     * Context time of the first note's beat, where its vowel lands. Left out,
+     * a live line starts as soon as its opening consonants can all still
+     * sound, and a line in a clock callback replayed by render() starts at the
+     * callback's tick.
+     */
+    at?: number;
+    /** Pronouncing dictionary for this line, over b.dictionary. */
+    dictionary?: PronouncingDictionary;
+    /** Scale for { degree } notes, as note()'s third argument. Default C major. */
+    scale?: Scale;
+    /**
+     * American flaps and dark l on English words ("little" sings lɪ.ɾəɫ), default true. False
+     * keeps every /t d l/ as written, as classical diction does. IPA is sung as written either way.
+     */
+    allophones?: boolean;
+}
+/**
+ * What sing() planned and posted. `phrases` are the plan, each vowel on its
+ * beat. `leadIn` is the longest any phrase starts before its own first
+ * beat, which can be more than the plan's own lead-in: a phrase that opens
+ * on an aspirated p, t or k releases it early, so its vowel is voiced on the
+ * beat. Live, call at least that far ahead of the first beat.
+ */
+export interface SingResult extends SungPlan {
+    /** IPA the vocal engine has no phoneme for, each once; those spans keep the sound before them. */
+    unknown: string[];
+    /**
+     * Seconds of the line left out because the instrument was still singing
+     * an earlier line there, or had a later one posted already: the opening
+     * consonants that would have overlapped it, or whole phrases. 0 when the
+     * instrument was free.
+     */
+    trimmed: number;
+}
 export type FxInput = string | [string, Record<string, number>] | FxSpec;
 export declare class Bellows {
     readonly ctx: AudioContext;
@@ -127,6 +177,8 @@ export declare class Bellows {
     private nextBus;
     private nextNote;
     private internedParams;
+    /** sing() state per vocal channel, live. A render keeps its own copy. */
+    private singing;
     private localDefs;
     private lastMeter;
     private gone;
@@ -139,6 +191,13 @@ export declare class Bellows {
     private initialBpm;
     private initialMeter;
     tuning: Tuning;
+    /**
+     * Pronunciations for sing(): lowercase word to CMUdict ARPAbet, as
+     * parseCmudict() returns. bellows ships none. While this is null, words
+     * go through letter-to-sound rules, and IPA between slashes sets the
+     * sounds directly either way.
+     */
+    dictionary: PronouncingDictionary | null;
     /** boot() made the context, so dispose() is the one allowed to close it */
     private ownsContext;
     private constructor();
@@ -254,6 +313,33 @@ export declare class Bellows {
         seconds: number;
     }, atSeconds: number): number;
     noteEvents(channel: number, note: NoteValue, opts: NoteOptions, scale?: Scale): void;
+    /**
+     * Plan a sung line and post it: durations through the tempo map, pitches
+     * through the tuning, lyrics through the front ends, then one note per
+     * phrase with `phoneme` and `bend` events inside it (see src/sing.ts).
+     * Instrument.sing() is the API; this checks no engine.
+     *
+     * @internal
+     */
+    singEvents(channel: number, lyrics: string | readonly Syllable[], notes: readonly SingNote[], opts?: SingOptions): SingResult;
+    /**
+     * A sung line's notes laid end to end from `at`, in seconds and Hz. With
+     * the transport running each duration is measured from where its note
+     * starts, so a tempo ramp under the line stretches the later notes; with
+     * it stopped the line's own beats run through the tempo map from its
+     * start, as a stopped note() measures from beat 0.
+     */
+    private sungNotes;
+    /** The sing() state of a channel in the current context, made on first use. */
+    private singState;
+    /**
+     * An untimed phoneme or bend on a vocal channel becomes the channel's own,
+     * which sung lines hand back when they end. A line already posted would
+     * still hand back the old value at its end, so the new one is posted
+     * there too, after that line's resets, unless another line opens at that
+     * moment and owns the channel.
+     */
+    private restOnSungChannel;
     noteOnEvent(channel: number, note: NoteValue, vel: number, at?: number): number;
     noteOffEvent(channel: number, noteId: number, at?: number): void;
     /** Intern a param name once, telling the kernel the index it answers to. */
@@ -290,13 +376,50 @@ export declare class Bellows {
 export declare class Instrument {
     private b;
     readonly channel: number;
+    readonly engineId?: string | undefined;
     private gone;
-    constructor(b: Bellows, channel: number);
+    /**
+     * `engineId` is what voice() created the channel with. It is optional so
+     * code that built an Instrument by hand keeps compiling; such a handle
+     * cannot sing(), because nothing says its engine can.
+     */
+    constructor(b: Bellows, channel: number, engineId?: string | undefined);
     /** True once dispose() has run. A disposed handle ignores everything. */
     get disposed(): boolean;
     /** Play a note. NoteValue: midi number, 'C#4', { hz }, or { degree, octave }. */
     note(note: NoteValue, opts?: NoteOptions, scale?: Scale): this;
     chord(notes: NoteValue[], opts?: NoteOptions): this;
+    /**
+     * Sing a lyric on a melody. Needs the 'vocal' engine: b.voice('vocal').
+     *
+     * Notes are laid end to end from `at`, each `dur` through the tempo map
+     * and each pitch through the tuning and `scale`, so the line follows
+     * b.tuning however it divides the octave. Each note's vowel lands on its
+     * beat; opening consonants start before it. Lyrics are English (through
+     * b.dictionary or opts.dictionary when set, letter-to-sound rules
+     * otherwise) and IPA between slashes: 'the /ˈkæt/ sat'. A hyphen splits
+     * a word across notes, a free-standing '-' or '~' holds the vowel onto
+     * the next note, and punctuation or a rest ends a phrase with a breath.
+     *
+     * Returns the plan. Its `leadIn` is the longest any phrase starts before
+     * its own first beat: live, call at least that far ahead, or the opening
+     * consonants are already past when they reach the kernel. b.render() collects
+     * events before rendering, so a sing() inside a clock callback replays
+     * exactly.
+     *
+     * One instrument sings one line at a time, because `phoneme` and `bend`
+     * are channel parameters: give a harmony its own voice(). A line that
+     * would start while an earlier line on this instrument is still singing
+     * starts where that one ends, losing the opening consonants that
+     * overlapped it, and `trimmed` says how much went; leave room for the
+     * next line's `leadIn` (a rest, or a shorter last note) to hear all of
+     * it. While a line sings, `bend` belongs to it, so a channel's own bend
+     * does not transpose it; when the line ends the channel gets back the
+     * phoneme and bend it was created with, or last given by an untimed
+     * param(). Any phoneme or bend change, untimed included, also reaches a
+     * line that is singing at that moment, so keep them clear of sung lines.
+     */
+    sing(lyrics: string | readonly Syllable[], notes: readonly SingNote[], opts?: SingOptions): SingResult;
     /** Sustain a note; returns an id for off(). Disposed: returns -1. */
     on(note: NoteValue, vel?: number, at?: number): number;
     off(noteId: number, at?: number): this;
@@ -634,6 +757,31 @@ default polyphony: 8
   shape: 0 to 1, default 0
   level: 0 to 2, default 1
 
+### vocal (Vocal)
+default polyphony: 8
+  phoneme: 0 to 41, default 1
+  bend: -48 to 48 st, default 0
+  glide: 0.005 to 0.5 s, default 0.17 curve=exp
+  body: 0 to 2, default 0
+  tension: 0 to 1, default 0.55
+  roughness: 0 to 1, default 0.1
+  fry: 0 to 1, default 0
+  drift: 0 to 20 cents, default 6
+  breath: 0 to 1, default 0.15
+  vibratoRate: 0 to 12 Hz, default 5.5
+  vibratoDepth: 0 to 2 st, default 0.3
+  vibratoDelay: 0 to 1 s, default 0.25
+  articulation: 0.25 to 4, default 1 curve=exp
+  attack: 0.001 to 1 s, default 0.02 curve=exp
+  release: 0.01 to 2 s, default 0.15 curve=exp
+  level: 0 to 2, default 1
+  overshoot: 0 to 0.5, default 0.095
+  preparation: 0 to 1, default 0.25
+  ring: 0 to 1, default 0
+  tuning: 0 to 1, default 0
+  nextIn: 0 to 1 s, default 0
+  nextPhoneme: 0 to 41, default 0
+
 ### granular (Granular)
 default polyphony: 8
   grainSize: 10 to 500 ms, default 80 curve=exp
@@ -675,6 +823,56 @@ Sampler engines expose SAMPLER_PARAMS:
   pan: -1 to 1, default 0
 
 Granular over your own buffer: b.granular(float32Data, sampleRate, params?).
+
+## Singing and lyrics
+
+const singer = b.voice('vocal', { body: 1 });          // 0 male, 1 female, 2 child
+const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
+  { note: 'C4', dur: '4n' }, { note: 'C4', dur: '4n' }, { note: 'G4', dur: '4n' },
+  { note: 'G4', dur: '4n' }, { note: 'A4', dur: '4n' }, { note: 'A4', dur: '4n' },
+  { note: 'G4', dur: '2n' },
+], { at: b.now() + 0.5 });
+
+- notes are laid end to end from 'at' (the first note's beat; default as
+  note()), each dur through the tempo map and each pitch through b.tuning.
+  { note: null, dur } is a rest. vel is per note; a phrase plays at its
+  first note's velocity.
+- lyrics: English words (letter-to-sound rules, or b.dictionary /
+  opts.dictionary, a ReadonlyMap from lowercase word to CMUdict ARPAbet such
+  as parseCmudict(text) returns; bellows ships no dictionary), and IPA
+  between slashes, which sets the sounds directly. A hyphen inside a word splits
+  syllables, a free-standing '-' or '~' holds the vowel onto the next note,
+  and . , ; : ! ? or a line break ends a phrase with a breath. A Syllable[]
+  is accepted in place of text.
+- Each vowel lands on its note time; onset consonants are sung before it.
+  The returned plan has phrases (spans of IPA with start/end seconds, and
+  pitches) and leadIn, the most any phrase starts before its first note:
+  live, call at least that far ahead. plan.unknown lists IPA the engine has
+  no phoneme for; those spans keep the sound before them. plan.trimmed is
+  the seconds cut because the instrument was still singing an earlier line
+  there: leave the next line's leadIn free (a rest, a shorter last note).
+  Any phoneme or bend param() change, untimed included, also reaches a line
+  that is singing at that moment. Live with no at, the line starts as soon
+  as its opening consonants can all still sound.
+- Inside a clock callback, b.render() replays sing() exactly as note().
+- Each phrase is one note with Param events inside: 'phoneme' (an index
+  into VOCAL_PHONEMES; vocalPhonemeIndex(ipa)) and 'bend' in semitones. One
+  instrument sings one line at a time; give a harmony its own voice(). A
+  line sings at its own pitches whatever the channel's bend, and when it
+  ends the channel gets back the phoneme and bend it was created with or
+  last given by an untimed param().
+- Without the facade: planSung(notes in seconds and Hz, syllables) gives the
+  plan, sungEvents(plan, { channel, phonemeParam: internParam('phoneme'),
+  bendParam: internParam('bend') }) gives kernel events for renderOffline.
+  lyricsToSyllables(text, { dictionary }), readLyrics(text, frontEnds) with
+  englishFrontEnd(opts) and ipaFrontEnd, tokenizeIpa(ipa),
+  arpabetToSegments(phones) and parseCmudict(text) are the lyric layer.
+
+VOCAL_PHONEMES ('_' is silence; append only, so a saved index keeps its sound):
+0 _, 1 ɑ, 2 æ, 3 ʌ, 4 ɔ, 5 ɛ, 6 ɝ, 7 ɪ, 8 i, 9 ʊ, 10 u, 11 e, 12 o, 13 a,
+14 ə, 15 p, 16 b, 17 t, 18 d, 19 k, 20 g, 21 f, 22 v, 23 θ, 24 ð, 25 s,
+26 z, 27 ʃ, 28 ʒ, 29 h, 30 tʃ, 31 dʒ, 32 m, 33 n, 34 ŋ, 35 l, 36 ɹ, 37 w,
+38 j, 39 ɾ, 40 ʔ, 41 ɫ
 
 ## Instrument presets
 
@@ -1047,7 +1245,14 @@ export interface NamedRng extends Rng {
     chance(p: number): boolean;
     /** Fisher-Yates shuffle, returns a new array. */
     shuffle<T>(arr: readonly T[]): T[];
-    /** Approximately normal (Irwin-Hall of 4), mean 0, roughly unit variance. */
+    /**
+     * Approximately normal (Irwin-Hall of 4), mean 0, standard deviation
+     * about 0.714, NOT unit: the sum of four uniforms has sd sqrt(1/3) and
+     * the scale applied is SQRT2 * 0.875. Multiply by about 1.4 where a
+     * coefficient was written for unit variance (src/dsp/glottal.ts does).
+     * The scale stays as it is because every engine that draws from it was
+     * tuned by ear against it.
+     */
     gauss(): number;
     /** Weighted index pick. */
     weighted(weights: ArrayLike<number>): number;

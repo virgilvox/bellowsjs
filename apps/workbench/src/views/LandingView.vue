@@ -35,7 +35,7 @@ const SIMPLE = [
   {
     num: '01',
     title: 'Play instruments',
-    body: '18 built-in synthesizers: pianos that pluck, basses that growl, bells, drums, voices, textures. Try them on the Instrument page with your mouse, keyboard, or a MIDI controller.',
+    body: '19 built-in synthesizers: pianos that pluck, basses that growl, bells, drums, a voice that sings, textures. Try them on the Instrument page with your mouse, keyboard, or a MIDI controller.',
   },
   {
     num: '02',

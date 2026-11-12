@@ -88,7 +88,7 @@ Browsers keep an AudioContext suspended until the page sees a user gesture. Call
 
 ## Where to go next
 
-[Playing notes](/docs/playing-notes) covers notes, durations, velocity, and chords. [Engines](/docs/engines) tours the eighteen built-in instruments. If you want the whole API surface on one page, the machine-readable reference at [/llm.txt](/llm.txt) lists every engine, effect, preset, and signature exactly, and it doubles as context you can paste into an LLM.
+[Playing notes](/docs/playing-notes) covers notes, durations, velocity, and chords. [Engines](/docs/engines) tours the nineteen built-in instruments. If you want the whole API surface on one page, the machine-readable reference at [/llm.txt](/llm.txt) lists every engine, effect, preset, and signature exactly, and it doubles as context you can paste into an LLM.
 `,
 };
 

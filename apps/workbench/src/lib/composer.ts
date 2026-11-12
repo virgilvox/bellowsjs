@@ -143,6 +143,11 @@ export const ENGINE_MACROS: Record<string, MacroState[]> = {
     { label: 'BREATH', param: 'breath', min: 0, max: 1, value: 0.15 },
     { label: 'VIB', param: 'vibratoDepth', min: 0, max: 2, value: 0.3 },
   ],
+  vocal: [
+    { label: 'BODY', param: 'body', min: 0, max: 2, value: 0 },
+    { label: 'BREATH', param: 'breath', min: 0, max: 1, value: 0.15 },
+    { label: 'VIB', param: 'vibratoDepth', min: 0, max: 2, value: 0.3 },
+  ],
   granular: [
     { label: 'GRAIN', param: 'grainSize', min: 15, max: 400, value: 90 },
     { label: 'DENSITY', param: 'density', min: 2, max: 120, value: 24 },
@@ -173,6 +178,7 @@ export const MELODIC_ENGINES: Array<[string, string]> = [
   ['modal', 'MODAL'],
   ['westcoast', 'WESTCST'],
   ['formant', 'FORMANT'],
+  ['vocal', 'VOCAL'],
   ['harmonic', 'HARMONIC'],
   ['granular', 'GRANULAR'],
 ];

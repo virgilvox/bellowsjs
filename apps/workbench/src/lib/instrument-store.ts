@@ -13,6 +13,7 @@ import {
   registerBuiltins,
   getPreset,
   SAMPLER_PARAMS,
+  VOCAL_PHONEMES,
   type Bellows,
   type Instrument,
   type InstrumentPreset,
@@ -36,6 +37,7 @@ export const MELODIC_ENGINE_IDS = [
   'modal',
   'westcoast',
   'formant',
+  'vocal',
   'harmonic',
   'granular',
 ];
@@ -560,7 +562,24 @@ export function fromSlider(spec: ParamSpec, t: number): number {
   return spec.min + (spec.max - spec.min) * c;
 }
 
-export function formatValue(spec: ParamSpec, value: number): string {
+/*
+ * Params whose value is an index into a list of names. The engine rounds
+ * them anyway, so the slider steps through whole values and shows the name:
+ * the vocal engine's phoneme reads as its IPA symbol, not as 17.3.
+ */
+const NAMED_STEPS: Record<string, Record<string, readonly string[]>> = {
+  vocal: { phoneme: VOCAL_PHONEMES, nextPhoneme: VOCAL_PHONEMES },
+};
+
+export function stepNamesFor(engineId: string, param: string): readonly string[] | null {
+  return NAMED_STEPS[resolveEngineId(engineId)]?.[param] ?? null;
+}
+
+export function formatValue(spec: ParamSpec, value: number, names?: readonly string[] | null): string {
+  if (names) {
+    const name = names[Math.round(value)];
+    if (name !== undefined) return name === '_' ? 'silence' : '/' + name + '/';
+  }
   const a = Math.abs(value);
   const s =
     a >= 100 ? value.toFixed(0) : a >= 10 ? value.toFixed(1) : a >= 1 ? value.toFixed(2) : a === 0 ? '0' : value.toFixed(3);

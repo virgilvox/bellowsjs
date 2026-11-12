@@ -4,7 +4,7 @@ const page: DocPage = {
   slug: 'presets',
   title: 'Instrument presets',
   blurb: 'Named, curated instruments: guitars to choirs in one lookup.',
-  prev: 'engines',
+  prev: 'singing',
   next: 'sequencing',
   body: `
 By the end of this page you can pull a finished instrument sound by name instead of tuning raw engine parameters.

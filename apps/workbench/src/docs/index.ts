@@ -8,6 +8,7 @@ import type { DocPage } from './types';
 import gettingStarted from './pages/getting-started';
 import playingNotes from './pages/playing-notes';
 import engines from './pages/engines';
+import singing from './pages/singing';
 import presets from './pages/presets';
 import sequencing from './pages/sequencing';
 import generativeMusic from './pages/generative-music';
@@ -30,7 +31,7 @@ export interface DocGroup {
 /** Sidebar groups in display order; flattening them yields reading order. */
 export const DOC_GROUPS: DocGroup[] = [
   { label: 'Start here', pages: [gettingStarted, playingNotes] },
-  { label: 'Sound', pages: [engines, presets] },
+  { label: 'Sound', pages: [engines, singing, presets] },
   { label: 'Time', pages: [sequencing, generativeMusic] },
   { label: 'Pitch', pages: [theory, tuning] },
   { label: 'Mix and sample', pages: [effects, soundfontsAndSamples] },
