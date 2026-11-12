@@ -17,7 +17,15 @@
  * THIRD_PARTY_NOTICES.md. The singer rules come from the literature: pitch
  * overshoot and preparation (Saitou, Unoki and Akagi 2005), the singer's
  * formant (Sundberg), first-resonance tuning on high notes (Joliveau,
- * Smith and Wolfe 2004).
+ * Smith and Wolfe 2004). So do the parts that replaced CHIMERA's: the
+ * articulators move as a six-stage cascade with return gestures (Birkholz
+ * 2011, Birkholz and Hoole 2012, VocalTractLab 2.4's manual); the pitch
+ * rise after a voiceless obstruent is a fold stiffness gesture (Hanson
+ * 2009); the two fold models follow Titze and Birkholz, Drechsel and Stone
+ * (2019) and Ishizaka and Flanagan (1972); the turbulence follows Stevens'
+ * law with Birkholz's (2014) source types and places; the tract wall is
+ * Birkholz and Zhang's (2025) stiffness and damping. docs/VOICE-2.md,
+ * "Integration 4", measures them together.
  *
  * THE LAYERS, AND HOW OFTEN EACH RUNS (48 kHz)
  *

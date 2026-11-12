@@ -91,6 +91,7 @@ singer.note('A3', { dur: '2n' });
 | \`preparation\` | 0 to 1, 0.25 | how far the pitch first moves the wrong way before a note change |
 | \`ring\` | 0 to 1, 0 | the singer's formant: a narrowed larynx tube that lifts 2.5 to 3.5 kHz |
 | \`tuning\` | 0 to 1, 0 | on high notes the jaw opens so the first resonance stays above the pitch, as trained sopranos do |
+| \`glottis\` | 0 to 2, 2 | the vocal folds: 2 a drawn pulse (the default), 0 folds whose swing follows the air pressure across them, 1 folds that vibrate on their own and are steered to the note. A sounding voice changes at its next note |
 | \`articulation\` | 0.25 to 4, 1 | speed of every mouth movement; 2 is twice as quick |
 | \`attack\`, \`release\` | 0.02 s, 0.15 s | how a phrase starts and dies away |
 | \`level\` | 0 to 2, 1 | output level |

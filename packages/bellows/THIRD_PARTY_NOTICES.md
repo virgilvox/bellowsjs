@@ -57,7 +57,7 @@ in CHIMERA, written again in bellows' own idiom, and they say so in their header
 | `src/engines/vocal-drive.ts` | CHIMERA's section counts (`voice/human_airway.rs:75-80`), the area rate law on each keyframe (`human_airway.rs:190-262`), the jet rule of the smallest sub-section minimum (`airway/network.rs:919-930`), the anatomical moving-wall flow (`airway/network.rs` node continuity) |
 | `src/dsp/junction-airway.ts` | the airway's elements: trachea 12 k cm by 2.5 k^2 and the lungs' resistance, the nasal profile, the glottal port (kinetic 0.37, slit 1.4 k, depth 0.3 k) and the velum port (length 1.0 k, kinetic 0.3 and 0.8), perimeter and viscous factors and wall radiation 0.25 (`voice/human_airway.rs:84-123`); viscous resistance at 700 Hz, closed area 2e-4, Borda-Carnot loss with a 0.1 contraction loss, the 60 Hz moving-wall filter, the Flanagan radiators (`airway/network.rs:360, 417, 866, 919-930, 1067-1068`); the voicing gate (`sources/glottis.rs:170-176`); the effort mapping (`voice/human_voice.rs:317-350`); the output gain (`human_voice.rs:220`). The formulation (a waveguide at Courant number 1 with the flow solved in its junctions) is bellows' own; the turbulence sources follow Stevens and Birkholz (below), not CHIMERA |
 | `src/dsp/airway-tube.ts` | the fixed tubes' wall and viscous elements (`airway/network.rs:860-1010`), lumped onto a few nodes here |
-| `src/dsp/air.ts` | the physical constants and the trachea's and nasal cavity's wall tissues (`physics.rs:5-35`); the tract's wall is Birkholz and Zhang's (below) |
+| `src/dsp/air.ts` | the physical constants and the trachea's and nasal cavity's wall tissues (`physics.rs:5-35`); the tract wall's mass, 1.5 g/cm^2, is CHIMERA's `WALL_SOFT` (`physics.rs:28`), its stiffness and damping Birkholz and Zhang's (below) |
 | `src/engines/vocal-tables.gen.ts` and `data/vocal/` | CHIMERA's articulator ranges and speeds, rest posture, inventory and calibrated targets, body constants and roofs, and tables measured on its geometry: the formant-tuning rows and the layout lengths (`data/vocal/README.md`) |
 | `src/engines/vocal-phonemes.ts` | the phoneme classes checked against `phonetics/inventory.rs`, and the stop release rules, no aspiration after /s/, 12 ms when unaspirated, aspiration only before a vowel (`phonetics/planner.rs`) |
 
@@ -79,7 +79,16 @@ Trombone (Neil Thapen) as the proof that such a tract runs in a browser, Story (
 parametric area model behind the design, Saitou, Unoki and Akagi (2005) for sung pitch with
 overshoot and preparation (`src/dsp/pitchglide.ts`), Sundberg for the singer's formant and
 Joliveau, Smith and Wolfe (2004) for first-resonance tuning on high notes (`src/engines/vocal.ts`),
-Krug et al. (2021) for the onset rise after voiceless consonants; Klatt (1980) and Gold and
+Hanson (2009) and Lofqvist et al. (1989) for the fold stiffness gesture that raises the pitch after
+voiceless obstruents (`src/engines/vocal-planner.ts`); Titze (1984, 1988, 1989) and Birkholz,
+Drechsel and Stone (Interspeech 2019) for the geometric two-edge glottis (`src/dsp/geometric-glottis.ts`),
+Titze (1988, 1992) and Lucero (1999) for the phonation threshold and its hysteresis
+(`src/dsp/phonation-threshold.ts`), Ishizaka and Flanagan (1972), Steinecke and Herzel (1995) and
+Birkholz, Kroger and Neuschaefer-Rube (2011) for the self-oscillating two-mass folds
+(`src/dsp/fold-oscillator.ts`); Shadle (1991) for keeping the obstacle source broadband while the
+free-jet, wall and labiodental sources fall through a second pole, and the critical Reynolds number
+of a turbulent jet (Flanagan, Speech Analysis, Synthesis and Perception) for the threshold under
+which a constriction makes no noise (`src/dsp/junction-airway.ts`); Klatt (1980) and Gold and
 Rabiner (1968) behind the resonators and the higher-pole correction in `src/dsp/resonator.ts`;
 Lisker and Abramson (1964) for voice onset times; Birkholz, Kroger and Neuschaefer-Rube (2011) and
 Birkholz and Hoole (2012) for the six-stage articulator cascade (`src/dsp/cascade.ts`), the
