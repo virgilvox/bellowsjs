@@ -269,7 +269,7 @@ describe('vocal engine: definition', () => {
     expect(vocalEngine.polyphony).toBe(8);
     const byName = Object.fromEntries(vocalEngine.params.map((p) => [p.name, p]));
     expect(Object.keys(byName).sort()).toEqual(
-      ['phoneme', 'bend', 'glide', 'body', 'tension', 'roughness', 'fry', 'drift', 'breath', 'vibratoRate', 'vibratoDepth', 'vibratoDelay', 'articulation', 'attack', 'release', 'level', 'overshoot', 'preparation', 'ring', 'tuning', 'nextPhoneme', 'nextIn'].sort(),
+      ['phoneme', 'bend', 'glide', 'body', 'tension', 'roughness', 'fry', 'drift', 'glottis', 'breath', 'vibratoRate', 'vibratoDepth', 'vibratoDelay', 'articulation', 'attack', 'release', 'level', 'overshoot', 'preparation', 'ring', 'tuning', 'nextPhoneme', 'nextIn'].sort(),
     );
     expect(byName.phoneme).toMatchObject({ min: 0, max: VOCAL_PHONEMES.length - 1, default: 1 });
     expect(byName.bend).toMatchObject({ min: -48, max: 48, default: 0 });
@@ -280,6 +280,7 @@ describe('vocal engine: definition', () => {
     expect(byName.overshoot).toMatchObject({ min: 0, max: 0.5 });
     expect(byName.ring).toMatchObject({ min: 0, max: 1, default: 0 });
     expect(byName.tuning).toMatchObject({ min: 0, max: 1, default: 0 });
+    expect(byName.glottis).toMatchObject({ min: 0, max: 2, default: 2 });
   });
 
   it('lays out more grid sections the higher the rate, one per c / (2 fs) of the shortest tract past the back duct', () => {
@@ -337,8 +338,8 @@ describe('vocal engine: rates, determinism, robustness', () => {
     expect(countDiffs(c, d)).toBeGreaterThan(c.length / 2);
   });
 
-  it('renders the same samples however a block is split', () => {
-    const o: DriveOpts = { seed: 'blocks', seconds: 0.6, events: [at(0.1, 'k'), at(0.17, 'u'), { t: 0.2, name: 'bend', value: 2 }, at(0.3, 'n'), { t: 0.33, name: 'nextIn', value: 0.1 }, { t: 0.33, name: 'nextPhoneme', value: ph('s') }] };
+  for (const glottis of [2, 0, 1]) it(`renders the same samples however a block is split (glottis ${glottis})`, () => {
+    const o: DriveOpts = { seed: 'blocks', seconds: 0.6, params: { glottis }, events: [at(0.1, 'k'), at(0.17, 'u'), { t: 0.2, name: 'bend', value: 2 }, at(0.3, 'n'), { t: 0.33, name: 'nextIn', value: 0.1 }, { t: 0.33, name: 'nextPhoneme', value: ph('s') }] };
     const a = sing(o);
     const voice = makeVoice(o);
     const n = a.length;
@@ -476,6 +477,67 @@ describe('vocal engine: pitch', () => {
   it('sings the note it is given: the audio f0 of a held /ɑ/ within 10 cents of it', () => {
     const x = sing({ freq: 196, seconds: 1, params: { vibratoDepth: 0, drift: 0 } });
     expect(Math.abs(1200 * Math.log2(f0At(x, SR, 0.7, 196) / 196))).toBeLessThan(10);
+  });
+  it('the fold models land a sung note within 5 cents once its glide has settled (audio f0; the self-oscillating folds by their servo)', () => {
+    /*
+     * The parametric pulse (glottis 2) is left out: its pressure term reads
+     * the last sample of each block, which aliases the cycle, and holds the
+     * female 494 Hz note 19 cents sharp (MEASURED; docs/VOICE-2.md).
+     */
+    for (const glottis of [0, 1]) {
+      for (const [body, freq, bend] of [[0, 110, 5], [0, 196, -3], [1, 330, 7], [2, 523, 2]] as const) {
+        const x = sing({ freq, seconds: 1.4, params: { body, glottis, vibratoDepth: 0, drift: 0, roughness: 0 }, events: [{ t: 0.5, name: 'bend', value: bend }] });
+        const target = freq * Math.pow(2, bend / 12);
+        const cents = 1200 * Math.log2(f0At(x, SR, 1.2, target) / target);
+        expect(Math.abs(cents), `glottis ${glottis} body ${body} ${freq} Hz + ${bend} st: ${cents.toFixed(1)} cents`).toBeLessThan(5);
+      }
+    }
+  });
+});
+
+describe('vocal engine: the fold models', () => {
+  it('sing at 22050, 44100, 48000 and 96000 Hz, finite, bounded and voiced, the geometric and the self-oscillating folds alike', () => {
+    for (const glottis of [0, 1]) {
+      for (const sr of [22050, 44100, 48000, 96000]) {
+        for (const [body, freq, vel] of [[0, 55, 1], [0, 110, 0.8], [1, 440, 0.2], [2, 880, 1]] as const) {
+          const x = sing({ sr, freq, vel, seconds: 1.2, gate: 1.1, params: { body, glottis }, events: PHRASE });
+          const tag = `glottis ${glottis} ${sr} body ${body} ${freq} Hz`;
+          expect(countNonFinite(x), tag).toBe(0);
+          expect(maxAbs(x), tag).toBeLessThan(2);
+          expect(rms(x, Math.round(0.15 * sr), Math.round(0.28 * sr)), tag).toBeGreaterThan(1e-3);
+        }
+      }
+    }
+  });
+
+  it('is deterministic per stream label with either fold model', () => {
+    for (const glottis of [0, 1]) {
+      const a = sing({ seconds: 0.8, params: { glottis }, events: PHRASE, seed: 'fold-det' });
+      const b = sing({ seconds: 0.8, params: { glottis }, events: PHRASE, seed: 'fold-det' });
+      expect(countDiffs(a, b), `glottis ${glottis}`).toBe(0);
+    }
+  });
+
+  it('the geometric folds stop in a voiceless fricative and voice a voiced one (white box: the threshold\'s level)', () => {
+    const level = (ipa: string) => {
+      let lv = -1;
+      sing({ seconds: 0.6, params: { glottis: 0, phoneme: ph(ipa) }, onBlock: (t, v) => { if (t > 0.45 && lv < 0) lv = (v as unknown as { air: { threshold: { level: number } } }).air.threshold.level; } });
+      return lv;
+    };
+    expect(level('s')).toBeLessThan(0.05);
+    expect(level('z')).toBeGreaterThan(0.95);
+    expect(level('ɑ')).toBeGreaterThan(0.95);
+  });
+
+  it('raises f0 after a voiceless obstruent with the folds\' stiffness, not after a voiced one (white box: the commanded f0)', () => {
+    const onsetRise = (c: string) => {
+      const f: Array<[number, number]> = [];
+      sing({ freq: 120, seconds: 0.9, params: { vibratoDepth: 0, phoneme: ph('ɑ') }, events: [at(0.3, c), at(0.42, 'ɑ')], onBlock: (t, v) => f.push([t, (v as unknown as { f0Now: number }).f0Now]) });
+      const near = f.filter(([t]) => t > 0.43 && t < 0.47).map(([, hz]) => hz);
+      return 1200 * Math.log2(Math.max(...near) / 120);
+    };
+    expect(onsetRise('t')).toBeGreaterThan(30);
+    expect(onsetRise('d')).toBeLessThan(1);
   });
 });
 
@@ -729,9 +791,15 @@ describe('vocal engine: allocation', () => {
   const ALLOCATING = [/\bnew\b/, /=>|\bfunction\b/, /([=(,:?]|\breturn)\s*[[{]/, /\.\.\./, /\.(slice|map|filter|concat|subarray|fork|bind)\(/];
 
   it('no method a voice, its planner, drive, geometry, roof, airway or tubes runs after construction has allocating syntax', () => {
-    type Internals = { planner: object; drive: { geometry: object }; roofs: object[]; air: { glottis: object; tr: object } };
+    type Internals = {
+      planner: object;
+      drive: { geometry: object };
+      roofs: object[];
+      air: { glottis: object; tr: object; geometric: object; folds: { servo: object }; threshold: object };
+    };
     const voice = makeVoice({}) as unknown as Record<string, unknown> & Internals;
-    const objects: object[] = [voice, voice.planner, voice.drive, voice.drive.geometry, voice.roofs[0], voice.air, voice.air.tr, voice.air.glottis];
+    const air = voice.air;
+    const objects: object[] = [voice, voice.planner, voice.drive, voice.drive.geometry, voice.roofs[0], air, air.tr, air.glottis, air.geometric, air.folds, air.folds.servo, air.threshold];
     const scanned: string[] = [];
     for (const obj of objects) {
       const proto = Object.getPrototypeOf(obj) as object;
@@ -746,7 +814,7 @@ describe('vocal engine: allocation', () => {
         }
       }
     }
-    for (const name of ['process', 'noteOn', 'noteOff', 'setParam', 'evaluate', 'evaluateNow', 'queryNow', 'render', 'beginBlock', 'configure', 'key', 'toAirway', 'resampleInto', 'project', 'interior', 'processArea']) expect(scanned).toContain(name);
+    for (const name of ['process', 'noteOn', 'noteOff', 'setParam', 'evaluate', 'evaluateNow', 'queryNow', 'render', 'beginBlock', 'configure', 'key', 'toAirway', 'resampleInto', 'project', 'interior', 'processArea', 'processPhase', 'nextPhase', 'step', 'cycle', 'tune']) expect(scanned).toContain(name);
   });
 
   it('constructs no typed array, array, map or set from noteOn, noteOff, setParam or process', () => {
@@ -773,8 +841,9 @@ describe('vocal engine: allocation', () => {
       });
     }
     try {
-      for (let note = 0; note < 4; note++) {
+      for (let note = 0; note < 6; note++) {
         voice.setParam('body', (note % 3) * 0.7);
+        voice.setParam('glottis', note % 3);
         voice.noteOn(110 + note * 50, 0.8);
         for (let b = 0; b < 400; b++) {
           if (b % 9 === 0) voice.setParam('phoneme', seq[(b / 9 + note) % seq.length]);
@@ -794,7 +863,7 @@ describe('vocal engine: allocation', () => {
     expect(count).toBe(0);
   });
 
-  it('starts no garbage collection in 5 s of a sung line, and grows new space by well under a byte a sample', async () => {
+  for (const glottis of [2, 0, 1]) it(`starts no garbage collection in 5 s of a sung line, and grows new space by well under a byte a sample (glottis ${glottis})`, async () => {
     /*
      * The GC probe, and the new-space size in a window no collection fell
      * in. V8 boxes a double that crosses a call it did not inline, and one a
@@ -805,7 +874,7 @@ describe('vocal engine: allocation', () => {
      * every note (a new body lays the airway and geometry out again). Left:
      * the planner rebuilding its gestures at each phoneme, and the layout.
      */
-    const voice = makeVoice({ seed: 'heap' });
+    const voice = makeVoice({ seed: 'heap', params: { glottis } });
     const l = new Float32Array(128);
     const r = new Float32Array(128);
     const seq = new Int32Array([ph('s'), ph('i'), ph('t'), ph('ɑ'), ph('tʃ'), ph('u'), ph('m'), ph('ɾ'), ph('k'), ph('e'), ph('l'), ph('n'), ph('f'), ph('ɹ')]);

@@ -77,7 +77,10 @@
  * preparation (how far it first moves the wrong way), ring (the singer's
  * formant: epilarynx narrowed, larynx lowered, tongue root forward),
  * tuning (open the jaw so the first resonance stays above 1.15 f0),
- * nextPhoneme and nextIn (above).
+ * nextPhoneme and nextIn (above), glottis (the fold model: 0 geometric,
+ * dsp/geometric-glottis.ts; 1 self-oscillating, dsp/fold-oscillator.ts;
+ * 2 CHIMERA's drawn pulse, the default; a sounding voice changes at its
+ * next note; docs/VOICE-2.md, "Vocal folds", has the measurements).
  *
  * Randomness: forks 'glottis' and 'noise' (in the airway: the fold pulse's
  * perturbations, and one turbulence seed drawn per note) and 'vibrato' (the
@@ -90,7 +93,7 @@ import { CritDampBank, CRITDAMP_SETTLE_98 } from '../dsp/critdamp';
 import { PitchGlide } from '../dsp/pitchglide';
 import { Adsr } from '../dsp/envelopes';
 import { CM_H2O, SOUND_SPEED } from '../dsp/air';
-import { JunctionAirway, ductMin } from '../dsp/junction-airway';
+import { GLOTTIS_GEOMETRIC, GLOTTIS_PULSE, GLOTTIS_SELF_OSCILLATING, JunctionAirway, ductMin } from '../dsp/junction-airway';
 import { VOCAL_DEFAULT_PHONEME, VOCAL_PHONEMES } from './vocal-phonemes';
 import { VOCAL_BODIES, VOCAL_NEUTRAL } from './vocal-tables.gen';
 import { ART, ARTICULATORS } from './vocal-articulators';
@@ -105,10 +108,42 @@ export const VOCAL_PLAN_LEAD = 0.3;
 
 /** The largest jaw opening the tuning rule uses (template cm). */
 const OPEN_MAX = 1.5;
-/** The explicit rise at a vowel onset after a voiceless obstruent, cents (MEASURED choice). */
-const MICRO_RISE = 60;
+/**
+ * f0 raised by full fold stiffness, cents: the planner's cricothyroid gesture after a voiceless
+ * obstruent (Hanson 2009). The size of the explicit rise it replaced (MEASURED choice).
+ */
+const STIFF_CENTS = 60;
+/** How much full stiffness narrows the geometric folds' swing (x_rel; Birkholz et al. 2019: under 1 is stiffening). CHOICE. */
+const STIFF_SWING = 0.25;
 /** f0 change per cmH2O of transglottal pressure away from the lungs', Hz at 120 Hz (MEASURED choice). */
 const COUPLE = 1.5;
+/**
+ * The singer's ear, for the geometric folds: their pressure term is taken against its own average
+ * over this many seconds, so a closure's quick dip stays and the steady pressure a vowel holds above
+ * the folds is sung away. CHOICE; without it the geometric folds sang held notes 2 to 7 cents flat
+ * on average (MEASURED; docs/VOICE-2.md, "Vocal folds").
+ */
+const EAR_TAU = 0.25;
+
+/*
+ * The folds per table body (male, female, child): rest length L0 cm (Birkholz, Drechsel and Stone
+ * 2019: 1.6 and 1.2; the child's INFERRED), and the paper's most natural settings, male then female:
+ * the lower edge's rest displacement (0.3 and 0.6 mm), the upper edge's over it (0.3 and 0 mm), the
+ * phase lag between the edges (70 and 50 degrees) and double pulsing (0.05). The child takes the
+ * female's. Skewness is 0.3 for all, inside the paper's tested range (-0.4 to 0.4; its best were 0
+ * and 0.2): CALIBRATED, the setting whose vowel band levels came closest to CHIMERA's (0 left the
+ * male 1.5 to 4 kHz 6 dB over it, 0.3 within 2.5 dB; docs/VOICE-2.md, "Vocal folds").
+ */
+const FOLD_LENGTH = [1.6, 1.2, 0.9];
+const FOLD_REST = [0.03, 0.06, 0.06];
+/** The self-oscillating folds' rest displacement, cm: a wider glottis than this stops them above about 600 Hz (MEASURED). */
+const SELF_REST = 0.01;
+const FOLD_UPPER = [0.03, 0, 0];
+const FOLD_LAG = [70 / 360, 50 / 360, 50 / 360];
+const FOLD_SKEW = [0.3, 0.3, 0.3];
+const FOLD_DOUBLE = 0.05;
+/** Medial compression per unit of tension away from 0.5, cm of rest displacement (pressed closes, lax opens). CHOICE. */
+const PRESS = 0.04;
 /** Output gain over CHIMERA's: puts the loudest held vowel near 1 at velocity 1. */
 const OUTPUT_GAIN = 0.25;
 /** CHIMERA's vibrato ramps out over this many seconds. */
@@ -181,6 +216,7 @@ class VocalVoice implements Voice {
   /** The glottal opening and closure at each articulator step of the keyframe interval (0 is its start). */
   private readonly abdAt = new Float64Array(STEPS + 1);
   private readonly cloAt = new Float64Array(STEPS + 1);
+  private readonly stfAt = new Float64Array(STEPS + 1);
   /** A contact's new value and velocity for each axis (x then y), for CritDampBank.placeFrom. */
   private readonly placed = new Float64Array(4);
   /** The time of the articulator step or block being computed, s (a field: no double crosses a call). */
@@ -220,6 +256,9 @@ class VocalVoice implements Voice {
   /** Lung pressure, cmH2O. */
   private pLung = 0;
   private pCoupleHz = 0;
+  /** The pressure above the folds as the singer has adapted to it, dyn/cm^2 (geometric folds). */
+  private pEar = 0;
+
 
   /* Body blend in force. */
   private bLo = 0;
@@ -234,6 +273,9 @@ class VocalVoice implements Voice {
   private tuneJaw = 0;
   private abduction = 0;
   private closure = 0;
+  private stiffness = 0;
+  private foldRest = 0.03;
+  private glottisModel = GLOTTIS_PULSE;
   private f0Now = 110;
   private depth = 0;
   /* The layout and geometry body last laid out (-1: none). */
@@ -332,6 +374,9 @@ class VocalVoice implements Voice {
       case 'drift':
         this.air.glottis.setDrift(clamp(value, 0, 20));
         return;
+      case 'glottis':
+        this.setGlottis(value);
+        return;
       case 'breath':
         this.breath = clamp(value, 0, 1);
         return;
@@ -365,6 +410,14 @@ class VocalVoice implements Voice {
         this.tuning = clamp(value, 0, 1);
         return;
     }
+  }
+
+  /** 0 geometric, 1 self-oscillating, 2 the parametric pulse; a voice that is sounding changes at its next note. */
+  private setGlottis(value: number): void {
+    const m = clamp(Math.round(value), 0, 2);
+    this.glottisModel = m === 1 ? GLOTTIS_SELF_OSCILLATING : m === 2 ? GLOTTIS_PULSE : GLOTTIS_GEOMETRIC;
+    if (!this.live) this.air.model = this.glottisModel;
+    this.applyTension();
   }
 
   private setPhoneme(value: number): void {
@@ -432,11 +485,22 @@ class VocalVoice implements Voice {
     const w = this.bW;
     this.k = A.k * (1 - w) + B.k * w;
     this.planner.setBody(b);
+    const lo = this.bLo;
+    const air = this.air;
+    air.foldLength = FOLD_LENGTH[lo] * (1 - w) + FOLD_LENGTH[lo + 1] * w;
+    air.upperRest = FOLD_UPPER[lo] * (1 - w) + FOLD_UPPER[lo + 1] * w;
+    air.lag = FOLD_LAG[lo] * (1 - w) + FOLD_LAG[lo + 1] * w;
+    air.skew = FOLD_SKEW[lo] * (1 - w) + FOLD_SKEW[lo + 1] * w;
+    air.doublePulse = FOLD_DOUBLE;
+    this.foldRest = FOLD_REST[lo] * (1 - w) + FOLD_REST[lo + 1] * w;
+    this.applyTension();
   }
 
   private applyTension(): void {
     const t = clamp(this.tension + 0.35 * (this.vel - 0.8), 0, 1);
     this.air.glottis.setTension(t);
+    const base = this.glottisModel === GLOTTIS_SELF_OSCILLATING ? SELF_REST : this.foldRest;
+    this.air.restOffset = base + PRESS * (0.5 - t);
   }
 
   /** Everything from rest, on the current phoneme, bend and body. */
@@ -470,6 +534,7 @@ class VocalVoice implements Voice {
       this.laidTongue = tongue;
       this.laidLips = lips;
     }
+    air.model = this.glottisModel;
     this.applyTension();
     this.planner.clear();
     this.planner.addNow(this.phonemeParam, 0);
@@ -477,6 +542,7 @@ class VocalVoice implements Voice {
     this.pLungTarget = clamp(4 + 6.25 * this.vel, 5, 15);
     this.pLung = this.planner.silentAt(0) ? 0 : 0.94 * this.pLungTarget;
     this.pCoupleHz = COUPLE * (this.noteHz / 120);
+    this.pEar = 0;
     this.tuneJaw = 0;
     this.settle();
   }
@@ -497,6 +563,7 @@ class VocalVoice implements Voice {
     for (let q = 0; q <= STEPS; q++) {
       this.abdAt[q] = this.abduction;
       this.cloAt[q] = this.closure;
+      this.stfAt[q] = this.stiffness;
     }
     this.intervalLeft = 0;
     this.blockInInterval = 0;
@@ -534,6 +601,7 @@ class VocalVoice implements Voice {
     const b = this.breath;
     this.abduction = (0.1 * b * b + 0.008 + 0.03 * b) * k2 + this.planner.abduction * k2;
     this.closure = this.planner.closure;
+    this.stiffness = this.planner.stiffness;
   }
 
   /** One articulator step ending at time `at`. */
@@ -628,11 +696,13 @@ class VocalVoice implements Voice {
     const sr = this.sr;
     this.abdAt[0] = this.abdAt[STEPS];
     this.cloAt[0] = this.cloAt[STEPS];
+    this.stfAt[0] = this.stfAt[STEPS];
     for (let q = 1; q <= STEPS; q++) {
       this.at = (this.pos + q * this.stepEvery) / sr;
       this.step();
       this.abdAt[q] = this.abduction;
       this.cloAt[q] = this.closure;
+      this.stfAt[q] = this.stiffness;
     }
     this.art.set(this.bank.values);
     this.drive.key(this.art, false);
@@ -658,13 +728,17 @@ class VocalVoice implements Voice {
     const fr = sf - s0;
     air.agStatic = this.abdAt[s0] + (this.abdAt[s1] - this.abdAt[s0]) * fr;
     air.closure = this.cloAt[s0] + (this.cloAt[s1] - this.cloAt[s0]) * fr;
+    // the posterior chink: CHIMERA's (0.008 + 0.03 breath) k^2 part of the opening above
+    const k2 = this.k * this.k;
+    air.chink = (0.008 + 0.03 * this.breath) * k2;
+    const stiff = this.stfAt[s0] + (this.stfAt[s1] - this.stfAt[s0]) * fr;
+    air.xRel = 1 - STIFF_SWING * stiff;
     const t = (this.pos + blk / 2) / sr;
     const p = this.planner;
     p.at = t;
-    p.riseCents = MICRO_RISE;
     p.queryNow();
 
-    // pitch: the glide, the vibrato blooming in, the microprosody rise, the pressure across the folds
+    // pitch: the glide, the vibrato blooming in, the folds' stiffness, the pressure across the folds
     this.glide.advance();
     const bend = this.glide.value;
     this.bloomT += blk / sr;
@@ -676,12 +750,21 @@ class VocalVoice implements Voice {
     if (ph >= 1) ph -= 1;
     this.vibPhase = ph;
     const vib = Math.sin(2 * Math.PI * ph) * this.vibDepth * this.bloomNow;
-    const f0 = this.noteHz * Math.pow(2, (bend + vib) / 12 + p.rise / 1200);
+    const f0 = this.noteHz * Math.pow(2, (bend + vib) / 12 + (stiff * STIFF_CENTS) / 1200);
     this.f0Now = f0;
     this.tune();
-    // f0 follows the pressure across the folds against the pressure below them: a closure above the
-    // folds lowers it, effort (both pressures together) does not
-    air.f0 = f0 + (this.pCoupleHz * (Math.max(air.dpSmooth, 0) - Math.max(air.pSubSmooth, 0))) / CM_H2O;
+    // f0 follows the pressure across the folds against the pressure below them, which is the pressure
+    // above them: a closure above the folds lowers it, effort (both pressures together) does not
+    // (Titze 1989: 2 to 6 Hz per cmH2O). The geometric folds read it from block means, against the
+    // singer's ear (EAR_TAU); the pulse keeps
+    // its reading of each block's last sample, which aliases the cycle (MEASURED: a female /ɑ/ at
+    // 494 Hz 19 cents sharp; docs/VOICE-2.md, "Vocal folds"). Self-oscillating folds find all this
+    // themselves: their servo aims at the note.
+    const pa = air.pSupra;
+    this.pEar += (pa - this.pEar) * (1 - Math.exp(-blk / sr / EAR_TAU));
+    if (air.model === GLOTTIS_SELF_OSCILLATING) air.f0 = f0;
+    else if (air.model === GLOTTIS_GEOMETRIC) air.f0 = f0 - (this.pCoupleHz * Math.max(pa - this.pEar, 0)) / CM_H2O;
+    else air.f0 = f0 + (this.pCoupleHz * (Math.max(air.dpSmooth, 0) - Math.max(air.pSubSmooth, 0))) / CM_H2O;
 
     // the sung breath (planner.rs:376-379): full drive from the note-on to its end, off in silences
     const gate = t < this.end && p.silent === 0 ? 1 : 0;
@@ -731,6 +814,7 @@ const PARAMS: ParamSpec[] = [
   { name: 'roughness', min: 0, max: 1, default: 0.1 },
   { name: 'fry', min: 0, max: 1, default: 0 },
   { name: 'drift', min: 0, max: 20, default: 6, unit: 'cents' },
+  { name: 'glottis', min: 0, max: 2, default: 2 },
   { name: 'breath', min: 0, max: 1, default: 0.15 },
   { name: 'vibratoRate', min: 0, max: 12, default: 5.5, unit: 'Hz' },
   { name: 'vibratoDepth', min: 0, max: 2, default: 0.3, unit: 'st' },

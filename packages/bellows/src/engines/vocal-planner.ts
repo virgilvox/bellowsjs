@@ -56,10 +56,21 @@ import {
   VOCAL_TABLE_PHONEMES,
 } from './vocal-tables.gen';
 
-/** Control keys: the 17 articulators, then the glottis. */
+/** Control keys: the 17 articulators, then the glottis: abduction, closure, fold stiffness (cricothyroid). */
 export const KEY_ABDUCTION = ARTICULATORS;
 export const KEY_CLOSURE = ARTICULATORS + 1;
-const KEYS = ARTICULATORS + 2;
+export const KEY_STIFFNESS = ARTICULATORS + 2;
+const KEYS = ARTICULATORS + 3;
+
+/**
+ * The stiffness gesture of a voiceless obstruent ramps out over this many
+ * seconds after its abduction ends. Hanson (2009, "Effects of obstruent
+ * consonants on fundamental frequency at vowel onset in English", JASA 125)
+ * and Lofqvist et al. (1989) put the raised f0 after voiceless obstruents
+ * in the folds' tension (cricothyroid activity that helps hold them apart
+ * against the flow), lasting into the first 50 to 100 ms of the vowel.
+ */
+const STIFF_RELEASE = 0.08;
 
 export const VOCAL_TABLE_SIZE = VOCAL_TABLE_PHONEMES.length;
 
@@ -182,16 +193,15 @@ export class VocalPlanner {
   readonly target = new Float64Array(ARTICULATORS);
   /** Speed factor per articulator, 1 at rest. */
   readonly speed = new Float64Array(ARTICULATORS);
-  /** Glottal abduction from gestures (cm^2 before the body's k^2) and closure, 0 to 1. */
+  /** Glottal abduction from gestures (cm^2 before the body's k^2), closure 0 to 1, and fold stiffness 0 to 1. */
   abduction = 0;
   closure = 0;
-  /** Inputs of evaluateNow() and queryNow(): the time, the rest tip, the rise's size in cents. */
+  stiffness = 0;
+  /** Inputs of evaluateNow() and queryNow(): the time and the rest tip. */
   at = 0;
   restX = 0;
   restY = 0;
-  riseCents = 0;
   /** Outputs of queryNow(). */
-  rise = 0;
   silent = 0;
   vowel = -1;
   private readonly wsum = new Float64Array(KEYS);
@@ -326,14 +336,12 @@ export class VocalPlanner {
   }
 
   /**
-   * At the time in `at`: the rise for riseCents (into `rise`), whether the
-   * breath stops (`silent`, 0 or 1) and the vowel sounding or next (`vowel`,
-   * -1 for none). The audio path's form of riseAt, silentAt and vowelAt.
+   * At the time in `at`: whether the breath stops (`silent`, 0 or 1) and
+   * the vowel sounding or next (`vowel`, -1 for none). The audio path's
+   * form of silentAt and vowelAt.
    */
   queryNow(): void {
     const t = this.at;
-    const cents = this.riseCents;
-    let rise = 0;
     let cur = -1;
     let vowel = -1;
     for (let s = 0; s < this.segCount; s++) {
@@ -343,30 +351,9 @@ export class VocalPlanner {
       // t1(s) written out: a returned double crossing a call is boxed when V8 does not inline it
       const end = s + 1 < this.segCount ? this.segT0[s + 1] : this.end;
       if (vowel < 0 && MANNER[idx] === M_VOWEL && end > t) vowel = idx;
-      if (s === 0 || r > t || t >= r + 0.25 || MANNER[idx] !== M_VOWEL) continue;
-      const p = this.segIdx[s - 1];
-      if (VOICED[p] === 0 && GLOTTAL[p] === 0 && MANNER[p] !== M_SILENCE && MANNER[p] !== M_VOWEL) rise += cents * Math.exp(-(t - r) / 0.05);
     }
-    this.rise = rise;
     this.silent = cur >= 0 && MANNER[this.segIdx[cur]] === M_SILENCE ? 1 : 0;
     this.vowel = vowel;
-  }
-
-  /**
-   * The explicit pitch rise at a vowel onset after a voiceless obstruent
-   * (Krug et al. 2021): `cents` decaying over 50 ms, for 250 ms. The sum
-   * over onsets at or before t.
-   */
-  riseAt(t: number, cents: number): number {
-    let rise = 0;
-    for (let s = 1; s < this.segCount; s++) {
-      const r = this.segT0[s];
-      if (r > t) break;
-      if (t >= r + 0.25 || MANNER[this.segIdx[s]] !== M_VOWEL) continue;
-      const p = this.segIdx[s - 1];
-      if (VOICED[p] === 0 && GLOTTAL[p] === 0 && MANNER[p] !== M_SILENCE && MANNER[p] !== M_VOWEL) rise += cents * Math.exp(-(t - r) / 0.05);
-    }
-    return rise;
   }
 
   /* ---------------------------------------------------------------- */
@@ -540,9 +527,11 @@ export class VocalPlanner {
           // abduction's ramp out and the voicing gate add (MEASURED), at least CHIMERA's 20 ms
           const hold = aspirated ? Math.max(0.02, STOP_VOT[idx] - 0.05) : 0.0048;
           this.emit(t0 + 0.25 * dur, t1 + hold, 0.035, aspirated ? 0.045 : 0.02, 6, 0, 0);
+          this.stiffen(t0 + 0.25 * dur, t1 + hold + (aspirated ? 0.045 : 0.02));
         } else {
           this.key(KEY_ABDUCTION, 0.3);
           this.emit(t0 - 0.015, t1 + 0.005, 0.03, 0.03, 6, 0, 0);
+          this.stiffen(t0 - 0.015, t1 + 0.035);
         }
       } else if (m === M_FRICATIVE) {
         this.key(KEY_ABDUCTION, 0.035);
@@ -638,6 +627,15 @@ export class VocalPlanner {
     this.abduction = wa > 0 ? (vsum[KEY_ABDUCTION] / wa) * Math.min(1, wa / 2) : 0;
     const wc = wsum[KEY_CLOSURE];
     this.closure = wc > 0 ? (vsum[KEY_CLOSURE] / wc) * Math.min(1, wc / 2) : 0;
+    const ws = wsum[KEY_STIFFNESS];
+    this.stiffness = ws > 0 ? (vsum[KEY_STIFFNESS] / ws) * Math.min(1, ws) : 0;
+  }
+
+  /** A cricothyroid stiffness gesture from t0, full until t1, ramping out over STIFF_RELEASE. */
+  private stiffen(t0: number, t1: number): void {
+    this.begin();
+    this.key(KEY_STIFFNESS, 1);
+    this.emit(t0, t1, 0.03, STIFF_RELEASE, 1, 0, 0);
   }
 }
 

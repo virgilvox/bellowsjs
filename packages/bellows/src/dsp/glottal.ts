@@ -345,11 +345,15 @@ export class GlottalSource {
   private closeFirst = NO_CORNER;
   private closeSecond = NO_CORNER;
 
-  /* Cycle state. */
-  private phase = 0;
-  private odd = false;
-  private scale = 1;
-  private amp = 1;
+  /* Cycle state. phase, odd, amp, ampPrev, scale and pitchFactor are read by
+   * the fold models (dsp/geometric-glottis.ts, dsp/fold-oscillator.ts) that
+   * take their cycle from this unit; nothing outside writes them. */
+  phase = 0;
+  odd = false;
+  scale = 1;
+  amp = 1;
+  /** The amplitude of the cycle before this one, for an edge that lags into it. */
+  ampPrev = 1;
   private chaosX = CHAOS_RESTART;
   private inc = 0;
 
@@ -358,7 +362,7 @@ export class GlottalSource {
   private drift1 = 0;
   private drift2 = 0;
   private driftCountdown = 0;
-  private pitchFactor = 1;
+  pitchFactor = 1;
 
   /* Flow: the inertive state, the corrected flow the derivative is taken
    * of, and the corner correction owed to the next sample. */
@@ -401,6 +405,7 @@ export class GlottalSource {
     this.odd = false;
     this.scale = 1;
     this.amp = 1;
+    this.ampPrev = 1;
     this.chaosX = CHAOS_START_LO + CHAOS_START_SPAN * this.chaosRng();
     this.cycleS = (this.cycleRng() * 4294967296) | 0;
     this.driftS = (this.driftRng() * 4294967296) | 0;
@@ -526,6 +531,36 @@ export class GlottalSource {
     for (let i = from; i < to; i++) {
       this.nextArea();
       out[i] = this.aOut;
+    }
+  }
+
+  /**
+   * Advances the cycle by one sample and computes no area: for a fold model
+   * that takes its phase, `amp` and `odd` from this unit and builds the area
+   * itself (dsp/geometric-glottis.ts). The streams are drawn at the same
+   * moments as by next() and nextArea().
+   */
+  nextPhase(): void {
+    if (--this.driftCountdown <= 0) this.stepDrift();
+    let hz = this.hz * this.pitchFactor;
+    if (this.fry > 0) hz = this.fryPull(hz);
+    if (hz > this.maxHz) hz = this.maxHz;
+    const inc = (hz * this.invSampleRate) / this.scale;
+    this.inc = inc;
+    let ph = this.phase + inc;
+    if (ph >= 1) {
+      ph -= 1;
+      this.ampPrev = this.amp;
+      this.startCycle();
+    }
+    this.phase = ph;
+  }
+
+  /** nextPhase() for samples [from, to) of out, writing each phase: the block form, as processArea(). */
+  processPhase(out: Float64Array, from: number, to: number): void {
+    for (let i = from; i < to; i++) {
+      this.nextPhase();
+      out[i] = this.phase;
     }
   }
 
