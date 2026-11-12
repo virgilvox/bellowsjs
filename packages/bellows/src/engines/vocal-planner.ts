@@ -30,6 +30,22 @@
  * speed while it can act (1.55 stops and nasals, 2.8 the tap, 2.0 and
  * 1.4 an affricate's closure and release, 1.3 the rest).
  *
+ * CHANGES FOR THE ARTICULATOR CASCADE (dsp/cascade.ts, six stages where
+ * CHIMERA has a critically damped pair; the 98 percent times are kept):
+ *  - each articulator sees every gesture CASCADE_LAG of its own 98 percent
+ *    time ahead (0.18 of it, 5 to 28 ms), the extra time the cascade takes
+ *    to pass half way, so sounds keep CHIMERA's times;
+ *  - a consonant's release is a return gesture (VocalTractLab 2.4): from
+ *    its gesture's end its articulators move at RETURN_SPEED for one whole
+ *    movement, whatever follows, where CHIMERA held the speed 45 ms;
+ *  - when two consonants hold an articulator at once, a closure wins over
+ *    any other constriction and then the more anterior place, and an
+ *    approach takes the articulator from a return;
+ *  - a bilabial closure aims at LIP_VIRTUAL, past the lips' contact (the
+ *    engine stops them at LIP_COMPRESSED), and closing consonants release
+ *    a few ms earlier than CHIMERA's (lips 25 ms before the next sound,
+ *    tip 24, body 39), since a pressed articulator takes longer to leave.
+ *
  * ONLINE. A segment is a phoneme and its start in voice time. The caller
  * adds them as they become known: addUpcoming() for one posted early,
  * addNow() for one that starts now. Every addition rebuilds the gestures of
@@ -44,6 +60,8 @@
  * fixed arrays, and a full pool drops the oldest segment.
  */
 
+import { CASCADE_ORDER, CASCADE_SETTLE_98, cascadeSettle } from '../dsp/cascade';
+import { CRITDAMP_SETTLE_98 } from '../dsp/critdamp';
 import { ARTICULATORS, ART } from './vocal-articulators';
 import { VOCAL_ACOUSTICS, vocalPhonemeIndex } from './vocal-phonemes';
 import {
@@ -143,6 +161,8 @@ const SAME = 0.003;
 const FORGET = 1.5;
 /** A phrase-initial consonant starts this much earlier (the prototype's measured choice: a phrase-initial /ʃ/ was 17 dB weak without it). */
 const INITIAL_LEAD = 0.06;
+/** No consonant holds the articulator. */
+const NO_RANK = 127;
 /** CHIMERA's rest-posture weight in the blend. */
 const BASE_WEIGHT = 0.05;
 
@@ -163,7 +183,22 @@ export class VocalPlanner {
   private readonly gRo = new Float64Array(GESTURES);
   private readonly gStr = new Float64Array(GESTURES);
   private readonly gSpeed = new Float64Array(GESTURES);
+  /** A consonant's return: how long after t1 + ro its speed holds, s. */
   private readonly gHold = new Float64Array(GESTURES);
+  /** A consonant's return speed (0: none). */
+  private readonly gRet = new Float64Array(GESTURES);
+  /**
+   * A consonant's priority on its articulators, lower first: a closure (stop,
+   * nasal, an affricate's closure) at its place rank (0 bilabial .. 8
+   * uvular), anything else at 16 plus it; -1 for a gesture that is not a
+   * consonant's main one.
+   */
+  private readonly gRank = new Int8Array(GESTURES);
+  /** How far ahead each key of a gesture is evaluated, s: its articulator's added lag in the cascade (0 for the glottis). */
+  private readonly gLead = new Float64Array(GESTURES * GESTURE_KEYS);
+  /** The smallest and largest of a gesture's leads, to skip or take whole a gesture no key of which is in a ramp. */
+  private readonly gLeadMin = new Float64Array(GESTURES);
+  private readonly gLeadMax = new Float64Array(GESTURES);
   private readonly gKeyCount = new Uint8Array(GESTURES);
   private readonly gKeys = new Uint8Array(GESTURES * GESTURE_KEYS);
   private readonly gVals = new Float64Array(GESTURES * GESTURE_KEYS);
@@ -196,6 +231,12 @@ export class VocalPlanner {
   vowel = -1;
   private readonly wsum = new Float64Array(KEYS);
   private readonly vsum = new Float64Array(KEYS);
+  /* Per articulator at the evaluated time: the first in priority of the consonants approaching it (rankA), fully under way on it (rankF) and returning from it (rankR), and the speeds of those approaching and returning. */
+  private readonly rankA = new Int8Array(ARTICULATORS);
+  private readonly rankF = new Int8Array(ARTICULATORS);
+  private readonly rankR = new Int8Array(ARTICULATORS);
+  private readonly speedA = new Float64Array(ARTICULATORS);
+  private readonly speedR = new Float64Array(ARTICULATORS);
 
   constructor() {
     this.setBody(0);
@@ -384,7 +425,7 @@ export class VocalPlanner {
     this.nTmp++;
   }
 
-  private emit(t0: number, t1: number, ri: number, ro: number, str: number, speed: number, hold: number): number {
+  private emit(t0: number, t1: number, ri: number, ro: number, str: number, speed: number): number {
     if (this.nTmp === 0 || this.gCount === GESTURES) return -1;
     const g = this.gCount++;
     this.gT0[g] = t0;
@@ -393,19 +434,32 @@ export class VocalPlanner {
     this.gRo[g] = ro;
     this.gStr[g] = str;
     this.gSpeed[g] = speed;
-    this.gHold[g] = hold;
+    this.gHold[g] = 0;
+    this.gRet[g] = 0;
+    this.gRank[g] = -1;
     const n = this.nTmp < GESTURE_KEYS ? this.nTmp : GESTURE_KEYS;
     this.gKeyCount[g] = n;
+    let lo = Infinity;
+    let hi = -Infinity;
     for (let q = 0; q < n; q++) {
-      this.gKeys[g * GESTURE_KEYS + q] = this.kTmp[q];
+      const k = this.kTmp[q];
+      this.gKeys[g * GESTURE_KEYS + q] = k;
       this.gVals[g * GESTURE_KEYS + q] = this.vTmp[q];
+      // the cascade passes half way CASCADE_LAG of a 98 percent time later than CHIMERA's tracker did:
+      // each articulator sees the gesture that much ahead, at the gesture's speed
+      const lead = k < ARTICULATORS ? (CASCADE_LAG * CRITDAMP_SETTLE_98) / (2 * Math.PI * VOCAL_ARTICULATOR_HZ[k] * (speed > 0 ? speed : 1)) : 0;
+      this.gLead[g * GESTURE_KEYS + q] = lead;
+      if (lead < lo) lo = lead;
+      if (lead > hi) hi = lead;
     }
+    this.gLeadMin[g] = lo;
+    this.gLeadMax[g] = hi;
     this.nTmp = 0;
     return g;
   }
 
-  /** A consonant's oral gestures from its targets row (planner.rs:292-321, 532-577). */
-  private oral(idx: number, row: number, a: number, b: number, speed: number): void {
+  /** A consonant's oral gestures from its targets row (planner.rs:292-321, 532-577), returning at speed `ret`. */
+  private oral(idx: number, row: number, a: number, b: number, speed: number, ret: number): void {
     const T = this.consT;
     const dom = DOMINANT[idx];
     const bodyOnly = BODY_ONLY[idx] === 1;
@@ -413,18 +467,28 @@ export class VocalPlanner {
     const m = MANNER[idx];
     const closing = m === M_STOP || m === M_NASAL || m === M_AFFRICATE;
     const lipsOnly = LIPS_ONLY[idx] === 1;
-    const lead = closing ? (bodyOnly ? 0.034 : lipsOnly ? 0.019 : 0.02) : 0;
+    const lead = closing ? (bodyOnly ? 0.039 : lipsOnly ? 0.025 : 0.024) : 0;
     const early = closing ? (bodyOnly ? 0.024 : lipsOnly ? 0.022 : 0.031) : 0.008;
     this.begin();
-    for (let k = 0; k < ARTICULATORS; k++) if (dom & (1 << k)) this.key(k, T[row + k]);
-    this.emit(a - early, Math.max(a + 0.01, b - lead), 0.03, bodyOnly ? 0.03 : 0.018, 40, sp, 0.045);
+    const bilabial = closing && RANK[idx] === 0;
+    for (let k = 0; k < ARTICULATORS; k++) if (dom & (1 << k)) this.key(k, bilabial && k === ART.lipAp ? LIP_VIRTUAL : T[row + k]);
+    const g = this.emit(a - early, Math.max(a + 0.01, b - lead), 0.03, bodyOnly ? 0.03 : 0.018, 40, sp);
+    if (g >= 0) {
+      // the return gesture: the release at the consonant's own speed for a whole movement, whatever follows
+      const rs = bodyOnly ? 1 + (ret - 1) * 0.35 : ret;
+      let hz = 0;
+      for (let k = 0; k < ARTICULATORS; k++) if (dom & (1 << k) && VOCAL_ARTICULATOR_HZ[k] > hz) hz = VOCAL_ARTICULATOR_HZ[k];
+      this.gRet[g] = rs;
+      this.gHold[g] = CRITDAMP_SETTLE_98 / (2 * Math.PI * (hz > 0 ? hz : 10) * rs);
+      this.gRank[g] = (closing ? 0 : 16) + (RANK[idx] >= 0 ? RANK[idx] : 0);
+    }
     const tbXSet = T[row + ART.tbX] === T[row + ART.tbX];
     const alveolar = ALVEOLAR[idx] === 1 && !tbXSet && (closing || m === M_FRICATIVE || m === M_TAP);
     if (alveolar) {
       this.begin();
       this.key(ART.tbX, 3.2);
       this.key(ART.tbY, 7.4);
-      this.emit(a, b, 0.05, 0.05, 1.2, 0, 0);
+      this.emit(a, b, 0.05, 0.05, 1.2, 0);
     }
     this.begin();
     let place = NaN;
@@ -435,11 +499,11 @@ export class VocalPlanner {
       if (bodyOnly && k === ART.tbX) place = v;
       else this.key(k, v);
     }
-    this.emit(a, b, 0.05, 0.05, 2.2, 0, 0);
+    this.emit(a, b, 0.05, 0.05, 2.2, 0);
     if (place === place) {
       this.begin();
       this.key(ART.tbX, place);
-      this.emit(a, b, 0.05, 0.05, 0.25, 0, 0);
+      this.emit(a, b, 0.05, 0.05, 0.25, 0);
     }
   }
 
@@ -467,7 +531,7 @@ export class VocalPlanner {
       const row = idx * ARTICULATORS;
       this.begin();
       for (let k = 0; k < ARTICULATORS; k++) this.key(k, this.vowelT[row + k]);
-      this.emit(t0, t1, ri, ro, 1, 0, 0);
+      this.emit(t0, t1, ri, ro, 1, 0);
       prevVowel = s;
     }
     let firstVowel = n;
@@ -503,32 +567,33 @@ export class VocalPlanner {
             }
           }
         }
-        this.oral(idx, row, placed ? t0 + Math.min(0.025, Math.max(0, dur - 0.03)) : t0, t1, 1.55);
-      } else if (m === M_NASAL) this.oral(idx, row, t0, t1, 1.55);
-      else if (m === M_TAP) this.oral(idx, row, t0, t1, 2.8);
+        this.oral(idx, row, placed ? t0 + Math.min(0.025, Math.max(0, dur - 0.03)) : t0, t1, 1.55, RETURN_SPEED[idx]);
+      } else if (m === M_NASAL) this.oral(idx, row, t0, t1, 1.55, RETURN_SPEED[idx]);
+      else if (m === M_TAP) this.oral(idx, row, t0, t1, 2.8, RETURN_SPEED[idx]);
       else if (m === M_AFFRICATE) {
         const split = t0 + dur * 0.55;
-        this.oral(idx, row, t0, split, 2.0);
+        this.oral(idx, row, t0, split, 2.0, RETURN_SPEED[idx]);
         const rel = RELEASE[idx];
-        if (rel >= 0) this.oral(idx, rel * ARTICULATORS, split + 0.008, t1, 1.4);
-      } else if (m === M_FRICATIVE || m === M_APPROXIMANT || m === M_LATERAL) this.oral(idx, row, t0, t1, 1.3);
+        // the release part ends as its fricative does
+        if (rel >= 0) this.oral(idx, rel * ARTICULATORS, split + 0.008, t1, 1.4, RETURN_SPEED[rel]);
+      } else if (m === M_FRICATIVE || m === M_APPROXIMANT || m === M_LATERAL) this.oral(idx, row, t0, t1, 1.3, RETURN_SPEED[idx]);
       if (NASAL[idx]) {
         this.begin();
         this.key(ART.velum, 0.45);
-        this.emit(t0 - 0.02, t1 - 0.02, 0.05, 0.03, 4, 0, 0);
+        this.emit(t0 - 0.02, t1 - 0.02, 0.05, 0.03, 4, 0);
       }
       // phonation (planner.rs:329-358)
       const gl = GLOTTAL[idx];
       this.begin();
       if (gl === 1) {
         this.key(KEY_ABDUCTION, 0.33);
-        this.emit(t0 - 0.01, t1, 0.03, 0.035, 5, 0, 0);
+        this.emit(t0 - 0.01, t1, 0.03, 0.035, 5, 0);
       } else if (gl === 2) {
         this.key(KEY_CLOSURE, 1);
-        this.emit(t0, t1, 0.012, 0.015, 8, 0, 0);
+        this.emit(t0, t1, 0.012, 0.015, 8, 0);
       } else if (gl === 3) {
         this.key(KEY_ABDUCTION, 0.1);
-        this.emit(t0, t1, 0.03, 0.03, 5, 0, 0);
+        this.emit(t0, t1, 0.03, 0.03, 5, 0);
       } else if (VOICED[idx] === 0) {
         if (m === M_STOP || m === M_AFFRICATE) {
           const nextVowel = s + 1 < n && MANNER[this.segIdx[s + 1]] === M_VOWEL;
@@ -539,14 +604,14 @@ export class VocalPlanner {
           // p 58, t 70, k 80 ms; src/sing.ts releases that much before the beat) less the 50 ms the
           // abduction's ramp out and the voicing gate add (MEASURED), at least CHIMERA's 20 ms
           const hold = aspirated ? Math.max(0.02, STOP_VOT[idx] - 0.05) : 0.0048;
-          this.emit(t0 + 0.25 * dur, t1 + hold, 0.035, aspirated ? 0.045 : 0.02, 6, 0, 0);
+          this.emit(t0 + 0.25 * dur, t1 + hold, 0.035, aspirated ? 0.045 : 0.02, 6, 0);
         } else {
           this.key(KEY_ABDUCTION, 0.3);
-          this.emit(t0 - 0.015, t1 + 0.005, 0.03, 0.03, 6, 0, 0);
+          this.emit(t0 - 0.015, t1 + 0.005, 0.03, 0.03, 6, 0);
         }
       } else if (m === M_FRICATIVE) {
         this.key(KEY_ABDUCTION, 0.035);
-        this.emit(t0, t1, 0.03, 0.03, 3, 0, 0);
+        this.emit(t0, t1, 0.03, 0.03, 3, 0);
       }
       if (s < firstVowel) {
         for (let g = before; g < this.gCount; g++) {
@@ -566,7 +631,7 @@ export class VocalPlanner {
       const sonorant = m === M_VOWEL || m === M_NASAL || m === M_APPROXIMANT || m === M_LATERAL || m === M_TAP;
       this.begin();
       this.key(KEY_ABDUCTION, 0.22);
-      this.emit(this.end + (sonorant ? 0.045 : 0.015), this.end + 0.1, 0.03, 0.06, 6, 0, 0);
+      this.emit(this.end + (sonorant ? 0.045 : 0.015), this.end + 0.1, 0.03, 0.06, 6, 0);
     }
   }
 
@@ -597,29 +662,74 @@ export class VocalPlanner {
     const wsum = this.wsum;
     const vsum = this.vsum;
     const speed = this.speed;
+    const rankA = this.rankA;
+    const rankR = this.rankR;
+    const speedA = this.speedA;
+    const speedR = this.speedR;
     wsum.fill(0);
     vsum.fill(0);
-    speed.fill(1);
+    const rankF = this.rankF;
+    rankA.fill(NO_RANK);
+    rankF.fill(NO_RANK);
+    rankR.fill(NO_RANK);
+    speedA.fill(1);
+    speedR.fill(1);
+    // which consonants hold each articulator: approaching (from the ramp's start to t1; fully from t0)
+    // or returning (from t1, over the ramp out and the return). When two compete, a closure wins over
+    // any other constriction, then the more anterior place
     for (let g = 0; g < this.gCount; g++) {
+      const rank = this.gRank[g];
+      if (rank < 0) continue;
       const lo = this.gT0[g] - this.gRi[g];
-      if (t <= lo) continue;
       const t1 = this.gT1[g];
-      const ro = this.gRo[g];
-      const sp = this.gSpeed[g];
-      const inSpeed = sp > 0 && t <= t1 + ro + this.gHold[g];
-      if (t >= t1 + ro && !inSpeed) continue;
-      const t0 = this.gT0[g];
-      let act = 1;
-      if (t >= t1 + ro) act = 0;
-      else if (t < t0) act = 0.5 - 0.5 * Math.cos((Math.PI * (t - lo)) / Math.max(1e-6, this.gRi[g]));
-      else if (t > t1) act = 0.5 + 0.5 * Math.cos((Math.PI * (t - t1)) / Math.max(1e-6, ro));
-      const w = act * this.gStr[g];
+      const last = t1 + this.gRo[g] + this.gHold[g];
+      if (t + this.gLeadMax[g] <= lo || t + this.gLeadMin[g] > last) continue;
       const kc = this.gKeyCount[g];
       const base = g * GESTURE_KEYS;
       for (let q = 0; q < kc; q++) {
+        const tg = t + this.gLead[base + q];
+        if (tg <= lo || tg > last) continue;
+        const approach = tg < t1;
+        const sp = approach ? this.gSpeed[g] : this.gRet[g];
         const k = this.gKeys[base + q];
-        if (inSpeed && k < ARTICULATORS && sp > speed[k]) speed[k] = sp;
-        if (act <= 0) continue;
+        if (approach) {
+          if (rank < rankA[k] || (rank === rankA[k] && sp > speedA[k])) {
+            rankA[k] = rank;
+            speedA[k] = sp;
+          }
+          if (tg >= this.gT0[g] && rank < rankF[k]) rankF[k] = rank;
+        } else if (rank < rankR[k] || (rank === rankR[k] && sp > speedR[k])) {
+          rankR[k] = rank;
+          speedR[k] = sp;
+        }
+      }
+    }
+    for (let i = 0; i < ARTICULATORS; i++) speed[i] = rankA[i] !== NO_RANK ? speedA[i] : rankR[i] !== NO_RANK ? speedR[i] : 1;
+    for (let g = 0; g < this.gCount; g++) {
+      const lo = this.gT0[g] - this.gRi[g];
+      const t0 = this.gT0[g];
+      const t1 = this.gT1[g];
+      const ri = this.gRi[g] > 1e-6 ? this.gRi[g] : 1e-6;
+      const ro = this.gRo[g];
+      if (t + this.gLeadMax[g] <= lo || t + this.gLeadMin[g] >= t1 + ro) continue;
+      const str = this.gStr[g];
+      const rank = this.gRank[g];
+      const kc = this.gKeyCount[g];
+      const base = g * GESTURE_KEYS;
+      // every key between the ramps: whole, with no cosine
+      const whole = t + this.gLeadMin[g] >= t0 && t + this.gLeadMax[g] <= t1;
+      for (let q = 0; q < kc; q++) {
+        const tg = t + this.gLead[base + q];
+        if (tg <= lo || tg >= t1 + ro) continue;
+        const k = this.gKeys[base + q];
+        // a consonant that outranks this one, fully under way on the same articulator, takes it
+        if (rank >= 0 && tg < t1 && k < ARTICULATORS && rank > rankF[k]) continue;
+        let act = 1;
+        if (whole) {
+          // act stays 1
+        } else if (tg < t0) act = 0.5 - 0.5 * Math.cos((Math.PI * (tg - lo)) / ri);
+        else if (tg > t1) act = 0.5 + 0.5 * Math.cos((Math.PI * (tg - t1)) / (ro > 1e-6 ? ro : 1e-6));
+        const w = act * str;
         wsum[k] += w;
         vsum[k] += w * this.gVals[base + q];
       }
@@ -641,8 +751,32 @@ export class VocalPlanner {
   }
 }
 
-/** Natural angular frequency of each articulator, rad/s (control/articulators.rs:23). */
-export const ARTICULATOR_OMEGA = Float64Array.from(VOCAL_ARTICULATOR_HZ, (hz) => 2 * Math.PI * hz);
+/**
+ * Each articulator's rate, 1 / tau of its six-stage cascade (dsp/cascade.ts),
+ * per second: CHIMERA's natural frequencies (control/articulators.rs:23)
+ * with the 98 percent time kept, t98 = 5.834 / w = 12.03 tau.
+ */
+export const ARTICULATOR_RATE = Float64Array.from(VOCAL_ARTICULATOR_HZ, (hz) => (2 * Math.PI * hz * CASCADE_SETTLE_98) / CRITDAMP_SETTLE_98);
+/**
+ * How much later, as a fraction of the 98 percent time, the cascade passes
+ * half way than CHIMERA's critically damped tracker with the same 98
+ * percent time (0.471 against 0.288 of it). Gestures are evaluated this
+ * much ahead so the sounds keep their times.
+ */
+export const CASCADE_LAG = cascadeSettle(CASCADE_ORDER, 0.5) / CASCADE_SETTLE_98 - cascadeSettle(2, 0.5) / CRITDAMP_SETTLE_98;
+/**
+ * Each consonant's return (release) speed, a factor on its articulators'
+ * rates like the approach speeds, after VocalTractLab 2.4's return
+ * gestures (manual section 6.1): it governs the whole release movement, one
+ * 98 percent time long, whatever vowel follows (CHIMERA held a consonant's
+ * speed 45 ms past its ramp out and left the rest of the release to the
+ * vowel's rate). Stops and nasals 1.55, an affricate's closure 2.0, the tap
+ * 2.8, the rest 1.3: each its approach speed, which MEASURED keeps the
+ * vowels' arrival (a glide released at 1 landed its vowel 8 ms later).
+ */
+const RETURN_SPEED = Float64Array.from(VOCAL_INVENTORY, (d) =>
+  d.manner === 'stop' || d.manner === 'nasal' ? 1.55 : d.manner === 'tap' ? 2.8 : d.manner === 'affricate' ? 2.0 : 1.3,
+);
 /** Each table phoneme's VOT, s (0 for all but stops), from engines/vocal-phonemes.ts. */
 const STOP_VOT = Float64Array.from(VOCAL_TABLE_PHONEMES, (ipa) => {
   const i = vocalPhonemeIndex(ipa);
@@ -653,6 +787,19 @@ const NEUTRAL = Float64Array.from(VOCAL_NEUTRAL);
 /** Each articulator's range. */
 export const ARTICULATOR_MIN = Float64Array.from(VOCAL_ARTICULATOR_MIN);
 export const ARTICULATOR_MAX = Float64Array.from(VOCAL_ARTICULATOR_MAX);
+/**
+ * The lips stop closing here (template cm of aperture, scaled by k in the
+ * geometry): CHIMERA's closure target, the most the lips are compressed.
+ */
+export const LIP_COMPRESSED = -0.25;
+/**
+ * A bilabial closure's virtual target, past LIP_COMPRESSED: the lips meet
+ * moving near their fastest and compress (Lofqvist and Gracco 1997), and
+ * the contact holds them while their motion carries on toward it.
+ */
+export const LIP_VIRTUAL = -1.0;
+/** The lowest target each articulator may be given: its range, but the lips may aim at LIP_VIRTUAL. */
+export const ARTICULATOR_TARGET_MIN = Float64Array.from(VOCAL_ARTICULATOR_MIN, (v, i) => (i === ART.lipAp ? Math.min(v, LIP_VIRTUAL) : v));
 
 /** CHIMERA's rest tip for a jaw and tongue body (articulators.rs:110, anatomy/human.rs:443), into out[0], out[1]. */
 /** restTip() of the jaw and tongue body in an articulator array a: no double crosses the call. */

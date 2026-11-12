@@ -404,6 +404,57 @@ tables went from 114.6 KB to 38.9 KB.
   (0.9 B/sample over a line with a note every 1.6 s); the planner's rebuild at a phoneme
   allocates a little (0.08 B/sample).
 
+## Articulator gesture dynamics (2026-11-12)
+
+The articulators move as a six-stage cascade of identical first-order lags,
+H(s) = 1 / (1 + tau s)^6 (`src/dsp/cascade.ts`), the target approximation Birkholz fitted to
+measured movements (IEEE TASLP 19(5), 2011; Birkholz and Hoole, Interspeech 2012), in place of
+CHIMERA's critically damped pair. It is stepped exactly at control rate (21 multiply-adds a
+channel). Each articulator keeps CHIMERA's 98 percent time (t98 = 12.03 tau against 5.83 / w),
+so its velocity now peaks at 0.42 of it with 38 percent of the way done (0.17 and 26 before).
+The cascade passes half way 0.18 t98 later; the planner evaluates every gesture that much ahead
+for each articulator (5 to 28 ms). A consonant's release is a return gesture after VocalTractLab
+2.4: its articulators keep the consonant's own speed for a whole movement, whatever follows.
+When two consonants hold one articulator, a closure wins over any other constriction, then the
+more anterior place. A bilabial closure aims at -1.0 (template cm, k-scaled), past the lips'
+contact; the lips stop at CHIMERA's -0.25. The contact rule moves only the cascade's output
+stage, so a pressed tongue or lip keeps its motion in the stages behind it and leaves the
+contact already accelerating.
+
+Measured with the comparison phrases through the kernel (scratch taskC/, renders tC5), against
+int3 (the library before) and CHIMERA:
+
+| measure | CHIMERA | int3 | now |
+| --- | --- | --- | --- |
+| lip closing speed where the lips meet, of the movement's peak (Lofqvist and Gracco 1997: near it) | | 0.30 | 0.99 |
+| closure starts and releases re int3, mean absolute shift (5 phrases, 3 bodies, 2.7 ms grid) | | 0 | 0.8 and 5.7 ms |
+| vowel landing t50 re the beat after an onset consonant, stops / son / twinkle / strengths / melisma, ms | | -33 26 -14 -18 -2 | -34 25 -14 -16 -3 |
+| VOT, mean absolute error re Lisker and Abramson 1964 (without the phrase-initial /p/) | 32.1 (13.1) | 19.6 (9.0) | 13.1 (5.9) |
+| spectral shape velocity after /b d g/, voiced frames, dB per 10 ms | 4.01 | 4.83 | 4.02 |
+| max F2 velocity after /b d g p t k/, male, Hz/ms (LPC, noisy) | 11.98 | 14.86 | 12.06 |
+| DTW to CHIMERA, worst change over 7 phrases x 3 bodies, dB | | | +0.03 (strengths male -0.10) |
+| /l/ dip, 12 seeds, dB (CHIMERA -2.8) | | -1.77 | -1.49 |
+| fricative shape distance to the human, 12 seeds, dB | 12.09 | 10.46 | 10.65 |
+| cost through the kernel, 9 renders interleaved, us a sample | | 1.009 | 1.024 |
+
+Not met, and known regressions:
+
+- The fricative shape distance to the human rose 0.19 dB (12 seeds): /f/ 3.7 to 5.2 dB and /v/
+  18.9 to 19.5, while /ʃ/ fell 6.6 to 6.1 and /z/ 9.0 to 8.7. The lips now close on /f/ still
+  moving near their peak speed, and the 20 to 40 ms before the beat carry a louder, brighter
+  onset (3 dB) that the measure's noisiest window picks; the held /f/ is unchanged. The canonical
+  seed reads 10.77 against int3's 10.59, so the gate below int3 is not met by this change.
+- Long closures release later: the pressed articulator has further to come back. Codas and
+  phrase-final stops release 8 to 11 ms after int3 (the final /t/ of strengths at 4.516 s
+  against 4.505), CV stops within 3 ms after the release leads were lengthened (lips 25 ms, tip
+  24, body 39, from 19, 20 and 34).
+- The first /t/ of strengths now closes (0.384 to 0.448 s): int3 blended it with /s/ and /ɹ/
+  into a 0.06 cm^2 constriction. A closure wins its articulator now; whether a sung "str" should
+  close fully was not checked against a recording.
+- The return speeds equal the approach speeds except an affricate's (closure 2.0, its fricative
+  part 1.3 against 1.4): a glide returning at 1 landed its vowel 8 ms later, and no recording here
+  measures release speeds, so the values stay CHIMERA's until one does.
+
 ## The phases, each with a gate
 
 0. **Is the tube enough?** A float Kelly-Lochbaum tract at 48 kHz, driven both by CHIMERA's own
