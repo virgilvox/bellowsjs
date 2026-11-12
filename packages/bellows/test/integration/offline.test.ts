@@ -45,7 +45,7 @@ describe('offline integration: every registered engine makes sound', () => {
       [
         'va', 'fm', 'additive', 'wavetable', 'kick', 'snare', 'hat', 'clap', 'tom',
         'noise', 'pluck', 'string', 'tube', 'modal', 'westcoast', 'formant',
-        'granular', 'harmonic',
+        'vocal', 'granular', 'harmonic',
       ].sort(),
     );
   });
@@ -53,7 +53,7 @@ describe('offline integration: every registered engine makes sound', () => {
   for (const id of [
     'va', 'fm', 'additive', 'wavetable', 'kick', 'snare', 'hat', 'clap', 'tom',
     'noise', 'pluck', 'string', 'tube', 'modal', 'westcoast', 'formant',
-    'granular', 'harmonic',
+    'vocal', 'granular', 'harmonic',
   ]) {
     it(`${id} produces bounded, non-silent, deterministic audio`, () => {
       const a = renderNote(id);

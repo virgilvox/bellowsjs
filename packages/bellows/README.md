@@ -80,6 +80,20 @@ b.rampBpm(96, '8m');
 b.start();
 ```
 
+Singing is a lyric on a melody, on the `vocal` engine. Each vowel lands on its note, the consonants around it are timed like a singer's, and the pitches go through the tuning like any other note:
+
+```js
+const singer = b.voice('vocal', { body: 1 }); // 0 male, 1 female, 2 child
+singer.sing('twinkle twinkle little star', [
+  { note: 'C4', dur: '4n' }, { note: 'C4', dur: '4n' },
+  { note: 'G4', dur: '4n' }, { note: 'G4', dur: '4n' },
+  { note: 'A4', dur: '4n' }, { note: 'A4', dur: '4n' },
+  { note: 'G4', dur: '2n' },
+], { at: b.now() + 0.5 });
+```
+
+Words go through letter-to-sound rules unless you load a pronouncing dictionary (`b.dictionary = parseCmudict(text)`; bellows ships none), and IPA between slashes, `/ˈlɪt.əl/`, sets the sounds directly, so no dictionary is needed. Symbols the voice has no sound for are listed in the returned plan's `unknown`, and its `leadIn` is the longest any phrase starts before its first beat, which is how far ahead a live call has to be.
+
 Tier 3, the kernel. Custom engines and effects implement small contracts and become addressable by id like the built-ins, in realtime and offline both:
 
 ```js
@@ -113,7 +127,9 @@ const wav = audio.wav(24); // ArrayBuffer, ready to download
 
 ## What ships
 
-Synthesis: virtual analog (tabulated-BLEP oscillators, worst alias measured at -85 dB through the musical range and -73 dB at the top of the band, ladder and SVF filters, per-voice drift), FM (2/4/6 operators, DX-style algorithm routing), additive, wavetable (mipmapped, position scan), granular (64-grain clouds), extended Karplus-Strong, waveguide string and tube, modal banks (bar, membrane, bell, glass, wood), west coast (wavefolder into a vactrol low-pass gate), formant vocal synthesis, five drum engines, noise synth, and a DDSP-style harmonic-plus-noise engine with a frame-driven control input.
+Synthesis: virtual analog (tabulated-BLEP oscillators, worst alias measured at -85 dB through the musical range and -73 dB at the top of the band, ladder and SVF filters, per-voice drift), FM (2/4/6 operators, DX-style algorithm routing), additive, wavetable (mipmapped, position scan), granular (64-grain clouds), extended Karplus-Strong, waveguide string and tube, modal banks (bar, membrane, bell, glass, wood), west coast (wavefolder into a vactrol low-pass gate), formant vocal synthesis, a singing voice, five drum engines, noise synth, and a DDSP-style harmonic-plus-noise engine with a frame-driven control input.
+
+Voice: `vocal`, an articulatory singing voice (17 articulators, a waveguide airway that carries the air itself) with male, female and child bodies, 41 phonemes including stops with bursts and voice onset times, affricates, nasals and fricatives, and a glottal source with jitter, shimmer, drift and vocal fry. `Instrument.sing()` takes lyrics and notes; the lyric layer under it (English letter-to-sound, an injected CMUdict, IPA between slashes, and sung timing) is pure TypeScript that never reaches the audio thread.
 
 Samples: a sampler engine with velocity layers, crossfades, round robins, and loop-seam crossfading; an SF2 parser implementing the generator resolution model of the spec; an SFZ parser covering the opcodes the popular free libraries actually use, with #include and #define.
 
@@ -169,8 +185,14 @@ npm run dev           # the workbench app (Vue), live against library source
 npm run build         # library build including the worklet bundle
 ```
 
-The workbench app doubles as the documentation: a generative bench showing every engine swappable mid-piece, and a code mode with about thirty runnable, editable examples covering the entire API.
+The workbench app doubles as the documentation: a generative bench showing every engine swappable mid-piece, and a code mode of runnable, editable examples covering the entire API.
+
+## Acknowledgements
+
+The singing voice in bellows owes a large debt to [CHIMERA](https://github.com/jamesondh/chimera-vocal-synth), Jameson Hodge's physical-model voice synthesizer (MIT). The glottal source and the lyric front end are ported from it. The sung timing rules, the critically damped articulation smoothing, the flow-gated breath and the upper formant values for IPA vowels were learned from its code and its calibrated vocal tract. CHIMERA simulates the airway itself, which is what makes bursts, closures and clicks; if you want an articulatory voice, use CHIMERA.
+
+The notice and the list of files ported or learned from it are in `THIRD_PARTY_NOTICES.md`, which ships in the package.
 
 ## License
 
-Apache-2.0. See LICENSE.
+MIT. See LICENSE: use it, change it, sell it, ship it, and keep the copyright notice with it. The parts ported from CHIMERA are MIT too, under Jameson Hodge's own notice; THIRD_PARTY_NOTICES.md carries it, and the built bundles carry a one-line banner naming both.

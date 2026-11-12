@@ -21,6 +21,18 @@
  * vibrato. Measuring them as shipped measures the expression, not the
  * tuning, which cost the author an afternoon of chasing a bug that was a
  * feature.
+ *
+ * vocal moves it three ways, all on purpose: a 0.3 semitone vibrato that
+ * blooms in from 0.25 s, inside this test's 0.37 s window; a 1/f drift of
+ * 6 cents rms, which does not average out over any window; and per-cycle
+ * jitter scaled by roughness. Measured over eight seeds (a scratch copy of
+ * this measurement): as shipped the worst error was 22.5 cents, with the
+ * vibrato off 7.6, with drift off too 3.4, and with roughness 0 as well
+ * 1.53. That last residue is the jitter floor CHIMERA keeps at roughness
+ * 0 (0.21 percent a cycle, dsp/glottal.ts), averaged over 41 cycles at
+ * 110 Hz. So all three are zeroed: the bar is then about the tuning, with
+ * the margin every other engine gets, rather than about which seed the
+ * jitter happened to draw.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -32,6 +44,7 @@ import { modalEngine } from '../../src/engines/modal';
 import { fmEngine } from '../../src/engines/fm';
 import { vaEngine } from '../../src/engines/va';
 import { formantEngine } from '../../src/engines/formant';
+import { vocalEngine } from '../../src/engines/vocal';
 import { additiveEngine } from '../../src/engines/additive';
 import { harmonicEngine } from '../../src/engines/harmonic';
 import { magnitudeSpectrum } from '../dsp-osc/spectrum';
@@ -43,6 +56,7 @@ const N = 1 << 14;
 const NEUTRAL: Record<string, Record<string, number>> = {
   va: { detune: 0, drift: 0, sub: 0 },
   formant: { vibratoDepth: 0, vibratoRate: 0, breath: 0 },
+  vocal: { vibratoDepth: 0, drift: 0, roughness: 0 },
 };
 
 function render(def: EngineDef, hz: number): Float32Array {
@@ -86,6 +100,7 @@ const ENGINES: Array<[string, EngineDef]> = [
   ['fm', fmEngine],
   ['va', vaEngine],
   ['formant', formantEngine],
+  ['vocal', vocalEngine],
   ['additive', additiveEngine],
   ['harmonic', harmonicEngine],
 ];

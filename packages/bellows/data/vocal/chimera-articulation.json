@@ -1,0 +1,3419 @@
+{
+ "source": {
+  "repo": "https://github.com/jamesondh/chimera-vocal-synth",
+  "commit": "1d3ea49",
+  "author": "Jameson Hodge",
+  "license": "MIT",
+  "note": "CHIMERA's own definitions, serialized from its structures by crates/chimera/examples/tract_dump.rs (artic-spec); the gesture rules are transcribed from the planner with file:line references."
+ },
+ "units": "template coordinates in cm (head frame of the adult male template: x forward, y up, glottis at the origin), scaled per body by HumanVocalTract::p (human.rs:685); velum in cm^2 before the body scale (port = max(0, velum) * k^2); 0..1 for curl, lip width, labiodental, lateral, epilarynx, ventricular, dorsum",
+ "articulators": {
+  "order": [
+   "jaw",
+   "tbX",
+   "tbY",
+   "ttX",
+   "ttY",
+   "ttCurl",
+   "root",
+   "lipAp",
+   "lipProt",
+   "lipWidth",
+   "labiodental",
+   "velum",
+   "larynx",
+   "epilarynx",
+   "ventricular",
+   "lateral",
+   "dorsum"
+  ],
+  "specs": [
+   {
+    "hz": 10.0,
+    "key": "jaw",
+    "max": 2.6,
+    "min": -0.1
+   },
+   {
+    "hz": 12.0,
+    "key": "tbX",
+    "max": 4.8,
+    "min": 1.0
+   },
+   {
+    "hz": 12.0,
+    "key": "tbY",
+    "max": 9.2,
+    "min": 4.8
+   },
+   {
+    "hz": 13.0,
+    "key": "ttX",
+    "max": 8.0,
+    "min": 3.5
+   },
+   {
+    "hz": 13.0,
+    "key": "ttY",
+    "max": 10.8,
+    "min": 5.0
+   },
+   {
+    "hz": 9.0,
+    "key": "ttCurl",
+    "max": 1.0,
+    "min": 0.0
+   },
+   {
+    "hz": 9.0,
+    "key": "root",
+    "max": 1.0,
+    "min": -1.0
+   },
+   {
+    "hz": 11.0,
+    "key": "lipAp",
+    "max": 2.4,
+    "min": -0.4
+   },
+   {
+    "hz": 11.0,
+    "key": "lipProt",
+    "max": 1.5,
+    "min": -0.2
+   },
+   {
+    "hz": 11.0,
+    "key": "lipWidth",
+    "max": 1.0,
+    "min": 0.0
+   },
+   {
+    "hz": 10.0,
+    "key": "labiodental",
+    "max": 1.0,
+    "min": 0.0
+   },
+   {
+    "hz": 12.0,
+    "key": "velum",
+    "max": 1.4,
+    "min": -0.25
+   },
+   {
+    "hz": 8.0,
+    "key": "larynx",
+    "max": 1.6,
+    "min": -1.6
+   },
+   {
+    "hz": 6.0,
+    "key": "epilarynx",
+    "max": 1.0,
+    "min": 0.0
+   },
+   {
+    "hz": 6.0,
+    "key": "ventricular",
+    "max": 1.0,
+    "min": 0.0
+   },
+   {
+    "hz": 10.0,
+    "key": "lateral",
+    "max": 1.0,
+    "min": 0.0
+   },
+   {
+    "hz": 9.0,
+    "key": "dorsum",
+    "max": 1.0,
+    "min": 0.0
+   }
+  ],
+  "ref": "crates/chimera/src/control/articulators.rs:23 ARTIC_SPECS (min, max, natural frequency hz)",
+  "dynamics": "each articulator is a critically damped second-order system: x'' = w^2 (T - x) - 2 w x', w = 2 pi hz * speed, semi-implicit Euler at the control step (control/articulators.rs:109-146); HumanVoice steps it every 64 output samples at 2x oversampling (128 internal samples at 96 kHz, 1.333 ms) (voice/human_voice.rs:226, 434)",
+  "targetClamp": "the blended target is clamped to [min, max] before the step (control/articulators.rs:137)",
+  "speed": "per articulator, the largest speed multiplier among gestures whose window (t0 - rampIn .. t1 + rampOut + releaseHold) contains t (control/score.rs:405 blend_all)"
+ },
+ "neutral": {
+  "dorsum": 0.0,
+  "epilarynx": 0.0,
+  "jaw": 0.6,
+  "labiodental": 0.0,
+  "larynx": 0.0,
+  "lateral": 0.0,
+  "lipAp": 0.7,
+  "lipProt": 0.2,
+  "lipWidth": 0.5,
+  "root": 0.0,
+  "tbX": 2.9,
+  "tbY": 6.85,
+  "ttCurl": 0.0,
+  "ttX": 6.45,
+  "ttY": 7.3,
+  "velum": -0.15,
+  "ventricular": 0.0
+ },
+ "restPosture": {
+  "dorsum": 0.0,
+  "epilarynx": 0.0,
+  "jaw": 0.6,
+  "labiodental": 0.0,
+  "larynx": 0.0,
+  "lateral": 0.0,
+  "lipAp": 0.7,
+  "lipProt": 0.2,
+  "lipWidth": 0.5,
+  "root": 0.0,
+  "tbX": 2.9,
+  "tbY": 6.85,
+  "ttCurl": 0.0,
+  "ttX": 6.241412821929657,
+  "ttY": 6.810460479056529,
+  "velum": -0.15,
+  "ventricular": 0.0
+ },
+ "tipFree": {
+  "rule": "while no gesture sets the tip (tip_free, the default), the tip's target follows rest_tip(jaw, tbX, tbY) of the current state",
+  "ref": "crates/chimera/src/control/articulators.rs:110; anatomy/human.rs:443 rest_tip",
+  "restTip": "rotate (6.45, 7.35) about (-2.5, 10.5) by -jaw / 9.84 rad, then add (0.3 (tbX - 2.9), 0.35 (tbY - 6.85))"
+ },
+ "blending": {
+  "gestures": "each control key's value is the weighted mean of the active gestures' targets, weight = activation * strength; activation is 0..1 with raised-cosine ramps of rampIn before t0 and rampOut after t1 (control/score.rs:273, 405)",
+  "base": "the performer's base posture joins every key with weight 0.05 while a score plays: T = (base * 0.05 + value * weight) / (0.05 + weight) (voice/human_voice.rs:445, control/articulators.rs:128)",
+  "velum": "bounded key: T = base + min(1, weight / 2) * (value - base), so a strength-4 gesture takes the velum fully and a weak one barely (control/articulators.rs:54, 121)"
+ },
+ "contact": {
+  "rule": "after each control step the geometry is computed; if the tongue tip or body penetrates the oral roof by more than 0.1 * k cm (max_penetration), it is projected back along the roof normal and its inward velocity removed (inelastic)",
+  "ref": "crates/chimera/src/voice/human_voice.rs:195 enforce_contacts, 261 max_penetration"
+ },
+ "gestureRules": {
+  "vowel": {
+   "strength": 1.0,
+   "keys": [
+    "tbX",
+    "tbY",
+    "jaw",
+    "lipAp",
+    "lipProt",
+    "lipWidth",
+    "root",
+    "larynx",
+    "ttCurl"
+   ],
+   "plusTipWhenCurl": "ttX, ttY too when the vowel's ttCurl > 0.05 (rhotic)",
+   "rampIn": "max(0.03, 0.75 * (t0 - previous vowel's t1)) + 0.01",
+   "rampOut": "max(0.03, 0.4 * (next vowel's t0 - t1)) + 0.01",
+   "note": "vowel gestures overlap through consonants (Ohman): the next vowel ramps in over most of the gap",
+   "ref": "crates/chimera/src/phonetics/planner.rs:24, 88-108, 252-263"
+  },
+  "consonant": {
+   "dominant": {
+    "strength": 40.0,
+    "keys": "the phoneme's 'dominant' list",
+    "window": "from closure - early to max(closure + 0.01, release - lead)",
+    "rampIn": 0.03,
+    "rampOut": "0.03 if body-only else 0.018",
+    "releaseHold": 0.045,
+    "speed": "the manner speed below; body-only consonants (dominant all in tbX, tbY, root) use 1 + (speed - 1) * 0.35"
+   },
+   "secondary": {
+    "strength": 2.2,
+    "keys": "the phoneme's other targets",
+    "rampIn": 0.05,
+    "rampOut": 0.05
+   },
+   "velarPlace": {
+    "strength": 0.25,
+    "rule": "a body-only consonant's own tbX is moved to a separate weak gesture, so its front-back place follows the vowel"
+   },
+   "alveolarFronting": {
+    "strength": 1.2,
+    "targets": {
+     "tbX": 3.2,
+     "tbY": 7.4
+    },
+    "rampIn": 0.05,
+    "rampOut": 0.05,
+    "applies": "place alveolar, no tbX target, manner stop, nasal, fricative, affricate or tap"
+   },
+   "lead": {
+    "closingBodyOnly": 0.034,
+    "closingLipsOnly": 0.019,
+    "closingOther": 0.02,
+    "open": 0.0,
+    "note": "closing = stop, nasal, affricate; lips only = dominant all in lipAp, labiodental"
+   },
+   "early": {
+    "closingBodyOnly": 0.024,
+    "closingLipsOnly": 0.022,
+    "closingOther": 0.031,
+    "open": 0.008
+   },
+   "speedByManner": {
+    "stop": 1.55,
+    "nasal": 1.55,
+    "tap": 2.8,
+    "trill": 3.2,
+    "affricateClosure": 2.0,
+    "affricateRelease": 1.4,
+    "fricative": 1.3,
+    "approximant": 1.3,
+    "lateral": 1.3
+   },
+   "ref": "crates/chimera/src/phonetics/planner.rs:292-321, 532-577"
+  },
+  "affricate": {
+   "rule": "closure gesture (the affricate's own targets, speed 2.0) from t0 to t0 + 0.55 dur; release gesture (the 'release' fricative's targets, speed 1.4) from split + 0.008 to t1",
+   "ref": "crates/chimera/src/phonetics/planner.rs:312-319"
+  },
+  "tap": {
+   "rule": "the stop's targets at speed 2.8; default duration 25 ms (ɾ), so in running speech the contact is brief",
+   "ref": "crates/chimera/src/phonetics/planner.rs:301; phonetics/inventory.rs:230"
+  },
+  "trill": {
+   "rule": "n = max(2, round(26 dur)) gestures of 0.35 / 26 s at speed 3.2",
+   "ref": "crates/chimera/src/phonetics/planner.rs:302-311"
+  },
+  "nasal": {
+   "rule": "velum gesture to 0.45 from t0 - 0.02 to t1 - 0.02, rampIn 0.05, rampOut 0.03, strength 4 (bounded key)",
+   "ref": "crates/chimera/src/phonetics/planner.rs:325-327"
+  },
+  "nasalizedVowel": {
+   "port": 0.3,
+   "ramp": 0.04,
+   "strength": 4.0,
+   "ref": "crates/chimera/src/phonetics/planner.rs:187, 279-282"
+  },
+  "palatalization": {
+   "rule": "the tongue body goes toward /j/'s targets on the body coordinates (tbX, tbY) the consonant itself does not dominate, from t0 until the voice returns, strength 3, ramps 0.04; not for palatal consonants or glottals",
+   "strength": 3.0,
+   "ramp": 0.04,
+   "ref": "crates/chimera/src/phonetics/planner.rs:365-371, 454-470"
+  },
+  "preplacedClosure": {
+   "rule": "a stop closing behind another stop's closure, its articulators already set by the segment before, aims its closure 25 ms later (at most dur - 0.03)",
+   "delay": 0.025,
+   "ref": "crates/chimera/src/phonetics/planner.rs:299, 490, 498-507"
+  },
+  "glottal": {
+   "h": "abduction 0.33 from t0 - 0.01 to t1, ramps 0.03 / 0.035, strength 5",
+   "ʔ": "closure 1.0, ramps 0.012 / 0.015, strength 8",
+   "ɦ": "abduction 0.1",
+   "note": "no oral targets: the oral posture is the surrounding vowels'",
+   "ref": "crates/chimera/src/phonetics/planner.rs:331-336"
+  },
+  "voiceless": {
+   "stopOrAffricate": "abduction 0.36 aspirated (0.22 not) from t0 + 0.25 dur to t1 + VOT share; aspirated by default when syllable-initial before a vowel and not after /s/",
+   "fricative": "abduction 0.3 from t0 - 0.015 to t1 + 0.005",
+   "voicedFricative": "abduction 0.035",
+   "ref": "crates/chimera/src/phonetics/planner.rs:337-358"
+  }
+ },
+ "inventory": [
+  {
+   "dominant": [
+    "lipAp"
+   ],
+   "dur": 0.085,
+   "ipa": "p",
+   "manner": "stop",
+   "name": "voiceless bilabial stop",
+   "place": "bilabial",
+   "targets": {
+    "lipAp": -0.25
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "dominant": [
+    "lipAp"
+   ],
+   "dur": 0.07,
+   "ipa": "b",
+   "manner": "stop",
+   "name": "voiced bilabial stop",
+   "place": "bilabial",
+   "targets": {
+    "lipAp": -0.25
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY"
+   ],
+   "dur": 0.075,
+   "ipa": "t",
+   "manner": "stop",
+   "name": "voiceless alveolar stop",
+   "place": "alveolar",
+   "targets": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY"
+   ],
+   "dur": 0.06,
+   "ipa": "d",
+   "manner": "stop",
+   "name": "voiced alveolar stop",
+   "place": "alveolar",
+   "targets": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "ttCurl"
+   ],
+   "dur": 0.075,
+   "ipa": "ʈ",
+   "manner": "stop",
+   "name": "voiceless retroflex stop",
+   "place": "retroflex",
+   "targets": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "ttCurl"
+   ],
+   "dur": 0.065,
+   "ipa": "ɖ",
+   "manner": "stop",
+   "name": "voiced retroflex stop",
+   "place": "retroflex",
+   "targets": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.08,
+   "ipa": "c",
+   "manner": "stop",
+   "name": "voiceless palatal stop",
+   "place": "palatal",
+   "targets": {
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "dominant": [
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.07,
+   "ipa": "ɟ",
+   "manner": "stop",
+   "name": "voiced palatal stop",
+   "place": "palatal",
+   "targets": {
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "tbY"
+   ],
+   "dur": 0.08,
+   "ipa": "k",
+   "manner": "stop",
+   "name": "voiceless velar stop",
+   "place": "velar",
+   "targets": {
+    "jaw": 0.7,
+    "tbX": 2.3,
+    "tbY": 8.35
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "dominant": [
+    "tbY"
+   ],
+   "dur": 0.07,
+   "ipa": "g",
+   "manner": "stop",
+   "name": "voiced velar stop",
+   "place": "velar",
+   "targets": {
+    "jaw": 0.7,
+    "tbX": 2.3,
+    "tbY": 8.35
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.085,
+   "ipa": "q",
+   "manner": "stop",
+   "name": "voiceless uvular stop",
+   "place": "uvular",
+   "targets": {
+    "tbX": 1.55,
+    "tbY": 7.6
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "dominant": [
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.075,
+   "ipa": "ɢ",
+   "manner": "stop",
+   "name": "voiced uvular stop",
+   "place": "uvular",
+   "targets": {
+    "tbX": 1.55,
+    "tbY": 7.6
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [],
+   "dur": 0.06,
+   "glottal": "stop",
+   "ipa": "ʔ",
+   "manner": "glottal",
+   "name": "glottal stop",
+   "place": "glottal",
+   "targets": {},
+   "voicing": "voiceless"
+  },
+  {
+   "dominant": [
+    "lipAp"
+   ],
+   "dur": 0.075,
+   "ipa": "m",
+   "manner": "nasal",
+   "name": "bilabial nasal",
+   "nasal": true,
+   "place": "bilabial",
+   "targets": {
+    "lipAp": -0.25
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "labiodental",
+    "lipAp"
+   ],
+   "dur": 0.075,
+   "ipa": "ɱ",
+   "manner": "nasal",
+   "name": "labiodental nasal",
+   "nasal": true,
+   "place": "labiodental",
+   "targets": {
+    "labiodental": 1.0,
+    "lipAp": -0.1
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY"
+   ],
+   "dur": 0.07,
+   "ipa": "n",
+   "manner": "nasal",
+   "name": "alveolar nasal",
+   "nasal": true,
+   "place": "alveolar",
+   "targets": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "ttCurl"
+   ],
+   "dur": 0.07,
+   "ipa": "ɳ",
+   "manner": "nasal",
+   "name": "retroflex nasal",
+   "nasal": true,
+   "place": "retroflex",
+   "targets": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.075,
+   "ipa": "ɲ",
+   "manner": "nasal",
+   "name": "palatal nasal",
+   "nasal": true,
+   "place": "palatal",
+   "targets": {
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "tbY"
+   ],
+   "dur": 0.08,
+   "ipa": "ŋ",
+   "manner": "nasal",
+   "name": "velar nasal",
+   "nasal": true,
+   "place": "velar",
+   "targets": {
+    "jaw": 0.7,
+    "tbX": 2.3,
+    "tbY": 8.35
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.08,
+   "ipa": "ɴ",
+   "manner": "nasal",
+   "name": "uvular nasal",
+   "nasal": true,
+   "place": "uvular",
+   "targets": {
+    "tbX": 1.55,
+    "tbY": 7.6
+   },
+   "voicing": "voiced"
+  },
+  {
+   "area": 0.12,
+   "calKey": "lipAp",
+   "dominant": [
+    "lipAp"
+   ],
+   "dur": 0.11,
+   "ipa": "ɸ",
+   "manner": "fricative",
+   "name": "voiceless bilabial fricative",
+   "place": "bilabial",
+   "targets": {
+    "lipAp": 0.08
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "area": 0.15,
+   "calKey": "lipAp",
+   "dominant": [
+    "lipAp"
+   ],
+   "dur": 0.09,
+   "ipa": "β",
+   "manner": "fricative",
+   "name": "voiced bilabial fricative",
+   "place": "bilabial",
+   "targets": {
+    "lipAp": 0.1
+   },
+   "voicing": "voiced"
+  },
+  {
+   "area": 0.11,
+   "calKey": "lipAp",
+   "dominant": [
+    "labiodental",
+    "lipAp"
+   ],
+   "dur": 0.11,
+   "ipa": "f",
+   "manner": "fricative",
+   "name": "voiceless labiodental fricative",
+   "place": "labiodental",
+   "targets": {
+    "labiodental": 1.0,
+    "lipAp": 0.05
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "area": 0.13,
+   "calKey": "lipAp",
+   "dominant": [
+    "labiodental",
+    "lipAp"
+   ],
+   "dur": 0.08,
+   "ipa": "v",
+   "manner": "fricative",
+   "name": "voiced labiodental fricative",
+   "place": "labiodental",
+   "targets": {
+    "labiodental": 1.0,
+    "lipAp": 0.06
+   },
+   "voicing": "voiced"
+  },
+  {
+   "area": 0.15,
+   "calKey": "ttY",
+   "dominant": [
+    "ttX",
+    "ttY"
+   ],
+   "dur": 0.11,
+   "ipa": "θ",
+   "manner": "fricative",
+   "name": "voiceless dental fricative",
+   "place": "dental",
+   "targets": {
+    "ttX": 6.85,
+    "ttY": 8.5
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "area": 0.17,
+   "calKey": "ttY",
+   "dominant": [
+    "ttX",
+    "ttY"
+   ],
+   "dur": 0.07,
+   "ipa": "ð",
+   "manner": "fricative",
+   "name": "voiced dental fricative",
+   "place": "dental",
+   "targets": {
+    "ttX": 6.85,
+    "ttY": 8.5
+   },
+   "voicing": "voiced"
+  },
+  {
+   "area": 0.085,
+   "calKey": "ttY",
+   "dominant": [
+    "ttX",
+    "ttY",
+    "jaw"
+   ],
+   "dur": 0.12,
+   "ipa": "s",
+   "manner": "fricative",
+   "name": "voiceless alveolar fricative",
+   "place": "alveolar",
+   "targets": {
+    "jaw": 0.3,
+    "ttX": 6.3,
+    "ttY": 9.15
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "area": 0.1,
+   "calKey": "ttY",
+   "dominant": [
+    "ttX",
+    "ttY",
+    "jaw"
+   ],
+   "dur": 0.09,
+   "ipa": "z",
+   "manner": "fricative",
+   "name": "voiced alveolar fricative",
+   "place": "alveolar",
+   "targets": {
+    "jaw": 0.3,
+    "ttX": 6.3,
+    "ttY": 9.15
+   },
+   "voicing": "voiced"
+  },
+  {
+   "area": 0.2,
+   "calKey": "ttY",
+   "dominant": [
+    "ttX",
+    "ttY",
+    "jaw",
+    "lipProt",
+    "lipWidth"
+   ],
+   "dur": 0.12,
+   "ipa": "ʃ",
+   "manner": "fricative",
+   "name": "voiceless postalveolar fricative",
+   "place": "postalveolar",
+   "targets": {
+    "jaw": 0.35,
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.7,
+    "ttY": 9.5
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "area": 0.22,
+   "calKey": "ttY",
+   "dominant": [
+    "ttX",
+    "ttY",
+    "jaw",
+    "lipProt",
+    "lipWidth"
+   ],
+   "dur": 0.09,
+   "ipa": "ʒ",
+   "manner": "fricative",
+   "name": "voiced postalveolar fricative",
+   "place": "postalveolar",
+   "targets": {
+    "jaw": 0.35,
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.7,
+    "ttY": 9.5
+   },
+   "voicing": "voiced"
+  },
+  {
+   "area": 0.15,
+   "calKey": "ttY",
+   "dominant": [
+    "ttX",
+    "ttY",
+    "ttCurl"
+   ],
+   "dur": 0.12,
+   "ipa": "ʂ",
+   "manner": "fricative",
+   "name": "voiceless retroflex fricative",
+   "place": "retroflex",
+   "targets": {
+    "ttCurl": 0.9,
+    "ttX": 5.45,
+    "ttY": 9.7
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "area": 0.17,
+   "calKey": "ttY",
+   "dominant": [
+    "ttX",
+    "ttY",
+    "ttCurl"
+   ],
+   "dur": 0.09,
+   "ipa": "ʐ",
+   "manner": "fricative",
+   "name": "voiced retroflex fricative",
+   "place": "retroflex",
+   "targets": {
+    "ttCurl": 0.9,
+    "ttX": 5.45,
+    "ttY": 9.7
+   },
+   "voicing": "voiced"
+  },
+  {
+   "area": 0.14,
+   "calKey": "tbY",
+   "dominant": [
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.12,
+   "ipa": "ç",
+   "manner": "fricative",
+   "name": "voiceless palatal fricative",
+   "place": "palatal",
+   "targets": {
+    "tbX": 3.75,
+    "tbY": 8.25
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "area": 0.16,
+   "calKey": "tbY",
+   "dominant": [
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.09,
+   "ipa": "ʝ",
+   "manner": "fricative",
+   "name": "voiced palatal fricative",
+   "place": "palatal",
+   "targets": {
+    "tbX": 3.75,
+    "tbY": 8.25
+   },
+   "voicing": "voiced"
+  },
+  {
+   "area": 0.18,
+   "calKey": "tbY",
+   "dominant": [
+    "tbY"
+   ],
+   "dur": 0.12,
+   "ipa": "x",
+   "manner": "fricative",
+   "name": "voiceless velar fricative",
+   "place": "velar",
+   "targets": {
+    "tbX": 2.3,
+    "tbY": 7.7
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "area": 0.2,
+   "calKey": "tbY",
+   "dominant": [
+    "tbY"
+   ],
+   "dur": 0.09,
+   "ipa": "ɣ",
+   "manner": "fricative",
+   "name": "voiced velar fricative",
+   "place": "velar",
+   "targets": {
+    "tbX": 2.3,
+    "tbY": 7.7
+   },
+   "voicing": "voiced"
+  },
+  {
+   "area": 0.2,
+   "calKey": "tbY",
+   "dominant": [
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.12,
+   "ipa": "χ",
+   "manner": "fricative",
+   "name": "voiceless uvular fricative",
+   "place": "uvular",
+   "targets": {
+    "tbX": 1.55,
+    "tbY": 7.6
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "area": 0.22,
+   "calKey": "tbY",
+   "dominant": [
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.09,
+   "ipa": "ʁ",
+   "manner": "fricative",
+   "name": "voiced uvular fricative",
+   "place": "uvular",
+   "targets": {
+    "tbX": 1.55,
+    "tbY": 7.6
+   },
+   "voicing": "voiced"
+  },
+  {
+   "area": 0.25,
+   "calKey": "tbX",
+   "dominant": [
+    "root",
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.12,
+   "ipa": "ħ",
+   "manner": "fricative",
+   "name": "voiceless pharyngeal fricative",
+   "place": "pharyngeal",
+   "targets": {
+    "root": -0.95,
+    "tbX": 1.3,
+    "tbY": 6.2
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "area": 0.3,
+   "calKey": "tbX",
+   "dominant": [
+    "root",
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.09,
+   "ipa": "ʕ",
+   "manner": "fricative",
+   "name": "voiced pharyngeal fricative",
+   "place": "pharyngeal",
+   "targets": {
+    "root": -0.95,
+    "tbX": 1.3,
+    "tbY": 6.2
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [],
+   "dur": 0.09,
+   "glottal": "open",
+   "ipa": "h",
+   "manner": "glottal",
+   "name": "voiceless glottal fricative",
+   "place": "glottal",
+   "targets": {},
+   "voicing": "voiceless"
+  },
+  {
+   "dominant": [],
+   "dur": 0.08,
+   "glottal": "breathy",
+   "ipa": "ɦ",
+   "manner": "glottal",
+   "name": "voiced glottal fricative",
+   "place": "glottal",
+   "targets": {},
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "lateral"
+   ],
+   "dur": 0.12,
+   "ipa": "ɬ",
+   "manner": "fricative",
+   "name": "voiceless lateral fricative",
+   "place": "alveolar",
+   "targets": {
+    "lateral": 0.35,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "lateral"
+   ],
+   "dur": 0.09,
+   "ipa": "ɮ",
+   "manner": "fricative",
+   "name": "voiced lateral fricative",
+   "place": "alveolar",
+   "targets": {
+    "lateral": 0.45,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY"
+   ],
+   "dur": 0.14,
+   "ipa": "ts",
+   "manner": "affricate",
+   "name": "voiceless alveolar affricate",
+   "place": "alveolar",
+   "release": "s",
+   "targets": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY"
+   ],
+   "dur": 0.12,
+   "ipa": "dz",
+   "manner": "affricate",
+   "name": "voiced alveolar affricate",
+   "place": "alveolar",
+   "release": "z",
+   "targets": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "lipProt",
+    "lipWidth"
+   ],
+   "dur": 0.15,
+   "ipa": "tʃ",
+   "manner": "affricate",
+   "name": "voiceless postalveolar affricate",
+   "place": "postalveolar",
+   "release": "ʃ",
+   "targets": {
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.75,
+    "ttY": 10.0
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "lipProt",
+    "lipWidth"
+   ],
+   "dur": 0.13,
+   "ipa": "dʒ",
+   "manner": "affricate",
+   "name": "voiced postalveolar affricate",
+   "place": "postalveolar",
+   "release": "ʒ",
+   "targets": {
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.75,
+    "ttY": 10.0
+   },
+   "voicing": "voiced"
+  },
+  {
+   "area": 0.17,
+   "calKey": "ttY",
+   "dominant": [
+    "ttX",
+    "ttY",
+    "tbX",
+    "tbY",
+    "jaw",
+    "lipProt",
+    "lipWidth"
+   ],
+   "dur": 0.12,
+   "ipa": "ɕ",
+   "manner": "fricative",
+   "name": "voiceless alveolo-palatal fricative",
+   "place": "alveolo-palatal",
+   "targets": {
+    "jaw": 0.3,
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 7.75,
+    "ttX": 5.85,
+    "ttY": 9.5
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "area": 0.19,
+   "calKey": "ttY",
+   "dominant": [
+    "ttX",
+    "ttY",
+    "tbX",
+    "tbY",
+    "jaw",
+    "lipProt",
+    "lipWidth"
+   ],
+   "dur": 0.09,
+   "ipa": "ʑ",
+   "manner": "fricative",
+   "name": "voiced alveolo-palatal fricative",
+   "place": "alveolo-palatal",
+   "targets": {
+    "jaw": 0.3,
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 7.75,
+    "ttX": 5.85,
+    "ttY": 9.5
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "tbX",
+    "tbY",
+    "lipProt",
+    "lipWidth"
+   ],
+   "dur": 0.14,
+   "ipa": "tɕ",
+   "manner": "affricate",
+   "name": "voiceless alveolo-palatal affricate",
+   "place": "alveolo-palatal",
+   "release": "ɕ",
+   "targets": {
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 8.1,
+    "ttX": 5.85,
+    "ttY": 10.0
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "tbX",
+    "tbY",
+    "lipProt",
+    "lipWidth"
+   ],
+   "dur": 0.12,
+   "ipa": "dʑ",
+   "manner": "affricate",
+   "name": "voiced alveolo-palatal affricate",
+   "place": "alveolo-palatal",
+   "release": "ʑ",
+   "targets": {
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 8.1,
+    "ttX": 5.85,
+    "ttY": 10.0
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "ttCurl"
+   ],
+   "dur": 0.14,
+   "ipa": "tʂ",
+   "manner": "affricate",
+   "name": "voiceless retroflex affricate",
+   "place": "retroflex",
+   "release": "ʂ",
+   "targets": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "ttCurl"
+   ],
+   "dur": 0.12,
+   "ipa": "dʐ",
+   "manner": "affricate",
+   "name": "voiced retroflex affricate",
+   "place": "retroflex",
+   "release": "ʐ",
+   "targets": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "lipAp"
+   ],
+   "dur": 0.14,
+   "ipa": "pf",
+   "manner": "affricate",
+   "name": "voiceless labiodental affricate",
+   "place": "labiodental",
+   "release": "f",
+   "targets": {
+    "lipAp": -0.25
+   },
+   "voicing": "voiceless"
+  },
+  {
+   "dominant": [
+    "lipAp",
+    "lipProt",
+    "lipWidth",
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.06,
+   "ipa": "w",
+   "manner": "approximant",
+   "name": "labial-velar approximant",
+   "place": "labial-velar",
+   "targets": {
+    "lipAp": 0.28,
+    "lipProt": 1.0,
+    "lipWidth": 0.05,
+    "tbX": 2.45,
+    "tbY": 7.45
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "labiodental",
+    "lipAp"
+   ],
+   "dur": 0.06,
+   "ipa": "ʋ",
+   "manner": "approximant",
+   "name": "labiodental approximant",
+   "place": "labiodental",
+   "targets": {
+    "labiodental": 0.9,
+    "lipAp": 0.25
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "ttCurl",
+    "lipProt",
+    "lipWidth",
+    "root"
+   ],
+   "dur": 0.065,
+   "ipa": "ɹ",
+   "manner": "approximant",
+   "name": "alveolar approximant",
+   "place": "postalveolar",
+   "targets": {
+    "lipProt": 0.5,
+    "lipWidth": 0.3,
+    "root": -0.6,
+    "tbX": 2.3,
+    "tbY": 7.1,
+    "ttCurl": 0.85,
+    "ttX": 5.35,
+    "ttY": 9.35
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "ttCurl"
+   ],
+   "dur": 0.065,
+   "ipa": "ɻ",
+   "manner": "approximant",
+   "name": "retroflex approximant",
+   "place": "retroflex",
+   "targets": {
+    "ttCurl": 1.0,
+    "ttX": 5.4,
+    "ttY": 9.55
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.055,
+   "ipa": "j",
+   "manner": "approximant",
+   "name": "palatal approximant",
+   "place": "palatal",
+   "targets": {
+    "jaw": 0.25,
+    "tbX": 3.8,
+    "tbY": 7.95
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "tbX",
+    "tbY",
+    "jaw",
+    "lipAp",
+    "lipProt",
+    "lipWidth"
+   ],
+   "dur": 0.055,
+   "ipa": "ɥ",
+   "manner": "approximant",
+   "name": "labial-palatal approximant",
+   "place": "labial-palatal",
+   "targets": {
+    "jaw": 0.25,
+    "lipAp": 0.28,
+    "lipProt": 1.0,
+    "lipWidth": 0.05,
+    "tbX": 3.8,
+    "tbY": 7.95
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.06,
+   "ipa": "ɰ",
+   "manner": "approximant",
+   "name": "velar approximant",
+   "place": "velar",
+   "targets": {
+    "tbX": 2.35,
+    "tbY": 7.45
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "lateral"
+   ],
+   "dur": 0.065,
+   "ipa": "l",
+   "manner": "lateral",
+   "name": "alveolar lateral approximant",
+   "place": "alveolar",
+   "targets": {
+    "lateral": 1.0,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "lateral",
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.075,
+   "ipa": "ɫ",
+   "manner": "lateral",
+   "name": "velarised lateral",
+   "place": "alveolar",
+   "targets": {
+    "lateral": 1.0,
+    "tbX": 1.9,
+    "tbY": 6.8,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "ttCurl",
+    "lateral"
+   ],
+   "dur": 0.065,
+   "ipa": "ɭ",
+   "manner": "lateral",
+   "name": "retroflex lateral",
+   "place": "retroflex",
+   "targets": {
+    "lateral": 1.0,
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "tbX",
+    "tbY",
+    "lateral"
+   ],
+   "dur": 0.07,
+   "ipa": "ʎ",
+   "manner": "lateral",
+   "name": "palatal lateral",
+   "place": "palatal",
+   "targets": {
+    "lateral": 1.0,
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY"
+   ],
+   "dur": 0.025,
+   "ipa": "ɾ",
+   "manner": "tap",
+   "name": "alveolar tap",
+   "place": "alveolar",
+   "targets": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY",
+    "ttCurl"
+   ],
+   "dur": 0.03,
+   "ipa": "ɽ",
+   "manner": "tap",
+   "name": "retroflex flap",
+   "place": "retroflex",
+   "targets": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "ttX",
+    "ttY"
+   ],
+   "dur": 0.11,
+   "ipa": "r",
+   "manner": "trill",
+   "name": "alveolar trill",
+   "place": "alveolar",
+   "targets": {
+    "ttX": 6.25,
+    "ttY": 9.45
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "tbX",
+    "tbY"
+   ],
+   "dur": 0.11,
+   "ipa": "ʀ",
+   "manner": "trill",
+   "name": "uvular trill",
+   "place": "uvular",
+   "targets": {
+    "tbX": 1.55,
+    "tbY": 7.85
+   },
+   "voicing": "voiced"
+  },
+  {
+   "dominant": [
+    "lipAp"
+   ],
+   "dur": 0.12,
+   "ipa": "ʙ",
+   "manner": "trill",
+   "name": "bilabial trill",
+   "place": "bilabial",
+   "targets": {
+    "lipAp": 0.02
+   },
+   "voicing": "voiced"
+  }
+ ],
+ "inventoryRef": "crates/chimera/src/phonetics/inventory.rs:136-235 (place templates and base())",
+ "calibration": {
+  "rule": "fricative constriction coordinates calibrated per body to hit target areas (area * k^2) in an /ɑ/ context with jaw 0.55 (chimera-cli calibrate.rs:281); consonantTargetsByBody is base targets merged with consonantTargets.generated.json",
+  "ref": "crates/chimera/src/phonetics/inventory.rs:259 phoneme()"
+ },
+ "consonantTargetsByBody": {
+  "child": {
+   "b": {
+    "lipAp": -0.25
+   },
+   "c": {
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "d": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "dz": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "dʐ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "dʑ": {
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 8.1,
+    "ttX": 5.85,
+    "ttY": 10.0
+   },
+   "dʒ": {
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.75,
+    "ttY": 10.0
+   },
+   "f": {
+    "labiodental": 1.0,
+    "lipAp": 0.006
+   },
+   "g": {
+    "jaw": 0.7,
+    "tbX": 2.3,
+    "tbY": 8.35
+   },
+   "h": {},
+   "j": {
+    "jaw": 0.25,
+    "tbX": 3.8,
+    "tbY": 7.95
+   },
+   "k": {
+    "jaw": 0.7,
+    "tbX": 2.3,
+    "tbY": 8.35
+   },
+   "l": {
+    "lateral": 1.0,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "m": {
+    "lipAp": -0.25
+   },
+   "n": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "p": {
+    "lipAp": -0.25
+   },
+   "pf": {
+    "lipAp": -0.25
+   },
+   "q": {
+    "tbX": 1.55,
+    "tbY": 7.6
+   },
+   "r": {
+    "ttX": 6.25,
+    "ttY": 9.45
+   },
+   "s": {
+    "jaw": 0.3,
+    "ttX": 6.3,
+    "ttY": 9.126
+   },
+   "t": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ts": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "tɕ": {
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 8.1,
+    "ttX": 5.85,
+    "ttY": 10.0
+   },
+   "tʂ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "tʃ": {
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.75,
+    "ttY": 10.0
+   },
+   "v": {
+    "labiodental": 1.0,
+    "lipAp": 0.02
+   },
+   "w": {
+    "lipAp": 0.28,
+    "lipProt": 1.0,
+    "lipWidth": 0.05,
+    "tbX": 2.45,
+    "tbY": 7.45
+   },
+   "x": {
+    "tbX": 2.3,
+    "tbY": 7.499
+   },
+   "z": {
+    "jaw": 0.3,
+    "ttX": 6.3,
+    "ttY": 9.114
+   },
+   "ç": {
+    "tbX": 3.75,
+    "tbY": 8.043
+   },
+   "ð": {
+    "ttX": 6.85,
+    "ttY": 8.244
+   },
+   "ħ": {
+    "root": -0.95,
+    "tbX": 1.106,
+    "tbY": 6.2
+   },
+   "ŋ": {
+    "jaw": 0.7,
+    "tbX": 2.3,
+    "tbY": 8.35
+   },
+   "ɕ": {
+    "jaw": 0.3,
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 7.75,
+    "ttX": 5.85,
+    "ttY": 9.464
+   },
+   "ɖ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ɟ": {
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "ɢ": {
+    "tbX": 1.55,
+    "tbY": 7.6
+   },
+   "ɣ": {
+    "tbX": 2.3,
+    "tbY": 7.487
+   },
+   "ɥ": {
+    "jaw": 0.25,
+    "lipAp": 0.28,
+    "lipProt": 1.0,
+    "lipWidth": 0.05,
+    "tbX": 3.8,
+    "tbY": 7.95
+   },
+   "ɦ": {},
+   "ɫ": {
+    "lateral": 1.0,
+    "tbX": 1.9,
+    "tbY": 6.8,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ɬ": {
+    "lateral": 0.35,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ɭ": {
+    "lateral": 1.0,
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ɮ": {
+    "lateral": 0.45,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ɰ": {
+    "tbX": 2.35,
+    "tbY": 7.45
+   },
+   "ɱ": {
+    "labiodental": 1.0,
+    "lipAp": -0.1
+   },
+   "ɲ": {
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "ɳ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ɴ": {
+    "tbX": 1.55,
+    "tbY": 7.6
+   },
+   "ɸ": {
+    "lipAp": 0.038
+   },
+   "ɹ": {
+    "lipProt": 0.5,
+    "lipWidth": 0.3,
+    "root": -0.6,
+    "tbX": 2.3,
+    "tbY": 7.1,
+    "ttCurl": 0.85,
+    "ttX": 5.35,
+    "ttY": 9.35
+   },
+   "ɻ": {
+    "ttCurl": 1.0,
+    "ttX": 5.4,
+    "ttY": 9.55
+   },
+   "ɽ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ɾ": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ʀ": {
+    "tbX": 1.55,
+    "tbY": 7.85
+   },
+   "ʁ": {
+    "tbX": 1.55,
+    "tbY": 7.176
+   },
+   "ʂ": {
+    "ttCurl": 0.9,
+    "ttX": 5.45,
+    "ttY": 9.75
+   },
+   "ʃ": {
+    "jaw": 0.35,
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.7,
+    "ttY": 9.538
+   },
+   "ʈ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ʋ": {
+    "labiodental": 0.9,
+    "lipAp": 0.25
+   },
+   "ʎ": {
+    "lateral": 1.0,
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "ʐ": {
+    "ttCurl": 0.9,
+    "ttX": 5.45,
+    "ttY": 9.739
+   },
+   "ʑ": {
+    "jaw": 0.3,
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 7.75,
+    "ttX": 5.85,
+    "ttY": 9.452
+   },
+   "ʒ": {
+    "jaw": 0.35,
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.7,
+    "ttY": 9.524
+   },
+   "ʔ": {},
+   "ʕ": {
+    "root": -0.95,
+    "tbX": 1.138,
+    "tbY": 6.2
+   },
+   "ʙ": {
+    "lipAp": 0.02
+   },
+   "ʝ": {
+    "tbX": 3.75,
+    "tbY": 8.032
+   },
+   "β": {
+    "lipAp": 0.048
+   },
+   "θ": {
+    "ttX": 6.85,
+    "ttY": 8.269
+   },
+   "χ": {
+    "tbX": 1.55,
+    "tbY": 7.187
+   }
+  },
+  "female": {
+   "b": {
+    "lipAp": -0.25
+   },
+   "c": {
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "d": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "dz": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "dʐ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "dʑ": {
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 8.1,
+    "ttX": 5.85,
+    "ttY": 10.0
+   },
+   "dʒ": {
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.75,
+    "ttY": 10.0
+   },
+   "f": {
+    "labiodental": 1.0,
+    "lipAp": 0.013
+   },
+   "g": {
+    "jaw": 0.7,
+    "tbX": 2.3,
+    "tbY": 8.35
+   },
+   "h": {},
+   "j": {
+    "jaw": 0.25,
+    "tbX": 3.8,
+    "tbY": 7.95
+   },
+   "k": {
+    "jaw": 0.7,
+    "tbX": 2.3,
+    "tbY": 8.35
+   },
+   "l": {
+    "lateral": 1.0,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "m": {
+    "lipAp": -0.25
+   },
+   "n": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "p": {
+    "lipAp": -0.25
+   },
+   "pf": {
+    "lipAp": -0.25
+   },
+   "q": {
+    "tbX": 1.55,
+    "tbY": 7.6
+   },
+   "r": {
+    "ttX": 6.25,
+    "ttY": 9.45
+   },
+   "s": {
+    "jaw": 0.3,
+    "ttX": 6.3,
+    "ttY": 9.117
+   },
+   "t": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ts": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "tɕ": {
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 8.1,
+    "ttX": 5.85,
+    "ttY": 10.0
+   },
+   "tʂ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "tʃ": {
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.75,
+    "ttY": 10.0
+   },
+   "v": {
+    "labiodental": 1.0,
+    "lipAp": 0.028
+   },
+   "w": {
+    "lipAp": 0.28,
+    "lipProt": 1.0,
+    "lipWidth": 0.05,
+    "tbX": 2.45,
+    "tbY": 7.45
+   },
+   "x": {
+    "tbX": 2.3,
+    "tbY": 7.43
+   },
+   "z": {
+    "jaw": 0.3,
+    "ttX": 6.3,
+    "ttY": 9.104
+   },
+   "ç": {
+    "tbX": 3.75,
+    "tbY": 7.985
+   },
+   "ð": {
+    "ttX": 6.85,
+    "ttY": 8.208
+   },
+   "ħ": {
+    "root": -0.95,
+    "tbX": 1.185,
+    "tbY": 6.2
+   },
+   "ŋ": {
+    "jaw": 0.7,
+    "tbX": 2.3,
+    "tbY": 8.35
+   },
+   "ɕ": {
+    "jaw": 0.3,
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 7.75,
+    "ttX": 5.85,
+    "ttY": 9.447
+   },
+   "ɖ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ɟ": {
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "ɢ": {
+    "tbX": 1.55,
+    "tbY": 7.6
+   },
+   "ɣ": {
+    "tbX": 2.3,
+    "tbY": 7.417
+   },
+   "ɥ": {
+    "jaw": 0.25,
+    "lipAp": 0.28,
+    "lipProt": 1.0,
+    "lipWidth": 0.05,
+    "tbX": 3.8,
+    "tbY": 7.95
+   },
+   "ɦ": {},
+   "ɫ": {
+    "lateral": 1.0,
+    "tbX": 1.9,
+    "tbY": 6.8,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ɬ": {
+    "lateral": 0.35,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ɭ": {
+    "lateral": 1.0,
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ɮ": {
+    "lateral": 0.45,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ɰ": {
+    "tbX": 2.35,
+    "tbY": 7.45
+   },
+   "ɱ": {
+    "labiodental": 1.0,
+    "lipAp": -0.1
+   },
+   "ɲ": {
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "ɳ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ɴ": {
+    "tbX": 1.55,
+    "tbY": 7.6
+   },
+   "ɸ": {
+    "lipAp": 0.033
+   },
+   "ɹ": {
+    "lipProt": 0.5,
+    "lipWidth": 0.3,
+    "root": -0.6,
+    "tbX": 2.3,
+    "tbY": 7.1,
+    "ttCurl": 0.85,
+    "ttX": 5.35,
+    "ttY": 9.35
+   },
+   "ɻ": {
+    "ttCurl": 1.0,
+    "ttX": 5.4,
+    "ttY": 9.55
+   },
+   "ɽ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ɾ": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ʀ": {
+    "tbX": 1.55,
+    "tbY": 7.85
+   },
+   "ʁ": {
+    "tbX": 1.55,
+    "tbY": 7.11
+   },
+   "ʂ": {
+    "ttCurl": 0.9,
+    "ttX": 5.45,
+    "ttY": 9.738
+   },
+   "ʃ": {
+    "jaw": 0.35,
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.7,
+    "ttY": 9.521
+   },
+   "ʈ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ʋ": {
+    "labiodental": 0.9,
+    "lipAp": 0.25
+   },
+   "ʎ": {
+    "lateral": 1.0,
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "ʐ": {
+    "ttCurl": 0.9,
+    "ttX": 5.45,
+    "ttY": 9.727
+   },
+   "ʑ": {
+    "jaw": 0.3,
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 7.75,
+    "ttX": 5.85,
+    "ttY": 9.434
+   },
+   "ʒ": {
+    "jaw": 0.35,
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.7,
+    "ttY": 9.505
+   },
+   "ʔ": {},
+   "ʕ": {
+    "root": -0.95,
+    "tbX": 1.22,
+    "tbY": 6.2
+   },
+   "ʙ": {
+    "lipAp": 0.02
+   },
+   "ʝ": {
+    "tbX": 3.75,
+    "tbY": 7.973
+   },
+   "β": {
+    "lipAp": 0.042
+   },
+   "θ": {
+    "ttX": 6.85,
+    "ttY": 8.242
+   },
+   "χ": {
+    "tbX": 1.55,
+    "tbY": 7.122
+   }
+  },
+  "male": {
+   "b": {
+    "lipAp": -0.25
+   },
+   "c": {
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "d": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "dz": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "dʐ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "dʑ": {
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 8.1,
+    "ttX": 5.85,
+    "ttY": 10.0
+   },
+   "dʒ": {
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.75,
+    "ttY": 10.0
+   },
+   "f": {
+    "labiodental": 1.0,
+    "lipAp": 0.016
+   },
+   "g": {
+    "jaw": 0.7,
+    "tbX": 2.3,
+    "tbY": 8.35
+   },
+   "h": {},
+   "j": {
+    "jaw": 0.25,
+    "tbX": 3.8,
+    "tbY": 7.95
+   },
+   "k": {
+    "jaw": 0.7,
+    "tbX": 2.3,
+    "tbY": 8.35
+   },
+   "l": {
+    "lateral": 1.0,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "m": {
+    "lipAp": -0.25
+   },
+   "n": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "p": {
+    "lipAp": -0.25
+   },
+   "pf": {
+    "lipAp": -0.25
+   },
+   "q": {
+    "tbX": 1.55,
+    "tbY": 7.6
+   },
+   "r": {
+    "ttX": 6.25,
+    "ttY": 9.45
+   },
+   "s": {
+    "jaw": 0.3,
+    "ttX": 6.3,
+    "ttY": 9.111
+   },
+   "t": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ts": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "tɕ": {
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 8.1,
+    "ttX": 5.85,
+    "ttY": 10.0
+   },
+   "tʂ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "tʃ": {
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.75,
+    "ttY": 10.0
+   },
+   "v": {
+    "labiodental": 1.0,
+    "lipAp": 0.031
+   },
+   "w": {
+    "lipAp": 0.28,
+    "lipProt": 1.0,
+    "lipWidth": 0.05,
+    "tbX": 2.45,
+    "tbY": 7.45
+   },
+   "x": {
+    "tbX": 2.3,
+    "tbY": 7.365
+   },
+   "z": {
+    "jaw": 0.3,
+    "ttX": 6.3,
+    "ttY": 9.097
+   },
+   "ç": {
+    "tbX": 3.75,
+    "tbY": 7.93
+   },
+   "ð": {
+    "ttX": 6.85,
+    "ttY": 8.19
+   },
+   "ħ": {
+    "root": -0.95,
+    "tbX": 1.247,
+    "tbY": 6.2
+   },
+   "ŋ": {
+    "jaw": 0.7,
+    "tbX": 2.3,
+    "tbY": 8.35
+   },
+   "ɕ": {
+    "jaw": 0.3,
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 7.75,
+    "ttX": 5.85,
+    "ttY": 9.435
+   },
+   "ɖ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ɟ": {
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "ɢ": {
+    "tbX": 1.55,
+    "tbY": 7.6
+   },
+   "ɣ": {
+    "tbX": 2.3,
+    "tbY": 7.352
+   },
+   "ɥ": {
+    "jaw": 0.25,
+    "lipAp": 0.28,
+    "lipProt": 1.0,
+    "lipWidth": 0.05,
+    "tbX": 3.8,
+    "tbY": 7.95
+   },
+   "ɦ": {},
+   "ɫ": {
+    "lateral": 1.0,
+    "tbX": 1.9,
+    "tbY": 6.8,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ɬ": {
+    "lateral": 0.35,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ɭ": {
+    "lateral": 1.0,
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ɮ": {
+    "lateral": 0.45,
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ɰ": {
+    "tbX": 2.35,
+    "tbY": 7.45
+   },
+   "ɱ": {
+    "labiodental": 1.0,
+    "lipAp": -0.1
+   },
+   "ɲ": {
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "ɳ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ɴ": {
+    "tbX": 1.55,
+    "tbY": 7.6
+   },
+   "ɸ": {
+    "lipAp": 0.032
+   },
+   "ɹ": {
+    "lipProt": 0.5,
+    "lipWidth": 0.3,
+    "root": -0.6,
+    "tbX": 2.3,
+    "tbY": 7.1,
+    "ttCurl": 0.85,
+    "ttX": 5.35,
+    "ttY": 9.35
+   },
+   "ɻ": {
+    "ttCurl": 1.0,
+    "ttX": 5.4,
+    "ttY": 9.55
+   },
+   "ɽ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ɾ": {
+    "ttX": 6.25,
+    "ttY": 9.68
+   },
+   "ʀ": {
+    "tbX": 1.55,
+    "tbY": 7.85
+   },
+   "ʁ": {
+    "tbX": 1.55,
+    "tbY": 7.049
+   },
+   "ʂ": {
+    "ttCurl": 0.9,
+    "ttX": 5.45,
+    "ttY": 9.73
+   },
+   "ʃ": {
+    "jaw": 0.35,
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.7,
+    "ttY": 9.512
+   },
+   "ʈ": {
+    "ttCurl": 0.95,
+    "ttX": 5.45,
+    "ttY": 10.05
+   },
+   "ʋ": {
+    "labiodental": 0.9,
+    "lipAp": 0.25
+   },
+   "ʎ": {
+    "lateral": 1.0,
+    "tbX": 3.75,
+    "tbY": 8.45
+   },
+   "ʐ": {
+    "ttCurl": 0.9,
+    "ttX": 5.45,
+    "ttY": 9.718
+   },
+   "ʑ": {
+    "jaw": 0.3,
+    "lipProt": 0.0,
+    "lipWidth": 0.7,
+    "tbX": 3.6,
+    "tbY": 7.75,
+    "ttX": 5.85,
+    "ttY": 9.42
+   },
+   "ʒ": {
+    "jaw": 0.35,
+    "lipProt": 0.75,
+    "lipWidth": 0.2,
+    "ttX": 5.7,
+    "ttY": 9.495
+   },
+   "ʔ": {},
+   "ʕ": {
+    "root": -0.95,
+    "tbX": 1.284,
+    "tbY": 6.2
+   },
+   "ʙ": {
+    "lipAp": 0.02
+   },
+   "ʝ": {
+    "tbX": 3.75,
+    "tbY": 7.917
+   },
+   "β": {
+    "lipAp": 0.04
+   },
+   "θ": {
+    "ttX": 6.85,
+    "ttY": 8.225
+   },
+   "χ": {
+    "tbX": 1.55,
+    "tbY": 7.061
+   }
+  }
+ },
+ "vowelTargetsByBody": {
+  "child": {
+   "a": {
+    "jaw": 1.816,
+    "larynx": -0.092,
+    "lipAp": 2.0,
+    "lipProt": 0.042,
+    "lipWidth": 1.0,
+    "root": -0.753,
+    "tbX": 2.008,
+    "tbY": 6.239,
+    "ttCurl": 0.0
+   },
+   "e": {
+    "jaw": 0.676,
+    "larynx": -0.14,
+    "lipAp": 0.717,
+    "lipProt": 0.351,
+    "lipWidth": 0.55,
+    "root": -0.219,
+    "tbX": 3.477,
+    "tbY": 7.552,
+    "ttCurl": 0.0
+   },
+   "i": {
+    "jaw": 0.096,
+    "larynx": -0.001,
+    "lipAp": 0.386,
+    "lipProt": 0.004,
+    "lipWidth": 0.655,
+    "root": 0.095,
+    "tbX": 3.719,
+    "tbY": 7.754,
+    "ttCurl": 0.001
+   },
+   "o": {
+    "jaw": 0.78,
+    "larynx": -0.209,
+    "lipAp": 0.131,
+    "lipProt": 1.241,
+    "lipWidth": 0.301,
+    "root": -0.566,
+    "tbX": 1.814,
+    "tbY": 7.259,
+    "ttCurl": 0.0
+   },
+   "u": {
+    "jaw": 0.162,
+    "larynx": -0.327,
+    "lipAp": 0.301,
+    "lipProt": 0.637,
+    "lipWidth": 0.054,
+    "root": -0.646,
+    "tbX": 2.324,
+    "tbY": 7.563,
+    "ttCurl": 0.0
+   },
+   "y": {
+    "jaw": 0.242,
+    "larynx": 0.121,
+    "lipAp": 0.284,
+    "lipProt": 1.4,
+    "lipWidth": 0.301,
+    "root": -0.9,
+    "tbX": 3.543,
+    "tbY": 7.972,
+    "ttCurl": 0.001
+   },
+   "æ": {
+    "jaw": 1.367,
+    "larynx": -0.23,
+    "lipAp": 1.601,
+    "lipProt": 0.356,
+    "lipWidth": 0.548,
+    "root": -0.534,
+    "tbX": 3.496,
+    "tbY": 6.678,
+    "ttCurl": 0.0
+   },
+   "ø": {
+    "jaw": 0.691,
+    "larynx": -0.569,
+    "lipAp": 0.253,
+    "lipProt": 1.4,
+    "lipWidth": 0.302,
+    "root": -0.9,
+    "tbX": 3.448,
+    "tbY": 7.622,
+    "ttCurl": 0.0
+   },
+   "œ": {
+    "jaw": 1.143,
+    "larynx": -0.432,
+    "lipAp": 0.693,
+    "lipProt": 1.143,
+    "lipWidth": 0.316,
+    "root": -0.9,
+    "tbX": 2.95,
+    "tbY": 7.017,
+    "ttCurl": 0.001
+   },
+   "ɐ": {
+    "jaw": 1.355,
+    "larynx": -0.292,
+    "lipAp": 0.981,
+    "lipProt": 0.373,
+    "lipWidth": 0.524,
+    "root": -0.358,
+    "tbX": 2.184,
+    "tbY": 6.6,
+    "ttCurl": 0.001
+   },
+   "ɑ": {
+    "jaw": 1.905,
+    "larynx": -0.353,
+    "lipAp": 2.0,
+    "lipProt": 0.361,
+    "lipWidth": 0.952,
+    "root": -0.9,
+    "tbX": 1.651,
+    "tbY": 6.308,
+    "ttCurl": 0.0
+   },
+   "ɒ": {
+    "jaw": 1.785,
+    "larynx": -0.253,
+    "lipAp": 0.95,
+    "lipProt": 1.286,
+    "lipWidth": 0.486,
+    "root": -0.151,
+    "tbX": 1.2,
+    "tbY": 6.233,
+    "ttCurl": 0.0
+   },
+   "ɔ": {
+    "jaw": 1.408,
+    "larynx": -0.049,
+    "lipAp": 0.762,
+    "lipProt": 1.086,
+    "lipWidth": 0.461,
+    "root": -0.561,
+    "tbX": 1.2,
+    "tbY": 6.764,
+    "ttCurl": 0.0
+   },
+   "ə": {
+    "jaw": 0.804,
+    "larynx": -0.379,
+    "lipAp": 0.569,
+    "lipProt": 0.359,
+    "lipWidth": 0.535,
+    "root": -0.503,
+    "tbX": 2.698,
+    "tbY": 7.382,
+    "ttCurl": 0.0
+   },
+   "ɛ": {
+    "jaw": 1.071,
+    "larynx": -0.168,
+    "lipAp": 1.177,
+    "lipProt": 0.355,
+    "lipWidth": 0.548,
+    "root": -0.339,
+    "tbX": 3.101,
+    "tbY": 6.836,
+    "ttCurl": 0.0
+   },
+   "ɝ": {
+    "jaw": 0.05,
+    "larynx": -1.288,
+    "lipAp": 0.12,
+    "lipProt": 1.4,
+    "lipWidth": 0.214,
+    "root": -0.9,
+    "tbX": 1.859,
+    "tbY": 7.0,
+    "ttCurl": 1.0,
+    "ttX": 5.722,
+    "ttY": 9.357
+   },
+   "ɤ": {
+    "jaw": 0.721,
+    "larynx": -0.208,
+    "lipAp": 0.838,
+    "lipProt": 0.1,
+    "lipWidth": 0.633,
+    "root": -0.448,
+    "tbX": 1.935,
+    "tbY": 7.365,
+    "ttCurl": 0.0
+   },
+   "ɨ": {
+    "jaw": 0.201,
+    "larynx": 0.16,
+    "lipAp": 0.172,
+    "lipProt": 0.0,
+    "lipWidth": 0.549,
+    "root": -0.9,
+    "tbX": 3.095,
+    "tbY": 7.893,
+    "ttCurl": 0.001
+   },
+   "ɪ": {
+    "jaw": 0.489,
+    "larynx": -0.025,
+    "lipAp": 0.366,
+    "lipProt": 0.001,
+    "lipWidth": 0.55,
+    "root": 0.005,
+    "tbX": 3.381,
+    "tbY": 7.692,
+    "ttCurl": 0.0
+   },
+   "ɯ": {
+    "jaw": 0.155,
+    "larynx": -0.427,
+    "lipAp": 0.219,
+    "lipProt": 0.353,
+    "lipWidth": 0.55,
+    "root": -0.561,
+    "tbX": 2.712,
+    "tbY": 7.767,
+    "ttCurl": 0.001
+   },
+   "ʊ": {
+    "jaw": 0.498,
+    "larynx": -0.249,
+    "lipAp": 0.335,
+    "lipProt": 0.6,
+    "lipWidth": 0.279,
+    "root": -0.498,
+    "tbX": 2.338,
+    "tbY": 7.482,
+    "ttCurl": 0.0
+   },
+   "ʌ": {
+    "jaw": 0.861,
+    "larynx": -0.157,
+    "lipAp": 0.569,
+    "lipProt": 0.369,
+    "lipWidth": 0.516,
+    "root": -0.189,
+    "tbX": 1.88,
+    "tbY": 7.088,
+    "ttCurl": 0.0
+   }
+  },
+  "female": {
+   "a": {
+    "jaw": 1.637,
+    "larynx": 0.641,
+    "lipAp": 2.0,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": -0.407,
+    "tbX": 2.191,
+    "tbY": 5.739,
+    "ttCurl": 0.0
+   },
+   "e": {
+    "jaw": 0.8,
+    "larynx": 0.853,
+    "lipAp": 1.369,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": 0.08,
+    "tbX": 3.593,
+    "tbY": 7.368,
+    "ttCurl": 0.0
+   },
+   "i": {
+    "jaw": 0.459,
+    "larynx": 1.016,
+    "lipAp": 1.092,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": 0.295,
+    "tbX": 3.754,
+    "tbY": 7.647,
+    "ttCurl": 0.0
+   },
+   "o": {
+    "jaw": 0.966,
+    "larynx": 0.46,
+    "lipAp": 0.288,
+    "lipProt": 1.4,
+    "lipWidth": 0.304,
+    "root": 0.221,
+    "tbX": 1.827,
+    "tbY": 7.11,
+    "ttCurl": 0.0
+   },
+   "u": {
+    "jaw": 0.266,
+    "larynx": 0.24,
+    "lipAp": 0.187,
+    "lipProt": 1.4,
+    "lipWidth": 0.301,
+    "root": 0.205,
+    "tbX": 2.243,
+    "tbY": 7.381,
+    "ttCurl": 0.0
+   },
+   "y": {
+    "jaw": 0.228,
+    "larynx": -0.123,
+    "lipAp": 0.301,
+    "lipProt": 0.6,
+    "lipWidth": 0.301,
+    "root": -0.26,
+    "tbX": 3.481,
+    "tbY": 7.85,
+    "ttCurl": 0.0
+   },
+   "æ": {
+    "jaw": 1.483,
+    "larynx": 0.854,
+    "lipAp": 1.851,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": -0.094,
+    "tbX": 3.712,
+    "tbY": 6.328,
+    "ttCurl": 0.0
+   },
+   "ø": {
+    "jaw": 0.651,
+    "larynx": -0.029,
+    "lipAp": 0.51,
+    "lipProt": 1.215,
+    "lipWidth": 0.3,
+    "root": -0.033,
+    "tbX": 3.455,
+    "tbY": 7.417,
+    "ttCurl": 0.0
+   },
+   "œ": {
+    "jaw": 1.015,
+    "larynx": 0.162,
+    "lipAp": 0.75,
+    "lipProt": 0.575,
+    "lipWidth": 0.381,
+    "root": -0.228,
+    "tbX": 3.051,
+    "tbY": 6.641,
+    "ttCurl": 0.0
+   },
+   "ɐ": {
+    "jaw": 1.408,
+    "larynx": 0.009,
+    "lipAp": 1.232,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": 0.112,
+    "tbX": 2.369,
+    "tbY": 6.131,
+    "ttCurl": 0.0
+   },
+   "ɑ": {
+    "jaw": 1.682,
+    "larynx": 0.523,
+    "lipAp": 2.0,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": -0.665,
+    "tbX": 1.847,
+    "tbY": 5.832,
+    "ttCurl": 0.0
+   },
+   "ɒ": {
+    "jaw": 1.51,
+    "larynx": -0.007,
+    "lipAp": 1.002,
+    "lipProt": 0.323,
+    "lipWidth": 0.525,
+    "root": -0.255,
+    "tbX": 1.33,
+    "tbY": 5.889,
+    "ttCurl": 0.0
+   },
+   "ɔ": {
+    "jaw": 1.256,
+    "larynx": 0.254,
+    "lipAp": 0.904,
+    "lipProt": 0.281,
+    "lipWidth": 0.59,
+    "root": -0.619,
+    "tbX": 1.397,
+    "tbY": 6.219,
+    "ttCurl": 0.0
+   },
+   "ə": {
+    "jaw": 0.818,
+    "larynx": 0.14,
+    "lipAp": 0.599,
+    "lipProt": 0.351,
+    "lipWidth": 0.544,
+    "root": 0.279,
+    "tbX": 2.996,
+    "tbY": 6.841,
+    "ttCurl": 0.0
+   },
+   "ɛ": {
+    "jaw": 1.181,
+    "larynx": 0.773,
+    "lipAp": 1.642,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": -0.105,
+    "tbX": 3.1,
+    "tbY": 6.484,
+    "ttCurl": 0.0
+   },
+   "ɝ": {
+    "jaw": 0.694,
+    "larynx": -0.832,
+    "lipAp": 0.657,
+    "lipProt": 0.59,
+    "lipWidth": 0.349,
+    "root": -0.9,
+    "tbX": 2.581,
+    "tbY": 7.338,
+    "ttCurl": 1.0,
+    "ttX": 5.71,
+    "ttY": 8.898
+   },
+   "ɤ": {
+    "jaw": 0.692,
+    "larynx": 0.274,
+    "lipAp": 0.518,
+    "lipProt": 0.0,
+    "lipWidth": 0.911,
+    "root": 0.428,
+    "tbX": 2.318,
+    "tbY": 7.294,
+    "ttCurl": 0.001
+   },
+   "ɨ": {
+    "jaw": 0.195,
+    "larynx": 0.172,
+    "lipAp": 0.568,
+    "lipProt": 0.35,
+    "lipWidth": 1.0,
+    "root": 0.337,
+    "tbX": 2.866,
+    "tbY": 7.731,
+    "ttCurl": 0.0
+   },
+   "ɪ": {
+    "jaw": 0.567,
+    "larynx": 0.196,
+    "lipAp": 1.147,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": 0.077,
+    "tbX": 3.647,
+    "tbY": 7.421,
+    "ttCurl": 0.0
+   },
+   "ɯ": {
+    "jaw": 0.185,
+    "larynx": 0.19,
+    "lipAp": 0.368,
+    "lipProt": 0.061,
+    "lipWidth": 0.602,
+    "root": 0.352,
+    "tbX": 2.65,
+    "tbY": 7.646,
+    "ttCurl": 0.0
+   },
+   "ʊ": {
+    "jaw": 0.573,
+    "larynx": 0.382,
+    "lipAp": 0.371,
+    "lipProt": 1.4,
+    "lipWidth": 0.301,
+    "root": 0.255,
+    "tbX": 2.314,
+    "tbY": 7.268,
+    "ttCurl": 0.0
+   },
+   "ʌ": {
+    "jaw": 1.067,
+    "larynx": 0.087,
+    "lipAp": 0.985,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": 0.196,
+    "tbX": 1.87,
+    "tbY": 6.262,
+    "ttCurl": 0.002
+   }
+  },
+  "male": {
+   "a": {
+    "jaw": 1.649,
+    "larynx": 0.37,
+    "lipAp": 2.0,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": -0.373,
+    "tbX": 2.292,
+    "tbY": 5.667,
+    "ttCurl": 0.0
+   },
+   "e": {
+    "jaw": 0.745,
+    "larynx": 0.506,
+    "lipAp": 1.315,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": 0.269,
+    "tbX": 3.6,
+    "tbY": 7.236,
+    "ttCurl": 0.0
+   },
+   "i": {
+    "jaw": 0.413,
+    "larynx": 0.798,
+    "lipAp": 1.046,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": 0.514,
+    "tbX": 3.683,
+    "tbY": 7.739,
+    "ttCurl": 0.0
+   },
+   "o": {
+    "jaw": 0.668,
+    "larynx": 0.061,
+    "lipAp": 0.405,
+    "lipProt": 0.597,
+    "lipWidth": 0.027,
+    "root": 0.227,
+    "tbX": 1.519,
+    "tbY": 6.592,
+    "ttCurl": 0.0
+   },
+   "u": {
+    "jaw": 0.203,
+    "larynx": 0.252,
+    "lipAp": 0.291,
+    "lipProt": 1.4,
+    "lipWidth": 0.065,
+    "root": 0.402,
+    "tbX": 2.419,
+    "tbY": 7.428,
+    "ttCurl": 0.0
+   },
+   "y": {
+    "jaw": 0.202,
+    "larynx": 0.038,
+    "lipAp": 0.3,
+    "lipProt": 1.397,
+    "lipWidth": 0.3,
+    "root": 0.038,
+    "tbX": 3.478,
+    "tbY": 7.838,
+    "ttCurl": 0.0
+   },
+   "æ": {
+    "jaw": 1.516,
+    "larynx": 0.328,
+    "lipAp": 1.875,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": -0.16,
+    "tbX": 3.373,
+    "tbY": 6.016,
+    "ttCurl": 0.002
+   },
+   "ø": {
+    "jaw": 0.625,
+    "larynx": 0.088,
+    "lipAp": 0.334,
+    "lipProt": 0.599,
+    "lipWidth": 0.001,
+    "root": 0.16,
+    "tbX": 3.45,
+    "tbY": 7.301,
+    "ttCurl": 0.0
+   },
+   "œ": {
+    "jaw": 1.036,
+    "larynx": 0.075,
+    "lipAp": 0.687,
+    "lipProt": 0.629,
+    "lipWidth": 0.303,
+    "root": 0.106,
+    "tbX": 3.01,
+    "tbY": 6.638,
+    "ttCurl": 0.0
+   },
+   "ɐ": {
+    "jaw": 1.394,
+    "larynx": -0.013,
+    "lipAp": 1.042,
+    "lipProt": 0.0,
+    "lipWidth": 0.722,
+    "root": 0.136,
+    "tbX": 2.374,
+    "tbY": 6.055,
+    "ttCurl": 0.001
+   },
+   "ɑ": {
+    "jaw": 1.685,
+    "larynx": 0.217,
+    "lipAp": 2.0,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": -0.354,
+    "tbX": 2.022,
+    "tbY": 5.692,
+    "ttCurl": 0.0
+   },
+   "ɒ": {
+    "jaw": 1.534,
+    "larynx": -0.047,
+    "lipAp": 0.965,
+    "lipProt": 0.349,
+    "lipWidth": 0.483,
+    "root": -0.221,
+    "tbX": 1.365,
+    "tbY": 5.824,
+    "ttCurl": 0.0
+   },
+   "ɔ": {
+    "jaw": 1.182,
+    "larynx": 0.175,
+    "lipAp": 0.844,
+    "lipProt": 0.31,
+    "lipWidth": 0.539,
+    "root": -0.328,
+    "tbX": 1.501,
+    "tbY": 6.115,
+    "ttCurl": 0.0
+   },
+   "ə": {
+    "jaw": 0.505,
+    "larynx": 0.149,
+    "lipAp": 0.323,
+    "lipProt": 0.352,
+    "lipWidth": 0.533,
+    "root": 0.421,
+    "tbX": 2.944,
+    "tbY": 6.685,
+    "ttCurl": 0.0
+   },
+   "ɛ": {
+    "jaw": 1.041,
+    "larynx": 0.379,
+    "lipAp": 1.519,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": 0.048,
+    "tbX": 3.403,
+    "tbY": 6.556,
+    "ttCurl": 0.0
+   },
+   "ɝ": {
+    "jaw": 0.976,
+    "larynx": -0.921,
+    "lipAp": 0.654,
+    "lipProt": 0.592,
+    "lipWidth": 0.347,
+    "root": -0.9,
+    "tbX": 2.727,
+    "tbY": 7.285,
+    "ttCurl": 1.0,
+    "ttX": 5.642,
+    "ttY": 8.632
+   },
+   "ɤ": {
+    "jaw": 0.638,
+    "larynx": 0.382,
+    "lipAp": 0.467,
+    "lipProt": 0.351,
+    "lipWidth": 0.545,
+    "root": 0.64,
+    "tbX": 2.259,
+    "tbY": 7.251,
+    "ttCurl": 0.0
+   },
+   "ɨ": {
+    "jaw": 0.184,
+    "larynx": 0.243,
+    "lipAp": 0.2,
+    "lipProt": 0.003,
+    "lipWidth": 1.0,
+    "root": 0.663,
+    "tbX": 2.941,
+    "tbY": 7.71,
+    "ttCurl": 0.003
+   },
+   "ɪ": {
+    "jaw": 0.575,
+    "larynx": 0.357,
+    "lipAp": 1.154,
+    "lipProt": 0.0,
+    "lipWidth": 1.0,
+    "root": -0.001,
+    "tbX": 3.637,
+    "tbY": 7.419,
+    "ttCurl": 0.0
+   },
+   "ɯ": {
+    "jaw": 0.176,
+    "larynx": 0.284,
+    "lipAp": 0.187,
+    "lipProt": 0.348,
+    "lipWidth": 0.55,
+    "root": 0.784,
+    "tbX": 2.715,
+    "tbY": 7.625,
+    "ttCurl": 0.0
+   },
+   "ʊ": {
+    "jaw": 0.516,
+    "larynx": 0.425,
+    "lipAp": 0.44,
+    "lipProt": 1.228,
+    "lipWidth": 0.199,
+    "root": 0.478,
+    "tbX": 2.317,
+    "tbY": 7.139,
+    "ttCurl": 0.0
+   },
+   "ʌ": {
+    "jaw": 1.022,
+    "larynx": 0.053,
+    "lipAp": 0.76,
+    "lipProt": 0.0,
+    "lipWidth": 0.607,
+    "root": 0.212,
+    "tbX": 1.955,
+    "tbY": 6.23,
+    "ttCurl": 0.002
+   }
+  }
+ },
+ "vowelTargetsRef": "crates/chimera/src/phonetics/vowelTargets.generated.json via planner.rs:74 vowel_artic (VOWEL_KEYS only, plus the tip for rhotics)",
+ "bellows40": {
+  "phonemes": [
+   "ɑ",
+   "æ",
+   "ʌ",
+   "ɔ",
+   "ɛ",
+   "ɝ",
+   "ɪ",
+   "i",
+   "ʊ",
+   "u",
+   "e",
+   "o",
+   "a",
+   "ə",
+   "p",
+   "b",
+   "t",
+   "d",
+   "k",
+   "g",
+   "f",
+   "v",
+   "θ",
+   "ð",
+   "s",
+   "z",
+   "ʃ",
+   "ʒ",
+   "h",
+   "tʃ",
+   "dʒ",
+   "m",
+   "n",
+   "ŋ",
+   "l",
+   "ɹ",
+   "w",
+   "j",
+   "ɾ",
+   "ʔ"
+  ],
+  "notes": {
+   "ɾ": "CHIMERA's alveolar tap: ALV_STOP targets (same as t, d), manner tap, dominant ttX ttY, 25 ms, gesture speed 2.8",
+   "ɫ": "not in the bellows 40, included: velarised lateral, ALV_STOP plus lateral 1, tbX 1.9, tbY 6.8, dominant ttX ttY lateral tbX tbY, 75 ms",
+   "l": "ALV_STOP plus lateral 1.0; the lateral channel is an area floor lateral * 0.35 k^2 on oral rays within 1.4 k cm of the tip (anatomy/human.rs:1203)",
+   "ɹ": "tip 5.35 / 9.35, curl 0.85, lipProt 0.5, lipWidth 0.3, root -0.6, body 2.3 / 7.1; dominant ttX ttY ttCurl lipProt lipWidth root",
+   "h": "glottal only",
+   "ʔ": "glottal only",
+   "e": "a monophthong target exists (vowelTargets); the planner expands eɪ to e + i",
+   "o": "a monophthong target exists; the planner expands oʊ to o + u"
+  }
+ }
+}

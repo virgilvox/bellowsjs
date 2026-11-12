@@ -1,0 +1,23 @@
+{
+ "source": "the prototype layout (scratchpad tract/src/layout.ts): minLength is the shortest glottis-to-lips length over CHIMERA calibrated postures of each body and every voiced frame of its telemetry for the comparison phrases; neutralPharynx and neutralLength are CHIMERA neutral posture (schwa) pharynx and total length, which place the velum and the piriform fossa on the sections",
+ "bodies": {
+  "male": {
+   "scale": 1,
+   "minLength": 15.8741,
+   "neutralPharynx": 8.679113500633552,
+   "neutralLength": 17.015627964822425
+  },
+  "female": {
+   "scale": 0.9,
+   "minLength": 13.424,
+   "neutralPharynx": 7.089841100655147,
+   "neutralLength": 14.72363815908563
+  },
+  "child": {
+   "scale": 0.74,
+   "minLength": 11.4771,
+   "neutralPharynx": 5.801429169464256,
+   "neutralLength": 12.31340122738798
+  }
+ }
+}

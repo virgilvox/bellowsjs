@@ -52,7 +52,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -358,6 +358,24 @@ const getTables = once(tables);
 const getFastmath = once(fastmath);
 const getToolchain = once(toolchainVersion);
 const getSuite = once(suite);
+
+/*
+ * How many runnable examples the workbench's code mode has, counted the way
+ * apps/workbench/scripts/check-examples.mjs counts them (its extractor, over
+ * the same files), which prints the same figure. HANDOFF quoted 49 for a
+ * release after the 50th was added, and nothing compared them.
+ */
+const getExamples = once(() => {
+  const dir = join(REPO, 'apps', 'workbench', 'src', 'examples');
+  let count = 0;
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith('.ts') || f === 'types.ts' || f === 'index.ts') continue;
+    const src = readFileSync(join(dir, f), 'utf8');
+    count += [...src.matchAll(/\bid:\s*'([^']+)',[\s\S]*?\bcode:\s*`([\s\S]*?)`,?\n\s*\}/g)].length;
+  }
+  if (count === 0) throw new Error('found no workbench examples');
+  return count;
+});
 
 const value = (sketch, col) => {
   const src = col.endsWith('Fm') ? fm : base;
@@ -929,6 +947,18 @@ const PROSE = [
     doc: 'docs/HANDOFF.md',
     re: /Library test suite: (\d+) files, (\d+) tests/,
     gets: [() => getSuite().files, () => getSuite().cases],
+    exact: true,
+  },
+  {
+    doc: 'docs/HANDOFF.md',
+    re: /Its (\d+) examples are checked against the built library/,
+    gets: [() => getExamples()],
+    exact: true,
+  },
+  {
+    doc: 'docs/HANDOFF.md',
+    re: /The site's (\d+) examples are checked against the library/,
+    gets: [() => getExamples()],
     exact: true,
   },
   {

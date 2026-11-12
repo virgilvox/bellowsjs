@@ -129,6 +129,43 @@ export class Adsr {
     }
   }
 
+  /**
+   * next() into out[from .. to): the block form, for callers whose loop
+   * would otherwise take a returned double per sample (V8 boxes it when the
+   * call is not inlined).
+   */
+  fill(out: Float32Array, from: number, to: number): void {
+    // next() written out: called per sample, its returned double was boxed
+    let lvl = this.lvl;
+    let stage = this.stage;
+    for (let i = from; i < to; i++) {
+      if (stage === Stage.Attack) {
+        lvl += this.aCoef * (ATTACK_TARGET - lvl);
+        if (lvl >= 1) {
+          lvl = 1;
+          stage = Stage.Decay;
+        }
+      } else if (stage === Stage.Decay) {
+        lvl += this.dCoef * (this.sus - lvl);
+        if (Math.abs(lvl - this.sus) < 1e-4) {
+          lvl = this.sus;
+          stage = Stage.Sustain;
+        }
+      } else if (stage === Stage.Sustain) {
+        lvl = this.sus;
+      } else if (stage === Stage.Release) {
+        lvl -= this.rCoef * lvl;
+        if (lvl < IDLE_FLOOR) {
+          lvl = 0;
+          stage = Stage.Idle;
+        }
+      } else lvl = 0;
+      out[i] = lvl;
+    }
+    this.lvl = lvl;
+    this.stage = stage;
+  }
+
   /** False once fully idle after release. */
   get active(): boolean {
     return this.stage !== Stage.Idle;

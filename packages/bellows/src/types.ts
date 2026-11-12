@@ -32,7 +32,14 @@ export interface NamedRng extends Rng {
   chance(p: number): boolean;
   /** Fisher-Yates shuffle, returns a new array. */
   shuffle<T>(arr: readonly T[]): T[];
-  /** Approximately normal (Irwin-Hall of 4), mean 0, roughly unit variance. */
+  /**
+   * Approximately normal (Irwin-Hall of 4), mean 0, standard deviation
+   * about 0.714, NOT unit: the sum of four uniforms has sd sqrt(1/3) and
+   * the scale applied is SQRT2 * 0.875. Multiply by about 1.4 where a
+   * coefficient was written for unit variance (src/dsp/glottal.ts does).
+   * The scale stays as it is because every engine that draws from it was
+   * tuned by ear against it.
+   */
   gauss(): number;
   /** Weighted index pick. */
   weighted(weights: ArrayLike<number>): number;

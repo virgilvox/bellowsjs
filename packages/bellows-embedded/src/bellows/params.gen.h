@@ -603,7 +603,7 @@ inline constexpr float kEffectSaturatorDefaults[kEffectSaturatorParamCount] = {
 };
 
 /* Not ported to C++ yet, listed so the gap stays visible:
- *   engines: clap, tom, noise, granular
+ *   engines: clap, tom, noise, vocal, granular
  *   effects: tapeDelay, multitap, fdn, transient, phaser, freqshift, pitchshift, freeze, blur, robot, whisper, denoise
  */
 

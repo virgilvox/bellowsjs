@@ -2,7 +2,7 @@
   "name": "bellowsjs",
   "version": "0.1.9",
   "description": "A browser-native audio engine for synthesis, samples, sequencing, analysis, and I/O. One clock, one kernel, seeded everywhere.",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/bellows.js",
   "module": "./dist/bellows.js",
@@ -18,7 +18,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "sideEffects": false,
   "keywords": [
@@ -43,7 +44,9 @@
     "test:watch": "vitest",
     "build": "node scripts/gen-worklet.mjs && vite build && tsc -p tsconfig.build.json && node scripts/postbuild.mjs",
     "typecheck": "tsc --noEmit",
-    "gen:worklet": "node scripts/gen-worklet.mjs"
+    "gen:worklet": "node scripts/gen-worklet.mjs",
+    "gen:vocal": "node scripts/gen-vocal-tract.mjs",
+    "gen:vocal:check": "node scripts/gen-vocal-tract.mjs --check"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

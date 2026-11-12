@@ -18,9 +18,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, normalize, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
+import { workletCode } from '../../src/kernel/worklet-code.gen';
 
 const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src');
 
@@ -31,6 +33,8 @@ const LAYER: Record<string, number> = {
   dsp: 2,
   theory: 2,
   patterns: 2,
+  /* text and notes to timed phonemes; knows no audio, like theory beside it */
+  lyrics: 2,
   engines: 3,
   fx: 3,
   analysis: 3,
@@ -132,7 +136,7 @@ describe('dependency direction', () => {
      * tests in Node." The suite proves it for whatever it happens to
      * import; this proves it for the whole of the pure layers.
      */
-    const PURE = ['dsp', 'engines', 'fx', 'theory', 'seq', 'analysis', 'patterns', 'core', 'presets'];
+    const PURE = ['dsp', 'engines', 'fx', 'theory', 'seq', 'analysis', 'patterns', 'core', 'presets', 'lyrics'];
     /*
      * `window` is deliberately absent from this list. In this codebase it
      * is an FFT window: chroma, onset, stft and granular all take one as a
@@ -144,9 +148,14 @@ describe('dependency direction', () => {
      * into a scope holding four names and nothing else, and renders 96
      * blocks through it. AudioWorkletGlobalScope has no window, no document
      * and no fetch, so a DSP module reaching for one throws there.
+     *
+     * fetch and WebAssembly are listed for the lyric layer's sake: it takes
+     * its pronouncing dictionary as an injected map and hosts no wasm
+     * (docs/VOICE.md, decisions 1 and 4), so a pure module that fetches
+     * data or instantiates a module has broken one of those decisions.
      */
     const BROWSER =
-      /\b(document|navigator|AudioContext|AudioWorkletNode|AudioBuffer|OfflineAudioContext|localStorage|sessionStorage|XMLHttpRequest|requestAnimationFrame|Blob|globalThis)\b/;
+      /\b(document|navigator|AudioContext|AudioWorkletNode|AudioBuffer|OfflineAudioContext|localStorage|sessionStorage|XMLHttpRequest|requestAnimationFrame|Blob|globalThis|fetch|WebAssembly)\b/;
     const offenders: string[] = [];
     for (const abs of allSources(SRC)) {
       const rel = relative(SRC, abs);
@@ -158,6 +167,107 @@ describe('dependency direction', () => {
       if (m) offenders.push(`${rel}: ${m[1]}`);
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('the lyric layer', () => {
+  it('imports nothing but the contracts and its own files', () => {
+    /*
+     * docs/VOICE.md puts lyrics beside theory: text and notes in, timed IPA
+     * out, no audio, no engine, no clock. Its layer number alone would let
+     * it import dsp, which sits at the same level, so the rule is stated
+     * here as what it is.
+     */
+    const lyricEdges = edges().filter((e) => e.from === 'lyrics');
+    expect(lyricEdges.length).toBeGreaterThan(10);
+    const outside = lyricEdges.filter((e) => e.to !== 'lyrics' && e.to !== 'types').map((e) => e.spec);
+    expect(outside).toEqual([]);
+  });
+});
+
+describe('the audio thread', () => {
+  /** Every source file the worklet entry reaches through runtime imports. */
+  function reachable(entry: string): Set<string> {
+    const seen = new Set<string>();
+    const stack = [entry];
+    while (stack.length > 0) {
+      const abs = stack.pop()!;
+      if (seen.has(abs)) continue;
+      seen.add(abs);
+      const text = readFileSync(abs, 'utf8');
+      for (const m of text.matchAll(/^(?:import|export)\s+(type\s+)?([^;]*?)from '([^']+)';/gms)) {
+        if (m[1] || !m[3].startsWith('.')) continue;
+        const clause = m[2];
+        const braced = clause.slice(clause.indexOf('{') + 1, clause.lastIndexOf('}'));
+        const allTyped =
+          clause.includes('{') && braced.split(',').every((x) => x.trim() === '' || x.trim().startsWith('type '));
+        if (allTyped) continue;
+        const base = join(dirname(abs), m[3]);
+        const file = [base + '.ts', join(base, 'index.ts')].find((p) => existsSync(p));
+        if (file) stack.push(file);
+      }
+    }
+    return new Set([...seen].map((p) => relative(SRC, p)));
+  }
+
+  /*
+   * Strings that exist only in the lyric layer (no other file under src/
+   * has them). A marker the source loses fails the first assertion below
+   * rather than passing quietly.
+   */
+  const MARKERS: Array<[string, string]> = [
+    ['english.ts', 'W IH1 N D'],
+    ['english.ts', 'AW1 ER0'],
+    ['ipa.ts', 'iyɨʉɯuɪʏʊeøɘɵɤoəɛœɜɞʌɔæɐaɶɑɒɝɚ'],
+    ['letter-to-sound.ts', 'ʃ ə n'],
+    ['cmudict.ts', ';;;'],
+  ];
+  /* esbuild writes non-ASCII as \xHH or \uHHHH escapes; undo them before searching. */
+  const unescaped = (code: string) =>
+    code.replace(/\\x([0-9a-fA-F]{2})|\\u([0-9a-fA-F]{4})/g, (_, x, u) => String.fromCharCode(parseInt(x ?? u, 16)));
+
+  it('does not reach the lyric layer or the facade from the worklet entry', () => {
+    /*
+     * docs/VOICE.md decision 3: the lyric layer ships in the main entry and
+     * stays out of the worklet bundle. The kernel needs the vocal engine
+     * and its phoneme table, and nothing that reads text.
+     */
+    const files = reachable(join(SRC, 'kernel', 'worklet-entry.ts'));
+    expect(files.has(join('engines', 'vocal.ts'))).toBe(true);
+    expect(files.has(join('engines', 'vocal-phonemes.ts'))).toBe(true);
+    const facade = ['bellows.ts', 'sing.ts', 'quick.ts', 'index.ts'];
+    const leaks = [...files].filter((f) => f.startsWith('lyrics' + sep) || facade.includes(f)).sort();
+    expect(leaks).toEqual([]);
+  });
+
+  it('ships a worklet bundle with none of the lyric layer in it', async () => {
+    for (const [file, marker] of MARKERS) {
+      expect(readFileSync(join(SRC, 'lyrics', file), 'utf8'), `${file} lost its marker`).toContain(marker);
+    }
+    /* Positive control: the markers survive the worklet's own minifier settings. */
+    const control = await build({
+      stdin: {
+        contents: "export * from './lyrics/read'; export * from './lyrics/cmudict';",
+        resolveDir: SRC,
+        loader: 'ts',
+      },
+      bundle: true,
+      format: 'esm',
+      target: 'es2022',
+      minify: true,
+      write: false,
+      legalComments: 'none',
+    });
+    const lyricBundle = unescaped(control.outputFiles[0].text);
+    const found = MARKERS.filter(([, m]) => !lyricBundle.includes(m)).map(([f]) => f);
+    expect(found, 'markers the minifier does not keep').toEqual([]);
+    /* And the bundle the kernel actually loads, as generated. */
+    const worklet = unescaped(workletCode);
+    expect(worklet.length).toBeGreaterThan(50_000);
+    /* the engine's own IPA is in there, so the unescaping is doing its job */
+    expect(worklet).toContain('tʃ');
+    const inWorklet = MARKERS.filter(([, m]) => worklet.includes(m)).map(([f]) => f);
+    expect(inWorklet).toEqual([]);
   });
 });
 

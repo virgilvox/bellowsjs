@@ -15,6 +15,16 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const pkg = join(here, '..');
 
+/*
+ * dist/worklet.js is this bundle as a file, which a host can serve or vendor
+ * on its own, and it carries ported MIT code, so it names its licenses as the
+ * main bundles do (vite.config.ts). esbuild emits `banner` even with
+ * legalComments 'none', which still strips every comment from the sources.
+ */
+const BANNER =
+  '/*! bellowsjs | MIT, Copyright (c) 2026 Moheeb Zara | includes code from CHIMERA, https://github.com/jamesondh/chimera-vocal-synth, ' +
+  'Copyright (c) 2026 Jameson Hodge, MIT License | notices in THIRD_PARTY_NOTICES.md */';
+
 const result = await build({
   entryPoints: [join(pkg, 'src/kernel/worklet-entry.ts')],
   bundle: true,
@@ -23,6 +33,7 @@ const result = await build({
   minify: true,
   write: false,
   legalComments: 'none',
+  banner: { js: BANNER },
 });
 
 const code = result.outputFiles[0].text;
