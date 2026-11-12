@@ -255,6 +255,7 @@ Hann STFT, N = 2048 (4096 for low-pitched/polyphonic), analysis hop Ha = N/4; sy
 - **Golden-file regression** (Tone's `CompareToFile` pattern): deterministic offline renders → stored golden WAV/Float32 binaries → compare via spectral/RMS distance with tolerance (default ~0.001), never exact float equality (cross-platform FP drift); `forceRender` flag to regenerate. Snapshot summary stats (peak/RMS/zero-crossings) via a custom vitest serializer for cheap smoke tests.
 
 ### License
+**AS BUILT: MIT since 2026-11-12, by the owner's choice; see docs/PRD.md item 8.** The research below chose Apache-2.0 and is kept as the record of why.
 - **Apache-2.0.** Ecosystem norm is permissive (Tone/howler MIT); Apache adds an explicit patent grant + retaliation clause: directly relevant to a DSP-algorithm library: and avoids the enterprise-legal friction any copyleft (even MPL's file-level) triggers in dependency audits. MPL-2.0 only if forcing DSP improvements upstream outweighs adoption; it doesn't here. Verify SpessaSynth is Apache-2.0 at the exact version pinned if adopted for SoundFont playback.
 
 ---

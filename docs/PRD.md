@@ -8,7 +8,7 @@ A browser-native audio engine for synthesis, samples, sequencing, analysis, and 
 | Author | Moheeb Zara (virgilvox) |
 | Date | 2026-07-03 |
 | Package | `bellowsjs` (confirmed available on npm) |
-| License | Apache-2.0 |
+| License | MIT (Apache-2.0 until 2026-11-12) |
 | Stewardship | OSSuary Foundation (planned) |
 | Companion | `docs/ENGINEERING.md` (research brief with formulas and platform facts) |
 
@@ -29,12 +29,12 @@ The original draft left several questions open. Research resolved them:
 5. Voices are pooled and reused inside the kernel. Zero allocation per block at steady state. No per-note node graphs, no dispose() surface.
 6. Seeding: xmur3 hash into mulberry32 streams, forkable by label so the stream tree is stable regardless of consumption order. Nothing in the library calls Math.random.
 7. WASM SIMD acceleration is deferred to a later phase and will be Rust if built; the TS reference implementations are the contract and the test oracle.
-8. License Apache-2.0 (patent grant matters for a DSP library; copyleft friction does not pay for itself here). Package name `bellowsjs`, unscoped, verified free.
+8. License MIT, changed from Apache-2.0 on 2026-11-12 at the owner's call: as permissive as licenses get while keeping attribution (the copyright notice travels with every copy), and the same terms as CHIMERA, whose ported files now sit under an identical license. The trade is Apache's explicit patent grant and retaliation clause, which MIT does not have; the original reasoning was that the grant matters for a DSP library. Copyleft was never on the table. Package name `bellowsjs`, unscoped, verified free.
 
 ## 3. Feature domains (as built in v0.1)
 
 ### Synthesis engines
-Virtual analog (saw/square/PWM/triangle band-limited by a tabulated Kaiser-sinc BLEP and its integral, not by a polyBLEP polynomial: see the AS BUILT note in docs/ENGINEERING.md 2.1 for the measurement that decided it, ladder and SVF filters, per-voice drift), FM (2/4/6 operators, DX-style algorithm routing tables, feedback operator), additive (32 partials, inharmonicity, morph), wavetable (mipmapped sets, position scan), granular (64-grain clouds, seeded jitter), extended Karplus-Strong pluck, waveguide string and tube, modal bank (bar, membrane, bell, glass, wood), west coast (wavefolder into vactrol low-pass gate), formant vocal synth (vowel morphing), drum engines (kick, snare, hat, clap, tom), noise synth, and a DDSP-style harmonic-plus-noise engine with a frame-driven control input reserved for a future neural pack.
+Virtual analog (saw/square/PWM/triangle band-limited by a tabulated Kaiser-sinc BLEP and its integral, not by a polyBLEP polynomial: see the AS BUILT note in docs/ENGINEERING.md 2.1 for the measurement that decided it, ladder and SVF filters, per-voice drift), FM (2/4/6 operators, DX-style algorithm routing tables, feedback operator), additive (32 partials, inharmonicity, morph), wavetable (mipmapped sets, position scan), granular (64-grain clouds, seeded jitter), extended Karplus-Strong pluck, waveguide string and tube, modal bank (bar, membrane, bell, glass, wood), west coast (wavefolder into vactrol low-pass gate), formant vocal synth (vowel morphing), a singing voice (formant synthesis with consonants in the Klatt manner, sung from lyrics by `sing()`; added after v0.1, see docs/VOICE.md), drum engines (kick, snare, hat, clap, tom), noise synth, and a DDSP-style harmonic-plus-noise engine with a frame-driven control input reserved for a future neural pack.
 
 ### Samples and soundfonts
 Sampler engine with velocity layers, round robins, loop crossfades. SF2 parser implementing the generator resolution model of the spec (preset zones adding onto instrument zones, timecents envelopes, loop modes, stereo links, 24-bit). SFZ parser covering the opcode subset that plays the popular free libraries, with include and define support.

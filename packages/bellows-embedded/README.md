@@ -306,4 +306,4 @@ examples/  Arduino sketches
 See `docs/HARDWARE.md` in the repository root for the port analysis, the board budgets, and the
 measurements behind every number here.
 
-Apache-2.0, same as the rest of bellows.
+MIT, same as the rest of bellows: keep the copyright notice with it. Nothing in the C++ port comes from CHIMERA, so no other notice applies here.

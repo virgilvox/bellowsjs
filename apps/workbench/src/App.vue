@@ -101,7 +101,7 @@ window.addEventListener('hashchange', () => {
       <span>
         <a href="https://www.npmjs.com/package/bellowsjs" target="_blank" rel="noopener">npm</a>
         // <a href="https://github.com/virgilvox/bellowsjs" target="_blank" rel="noopener">github</a>
-        // apache-2.0
+        // mit
       </span>
       <span class="badges"><span>ONE CLOCK</span><span>ONE KERNEL</span><span>SEEDED</span></span>
     </footer>

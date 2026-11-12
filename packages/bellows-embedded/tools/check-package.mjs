@@ -4,7 +4,7 @@
  * This library ships through two channels with different shapes, and both were
  * got wrong by hand before anything checked them:
  *
- *   - the package had no LICENSE at all, while every manifest said Apache-2.0
+ *   - the package had no LICENSE at all, while every manifest named one
  *   - a PlatformIO pack carried examples/daisy_onekick/build, a megabyte of
  *     .elf, .map and object files, because export.exclude named only test and
  *     tools
@@ -55,9 +55,10 @@ const DEV_ONLY = /^(test|tools)\/|^(package\.json|compile_flags\.txt)$/;
 
 function checkCommon(where, root, files) {
   if (!existsSync(join(root, 'LICENSE'))) {
-    fail(where, 'no LICENSE. Every manifest here says Apache-2.0 and a distributed artifact must carry the text');
-  } else if (readFileSync(join(root, 'LICENSE'), 'utf8').length < 1000) {
-    fail(where, 'LICENSE is suspiciously short');
+    fail(where, 'no LICENSE. Every manifest here names a license and a distributed artifact must carry the text');
+  } else if (!/^MIT License[\s\S]*Copyright \(c\) \d{4} \S[\s\S]*Permission is hereby granted/.test(readFileSync(join(root, 'LICENSE'), 'utf8'))) {
+    // length proves nothing; the text has to be the license the manifests name, with its holder
+    fail(where, 'LICENSE is not the MIT text, with a copyright holder, that every manifest names');
   }
 
   for (const f of files) {
