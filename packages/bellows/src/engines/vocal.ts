@@ -22,7 +22,7 @@
  * THE LAYERS, AND HOW OFTEN EACH RUNS (48 kHz)
  *
  *   planner      every 64 samples: gestures to articulator targets
- *   articulators every 64: a critically damped bank, then the contacts
+ *   articulators every 64: a six-stage cascade bank, then the contacts
  *   geometry     every 512 (a keyframe): the exact shape, rate limited
  *   drive        every 32: the shape between keyframes onto the grid
  *   pitch        every 32: glide, vibrato, microprosody, pressure
@@ -86,7 +86,8 @@
 
 import type { EngineDef, NamedRng, ParamSpec, Voice } from '../types';
 import { clamp } from '../types';
-import { CritDampBank, CRITDAMP_SETTLE_98 } from '../dsp/critdamp';
+import { CRITDAMP_SETTLE_98 } from '../dsp/critdamp';
+import { CascadeBank } from '../dsp/cascade';
 import { PitchGlide } from '../dsp/pitchglide';
 import { Adsr } from '../dsp/envelopes';
 import { CM_H2O, SOUND_SPEED } from '../dsp/air';
@@ -94,7 +95,7 @@ import { JunctionAirway, ductMin } from '../dsp/junction-airway';
 import { VOCAL_DEFAULT_PHONEME, VOCAL_PHONEMES } from './vocal-phonemes';
 import { VOCAL_BODIES, VOCAL_NEUTRAL } from './vocal-tables.gen';
 import { ART, ARTICULATORS } from './vocal-articulators';
-import { ARTICULATOR_MAX, ARTICULATOR_MIN, ARTICULATOR_OMEGA, VocalPlanner, restTipFrom } from './vocal-planner';
+import { ARTICULATOR_MAX, ARTICULATOR_RATE, ARTICULATOR_TARGET_MIN, LIP_COMPRESSED, VocalPlanner, restTipFrom } from './vocal-planner';
 import { VocalRoof } from './vocal-roof';
 import { VOCAL_KEY_BLOCKS, VocalDrive } from './vocal-drive';
 
@@ -165,7 +166,7 @@ class VocalVoice implements Voice {
   private readonly drive: VocalDrive;
   private readonly roofs: VocalRoof[];
   private readonly planner = new VocalPlanner();
-  private readonly bank: CritDampBank;
+  private readonly bank: CascadeBank;
   private readonly glide: PitchGlide;
   private readonly env: Adsr;
   private readonly vibRng: NamedRng;
@@ -177,12 +178,12 @@ class VocalVoice implements Voice {
   /* Scratch. */
   private readonly art = new Float64Array(ARTICULATORS);
   private readonly tip = new Float64Array(2);
-  private readonly omega = new Float64Array(ARTICULATORS);
+  private readonly rate = new Float64Array(ARTICULATORS);
   /** The glottal opening and closure at each articulator step of the keyframe interval (0 is its start). */
   private readonly abdAt = new Float64Array(STEPS + 1);
   private readonly cloAt = new Float64Array(STEPS + 1);
-  /** A contact's new value and velocity for each axis (x then y), for CritDampBank.placeFrom. */
-  private readonly placed = new Float64Array(4);
+  /** A contact's new position for each axis (x then y), for CascadeBank.placeFrom. */
+  private readonly placed = new Float64Array(2);
   /** The time of the articulator step or block being computed, s (a field: no double crosses a call). */
   private at = 0;
 
@@ -253,7 +254,7 @@ class VocalVoice implements Voice {
     this.blk = this.air.block;
     this.stepEvery = 2 * this.blk;
     this.keyEvery = VOCAL_KEY_BLOCKS * this.blk;
-    this.bank = new CritDampBank(ARTICULATORS, sampleRate / this.stepEvery);
+    this.bank = new CascadeBank(ARTICULATORS, sampleRate / this.stepEvery);
     this.glide = new PitchGlide(sampleRate / this.blk);
     this.env = new Adsr(sampleRate);
     this.vibRng = rng.fork('vibrato');
@@ -490,6 +491,8 @@ class VocalVoice implements Voice {
       this.targets();
       for (let i = 0; i < ARTICULATORS; i++) bank.snap(i, this.planner.target[i]);
       this.contact();
+      // at rest where the contacts hold it: a note that opens on a closure starts pressed, not mid-movement
+      for (let i = 0; i < ARTICULATORS; i++) bank.snap(i, bank.values[i]);
     }
     this.art.set(bank.values);
     this.drive.key(this.art, true);
@@ -525,7 +528,7 @@ class VocalVoice implements Voice {
     tg[ART.lipAp] += 0.5 * tj;
     for (let i = 0; i < ARTICULATORS; i++) {
       const v = tg[i];
-      tg[i] = v < ARTICULATOR_MIN[i] ? ARTICULATOR_MIN[i] : v > ARTICULATOR_MAX[i] ? ARTICULATOR_MAX[i] : v;
+      tg[i] = v < ARTICULATOR_TARGET_MIN[i] ? ARTICULATOR_TARGET_MIN[i] : v > ARTICULATOR_MAX[i] ? ARTICULATOR_MAX[i] : v;
     }
   }
 
@@ -542,9 +545,9 @@ class VocalVoice implements Voice {
     const bank = this.bank;
     const p = this.planner;
     const art = this.articulation;
-    const om = this.omega;
-    for (let i = 0; i < ARTICULATORS; i++) om[i] = ARTICULATOR_OMEGA[i] * p.speed[i] * art;
-    bank.setAll(p.target, om);
+    const rate = this.rate;
+    for (let i = 0; i < ARTICULATORS; i++) rate[i] = ARTICULATOR_RATE[i] * p.speed[i] * art;
+    bank.setAll(p.target, rate);
     bank.step();
     this.contact();
     this.updateGlottis();
@@ -552,16 +555,26 @@ class VocalVoice implements Voice {
 
   /**
    * Tip and body may press 0.1 k cm into the roof; past that they are
-   * projected back along the contact normal and only their inward velocity
-   * is removed (CHIMERA human_voice.rs:520-552), so a release leaves
-   * contact smoothly.
+   * projected back along the contact normal (CHIMERA human_voice.rs:520-552).
+   * CHIMERA then removes the inward part of the velocity; in the cascade
+   * the velocity is the stages behind the output, so only the output stage
+   * is moved and those stages keep going toward a target past the roof (a
+   * /t/ aims 0.29 k cm past it). The articulator presses into the roof
+   * while they do, and when its target turns back it leaves the roof
+   * already accelerating. The lips likewise stop at LIP_COMPRESSED while
+   * their stages go on to the virtual closure target.
    */
   private contact(): void {
+    const bank = this.bank;
+    if (bank.values[ART.lipAp] < LIP_COMPRESSED) {
+      this.placed[0] = LIP_COMPRESSED;
+      bank.placeFrom(ART.lipAp, this.placed, 0);
+    }
     const roof = this.roofs[this.bW < 0.5 ? this.bLo : this.bLo + 1];
     const k = roof.k;
     const lim = -0.1 * k;
     const a = this.art;
-    a.set(this.bank.values);
+    a.set(bank.values);
     // the body: its circle against the roof
     roof.bodyPoint(a);
     roof.x = roof.bx;
@@ -571,7 +584,7 @@ class VocalVoice implements Voice {
       this.depth = lim - (roof.sd - roof.r);
       this.push(roof, ART.tbX, ART.tbY);
     }
-    a.set(this.bank.values);
+    a.set(bank.values);
     roof.tipPoint(a);
     roof.x = roof.tipX;
     roof.y = roof.tipY;
@@ -583,8 +596,8 @@ class VocalVoice implements Voice {
   }
 
   /**
-   * Move articulators (ix, iy), at the roof's point (x, y) with signed
-   * distance sd from it, out by `depth` along the normal.
+   * Move the output stages of articulators (ix, iy), at the roof's point
+   * (x, y) with signed distance sd from it, out by `depth` along the normal.
    */
   private push(roof: VocalRoof, ix: number, iy: number): void {
     const sd = roof.sd;
@@ -603,24 +616,16 @@ class VocalVoice implements Voice {
     }
     const bank = this.bank;
     const val = bank.values;
-    const vel = bank.velocities;
     const ax = val[ix];
     const ay = val[iy];
     const k = roof.k;
     const sx = (ax > 0.5 ? 0.86 : 1) * k;
     const sy = (ay < 7 ? roof.pharynxScale : 1) * k;
-    const vx = vel[ix];
-    const vy = vel[iy];
-    const vn = vx * sx * nx + vy * sy * ny;
-    const cx = vn < 0 ? vn * nx : 0;
-    const cy = vn < 0 ? vn * ny : 0;
     const pl = this.placed;
     pl[0] = ax + (nx * depth) / sx;
-    pl[1] = vx - cx / sx;
-    pl[2] = ay + (ny * depth) / sy;
-    pl[3] = vy - cy / sy;
+    pl[1] = ay + (ny * depth) / sy;
     bank.placeFrom(ix, pl, 0);
-    bank.placeFrom(iy, pl, 2);
+    bank.placeFrom(iy, pl, 1);
   }
 
   /** A keyframe interval starts: the articulators to its end, then the shape there. */

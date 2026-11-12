@@ -521,7 +521,7 @@ describe('vocal engine: the singer rules', () => {
   it('tuning opens the jaw for a high /i/ and leaves a low one alone (white box)', () => {
     const jaw = (freq: number, tuning: number) => {
       let j = 0;
-      sing({ freq, seconds: 0.8, params: { body: 1, tuning, phoneme: ph('i') }, onBlock: (t, v) => { if (t > 0.6 && !j) j = (v as unknown as { bank: { value(i: number): number } }).bank.value(0); } });
+      sing({ freq, seconds: 0.8, params: { body: 1, tuning, phoneme: ph('i') }, onBlock: (t, v) => { if (t > 0.6 && !j) j = (v as unknown as { bank: { values: Float64Array } }).bank.values[0]; } });
       return j;
     };
     expect(jaw(880, 1) - jaw(880, 0)).toBeGreaterThan(0.3);
@@ -597,12 +597,20 @@ describe('vocal engine: consonants', () => {
   it('/l/ dips under its vowel with its F1 low, as CHIMERA\'s does (male: dip -2.8 dB)', () => {
     const { x, spans, sr } = son[0];
     const c = centreOf(spans, 'l', 4.45, 4.75);
-    const dip = db(spanRms(x, sr, c - 0.015, c + 0.015) / spanRms(x, sr, 4.875, 4.925));
+    const dipOf = (y: Float32Array) => db(spanRms(y, sr, c - 0.015, c + 0.015) / spanRms(y, sr, 4.875, 4.925));
     /*
      * The gate is 1 dB: the integration's render measured -2.2 against
-     * CHIMERA's -2.8; this seed's line measures about -1.7, so the test
-     * allows 1.5.
+     * CHIMERA's -2.8. A 30 ms window holds three or four glottal cycles, so
+     * one seed's dip moves by up to a dB with their jitter: this seed's
+     * line measured -1.7 with the second-order articulators and -0.7 with
+     * the six-stage cascade, whose /l/ path is the same to 0.2 mm. Over 12
+     * seeds (MEASURED) the mean went from -1.77 to -1.49 (sd 0.3), the /l/
+     * channel 0.35 cm^2 against 0.34. So the test takes the mean of eight
+     * seeds and allows 1.5.
      */
+    let dip = dipOf(x);
+    for (const seed of ['l2', 'l3', 'l4', 'l5', 'l6', 'l7', 'l8']) dip += dipOf(sungLine(PHRASES.son, 0, { seed }).x);
+    dip /= 8;
     expect(Math.abs(dip - -2.8)).toBeLessThan(1.5);
     expect(bandDb(x, sr, c, 1000, 2000, 1024) - bandDb(x, sr, 4.9, 1000, 2000, 1024)).toBeLessThan(-3);
   });
@@ -662,16 +670,19 @@ describe('vocal engine: releases', () => {
   it('opens a stop as CHIMERA does: the burst grows over samples, out of a closure that is not digital silence', () => {
     /*
      * The twinkle /k/ (about 1.04 and 2.24 s) and the strengths final /t/
-     * (about 4.5 s), every body. Before the drive smoothed the profile and the
+     * (4.50 to 4.52 s), every body. Before the drive smoothed the profile and the
      * airway's area floor rose to 1e-4 cm^2, the first sample of a release was a
      * step larger than the burst's peak (MEASURED: 1.05 to 1.5) out of a closure
-     * 61 dB under it; CHIMERA's: 0.57 and 26 dB. MEASURED now: at most 0.63, and
-     * rises of 20 to 35 dB.
+     * 61 dB under it; CHIMERA's: 0.57 and 26 dB. MEASURED now: at most 0.48, and
+     * rises of 15 to 38 dB. The final /t/'s window starts at 4.495 s: the tip,
+     * pressed past the roof, now releases at 4.516 s for the male body, and a
+     * window from 4.45 s found instead a wall-motion event 20 ms before it
+     * inside the closure (peak 8e-4 against the burst's 6e-3).
      */
     for (let b = 0; b < 3; b++) {
       const tw = sungLine(PHRASES.twinkle, b, { seed: `int-twinkle-${b}` });
       const st = sungLine(PHRASES.strengths, b, { seed: `int-strengths-${b}` });
-      for (const r of [release(tw.x, tw.sr, 1.0, 1.08), release(tw.x, tw.sr, 2.2, 2.28), release(st.x, st.sr, 4.45, 4.55)]) {
+      for (const r of [release(tw.x, tw.sr, 1.0, 1.08), release(tw.x, tw.sr, 2.2, 2.28), release(st.x, st.sr, 4.495, 4.56)]) {
         expect(r.sharp).toBeLessThan(0.7);
         expect(r.rise).toBeLessThan(45);
       }
