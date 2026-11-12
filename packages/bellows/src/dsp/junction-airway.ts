@@ -63,6 +63,14 @@ import { AIR_DENSITY, AIR_DYNAMIC_VISCOSITY, AIR_VISCOSITY, CM_H2O, CRITICAL_REY
 import { AirwayTube, TUBE_RING, evenNodes } from './airway-tube';
 import { AreaSlew } from './area-rate';
 import { GlottalSource } from './glottal';
+import { GEO_AMPLITUDE, GeometricGlottis } from './geometric-glottis';
+import { FoldOscillator } from './fold-oscillator';
+import { PhonationThreshold } from './phonation-threshold';
+
+/** The fold models: kinematic two-edge, self-oscillating two-mass, the parametric pulse (the default). */
+export const GLOTTIS_GEOMETRIC = 0;
+export const GLOTTIS_SELF_OSCILLATING = 1;
+export const GLOTTIS_PULSE = 2;
 
 const RHO = AIR_DENSITY;
 const RHOC = AIR_DENSITY * SOUND_SPEED;
@@ -173,6 +181,21 @@ export class JunctionAirway {
   agStatic = 0.02;
   /** How far the folds are held shut, 0..1 (a glottal stop). */
   closure = 0;
+  /** Which fold model makes the glottal area: GLOTTIS_GEOMETRIC, GLOTTIS_SELF_OSCILLATING or GLOTTIS_PULSE. */
+  model = GLOTTIS_PULSE;
+  /** The part of agStatic that is the posterior chink, cm^2 (the fold models; the pulse uses agStatic whole). */
+  chink = 0.01;
+  /** Fold length at rest, cm (the fold models). */
+  foldLength = 1.6;
+  /** Geometric glottis: the upper edge's rest displacement over the lower's, cm; its phase lag (cycles), skew, double pulsing. */
+  upperRest = 0.03;
+  lag = 70 / 360;
+  skew = 0;
+  doublePulse = 0.05;
+  /** Geometric glottis: the amplitude factor x_rel (under 1: stiffened folds). */
+  xRel = 1;
+  /** Added to both edges' rest displacement, cm: negative presses the folds together (the fold models). */
+  restOffset = 0;
   /** The fold pulse's rate, Hz. */
   f0 = 110;
   /** Incisors (grid junction) and the pharynx/oral split (fractional grid position). */
@@ -185,12 +208,21 @@ export class JunctionAirway {
   voicing = 0;
   /** Pressure across the folds, dyn/cm^2, and its 30 Hz smoothing; the pressure below them, smoothed. */
   dpGlottis = 0;
+  /** The transglottal pressure the fold models see: block means through a 30 Hz one-pole, dyn/cm^2. */
+  pTrans = 0;
+  /** The pressure above the folds, the same way, dyn/cm^2. */
+  pSupra = 0;
+  private dpAcc = 0;
+  private paAcc = 0;
   dpSmooth = 0;
   pSubSmooth = 0;
   private pSub = 0;
   uLips = 0;
   uNose = 0;
   readonly glottis: GlottalSource;
+  readonly geometric = new GeometricGlottis();
+  readonly folds: FoldOscillator;
+  readonly threshold: PhonationThreshold;
 
   /* ---- Grid sections. ---- */
   private readonly R: Float64Array;
@@ -385,6 +417,8 @@ export class JunctionAirway {
     // the longest fixed tube (the male trachea, 12 cm) in sections, with room
     this.secScratch = new Float64Array(Math.ceil((14 * 1.2) / this.dx) + 4);
     this.glottis = new GlottalSource(rate, rng.fork('glottis'));
+    this.folds = new FoldOscillator(rate);
+    this.threshold = new PhonationThreshold(this.block / rate);
     this.areaBuf = new Float64Array(this.block);
     this.areaArgs = [this.areaBuf, 0, this.block];
     this.hpC = Math.exp((-2 * Math.PI * OUTPUT_HP) / rate);
@@ -462,6 +496,11 @@ export class JunctionAirway {
     this.tr.reset();
     this.na.reset();
     this.glottis.reset();
+    this.geometric.reset();
+    this.folds.reset();
+    this.threshold.reset();
+    this.pTrans = this.dpAcc = 0;
+    this.pSupra = this.paAcc = 0;
     this.R.fill(0);
     this.L.fill(0);
     this.U.fill(0);
@@ -734,7 +773,88 @@ export class JunctionAirway {
     this.f0Buf[0] = this.f0;
     this.glottis.setFreqFrom(this.f0Buf, 0);
     this.areaArgs[2] = blk;
+    // the pressure across the folds: the last block's mean through a 30 Hz one-pole
+    const dpMean = first ? 0 : this.dpAcc / blk;
+    const paMean = first ? 0 : this.paAcc / blk;
+    this.dpAcc = 0;
+    this.paAcc = 0;
+    this.pTrans += c30 * (dpMean - this.pTrans);
+    this.pSupra += c30 * (paMean - this.pSupra);
+    const model = this.model;
+    if (model === GLOTTIS_GEOMETRIC) this.geometricBlock(closure);
+    else if (model === GLOTTIS_SELF_OSCILLATING) this.foldBlock(closure);
+    else this.pulseBlock();
+  }
+
+  /** The parametric pulse into absolute areas: the static opening plus the gated pulse, averaged over two samples. */
+  private pulseBlock(): void {
     Reflect.apply(AREA_BLOCK, this.glottis, this.areaArgs);
+    const buf = this.areaBuf;
+    const blk = this.block;
+    const inv = 1 / blk;
+    const last = buf[blk - 1];
+    // backwards, so each sample still reads its raw predecessor
+    for (let n = blk - 1; n >= 0; n--) {
+      const w = (n + 1) * inv;
+      const st = this.agSt0 + (this.agSt - this.agSt0) * w;
+      const av = this.aVib0 + (this.aVib - this.aVib0) * w;
+      // the fold pulse, averaged over two samples (a closure's top octave is softer; MEASURED)
+      let ag = st + av * 0.5 * (buf[n] + (n > 0 ? buf[n - 1] : this.agLast));
+      if (ag < 1e-7) ag = 1e-7;
+      buf[n] = ag;
+    }
+    this.agLast = last;
+  }
+
+  /** The geometric glottis: rest displacements from the opening, the threshold from the pressure, then the areas. */
+  private geometricBlock(closure: number): void {
+    const g = this.geometric;
+    const L = this.foldLength > 0.1 ? this.foldLength : 0.1;
+    const shut = 1 - 0.92 * closure;
+    const chink = (this.chink > 0 ? this.chink : 0) * shut;
+    const rest = this.agSt - chink;
+    const x1 = (rest > 0 ? rest : 0) / L + this.restOffset;
+    const x2 = x1 + this.upperRest * shut;
+    g.length = L;
+    g.chink = chink;
+    g.xRest1 = x1;
+    g.xRest2 = x2;
+    g.lag = this.lag;
+    g.skew = this.skew;
+    g.doublePulse = this.doublePulse;
+    const th = this.threshold;
+    th.pressure = this.pTrans;
+    th.halfWidth = 0.25 * (x1 + x2);
+    th.drive = 1 - closure;
+    th.step();
+    this.voicing = th.level;
+    // the swing as the root of the pressure across the folds (Titze 1989, as the paper models it)
+    const p = this.pTrans > 0 ? this.pTrans : 0;
+    g.xMax = GEO_AMPLITUDE * this.xRel * Math.sqrt(p) * th.level;
+    g.process(this.glottis, this.areaBuf, 0, this.block);
+  }
+
+  /** The self-oscillating folds: rest, chink, freedom and the servo's target; their perturbation from the cycle unit. */
+  private foldBlock(closure: number): void {
+    const f = this.folds;
+    const L = this.foldLength > 0.1 ? this.foldLength : 0.1;
+    const shut = 1 - 0.92 * closure;
+    const chink = (this.chink > 0 ? this.chink : 0) * shut;
+    const rest = this.agSt - chink;
+    let r = (rest > 0 ? rest : 0) / L + this.restOffset;
+    r = r > 0 ? r : 0;
+    f.length = L;
+    f.chink = chink;
+    f.rest1 = r;
+    f.rest2 = r;
+    f.free = 1 - closure;
+    // the cycle unit still runs, for its drift and jitter: the servo aims at the drifted pitch, the
+    // cycle's period scale perturbs the tension
+    this.glottis.processPhase(this.areaBuf, 0, this.block);
+    f.servo.target = this.f0 * this.glottis.pitchFactor;
+    f.perturb = 1 / this.glottis.scale;
+    f.tune();
+    this.voicing = f.cycles > 0 ? 1 : 0;
   }
 
   /** Put source q at junction j, reading the flow of junction uj; a move fades out at the old place over a block. */
@@ -798,6 +918,8 @@ export class JunctionAirway {
     const tr = this.tr;
     const na = this.na;
     const areaBuf = this.areaBuf;
+    const folds = this.folds;
+    const selfOsc = this.model === GLOTTIS_SELF_OSCILLATING;
     const visc0 = this.visc0;
     const ldG = this.ldG;
     const blk = this.block;
@@ -864,10 +986,11 @@ export class JunctionAirway {
       this.ductSZ += this.dDuctSZ;
       const pL = this.pL0 + (this.pL - this.pL0) * w;
       this.velNow = this.vel0 + (this.vel - this.vel0) * w;
-      const st = this.agSt0 + (this.agSt - this.agSt0) * w;
-      const av = this.aVib0 + (this.aVib - this.aVib0) * w;
-      // the fold pulse, averaged over two samples (a closure's top octave is softer; MEASURED)
-      let ag = st + av * 0.5 * (areaBuf[n] + (n > 0 ? areaBuf[n - 1] : this.agLast));
+      let ag: number;
+      if (selfOsc) {
+        folds.step();
+        ag = folds.area;
+      } else ag = areaBuf[n];
       if (ag < 1e-7) ag = 1e-7;
       this.ag = ag;
       this.agAcc += ag;
@@ -961,6 +1084,10 @@ export class JunctionAirway {
         const pBelow = 2 * a - trZ * u;
         const pAbove = 2 * b + zb * u;
         this.dpGlottis = pBelow - pAbove;
+        this.dpAcc += pBelow - pAbove;
+        this.paAcc += pAbove;
+        folds.ps = pBelow;
+        folds.pe = pAbove;
         this.pSub = pBelow;
         tr.B[trSegF + pos] = pBelow - a;
         fBuf[pos] = (pAbove - b) / ductSZ;
@@ -1085,10 +1212,7 @@ export class JunctionAirway {
       outL[at + c] += v;
       outR[at + c] += v;
     }
-    if (off + count >= blk) {
-      this.agMean = this.agAcc / blk;
-      this.agLast = areaBuf[blk - 1];
-    }
+    if (off + count >= blk) this.agMean = this.agAcc / blk;
   }
 
   /** Lips: Flanagan R || L on the last grid section, with any series noise source. */

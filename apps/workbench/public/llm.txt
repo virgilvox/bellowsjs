@@ -767,6 +767,7 @@ default polyphony: 8
   roughness: 0 to 1, default 0.1
   fry: 0 to 1, default 0
   drift: 0 to 20 cents, default 6
+  glottis: 0 to 2, default 2
   breath: 0 to 1, default 0.15
   vibratoRate: 0 to 12 Hz, default 5.5
   vibratoDepth: 0 to 2 st, default 0.3

@@ -455,6 +455,88 @@ Not met, and known regressions:
   part 1.3 against 1.4): a glide returning at 1 landed its vowel 8 ms later, and no recording here
   measures release speeds, so the values stay CHIMERA's until one does.
 
+## Vocal folds: three glottis models, measured (2026-11-12)
+
+The airway's glottis was CHIMERA's drawn area pulse and a smoothstep voicing gate. Two fold
+models now sit beside it, chosen by the `glottis` parameter (0 geometric, 1 self-oscillating,
+2 the pulse). Both are written from the papers; VocalTractLab's code is GPL and was not read.
+
+- Geometric (`src/dsp/geometric-glottis.ts`): Titze's kinematic folds as Birkholz, Drechsel
+  and Stone (2019) extend them. A lower and an upper edge, x_i(y, t) = x_rest,i (1 - y / L) +
+  x_max sin(pi y / L) sin(phi_i), the upper lagging by 70 degrees (male) or 50 (female, child),
+  a posterior chink, skew by a piecewise linear phase warp, double pulsing 0.05, and the area
+  the smaller of the two edges' integrals, which is closed form. x_max = c x_rel sqrt(P_trans),
+  1 mm at 800 Pa, from the airway's own transglottal pressure (block means through a 30 Hz
+  pole). Voicing is a threshold linear in the prephonatory half-width (Titze 1988; 2 cmH2O
+  floor from Titze 1992, 4 cmH2O per mm) with offset at 0.7 of onset (Lucero 1999), in
+  `src/dsp/phonation-threshold.ts`. The cycle (pitch, drift, jitter, shimmer) is still the
+  pulse unit's, stepped without its area (`GlottalSource.nextPhase`).
+- Self-oscillating (`src/dsp/fold-oscillator.ts`): Ishizaka and Flanagan's two masses with
+  Steinecke and Herzel's pressures on a triangular glottis (after Birkholz, Kroger and
+  Neuschaefer-Rube 2011), collision at three times the spring with extra damping, driven every
+  sample by the pressures the airway solved the sample before. Tension scales the masses by
+  Q^-1.5 and the springs by Q^0.5. A singer's servo (`src/dsp/pitch-servo.ts`) measures each
+  cycle and moves Q toward the target with a 40 ms time constant over a feedforward of
+  f / 158 Hz (the model's own frequency at Q = 1, MEASURED). Semi-implicit Euler at the audio
+  rate is stable at 22050 Hz up to Q 12, so nothing oversamples.
+- Microprosody, all models: the fixed 60-cent rise at a vowel after a voiceless obstruent is
+  now a cricothyroid stiffness gesture from the planner (Hanson 2009, Lofqvist 1989), held
+  through the consonant and its aspiration and ramped out over 80 ms; full stiffness is 60
+  cents, and narrows the geometric folds' swing by a quarter.
+- Calibrations (CALIBRATED against CHIMERA's vowel bands, so they are fits): skewness 0.3 for
+  every body (the paper tested -0.4 to 0.4; its best were 0 and 0.2, which left the male 1.5
+  to 4 kHz 6 dB over CHIMERA's); the two-breakpoint warp, 3 to 4 dB nearer than one breakpoint;
+  rest displacement 0.3 mm male, 0.6 mm female and child, the paper's best; the self-oscillating
+  folds 0.1 mm (wider stops them above about 600 Hz).
+
+Measured, renders of the comparison phrases through the kernel (scratch taskB/, tags tbP pulse
+with the stiffness gesture, tbG geometric, tbS self-oscillating):
+
+| Measure | int3 (pulse before) | pulse now | geometric | self-oscillating | CHIMERA | human |
+| --- | --- | --- | --- | --- | --- | --- |
+| DTW distance to CHIMERA, male, dB (twinkle/strengths/stops/fric/son/vowels/melisma) | 3.75/3.68/4.28/4.44/4.38/4.85/3.40 | 3.74/3.69/4.29/4.42/4.38/4.85/3.40 | 4.11/4.12/4.29/4.50/4.49/4.74/4.30 | 5.08/4.85/5.04/5.21/5.03/5.81/4.36 | 0 | |
+| DTW, female, worst phrase over int3, dB | | +0.05 | +2.52 (son) | +4.59 (fric) | | |
+| Vowel bands over CHIMERA, male, 1.5-2.5/2.5-4/4-6 kHz, dB | 0.7/2.9/4.0 | 0.8/2.9/4.0 | 1.9/3.3/5.1 | 4.2/3.0/4.8 | 0 | |
+| Held /ɑ/ H1-H2, male/female/child, dB | 0.7/-1.4/-0.8 | same | -0.9/-0.5/0.3 | 6.6/3.3/3.2 | 0.4/-1.9/-1.1 | |
+| Voice bar /b d g/ re vowel, male, dB | -27/-31/-24 | -26/-31/-24 | -30/-36/-29 | -53/-41/-41 | -25/-36/-29 | |
+| Voice bar /b/, female/child, dB | -25/-25 | -25/-25 | -48/-57 | -60/-55 | -24/-23 | |
+| VOT /t/ /k/, male, ms (closure-anchored detector; Lisker and Abramson: 70, 80) | 80/72 | 72/65 | 15/72 | 75/80 | 75/2 | 70/80 |
+| Voiced fricatives, frication over voicing, mean distance to the human recordings, male/female/child, dB | 12.8/15.0/16.8 | 13.7/15.1/16.7 | 14.7/13.0/14.7 | 17.1/17.3/18.6 | 15.6/15.0/17.0 | 0 |
+| Fricative shape distance to the human, male, dB | 10.59 | 10.60 | 11.08 | 13.74 | 12.09 | 0 |
+| Sung notes within 5 cents of target (vibrato, drift off), of 37 a body, male/female/child | 35/34/32 | 35/34/32 | 33/36/36 | 37/33/34 | | |
+| Mean error of held vowels, cents, male/female/child | 2.1/1.3/3.6 | same | 3.1/1.8/2.0 | 0.7/0.6/0.6 | | |
+| Brighter when louder (velocity 0.2 to 1, harmonics 2-4 kHz re 0-1 kHz), dB | +5.2 | +5.2 | -4.6 | +5.5 | | |
+| Cost through the kernel, us/sample, twinkle and stops, male and female (best of 6, interleaved, load 5.2 on 8 cores) | | 1.12 to 1.19 | 1.10 to 1.26 | 1.04 to 1.21 | | |
+| Allocation, 5 s of a sung line | | 0 collections | 0 collections | 0 collections | | |
+
+What the numbers say:
+
+- Neither fold model beats the pulse against CHIMERA, and the gates for the library
+  (no phrase more than 0.2 dB further from CHIMERA than int3 without a human measure to justify
+  it) keep the pulse as the default. The geometric folds come close on the male stops,
+  fric and son (0.11 at most) and nearer on the vowels phrase (4.74 against 4.85), but lose 0.4
+  to 0.9 dB on twinkle, strengths and melisma, and up to 2.5 (female) and 2.7 dB (child) on the
+  consonant phrases, where the wide rest those bodies take (the paper's 0.6 mm) stops voicing in
+  closures (voice bars 11 to 34 dB under CHIMERA's).
+  The self-oscillating folds lose 0.7 to 4.6 dB everywhere.
+- What the fold models do better is pitch and physics. The self-oscillating folds hold a sung
+  vowel to 0.6 to 0.7 cents on average in every body, by the servo, where the pulse is off by
+  1.3 to 3.6; they are brighter when louder by their own collision (+5.5 dB) where the geometric
+  folds, whose shape does not change with pressure, get darker (-4.6). Their weak points are
+  voice bars (they stop at a higher pressure than the 2 cmH2O floor) and fast high melismas
+  near the first formant (female and child: up to 92 cents, the oscillation drawn to the
+  resonance; formant tuning is the singer's answer and is off in that phrase).
+- The pulse's own pitch: its pressure term reads the last sample of each block, which aliases
+  the cycle. A female /ɑ/ at 494 Hz sat 19.4 cents sharp. Reading block means brings it inside
+  5 cents, but moves two single-frame tests: measured more steadily (five frames averaged;
+  harmonics at the measured f0), `ring` then lifts 0.95 dB, under its 1 dB gate, and velocity
+  brightens 4.9 dB, under 5. So the pulse keeps the old reading and the geometric folds use the means; fixing it
+  for the pulse is its own change.
+- The voiced fricatives' balance against the human recordings (male: frication 11 to 13 dB too
+  weak against the voicing for /v/, 24 to 26 for /ʒ/, every model) is not a source problem: /v/
+  and /ʒ/ moved by under 1 dB when the voiced fricative's abduction went from 0.035 to
+  0.15 cm^2; only /z/ moved. That is the noise sources' work.
+
 ## The phases, each with a gate
 
 0. **Is the tube enough?** A float Kelly-Lochbaum tract at 48 kHz, driven both by CHIMERA's own
