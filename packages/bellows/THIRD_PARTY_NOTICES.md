@@ -55,9 +55,9 @@ in CHIMERA, written again in bellows' own idiom, and they say so in their header
 | `src/engines/vocal-planner.ts` | the gestural planner: vowel overlap ramps, a consonant's dominant, secondary, velar-place and alveolar-fronting gestures with their lead, early and release-hold times and speeds by manner, the affricate split, the tap, the nasal velum gesture, the glottal and voiceless abduction rules and the end of the breath group, and the blend of gestures with the rest posture (`phonetics/planner.rs:24, 88-108, 196-390, 532-577`, `control/score.rs:273-430`, `voice/human_voice.rs:445`), planned online here; the return gestures, the closure-then-anterior priority, the per-articulator lead and the virtual lip target are bellows' own |
 | `src/engines/vocal-roof.ts` | the roof polylines (from `anatomy/human.rs`), the template-to-body transform (`human.rs:685`), the tip kept outside the tongue body (`human.rs:828`) |
 | `src/engines/vocal-drive.ts` | CHIMERA's section counts (`voice/human_airway.rs:75-80`), the area rate law on each keyframe (`human_airway.rs:190-262`), the jet rule of the smallest sub-section minimum (`airway/network.rs:919-930`), the anatomical moving-wall flow (`airway/network.rs` node continuity) |
-| `src/dsp/junction-airway.ts` | the airway's elements: trachea 12 k cm by 2.5 k^2 and the lungs' resistance, the nasal profile, the glottal port (kinetic 0.37, slit 1.4 k, depth 0.3 k) and the velum port (length 1.0 k, kinetic 0.3 and 0.8), perimeter and viscous factors and wall radiation 0.25 (`voice/human_airway.rs:84-123`); viscous resistance at 700 Hz, closed area 2e-4, Borda-Carnot loss with a 0.1 contraction loss, the 60 Hz moving-wall filter, the Flanagan radiators (`airway/network.rs:360, 417, 866, 919-930, 1067-1068`); the three turbulence sources, their placement and weights, the Reynolds law and the glottal band (`voice/human_airway.rs` `update_noise`, `:271`, `airway/network.rs:1097-1130`); the voicing gate (`sources/glottis.rs:170-176`); the effort mapping (`voice/human_voice.rs:317-350`); the output gain (`human_voice.rs:220`). The formulation (a waveguide at Courant number 1 with the flow solved in its junctions) and the Strouhal-scaled source spectrum are bellows' own |
+| `src/dsp/junction-airway.ts` | the airway's elements: trachea 12 k cm by 2.5 k^2 and the lungs' resistance, the nasal profile, the glottal port (kinetic 0.37, slit 1.4 k, depth 0.3 k) and the velum port (length 1.0 k, kinetic 0.3 and 0.8), perimeter and viscous factors and wall radiation 0.25 (`voice/human_airway.rs:84-123`); viscous resistance at 700 Hz, closed area 2e-4, Borda-Carnot loss with a 0.1 contraction loss, the 60 Hz moving-wall filter, the Flanagan radiators (`airway/network.rs:360, 417, 866, 919-930, 1067-1068`); the voicing gate (`sources/glottis.rs:170-176`); the effort mapping (`voice/human_voice.rs:317-350`); the output gain (`human_voice.rs:220`). The formulation (a waveguide at Courant number 1 with the flow solved in its junctions) is bellows' own; the turbulence sources follow Stevens and Birkholz (below), not CHIMERA |
 | `src/dsp/airway-tube.ts` | the fixed tubes' wall and viscous elements (`airway/network.rs:860-1010`), lumped onto a few nodes here |
-| `src/dsp/air.ts` | the physical constants and wall tissues (`physics.rs:5-35`) |
+| `src/dsp/air.ts` | the physical constants and the trachea's and nasal cavity's wall tissues (`physics.rs:5-35`); the tract's wall is Birkholz and Zhang's (below) |
 | `src/engines/vocal-tables.gen.ts` and `data/vocal/` | CHIMERA's articulator ranges and speeds, rest posture, inventory and calibrated targets, body constants and roofs, and tables measured on its geometry: the formant-tuning rows and the layout lengths (`data/vocal/README.md`) |
 | `src/engines/vocal-phonemes.ts` | the phoneme classes checked against `phonetics/inventory.rs`, and the stop release rules, no aspiration after /s/, 12 ms when unaspirated, aspiration only before a vowel (`phonetics/planner.rs`) |
 
@@ -67,7 +67,14 @@ the ported tokenizer and syllabifier and read the dictionary formats CHIMERA rea
 Published research keeps its own credit, given in the files that use it: for the
 articulatory voice, the digital waveguide (J. O. Smith, Physical Audio Signal Processing) and
 the Kelly-Lochbaum scattering junction (Kelly and Lochbaum 1962) behind `src/dsp/junction-airway.ts`,
-Jongman, Wayland and Wong (2000) for the fricative spectra its noise is calibrated against, Pink
+Jongman, Wayland and Wong (2000) for the fricative spectra its noise is calibrated against,
+Stevens (Acoustic Phonetics, 1998) for the turbulence source law and corner, Birkholz (ISSP 2014)
+for the constriction detection, source types, places and their split between junctions, Jackson
+and Shadle (2000) and Pincas and Jackson (2005) for frication pulsing with voicing behind a
+convective delay, VocalTractLab 2.4's manual for the velic noise source (implemented from the
+papers and the manual, not from VocalTractLab's GPL code), Birkholz and Zhang (Interspeech 2025)
+for the vocal tract wall's mass, stiffness and damping (`src/dsp/air.ts`), Story and Bunton for
+the velopharyngeal port at which a stop turns nasal (`test/engines-physical/vocal.test.ts`), Pink
 Trombone (Neil Thapen) as the proof that such a tract runs in a browser, Story (2005) for the
 parametric area model behind the design, Saitou, Unoki and Akagi (2005) for sung pitch with
 overshoot and preparation (`src/dsp/pitchglide.ts`), Sundberg for the singer's formant and

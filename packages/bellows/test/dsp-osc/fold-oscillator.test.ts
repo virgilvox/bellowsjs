@@ -31,7 +31,7 @@ function airway(rate: number, model: number, hz: number, pLung = 8): JunctionAir
   a.restOffset = 0.01;
   a.foldLength = 1.6;
   a.f0 = hz;
-  a.teethI = n - 2;
+  a.teethX = n - 2;
   a.splitI = n / 2;
   a.gain = 1;
   a.glottis.setDrift(0);

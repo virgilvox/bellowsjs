@@ -27,15 +27,45 @@
  * the velum (a three-way node into the nasal tube) and the Flanagan R || L
  * radiation loads at the lips and nostrils, which pass DC.
  *
- * TURBULENCE. Three dipole sources, CHIMERA's (human_airway.rs update_noise,
- * network.rs:1097-1130): at the junction the jet reattaches, 0.9 k cm past
- * the narrowest point's exit; at the incisors, an obstacle the jet hits;
- * and at the glottis. Each is Reynolds-law white noise, (Re^2 - Re_c^2)
- * saturating at Re 12000, from the local flow and area. The constriction
- * and teeth sources are shaped by a two-pole low-pass at a constant
- * Strouhal number, fc = St v / d (St = 1, CALIBRATED against Jongman,
- * Wayland and Wong 2000), and a high-pass at fc / 12; the glottal source
- * keeps CHIMERA's 300 to 3500 Hz band (human_airway.rs:271).
+ * TURBULENCE. Stevens' law and Birkholz's placement (Stevens, Acoustic
+ * Phonetics, 1998, pp. 103-104; Birkholz, "Enhanced area functions for noise
+ * source modeling in the vocal tract", ISSP 2014). Each block the grid is
+ * searched for constrictions: the narrowest section under 1 k^2 cm^2 and its
+ * contiguous neighbours within 0.2 k^2 cm^2 of it, then up to two more runs
+ * not joined to it by sections under 1 k^2 cm^2 (a second lingual
+ * constriction, so the source does not jump in /su/, and a labial one). No
+ * constriction, no jet: a wide tract keeps only the glottal source, so /h/ is
+ * aspiration shaped by its vowel. A constriction's source pressure is
+ *
+ *   p_s = G |v_c|^3 sqrt(A_min)
+ *
+ * with v_c the velocity through its narrowest section low-passed at 500 Hz,
+ * in series at the junctions where it lands, its sign the flow's. Where it
+ * lands depends on D, the distance from the flow separation point (the run's
+ * anterior end) to the incisors: a wall source 0.25 k cm downstream when D is
+ * over 2 k cm, an obstacle source at the incisors when it is under, blended
+ * over 2 to 3 k cm (Birkholz's own proposal; his table lists /s z ʃ ʒ/ as
+ * obstacle sources, and this geometry's /ʃ/ separates 1.9 to 2.2 cm behind
+ * the incisors), and a labiodental source 0.15 k cm downstream where the
+ * lower lip forms the constriction at the incisors (/f v/), blended over D
+ * from 0.5 k cm to 0. A place inside a section is split between its two
+ * junctions linearly, and a source that moves or changes type ramps every
+ * junction weight over one block. The noise is white through one first-order
+ * low-pass at fc = 0.15 v_c / d, d = sqrt(4 A / pi), for every source:
+ * Birkholz flattens the labiodental and glottal ones (a 6 kHz corner), but in
+ * this airway that made /f/ rise 17 dB from 1 to 12 kHz against the human
+ * recording's flat spectrum and /h/ bright (MEASURED: shape distance to the
+ * human 11.5 and 18.0 dB, against 5.8 and 15.4 with Stevens' corner). The
+ * glottal (aspiration) source sits 1.5 k cm above the glottis, read from the
+ * glottal flow and area; a velic source in the velum port, read from its flow
+ * and area, gives the burst of a velic release (/pm/, as VocalTractLab 2.4
+ * adds). In voicing, frication pulses at f0 behind a convective delay,
+ * tau = D / (0.5 v_jet), with its modulation index soft-limited near 0.5
+ * (Jackson and Shadle 2000; Pincas and Jackson 2005). A section at the closed
+ * area makes no noise: its leak is the area floor's, not a jet. The gains are
+ * CALIBRATED here against the human recordings and CHIMERA's levels (Birkholz
+ * fitted his to his own tract: wall 5, obstacle 10, labiodental 3, aspiration
+ * 0.005 to 0.5).
  *
  * COST. The trachea and nasal tube are fixed, so they are delay lines
  * between a few lumped nodes (dsp/airway-tube.ts). On the grid only the
@@ -59,7 +89,7 @@
  */
 
 import type { NamedRng } from '../types';
-import { AIR_DENSITY, AIR_DYNAMIC_VISCOSITY, AIR_VISCOSITY, CM_H2O, CRITICAL_REYNOLDS, SATURATION_REYNOLDS, SOUND_SPEED, WALL_NASAL, WALL_SOFT, WALL_TRACHEA } from './air';
+import { AIR_DENSITY, AIR_DYNAMIC_VISCOSITY, CM_H2O, SOUND_SPEED, WALL_NASAL, WALL_TRACHEA, WALL_TRACT } from './air';
 import { AirwayTube, TUBE_RING, evenNodes } from './airway-tube';
 import { AreaSlew } from './area-rate';
 import { GlottalSource } from './glottal';
@@ -76,10 +106,6 @@ const RHO = AIR_DENSITY;
 const RHOC = AIR_DENSITY * SOUND_SPEED;
 const IRHOC = 1 / RHOC;
 const SRHOC = Math.sqrt(RHOC);
-const NU = AIR_VISCOSITY;
-const RE_C = CRITICAL_REYNOLDS;
-const RE_C2 = RE_C * RE_C;
-const SAT = SATURATION_REYNOLDS * SATURATION_REYNOLDS - RE_C2;
 /** CHIMERA's viscous resistance at 700 Hz (network.rs:866). */
 const VISC = Math.sqrt((RHO * AIR_DYNAMIC_VISCOSITY * 2 * Math.PI * 700) / 2);
 /** Under this area a section is shut (network.rs:417). */
@@ -100,27 +126,65 @@ const OUTPUT_GAIN = 5.5e-7;
 const LIN_EPS = 2e-3;
 /** A grid section moving by less than this fraction in a block steps once per block (42 to 57 dB SNR against per sample). MEASURED. */
 const MOVE_REL = 0.003;
-/** Strouhal number of the constriction and teeth sources. CALIBRATED against Jongman (2000) fricative means. */
-const STROUHAL = 1.0;
-/** Their high-pass corner, as a fraction of the low-pass corner. CALIBRATED with STROUHAL. */
-const HP_RATIO = 12;
-/* The glottal source's fixed band is 300 to 3500 Hz (human_airway.rs:271), written as literals where used. */
-/**
- * Noise gains (constriction, teeth, glottis): CHIMERA's own values at 48 kHz, times
- * sqrt(rate / 48000) elsewhere so the noise's spectral density does not change with the rate.
- * CALIBRATED against CHIMERA's output, band by band after time alignment (scratch dtw/bands.ts):
- * the earlier sqrt(rate / 96000) scaling, with the glottal gain halved again, left the vowels 6 to
- * 9 dB short above 6 kHz (the breath noise each open phase carries) and the consonant noise 2 to
- * 6 dB short above 1.5 kHz. At CHIMERA's values both are within about 2 to 3 dB.
+/*
+ * Turbulence sources: three constriction slots, the glottis, the velum port. Each writes into at
+ * most TAPS junctions (its places this block and the ones it fades out of); its velocity passes
+ * through a ring of MOD_RING samples for the convective delay (4 ms at 96 kHz fits).
  */
-const GAIN_C = 2.2e-6;
-const GAIN_T = 3.0e-6;
-const GAIN_G = 3.2e-6;
-/** The teeth source fades out as the jet widens past these areas, x k^2 (CHIMERA 0.2 to 0.5). CALIBRATED against Jongman. */
-const TEETH_JET_LO = 0.1;
-const TEETH_JET_HI = 0.3;
-/** Where the jet reattaches past the narrowest point's exit, cm x k (human_airway.rs update_noise). */
-const REATTACH = 0.9;
+const NSRC = 5;
+const SRC_ASP = 3;
+const SRC_VEL = 4;
+const TAPS = 16;
+const MOD_RING = 512;
+/**
+ * Source gains by type, CALIBRATED from Birkholz's (ISSP 2014, Table 1: wall 5, obstacle 10,
+ * labiodental 3). Wall and obstacle keep his ratio at 1.4 times his values: at 10, the voiced /z/'s
+ * frication lay under its voicing in the female and child bodies (shape distance to the human 25.4
+ * and 26.0 dB; at 14, 12.6 and 12.6). The labiodental one: at his 3, /f/ lay 37 dB under its vowel
+ * (CHIMERA 18, the earlier library 25); at 18, 23.
+ */
+const G_WALL = 7;
+const G_OBSTACLE = 14;
+const G_LABIAL = 18;
+/** A constriction at the lips that is not labiodental (rounding): Birkholz's labiodental gain, unfitted. */
+const G_LIPS = 3;
+/**
+ * The common scale of p_s = G |v|^3 sqrt(A) at 48 kHz (dyn/cm^2 per (cm/s)^3 cm), times
+ * sqrt(rate / 48000) elsewhere so the noise's spectral density does not change with the rate.
+ * CALIBRATED: fricative levels re the following vowel against CHIMERA and band shapes against
+ * the human recordings (docs/VOICE-2.md, "Noise sources, walls and velum").
+ */
+const GAIN_SCALE = 3.5e-9;
+/**
+ * The aspiration source's G, open (no voicing) and in modal voicing; Birkholz's is variable. CALIBRATED:
+ * the open value on /h/ and /θ/ (a voiceless fricative's open glottis fills its 1 to 6 kHz: at 10, /θ/
+ * lay 13.0 dB from the human shape, at 20, 7.4), the voiced one on the vowels' breath noise above
+ * 4 kHz against CHIMERA (scratch dtw/bands.ts).
+ */
+const G_ASPIRATION = 20;
+const G_ASPIRATION_VOICED = 3;
+/** v_c's low-pass, Hz (Birkholz 2014). */
+const VC_HZ = 500;
+/** The slow velocity the voicing modulation is measured against, Hz: under any sung f0. */
+const VSLOW_HZ = 25;
+/** The source corner, fc = 0.15 v / d (Stevens 1998, p. 104). */
+const FC_LINGUAL = 0.15;
+/** Constriction detection, x k^2 cm^2: under this, and the run's tolerance (Birkholz 2014). */
+const CONSTRICTED = 1.0;
+const RUN_TOL = 0.2;
+/** Separation-to-incisor distances, x k cm: wall/obstacle blend, labiodental blend. */
+const D_WALL_LO = 2.0;
+const D_WALL_HI = 3.0;
+const D_LABIAL = 0.5;
+/** Source places, x k cm downstream of separation (wall, labiodental) or above the glottis. */
+const WALL_DOWN = 0.25;
+const LABIAL_DOWN = 0.15;
+const ASPIRATION_AT = 1.5;
+/** The convective delay's speed as a fraction of the jet's, and its cap, s (Jackson and Shadle 2000). */
+const CONVECT = 0.5;
+const TAU_MAX = 0.004;
+/** The modulation index's soft limit (Jackson and Shadle 2000: about 0.5 at most). */
+const MOD_MAX = 0.5;
 /** The glottal port: depth 0.3 k, slit 1.4 k, kinetic entrance 0.37 (human_airway.rs:102). */
 const GLOTTIS_DEPTH = 0.3;
 const GLOTTIS_SLIT = 1.4;
@@ -139,7 +203,11 @@ const TRACHEA_NODES = 4;
 const NASAL_NODES = 6;
 /** The back duct's shortest length, cm: the Lagrange read stays causal. */
 export const DUCT_MIN = 1.25;
-/** Fraction of a wall's volume velocity radiated through the skin (human_airway.rs:86-87). */
+/**
+ * Fraction of a wall's volume velocity radiated through the skin. Birkholz and Zhang (2025) radiate
+ * the whole wall flow through the mouth's radiation characteristic; CHIMERA 0.25 (human_airway.rs:86-87).
+ * CALIBRATED on the voice bar (docs/VOICE-2.md).
+ */
 const WALL_RADIATION = 0.25;
 
 /** The shortest back duct at a rate, cm: max(DUCT_MIN, 3.2 dx), so a Lagrange read is causal. */
@@ -198,8 +266,10 @@ export class JunctionAirway {
   restOffset = 0;
   /** The fold pulse's rate, Hz. */
   f0 = 110;
-  /** Incisors (grid junction) and the pharynx/oral split (fractional grid position). */
-  teethI = 30;
+  /** Incisors and the pharynx/oral split, fractional grid positions (junction units). */
+  teethX = 30;
+  /** How far the lower lip forms a constriction at the incisors (0..1): labiodental, not lingual, noise. */
+  labial = 0;
   splitI = 20;
   /** Output gain applied with the envelope. */
   gain = 1;
@@ -223,6 +293,17 @@ export class JunctionAirway {
   readonly geometric = new GeometricGlottis();
   readonly folds: FoldOscillator;
   readonly threshold: PhonationThreshold;
+  /*
+   * The turbulence sources over the last block, for measurement (index: constriction slots 0..2, the
+   * glottis 3, the velum port 4): the mean of |v_c|^3 sqrt(A) times the closed-area fade (p_s / G
+   * before the noise), the mean |v_c| (cm/s), the area read (cm^2), the summed junction weight G and
+   * the weighted mean place (junction units; -1 when silent).
+   */
+  readonly noiseLevel = new Float64Array(NSRC);
+  readonly noiseVelocity = new Float64Array(NSRC);
+  readonly noiseArea = new Float64Array(NSRC);
+  readonly noiseGain = new Float64Array(NSRC);
+  readonly noisePlace = new Float64Array(NSRC).fill(-1);
 
   /* ---- Grid sections. ---- */
   private readonly R: Float64Array;
@@ -337,23 +418,51 @@ export class JunctionAirway {
   /** The fold rate handed to the glottis, [0]: setFreqFrom reads it, so no double crosses the call. */
   private readonly f0Buf = new Float64Array(1);
 
-  /* ---- Turbulence: slot 0 constriction, 1 teeth, 2 glottis. ---- */
-  private readonly srcJ = new Int32Array(3).fill(-1);
-  private readonly srcJOld = new Int32Array(3).fill(-1);
-  private readonly srcUJ = new Int32Array(3).fill(-1);
-  private readonly srcUJOld = new Int32Array(3).fill(-1);
-  private readonly srcW = new Float64Array(3);
-  private readonly srcW0 = new Float64Array(3);
-  private readonly srcA = new Float64Array(3);
-  private readonly srcReK = new Float64Array(3);
-  private readonly fade = new Float64Array(3);
-  private readonly nHp = new Float64Array(3);
-  private readonly nL1 = new Float64Array(3);
-  private readonly nL2 = new Float64Array(3);
-  private readonly cHp = new Float64Array(3);
-  private readonly cLp = new Float64Array(3);
-  private readonly uAbsAcc = new Float64Array(3);
-  private readonly noiseGain = new Float64Array(3);
+  /* ---- Turbulence: slots 0..2 constrictions, SRC_ASP the glottis, SRC_VEL the velum port. ---- */
+  /** Each constriction slot's separation junction last block (-1: free), its flow junction and narrowest section. */
+  private readonly srcExit = new Int32Array(NSRC).fill(-1);
+  private readonly srcUJ = new Int32Array(NSRC);
+  private readonly srcSec = new Int32Array(NSRC);
+  /** Junction taps per source: junction, weight at the block's start and end (G folded in). */
+  private readonly nTap = new Int32Array(NSRC);
+  private readonly tapJ = new Int32Array(NSRC * TAPS);
+  private readonly tapW0 = new Float64Array(NSRC * TAPS);
+  private readonly tapW1 = new Float64Array(NSRC * TAPS);
+  /** The velic source's weight, ramped. */
+  private velW0 = 0;
+  private velW1 = 0;
+  private pnV = 0;
+  /** Per source: v_c low-passed, the slow mean of its delayed cube, the area low-passed, the noise low-pass state and coefficient. */
+  private readonly vF = new Float64Array(NSRC);
+  private readonly vS = new Float64Array(NSRC);
+  private readonly aF = new Float64Array(NSRC);
+  private readonly nL = new Float64Array(NSRC);
+  private readonly cLp = new Float64Array(NSRC);
+  /** Block sums of |v_c| and of |v_c|^3 sqrt(A), and the convective delay in samples at the block's start and end. */
+  private readonly vAcc = new Float64Array(NSRC);
+  private readonly lvAcc = new Float64Array(NSRC);
+  private readonly tau0 = new Float64Array(NSRC);
+  private readonly tau1 = new Float64Array(NSRC);
+  /** Whether a slot modulates with voicing (1) or reads its velocity undelayed and unlimited (0). */
+  private readonly modOn = new Float64Array(NSRC);
+  private readonly ring = new Float64Array(NSRC * MOD_RING);
+  private ringPos = 0;
+  /** A place being added (fractional junction), its weight and its share at one junction: fields, so no double crosses a call. */
+  private tx = 0;
+  private tw = 0;
+  private tShare = 0;
+  /** The fastest jet the lungs can drive this block, cm/s (Bernoulli, with a margin). */
+  private vMax = 0;
+  /** Scratch for the detection: runs (lo, hi, narrowest section) and per-slot assignment. */
+  private readonly runLo = new Int32Array(3);
+  private readonly runHi = new Int32Array(3);
+  private readonly runMin = new Int32Array(3);
+  private readonly conLo = new Int32Array(3);
+  private readonly conHi = new Int32Array(3);
+  private readonly runSlot = new Int32Array(3);
+  private readonly cVc: number = 0;
+  private readonly cVs: number = 0;
+  private readonly noiseScale: number = 0;
   private readonly rng: NamedRng;
   /** mulberry32 state, an int32. */
   private seed = 1;
@@ -409,9 +518,9 @@ export class JunctionAirway {
     this.dv2 = new Float64Array(nj);
     this.dvRaw = new Float64Array(nj);
     this.dvCoef = 1 - Math.exp((-2 * Math.PI * DVDT_HZ) / rate);
-    this.wCm = WALL_SOFT.m * rate - 0.5 * WALL_SOFT.r;
-    this.wKs = WALL_SOFT.k;
-    this.wIbs = 1 / (WALL_SOFT.m * rate + 0.5 * WALL_SOFT.r);
+    this.wCm = WALL_TRACT.m * rate - 0.5 * WALL_TRACT.r;
+    this.wKs = WALL_TRACT.k;
+    this.wIbs = 1 / (WALL_TRACT.m * rate + 0.5 * WALL_TRACT.r);
     this.tr = new AirwayTube(TRACHEA_NODES + 2);
     this.na = new AirwayTube(NASAL_NODES + 5);
     // the longest fixed tube (the male trachea, 12 cm) in sections, with room
@@ -430,10 +539,9 @@ export class JunctionAirway {
     this.lb1 = 2 * this.lb0;
     this.la1 = 2 * (K * K - 1) * norm;
     this.la2 = (1 - K / q + K * K) * norm;
-    const ns = Math.sqrt(rate / 48000);
-    this.noiseGain[0] = GAIN_C * ns;
-    this.noiseGain[1] = GAIN_T * ns;
-    this.noiseGain[2] = GAIN_G * ns;
+    this.noiseScale = GAIN_SCALE * Math.sqrt(rate / 48000);
+    this.cVc = 1 - Math.exp((-2 * Math.PI * VC_HZ) / rate);
+    this.cVs = 1 - Math.exp((-2 * Math.PI * VSLOW_HZ) / rate);
     this.configure(1, Math.min(n, 30), 12);
   }
 
@@ -531,14 +639,26 @@ export class JunctionAirway {
     this.agMean = 0.05;
     this.agLast = 0;
     this.ag = 1e-4;
-    for (let q = 0; q < 3; q++) {
-      this.srcJ[q] = this.srcJOld[q] = this.srcUJ[q] = this.srcUJOld[q] = -1;
-      this.srcW[q] = this.srcW0[q] = 0;
-      this.srcA[q] = 1;
-      this.fade[q] = 1;
-      this.nHp[q] = this.nL1[q] = this.nL2[q] = 0;
-      this.uAbsAcc[q] = 0;
-    }
+    this.srcExit.fill(-1);
+    this.srcUJ.fill(0);
+    this.srcSec.fill(0);
+    this.nTap.fill(0);
+    this.vF.fill(0);
+    this.vS.fill(0);
+    this.aF.fill(0);
+    this.nL.fill(0);
+    this.vAcc.fill(0);
+    this.lvAcc.fill(0);
+    this.noiseLevel.fill(0);
+    this.noiseVelocity.fill(0);
+    this.noiseArea.fill(0);
+    this.noiseGain.fill(0);
+    this.noisePlace.fill(-1);
+    this.tau0.fill(0);
+    this.tau1.fill(0);
+    this.ring.fill(0);
+    this.ringPos = 0;
+    this.velW0 = this.velW1 = this.pnV = 0;
     this.seed = (this.rng() * 4294967296) | 0 || 1;
     this.blocks = 0;
   }
@@ -702,73 +822,7 @@ export class JunctionAirway {
     this.aVib0 = this.aVib;
     this.aVib = 0.17 * k2 * (0.45 + 0.75 * effort) * this.voicing;
     if (first) this.aVib0 = this.aVib;
-    // turbulence sources: the narrowest open grid minimum
-    let mn = Infinity;
-    let mi = -1;
-    for (let i = 0; i < nG; i++) {
-      const a = gmn[i];
-      if (a > CLOSED && a < mn) {
-        mn = a;
-        mi = i;
-      }
-    }
-    let wa = (mn - 0.35 * k2) / (0.55 * k2);
-    wa = wa < 0 ? 0 : wa > 1 ? 1 : wa * wa * (3 - 2 * wa);
-    const wArea = mi >= 0 ? 1 - wa : 0;
-    const sw = this.srcW;
-    const sw0 = this.srcW0;
-    sw0[0] = sw[0];
-    sw0[1] = sw[1];
-    sw0[2] = sw[2];
-    if (mi >= 0 && wArea > 0) {
-      const exitJ = mi + 1;
-      let inj = mi + 1 + Math.round((REATTACH * k) / dx);
-      if (inj > nG) inj = nG;
-      this.place(0, inj, exitJ);
-      sw[0] = wArea;
-      this.srcA[0] = mn;
-      const behind = (this.teethI * dx - (mi + 0.5) * dx) / k;
-      let d0 = (behind - 0.15) / 0.35;
-      d0 = d0 < 0 ? 0 : d0 > 1 ? 1 : d0 * d0 * (3 - 2 * d0);
-      let d1 = (behind - 2.6) / 1.4;
-      d1 = d1 < 0 ? 0 : d1 > 1 ? 1 : d1 * d1 * (3 - 2 * d1);
-      const wDist = d0 * (1 - d1);
-      let j0 = (mn - TEETH_JET_LO * k2) / ((TEETH_JET_HI - TEETH_JET_LO) * k2);
-      j0 = j0 < 0 ? 0 : j0 > 1 ? 1 : j0 * j0 * (3 - 2 * j0);
-      const wJet = 1 - j0;
-      let tj = this.teethI;
-      tj = tj < 1 ? 1 : tj > nG ? nG : tj;
-      this.place(1, tj, exitJ);
-      sw[1] = wDist * wJet;
-      this.srcA[1] = mn;
-    } else {
-      sw[0] = 0;
-      sw[1] = 0;
-    }
-    this.place(2, 0, -1);
-    sw[2] = 1;
-    this.srcA[2] = this.ag > 1e-4 ? this.ag : 1e-4;
-    for (let q = 0; q < 3; q++) {
-      const uMean = this.uAbsAcc[q] / blk;
-      this.uAbsAcc[q] = 0;
-      let fc: number;
-      let hc: number;
-      if (q === 2) {
-        // GLOTTAL_LP and GLOTTAL_HP as literals: a module constant merged with a double boxes it
-        fc = 3500;
-        hc = 300;
-      } else {
-        const a = this.srcA[q] > 1e-4 ? this.srcA[q] : 1e-4;
-        fc = (STROUHAL * (uMean / a)) / (2 * Math.sqrt(a / Math.PI));
-        fc = fc < 300 ? 300 : fc > 18000 ? 18000 : fc;
-        hc = fc / HP_RATIO;
-      }
-      if (fc > 0.45 * this.rate) fc = 0.45 * this.rate;
-      this.cLp[q] = 1 - Math.exp((-2 * Math.PI * fc) / this.rate);
-      this.cHp[q] = Math.exp((-2 * Math.PI * hc) / this.rate);
-      const sa = this.srcA[q] > 1e-12 ? this.srcA[q] : 1e-12;
-      this.srcReK[q] = 2 / (NU * Math.sqrt(Math.PI * sa));
-    }
+    this.placeSources();
     this.agAcc = 0;
     this.f0Buf[0] = this.f0;
     this.glottis.setFreqFrom(this.f0Buf, 0);
@@ -857,15 +911,249 @@ export class JunctionAirway {
     this.voicing = f.cycles > 0 ? 1 : 0;
   }
 
-  /** Put source q at junction j, reading the flow of junction uj; a move fades out at the old place over a block. */
-  private place(q: number, j: number, uj: number): void {
-    if (j !== this.srcJ[q] || uj !== this.srcUJ[q]) {
-      this.srcJOld[q] = this.srcJ[q];
-      this.srcUJOld[q] = this.srcUJ[q];
-      this.fade[q] = 0;
-      this.srcJ[q] = j;
-      this.srcUJ[q] = uj;
+  /**
+   * Find the constrictions, give each a slot, and set every source's places, spectrum and delay
+   * for the block (Birkholz 2014). Integers only cross this call; the doubles are fields.
+   */
+  private placeSources(): void {
+    const pl = this.pLung > 0 ? this.pLung : 0;
+    this.vMax = 1.2 * Math.sqrt((2 * pl) / RHO) + 100;
+    const k = this.k;
+    const k2 = k * k;
+    const nG = this.nG;
+    const gmn = this.tgtMin;
+    const dx = this.dx;
+    const rate = this.rate;
+    const blk = this.block;
+    const tapW0 = this.tapW0;
+    const tapW1 = this.tapW1;
+    for (let q = 0; q < NSRC; q++) {
+      const b = q * TAPS;
+      let g = 0;
+      let x = 0;
+      for (let t = 0; t < this.nTap[q]; t++) {
+        g += tapW1[b + t];
+        x += tapW1[b + t] * this.tapJ[b + t];
+        tapW0[b + t] = tapW1[b + t];
+        tapW1[b + t] = 0;
+      }
+      if (q === SRC_VEL) g = this.velW1;
+      this.noiseLevel[q] = this.lvAcc[q] / blk;
+      this.noiseVelocity[q] = this.vAcc[q] / blk;
+      this.noiseArea[q] = this.aF[q];
+      this.noiseGain[q] = g;
+      this.noisePlace[q] = q === SRC_VEL ? (g > 0 ? this.jv : -1) : g > 0 ? x / g : -1;
+      this.lvAcc[q] = 0;
     }
+    // up to three runs apart from each other: the narrowest under 1 k^2 cm^2 and its neighbours within
+    // 0.2; a further run must not connect to an earlier one through sections under 1 k^2 cm^2
+    const runLo = this.runLo;
+    const runHi = this.runHi;
+    const conLo = this.conLo;
+    const conHi = this.conHi;
+    const cut = CONSTRICTED * k2;
+    let nr = 0;
+    for (let r = 0; r < 3; r++) {
+      let mn = CONSTRICTED * k2;
+      let mi = -1;
+      for (let s = 0; s < nG; s++) {
+        const a = gmn[s];
+        if (a >= mn) continue;
+        let free = true;
+        for (let p = 0; p < nr; p++) if (s >= conLo[p] && s <= conHi[p]) free = false;
+        if (free) {
+          mn = a;
+          mi = s;
+        }
+      }
+      if (mi < 0) break;
+      const lim = mn + RUN_TOL * k2;
+      let lo = mi;
+      let hi = mi;
+      for (;;) {
+        const s = lo - 1;
+        if (s < 0 || gmn[s] >= lim) break;
+        let free = true;
+        for (let p = 0; p < nr; p++) if (s >= conLo[p] && s <= conHi[p]) free = false;
+        if (!free) break;
+        lo = s;
+      }
+      for (;;) {
+        const s = hi + 1;
+        if (s >= nG || gmn[s] >= lim) break;
+        let free = true;
+        for (let p = 0; p < nr; p++) if (s >= conLo[p] && s <= conHi[p]) free = false;
+        if (!free) break;
+        hi = s;
+      }
+      runLo[nr] = lo;
+      runHi[nr] = hi;
+      this.runMin[nr] = mi;
+      while (lo > 0 && gmn[lo - 1] < cut) lo--;
+      while (hi < nG - 1 && gmn[hi + 1] < cut) hi++;
+      conLo[nr] = lo;
+      conHi[nr] = hi;
+      nr++;
+    }
+    // each run keeps the slot whose separation point was nearest (within 3 sections), else a free one
+    let used = 0;
+    for (let r = 0; r < nr; r++) {
+      const exit = runHi[r] + 1;
+      let best = -1;
+      let bd = 4;
+      for (let q = 0; q < 3; q++) {
+        if ((used >> q) & 1 || this.srcExit[q] < 0) continue;
+        const d = this.srcExit[q] > exit ? this.srcExit[q] - exit : exit - this.srcExit[q];
+        if (d < bd) {
+          bd = d;
+          best = q;
+        }
+      }
+      if (best < 0) for (let q = 0; q < 3 && best < 0; q++) if (!((used >> q) & 1) && this.srcExit[q] < 0 && this.nTap[q] === 0) best = q;
+      if (best < 0) for (let q = 0; q < 3 && best < 0; q++) if (!((used >> q) & 1) && this.srcExit[q] < 0) best = q;
+      if (best < 0) for (let q = 0; q < 3 && best < 0; q++) if (!((used >> q) & 1)) best = q;
+      used |= 1 << best;
+      this.runSlot[r] = best;
+    }
+    for (let q = 0; q < 3; q++) if (!((used >> q) & 1)) this.srcExit[q] = -1;
+    for (let r = 0; r < nr; r++) {
+      const q = this.runSlot[r];
+      const mi = this.runMin[r];
+      const exit = runHi[r] + 1;
+      const a = gmn[mi];
+      if (this.nTap[q] === 0) this.freshSource(q, mi);
+      this.srcExit[q] = exit;
+      // the flow through the narrowest section itself, where the kinetic loss holds it to A sqrt(2 dp / rho); read
+      // further on, a sealed section's v = U / A took the flow the cavity in between pumps (MEASURED: frication
+      // at a /d/ closure as loud as the /s/)
+      this.srcUJ[q] = mi + 1;
+      this.srcSec[q] = mi;
+      // D, the separation point to the incisors, x k cm
+      const dk = ((this.teethX - exit) * dx) / k;
+      // labiodental where the lower lip forms it at or past the incisors (/f v/); a tongue there (/θ/) keeps the
+      // obstacle source; a constriction whose narrowest section lies past the incisors is the lips' (rounding)
+      let lab = dk / D_LABIAL;
+      lab = lab <= 0 ? 1 : lab >= 1 ? 0 : 1 - lab * lab * (3 - 2 * lab);
+      const lip = this.labial < 0 ? 0 : this.labial > 1 ? 1 : this.labial;
+      let past = mi + 1 - this.teethX;
+      past = past <= 0 ? 0 : past >= 1 ? 1 : past * past * (3 - 2 * past);
+      const labio = lab * lip;
+      const lips = (1 - labio) * past;
+      lab = labio + lips;
+      let wf = (dk - D_WALL_LO) / (D_WALL_HI - D_WALL_LO);
+      wf = wf < 0 ? 0 : wf > 1 ? 1 : wf * wf * (3 - 2 * wf);
+      this.tx = exit + (WALL_DOWN * k) / dx;
+      this.tw = (1 - lab) * wf * G_WALL;
+      this.addAt(q);
+      this.tx = this.teethX;
+      this.tw = (1 - lab) * (1 - wf) * G_OBSTACLE;
+      this.addAt(q);
+      this.tx = exit + (LABIAL_DOWN * k) / dx;
+      this.tw = labio * G_LABIAL + lips * G_LIPS;
+      this.addAt(q);
+      const v = this.vAcc[q] / blk;
+      const d = 2 * Math.sqrt((a > 1e-4 ? a : 1e-4) / Math.PI);
+      let fc = (FC_LINGUAL * v) / d;
+      fc = fc < 200 ? 200 : fc > 0.45 * rate ? 0.45 * rate : fc;
+      this.cLp[q] = 1 - Math.exp((-2 * Math.PI * fc) / rate);
+      // the convective delay from the separation point to where the source sits
+      const dObs = dk > 0 ? dk * k : 0;
+      const ds = (1 - lab) * (wf * WALL_DOWN * k + (1 - wf) * dObs) + lab * LABIAL_DOWN * k;
+      let tau = v > 1 ? ds / (CONVECT * v) : TAU_MAX;
+      tau = (tau < TAU_MAX ? tau : TAU_MAX) * rate;
+      this.tau0[q] = this.tau1[q];
+      this.tau1[q] = tau;
+      this.modOn[q] = 1;
+    }
+    // aspiration, 1.5 k cm above the glottis (at the duct's end when the duct is longer)
+    {
+      const q = SRC_ASP;
+      if (this.nTap[q] === 0) this.freshSource(q, 0);
+      let x = (ASPIRATION_AT * k - this.ductLen) / dx;
+      x = x < 0 ? 0 : x > nG ? nG : x;
+      this.tx = x;
+      // Birkholz's aspiration gain is variable (0.005 to 0.5 of the others): less in modal voicing
+      const vo = this.voicing;
+      this.tw = G_ASPIRATION * (1 - vo) + G_ASPIRATION_VOICED * vo;
+      this.addAt(q);
+      const ga = this.agMean > 1e-4 ? this.agMean : 1e-4;
+      let fc = (FC_LINGUAL * (this.vAcc[q] / blk)) / (2 * Math.sqrt(ga / Math.PI));
+      fc = fc < 200 ? 200 : fc > 0.45 * rate ? 0.45 * rate : fc;
+      this.cLp[q] = 1 - Math.exp((-2 * Math.PI * fc) / rate);
+      this.modOn[q] = 0;
+    }
+    // the velic source while the port is a constriction
+    {
+      const q = SRC_VEL;
+      const vel = this.velum;
+      this.velW0 = this.velW1;
+      // a jet into the nasal cavity with no obstacle ahead: a wall source
+      this.velW1 = vel > CLOSED && vel < CONSTRICTED * k2 ? G_WALL : 0;
+      if (this.velW0 === 0 && this.velW1 > 0) this.freshSource(q, 0);
+      const d = 2 * Math.sqrt((vel > 1e-4 ? vel : 1e-4) / Math.PI);
+      let fc = (FC_LINGUAL * (this.vAcc[q] / blk)) / d;
+      fc = fc < 200 ? 200 : fc > 0.45 * rate ? 0.45 * rate : fc;
+      this.cLp[q] = 1 - Math.exp((-2 * Math.PI * fc) / rate);
+      this.modOn[q] = 0;
+    }
+    for (let q = 0; q < NSRC; q++) this.vAcc[q] = 0;
+    // drop taps that are silent at both ends
+    for (let q = 0; q < NSRC; q++) {
+      const b = q * TAPS;
+      let n = 0;
+      for (let t = 0; t < this.nTap[q]; t++) {
+        if (tapW0[b + t] === 0 && tapW1[b + t] === 0) continue;
+        this.tapJ[b + n] = this.tapJ[b + t];
+        tapW0[b + n] = tapW0[b + t];
+        tapW1[b + n] = tapW1[b + t];
+        n++;
+      }
+      this.nTap[q] = n;
+    }
+  }
+
+  /** A source starting from silence: clear its filters and its delay ring; its area from section s. */
+  private freshSource(q: number, s: number): void {
+    this.vF[q] = 0;
+    this.vS[q] = 0;
+    this.nL[q] = 0;
+    this.aF[q] = q < 3 ? this.tgtMin[s] : q === SRC_ASP ? this.ag : this.velum > 1e-4 ? this.velum : 1e-4;
+    this.tau0[q] = this.tau1[q] = 0;
+    this.ring.fill(0, q * MOD_RING, (q + 1) * MOD_RING);
+  }
+
+  /** Place source q's weight `tw` at fractional junction `tx`, split linearly between the two junctions there. */
+  private addAt(q: number): void {
+    const w = this.tw;
+    if (!(w > 0)) return;
+    const nG = this.nG;
+    let x = this.tx;
+    x = x < 0 ? 0 : x > nG ? nG : x;
+    const j = Math.floor(x);
+    const f = x - j;
+    this.tShare = 1 - f;
+    this.addTap(q, j);
+    if (f > 0 && j < nG) {
+      this.tShare = f;
+      this.addTap(q, j + 1);
+    }
+  }
+
+  /** Add tw times tShare to source q's tap at junction j. */
+  private addTap(q: number, j: number): void {
+    const b = q * TAPS;
+    const n = this.nTap[q];
+    const add = this.tw * this.tShare;
+    for (let t = 0; t < n; t++)
+      if (this.tapJ[b + t] === j) {
+        this.tapW1[b + t] += add;
+        return;
+      }
+    if (n >= TAPS) return;
+    this.tapJ[b + n] = j;
+    this.tapW0[b + n] = 0;
+    this.tapW1[b + n] = add;
+    this.nTap[q] = n + 1;
   }
 
   /**
@@ -931,6 +1219,15 @@ export class JunctionAirway {
     const trD = tr.D[trLast];
     const trZ = tr.Z[trLast];
     const trA = tr.area[trLast];
+    const ring = this.ring;
+    const tapJ = this.tapJ;
+    const tapW0 = this.tapW0;
+    const tapW1 = this.tapW1;
+    const cVc = this.cVc;
+    const cVs = this.cVs;
+    const noiseScale = this.noiseScale;
+    const voi = this.voicing;
+    const vMax = this.vMax;
     let wallRad = 0;
     for (let c = 0; c < count; c++) {
       const n = off + c;
@@ -994,52 +1291,76 @@ export class JunctionAirway {
       if (ag < 1e-7) ag = 1e-7;
       this.ag = ag;
       this.agAcc += ag;
-      // turbulence from last sample's flows
-      for (let q = 0; q < 3; q++) {
-        const j = this.srcJ[q];
-        if (j < 0) continue;
-        // the flow the source reads crossfades with its place (switched at once to another junction's
-        // flow, of the other sign at a reversal, the dipole flipped at full level: MEASURED ticks)
+      // turbulence from last sample's flows: p_s = G |v_c|^3 sqrt(A), in series where each source sits
+      const rp = this.ringPos;
+      for (let q = 0; q < NSRC; q++) {
+        const nt = this.nTap[q];
+        const vel = q === SRC_VEL;
+        if (nt === 0 && !(vel && (this.velW0 > 0 || this.velW1 > 0))) continue;
         let u: number;
-        if (q === 2) u = this.uG;
-        else {
-          const f = this.fade[q];
-          const uo = this.srcUJOld[q];
-          u = f < 1 && uo >= 0 ? U[uo] * (1 - f) + U[this.srcUJ[q]] * f : U[this.srcUJ[q]];
+        let a: number;
+        if (q < 3) {
+          u = U[this.srcUJ[q]];
+          a = aMin[this.srcSec[q]];
+          if (a > area[this.srcSec[q]]) a = area[this.srcSec[q]];
+        } else if (q === SRC_ASP) {
+          u = this.uG;
+          a = ag;
+        } else {
+          u = this.uV;
+          a = this.velNow;
         }
-        const au = u < 0 ? -u : u;
-        this.uAbsAcc[q] += au;
-        const re = q === 2 ? (2 * au) / (NU * Math.sqrt(Math.PI * ag)) : au * this.srcReK[q];
-        let amp = 0;
-        if (re > RE_C) {
-          const x = re * re - RE_C2;
-          amp = x / (1 + x / SAT);
+        // a section at the closed area is shut: its floor's leak is numerical, not a jet (MEASURED: read as one, a
+        // /t/ closure carried frication 30 dB over CHIMERA's silence); the source fades in to 5 times that area
+        let shut = (a - 2e-4) * 1250;
+        shut = q === SRC_ASP ? 1 : shut <= 0 ? 0 : shut >= 1 ? 1 : shut * shut * (3 - 2 * shut);
+        if (a < 1e-4) a = 1e-4;
+        const af = this.aF[q] + cVc * (a - this.aF[q]);
+        this.aF[q] = af;
+        // no jet outruns the lungs: the flow and the area it reads can disagree for a sample as a section seals
+        let vr = u / a;
+        vr = vr > vMax ? vMax : vr < -vMax ? -vMax : vr;
+        const vf = this.vF[q] + cVc * (vr - this.vF[q]);
+        this.vF[q] = vf;
+        const av = vf < 0 ? -vf : vf;
+        this.vAcc[q] += av;
+        // the convective delay, read linearly between ring samples
+        const rb = q * MOD_RING;
+        ring[rb + rp] = av;
+        const td = this.tau0[q] + (this.tau1[q] - this.tau0[q]) * w;
+        const ti = td | 0;
+        const tf = td - ti;
+        const vd = ring[rb + ((rp - ti) & (MOD_RING - 1))] * (1 - tf) + ring[rb + ((rp - ti - 1) & (MOD_RING - 1))] * tf;
+        let lev = vd * vd * vd;
+        const s3 = this.vS[q] + cVs * (lev - this.vS[q]);
+        this.vS[q] = s3;
+        // in voicing the pulsing about the slow level is soft-limited to an index near MOD_MAX
+        const mw = this.modOn[q] * voi;
+        if (mw > 0) {
+          let m = s3 > 1 ? lev / s3 - 1 : 0;
+          m = m / (1 + (m < 0 ? -m : m) * (1 / MOD_MAX));
+          lev = (1 - mw) * lev + mw * s3 * (1 + m);
         }
-        const lev = amp * (this.srcW0[q] + (this.srcW[q] - this.srcW0[q]) * w) * this.noiseGain[q];
         // mulberry32, inline: uniform in [0, 1)
         let s = (this.seed + 0x6d2b79f5) | 0;
         this.seed = s;
         s = Math.imul(s ^ (s >>> 15), s | 1);
         s ^= s + Math.imul(s ^ (s >>> 7), s | 61);
         const wv = ((((s ^ (s >>> 14)) >>> 0) / 4294967296) * 2 - 1) * 1.7320508075688772;
-        const hpc = this.cHp[q];
-        const nh = hpc * this.nHp[q] + (1 - hpc) * wv;
-        this.nHp[q] = nh;
-        const lpc = this.cLp[q];
-        const l1 = this.nL1[q] + lpc * (wv - nh - this.nL1[q]);
-        this.nL1[q] = l1;
-        const l2 = this.nL2[q] + lpc * (l1 - this.nL2[q]);
-        this.nL2[q] = l2;
+        const nl = this.nL[q] + this.cLp[q] * (wv - this.nL[q]);
+        this.nL[q] = nl;
         // the dipole's sign follows the flow's, continuously through zero
-        const v = (lev * l2 * u) / (au + 1);
-        if (this.fade[q] < 1) {
-          const f = this.fade[q] + inv < 1 ? this.fade[q] + inv : 1;
-          this.fade[q] = f;
-          const jo = this.srcJOld[q];
-          if (jo >= 0) pn[jo] += v * (1 - f);
-          pn[j] += v * f;
-        } else pn[j] += v;
+        const ls = shut * lev * Math.sqrt(af);
+        this.lvAcc[q] += ls;
+        const v = (noiseScale * ls * nl * vf) / (av + 1);
+        if (vel) {
+          this.pnV = v * (this.velW0 + (this.velW1 - this.velW0) * w);
+          continue;
+        }
+        const b = q * TAPS;
+        for (let t = 0; t < nt; t++) pn[tapJ[b + t]] += v * (tapW0[b + t] + (tapW1[b + t] - tapW0[b + t]) * w);
       }
+      this.ringPos = (rp + 1) & (MOD_RING - 1);
       // Lagrange-3 coefficients shared by both duct reads (tau - 0.5 and tau + 0.5)
       const dF = this.ductTau - 0.5;
       const i0 = Math.floor(dF);
@@ -1187,12 +1508,11 @@ export class JunctionAirway {
         R[0] = (b + zr * u) * isZ[0];
       }
       if ((nG & 1) === 0) this.lips();
-      for (let q = 0; q < 3; q++) {
-        const j = this.srcJ[q];
-        if (j >= 0) pn[j] = 0;
-        const jo = this.srcJOld[q];
-        if (jo >= 0) pn[jo] = 0;
+      for (let q = 0; q < SRC_VEL; q++) {
+        const b = q * TAPS;
+        for (let t = 0; t < this.nTap[q]; t++) pn[tapJ[b + t]] = 0;
       }
+      this.pnV = 0;
       this.pos = (pos + 1) & (TUBE_RING - 1);
       // the radiated flow's derivative, DC blocked, low-passed
       const rad = this.uLips + this.uNose + this.wallRadAcc + wallRad;
@@ -1313,7 +1633,7 @@ export class JunctionAirway {
       const m0 = lv < this.lV ? lv * this.uV : this.momV;
       this.lV = lv;
       const bqv = zl + z3 + rvv + lv * this.rate;
-      const cv0 = zl * p0 - 2 * c3 + m0 * this.rate;
+      const cv0 = zl * p0 - 2 * c3 + m0 * this.rate + this.pnV;
       uv = this.uV;
       for (let it = 0; it < 3; it++) {
         let c = cr0 - zl * uv;
