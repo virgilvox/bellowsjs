@@ -404,6 +404,85 @@ tables went from 114.6 KB to 38.9 KB.
   (0.9 B/sample over a line with a note every 1.6 s); the planner's rebuild at a phoneme
   allocates a little (0.08 B/sample).
 
+## Noise sources, walls and velum (2026-11-12)
+
+The airway's turbulence follows Stevens and Birkholz now instead of CHIMERA's Reynolds law
+(`src/dsp/junction-airway.ts`, written from Stevens 1998, Birkholz ISSP 2014, Jackson and Shadle
+2000 and the VocalTractLab 2.4 manual; none of VocalTractLab's code). Each block finds up to three
+constrictions (the narrowest section under 1 k^2 cm^2 with its neighbours within 0.2, and runs not
+joined to it), and each makes p_s = G |v_c|^3 sqrt(A_min), v_c low-passed at 500 Hz, placed by the
+distance D from its separation point to the incisors: a wall source 0.25 cm downstream, an
+obstacle source at the incisors, a labiodental one 0.15 cm past the separation where the lower lip
+forms it, split linearly between the two junctions of its section. A wide tract has no jet, so /h/
+is aspiration 1.5 cm above the glottis shaped by its vowel. In voicing, frication pulses at f0
+behind tau = D / (0.5 v_jet) with its index soft-limited at 0.5. A velic source in the velum port
+covers velic releases. The tract wall is Birkholz and Zhang's (2025): M 2.0 g/cm^2, K 100,000
+dyn/cm^3, B 2000 dyn s/cm^3, against CHIMERA's 1.5, 300,000 and 1600.
+
+### Decisions, and the numbers behind them
+
+- Every source takes Stevens' corner, fc = 0.15 v / d. Birkholz flattens the labiodental and
+  glottal ones (6 kHz); here that made /f/ rise 17 dB from 1 to 12 kHz and /h/ bright (shape
+  distance to the human 11.5 and 18.0 dB against 5.8 and 15.4).
+- The noise high-pass at fc / 12 is gone: /s/ at 0.5 to 1.6 kHz rose 8 and 5 dB toward the human.
+- Gains, fitted: wall 7 and obstacle 14 (Birkholz's ratio, 1.4 times his values; at 10 the female
+  and child /z/ frication fell under the voicing, shape distance 25.4 and 26.0, at 14, 12.6 and
+  12.6), labiodental 18 (at his 3, /f/ lay 37 dB under its vowel), lip rounding 3 (his labiodental
+  value, so /o u/ do not hiss), aspiration 20 with the glottis open and 3 in modal voicing (at 10,
+  /θ/ lay 13.0 dB from the human shape, at 20, 7.4: the open glottis fills its 1 to 6 kHz).
+- Wall and obstacle blend over D = 2 to 3 cm, not 1.5 to 2.5: this geometry's /ʃ/ separates 1.9
+  to 2.2 cm behind the incisors, and Birkholz lists /ʃ/ as an obstacle source. At the same gains /ʃ/
+  went from -24 to -17 dB re its vowel (-15 now).
+- v_c is read at the junction after the narrowest section, where the kinetic loss holds it to
+  A sqrt(2 dp / rho); read at the run's exit, a /d/ closure was as loud as the /s/. A section at
+  the closed area makes no noise (the area floor's leak is not a jet); without that the strengths
+  /t/ closure carried frication 30 dB over CHIMERA's silence and the release test read 1.18.
+- No jet outruns the lungs: v_c is capped at 1.2 sqrt(2 P_lung / rho).
+- Wall radiation stays at CHIMERA's 0.25 of the wall flow. Birkholz and Zhang radiate all of it;
+  here that put the /b/ and /g/ voice bars 8 to 12 dB over CHIMERA's (-3.3 and -8.8 dB re the
+  vowel against -16.9 and -17.7). K was chosen by the held-closure voicing: 60 ms on CHIMERA's
+  wall, 83 at K 100,000, 102 at 65,000. B 2000 keeps the first formant's bandwidth nearest
+  CHIMERA's (44 Hz mean, 41 at B 1400, 49 on CHIMERA's wall, CHIMERA 52).
+- The velum port stays under 0.03 cm^2 through every oral stop closure in all three bodies
+  (MEASURED 0; a test now holds it).
+
+### Measured (male unless said; scratch taskA/)
+
+| Measure | before (int3) | now | CHIMERA | human |
+| --- | --- | --- | --- | --- |
+| Fricative shape distance to the human, dB (male / female / child) | 10.59 / 10.96 / 11.33 | 10.27 / 10.54 / 11.55 | 12.09 / 12.33 / 13.57 | |
+| /s/, /ʃ/, /f/, /θ/, /h/ shape distance | 7.3, 7.4, 3.5, 9.0, 15.1 | 5.6, 5.7, 5.8, 7.4, 15.4 | 8.1, 4.3, 6.7, 13.7, 16.6 | |
+| /z/, /v/, /ʒ/ shape distance | 8.8, 18.4, 15.2 | 10.1, 16.7, 15.4 | 9.6, 18.2, 19.5 | |
+| Spectral mean error to Jongman, kHz (f θ s ʃ) | 1.10 | 1.59 | 1.94 | |
+| Level re vowel, dB: /s/ /ʃ/ /f/ /θ/ /h/ | -6 -19 -25 -25 -16 | -4 -15 -23 -23 -16 | -10 -12 -18 -22 -19 | |
+| /h/ 5 to 12.5 kHz, dB re its total | -7 -6 -10 -14 | -8 -7 -10 -12 | | -21 -31 -31 -38 |
+| DTW distance to CHIMERA, mean of 21 renders, 3 seeds | 4.51 | 4.82 | | |
+| Vowel F1 / B1 mean, Hz | 508 / 48 | 500 / 44 | 521 / 52 | |
+| Cost, us/sample through the kernel (load 5.2) | up to 1.30 | up to 1.33 | | |
+
+### Not met
+
+- /h/ keeps its 6 to 12 kHz hiss: with no jet it is aspiration alone, and aspiration through this
+  tract stays flat to 12 kHz with any one-pole corner, where the speaker falls 12 dB an octave
+  above 4 kHz. Not tested here: the radiation load's +6 dB an octave past ka = 1 (4.4 kHz for an
+  open mouth) is a likely part of it.
+- /ʃ/ still peaks at 1.6 to 2.5 kHz, not 2.5 to 4: the geometry puts its front cavity 3.65 cm
+  long (separation to lips), which resonates at 2.4 kHz; the human peak needs about 2.5 cm. The
+  constriction sits 2.2 cm behind the incisors. That is the articulation target or the geometry,
+  not the noise source.
+- /θ/'s top: the geometry makes it a 2.3 cm channel of 0.15 to 0.25 cm^2 ending past the
+  incisors, and the channel's resonance near 8 kHz stays.
+- Voiced /z ʒ/: the jet is 31 percent slower than /s/'s (1930 against 2810 cm/s), so 9.7 dB
+  weaker by the law, because the folds sit adducted at 0.05 cm^2 and vibrate at vowel amplitude.
+  A glottis whose amplitude falls with transglottal pressure is the fix, outside this change.
+- DTW to CHIMERA is 0.31 dB worse on average and 0.2 to 0.65 dB on 18 of 21 renders. Part is the
+  human-directed change (noise frames gain 2 to 4 dB at 0.3 to 1.5 kHz, where /s/ moved toward
+  the speaker); part is closure frication: a closing constriction passes through an /s/-sized gap
+  for about 10 ms at full jet speed (the /tʃ/ closure in the stops line reads 17 dB over
+  CHIMERA's). Real closures cross that range in 3 to 5 ms; the closing speed is the planner's.
+- The /l/ dip test's tolerance went from 1.5 to 1.6 dB: the heavier wall moved the dip from -1.57
+  to -1.28 against CHIMERA's -2.8.
+
 ## The phases, each with a gate
 
 0. **Is the tube enough?** A float Kelly-Lochbaum tract at 48 kHz, driven both by CHIMERA's own

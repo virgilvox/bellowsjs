@@ -14,7 +14,9 @@
  *   - each grid section's area is the harmonic mean of the profile over it,
  *     and its minimum the smallest sub-section minimum of the profile
  *     sections it overlaps, never above its own area (CHIMERA's jet rule);
- *   - the incisors and the pharynx/oral split become grid positions;
+ *   - the incisors and the pharynx/oral split become grid positions, and the
+ *     labiodental articulator tells the airway whether a front constriction
+ *     is the lower lip's (a labiodental noise source) or the tongue's;
  *   - the anatomical moving-wall flow: each profile section's volume change
  *     across the keyframe interval, as -dV/dt at its place on the grid. It
  *     must not be differenced from grid areas: a grid that slides along the
@@ -32,7 +34,10 @@
 import { SOUND_SPEED } from '../dsp/air';
 import { AreaSlew } from '../dsp/area-rate';
 import { ductMin, type JunctionAirway } from '../dsp/junction-airway';
+import { ART } from './vocal-articulators';
 import { ChimeraGeometry } from './vocal-geometry';
+
+const LABIODENTAL = ART.labiodental;
 
 /** Blocks per keyframe. */
 export const VOCAL_KEY_BLOCKS = 16;
@@ -60,6 +65,8 @@ class Key {
   orLen = 8.3;
   teeth = 16;
   velum = 0;
+  /** How far the lower lip forms the front constriction (the labiodental articulator, 0..1). */
+  lab = 0;
 
   copy(s: Key): void {
     this.ph.set(s.ph);
@@ -70,6 +77,7 @@ class Key {
     this.orLen = s.orLen;
     this.teeth = s.teeth;
     this.velum = s.velum;
+    this.lab = s.lab;
   }
 }
 
@@ -151,6 +159,8 @@ export class VocalDrive {
     q.orLen = g.orLen;
     q.teeth = g.teethS;
     q.velum = g.velumPort;
+    const lab = a[LABIODENTAL];
+    q.lab = lab < 0 ? 0 : lab > 1 ? 1 : lab;
     if (snap) {
       p.copy(q);
       this.snapped = true;
@@ -276,9 +286,10 @@ export class VocalDrive {
     }
     // incisors and split as grid positions; the velum port
     const teeth = p.teeth * w0 + q.teeth * u;
-    air.teethI = Math.round((teeth - lb) / step);
+    air.teethX = (teeth - lb) / step;
     air.splitI = (phLen - lb) / step;
     air.velum = p.velum * w0 + q.velum * u;
+    air.labial = p.lab * w0 + q.lab * u;
     // the moving-wall flow at each section's place, shared between the two nearest junctions so it
     // moves along the grid continuously as the tract does (snapped to one, it jumped between blocks)
     const vflow = air.vflow;

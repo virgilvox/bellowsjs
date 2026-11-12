@@ -15,10 +15,6 @@ export const AIR_DYNAMIC_VISCOSITY = 1.86e-4;
 export const AIR_VISCOSITY = AIR_DYNAMIC_VISCOSITY / AIR_DENSITY;
 /** One centimetre of water, dyn/cm^2. */
 export const CM_H2O = 980.665;
-/** The Reynolds number where a jet turns turbulent (network.rs:1097-1130). */
-export const CRITICAL_REYNOLDS = 1800;
-/** Where turbulence amplitude stops growing as Re^2 (network.rs:1100). */
-export const SATURATION_REYNOLDS = 12000;
 
 /** A yielding wall per unit area: mass g/cm^2, resistance dyn s/cm^3, stiffness dyn/cm^3. */
 export interface WallTissue {
@@ -27,8 +23,13 @@ export interface WallTissue {
   k: number;
 }
 
-/** Soft tissue of the pharynx and mouth (physics.rs WALL_SOFT). */
-export const WALL_SOFT: WallTissue = { m: 1.5, r: 1600, k: 3e5 };
+/**
+ * Soft tissue of the pharynx and mouth: Birkholz and Zhang (Interspeech 2025) fitted six speakers'
+ * voice bars with M = 2.0 g/cm^2 for all, K 65,000 to 100,000 dyn/cm^3 and B 800 to 2000 dyn s/cm^3,
+ * uniform over the tract. K and B are chosen here by the voice bar's duration and level
+ * (docs/VOICE-2.md, "Noise sources, walls and velum"). CHIMERA's WALL_SOFT was m 1.5, r 1600, k 3e5.
+ */
+export const WALL_TRACT: WallTissue = { m: 2.0, r: 2000, k: 1e5 };
 /** The trachea's cartilage-ringed wall (physics.rs WALL_TRACHEA). */
 export const WALL_TRACHEA: WallTissue = { m: 0.6, r: 1000, k: 1e6 };
 /** The nasal cavity's mucosa over bone (physics.rs WALL_NASAL). */

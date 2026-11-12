@@ -141,8 +141,8 @@ describe('VocalDrive', () => {
       expect(air.gridMin[i]).toBeLessThanOrEqual(air.gridIn[i]);
     }
     expect(air.ductLen).toBeGreaterThanOrEqual(1.25);
-    expect(air.teethI).toBeGreaterThan(30);
-    expect(air.teethI).toBeLessThanOrEqual(40);
+    expect(air.teethX).toBeGreaterThan(30);
+    expect(air.teethX).toBeLessThanOrEqual(40);
     expect(air.splitI).toBeGreaterThan(10);
     expect(air.splitI).toBeLessThan(30);
     /* a snapped key moves nothing */
