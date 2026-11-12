@@ -155,25 +155,26 @@ describe('JunctionAirway', () => {
     }
   });
 
-  it('places the source by the separation point: a wall source downstream far from the incisors, an obstacle at them near, labiodental past them', () => {
+  it('places the source by the separation point: a wall source downstream far from the incisors, an obstacle at them near, labiodental past them, a free jet past them from the tongue', () => {
     const dx = 35000 / (2 * 48000);
     // D = 26 sections: a wall source 0.25 cm past the separation (junction 12)
     const wall = constricted(10, 11, 0.1, 38);
     let q = loudest(wall);
     expect(wall.noisePlace[q]).toBeCloseTo(12 + 0.25 / dx, 1);
-    // D = 2.5 sections (0.9 cm): an obstacle source at the incisors, twice the wall's gain
+    // D = 2.5 sections (0.9 cm): an obstacle source at the incisors, 15 / 7 of the wall's gain
     const obstacle = constricted(30, 31, 0.1, 34.5);
     q = loudest(obstacle);
     expect(obstacle.noisePlace[q]).toBeCloseTo(34.5, 1);
-    expect(obstacle.noiseGain[q]).toBeCloseTo(2 * wall.noiseGain[loudest(wall)], 6);
+    expect(obstacle.noiseGain[q]).toBeCloseTo((15 / 7) * wall.noiseGain[loudest(wall)], 6);
     // separation past the incisors, formed by the lower lip: labiodental, 0.15 cm downstream
     const labio = constricted(36, 37, 0.15, 37.5, 8, 1);
     q = loudest(labio);
     expect(labio.noisePlace[q]).toBeCloseTo(38 + 0.15 / dx, 1);
-    // the same place formed by the tongue (/θ/): the obstacle source stays at the incisors
+    // the same place formed by the tongue (/θ/): nothing ahead of the jet, a free jet 0.25 cm downstream
     const dental = constricted(36, 37, 0.15, 37.5, 8, 0);
     q = loudest(dental);
-    expect(dental.noisePlace[q]).toBeCloseTo(37.5, 1);
+    expect(dental.noisePlace[q]).toBeCloseTo(38 + 0.25 / dx, 1);
+    expect(dental.noiseGain[q]).toBeLessThan(obstacle.noiseGain[loudest(obstacle)]);
   });
 
   it('keeps two constrictions apart as two sources, and one joined by narrow sections as one', () => {
@@ -195,15 +196,15 @@ describe('JunctionAirway', () => {
     for (let q = 0; q < 3; q++) expect(a.noiseLevel[q]).toBe(0);
   });
 
-  it("takes Birkholz and Zhang's wall: mass 2.0 g/cm^2, stiffness and damping in their fitted ranges", () => {
-    expect(WALL_TRACT.m).toBe(2.0);
+  it("takes Birkholz and Zhang's wall stiffness and damping in their fitted ranges, CHIMERA's mass (air.ts says why)", () => {
+    expect(WALL_TRACT.m).toBe(1.5);
     expect(WALL_TRACT.k).toBeGreaterThanOrEqual(65000);
     expect(WALL_TRACT.k).toBeLessThanOrEqual(100000);
     expect(WALL_TRACT.r).toBeGreaterThanOrEqual(800);
     expect(WALL_TRACT.r).toBeLessThanOrEqual(2000);
   });
 
-  it('voices on through a held labial closure while the walls yield (MEASURED 83 ms; CHIMERA walls 60)', () => {
+  it('voices on through a held labial closure while the walls yield (MEASURED 77 ms; CHIMERA walls 60)', () => {
     const a = airway(48000, 40, 3, 8);
     a.agStatic = 0.03;
     const tc = 0.4;

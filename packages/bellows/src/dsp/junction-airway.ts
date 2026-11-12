@@ -48,14 +48,21 @@
  * obstacle sources, and this geometry's /ʃ/ separates 1.9 to 2.2 cm behind
  * the incisors), and a labiodental source 0.15 k cm downstream where the
  * lower lip forms the constriction at the incisors (/f v/), blended over D
- * from 0.5 k cm to 0. A place inside a section is split between its two
+ * from 0.5 k cm to 0. A jet that separates at or past the incisors' edge
+ * (the dental /θ/) has no obstacle ahead: as D falls from 0.3 k cm to 0 the
+ * obstacle source gives way to a free-jet source at the wall source's place.
+ * A place inside a section is split between its two
  * junctions linearly, and a source that moves or changes type ramps every
  * junction weight over one block. The noise is white through one first-order
  * low-pass at fc = 0.15 v_c / d, d = sqrt(4 A / pi), for every source:
  * Birkholz flattens the labiodental and glottal ones (a 6 kHz corner), but in
  * this airway that made /f/ rise 17 dB from 1 to 12 kHz against the human
  * recording's flat spectrum and /h/ bright (MEASURED: shape distance to the
- * human 11.5 and 18.0 dB, against 5.8 and 15.4 with Stevens' corner). The
+ * human 11.5 and 18.0 dB, against 5.8 and 15.4 with Stevens' corner). Every
+ * constriction source but the obstacle's share also falls through a second
+ * pole at 3.5 kHz (Shadle 1991: the obstacle is the broadband source), and a
+ * constriction makes noise only above the critical Reynolds number, faded in
+ * over Re 1000 to 2000, so a closure's last leak is quiet. The
  * glottal (aspiration) source sits 1.5 k cm above the glottis, read from the
  * glottal flow and area; a velic source in the velum port, read from its flow
  * and area, gives the burst of a velic release (/pm/, as VocalTractLab 2.4
@@ -138,37 +145,65 @@ const TAPS = 16;
 const MOD_RING = 512;
 /**
  * Source gains by type, CALIBRATED from Birkholz's (ISSP 2014, Table 1: wall 5, obstacle 10,
- * labiodental 3). Wall and obstacle keep his ratio at 1.4 times his values: at 10, the voiced /z/'s
- * frication lay under its voicing in the female and child bodies (shape distance to the human 25.4
- * and 26.0 dB; at 14, 12.6 and 12.6). The labiodental one: at his 3, /f/ lay 37 dB under its vowel
- * (CHIMERA 18, the earlier library 25); at 18, 23.
+ * labiodental 3). Wall 1.4 times his: at 10 and 5, the voiced /z/'s frication lay under its voicing
+ * in the female and child bodies (shape distance to the human 25.4 and 26.0 dB; at 14 and 7, 12.6 and
+ * 12.6). The obstacle 15: with the retuned scale and Reynolds threshold the child's /z/ fell under its
+ * voicing again at 14 (26.0 dB from the human shape; at 15, 11.0). The labiodental one: at his 3, /f/
+ * lay 37 dB under its vowel (CHIMERA 18, the earlier library 25); at 25, with the second pole below, 27.
  */
 const G_WALL = 7;
-const G_OBSTACLE = 14;
-const G_LABIAL = 18;
+const G_OBSTACLE = 15;
+const G_LABIAL = 25;
 /** A constriction at the lips that is not labiodental (rounding): Birkholz's labiodental gain, unfitted. */
 const G_LIPS = 3;
 /**
+ * A jet that separates at or past the incisors' edge has no obstacle ahead of it (the dental /θ/):
+ * the obstacle source fades out as D falls from D_FREE x k cm to 0, and a free-jet source at the
+ * wall source's place, gain G_FREE, takes its share. CALIBRATED: /θ/ at the incisors' obstacle read
+ * 12.8 dB from the human shape, 9.0 as a free jet with the second pole (docs/VOICE-2.md).
+ */
+const D_FREE = 0.3;
+const G_FREE = 6;
+/**
  * The common scale of p_s = G |v|^3 sqrt(A) at 48 kHz (dyn/cm^2 per (cm/s)^3 cm), times
  * sqrt(rate / 48000) elsewhere so the noise's spectral density does not change with the rate.
- * CALIBRATED: fricative levels re the following vowel against CHIMERA and band shapes against
- * the human recordings (docs/VOICE-2.md, "Noise sources, walls and velum").
+ * CALIBRATED with the six-stage articulators and the aspiration gains below: DTW distance to
+ * CHIMERA over the comparison phrases (docs/VOICE-2.md, "Integration 4").
  */
-const GAIN_SCALE = 3.5e-9;
+const GAIN_SCALE = 3e-9;
 /**
- * The aspiration source's G, open (no voicing) and in modal voicing; Birkholz's is variable. CALIBRATED:
- * the open value on /h/ and /θ/ (a voiceless fricative's open glottis fills its 1 to 6 kHz: at 10, /θ/
- * lay 13.0 dB from the human shape, at 20, 7.4), the voiced one on the vowels' breath noise above
- * 4 kHz against CHIMERA (scratch dtw/bands.ts).
+ * The aspiration source's G, open (no voicing) and in modal voicing; Birkholz's is variable.
+ * CALIBRATED: the open value on the breaths between vowels and on /h/ (at 20 the vowels line sat
+ * 0.3 dB further from CHIMERA, and with the second pole /θ/ no longer needs it), the voiced one on
+ * the vowels' breath noise against CHIMERA, scaled by k^ASPIRATION_VOICED_K: the male line needs 3
+ * (at 1 it read 1.1 dB further from CHIMERA), the child's about 1 (at 3, 0.24 dB further).
  */
-const G_ASPIRATION = 20;
+const G_ASPIRATION = 10;
 const G_ASPIRATION_VOICED = 3;
+const ASPIRATION_VOICED_K = 3.5;
+/**
+ * A jet is turbulent only above a critical Reynolds number (Flanagan; CHIMERA takes 1800): a
+ * constriction's source fades in over Re 1000 to 2000, Re = v d / nu, d = 2 sqrt(A / pi). MEASURED: a
+ * /tʃ/ closure leaking 0.003 cm^2 at 2400 cm/s (Re 1000) carried frication 9 dB under the /s/ for
+ * 10 ms; over Re 1800 to 3000 the female /z/ (Re about 2400) fell under its voicing (25.3 dB from the
+ * human shape, against 12.7 over 1000 to 2000).
+ */
+const RE_PER_VSA = (2 / Math.sqrt(Math.PI)) * (AIR_DENSITY / AIR_DYNAMIC_VISCOSITY);
+const RE_LO = 1000;
+const RE_SPAN = 1 / 1000;
 /** v_c's low-pass, Hz (Birkholz 2014). */
 const VC_HZ = 500;
 /** The slow velocity the voicing modulation is measured against, Hz: under any sung f0. */
 const VSLOW_HZ = 25;
 /** The source corner, fc = 0.15 v / d (Stevens 1998, p. 104). */
 const FC_LINGUAL = 0.15;
+/**
+ * A second pole at this frequency for every constriction source except the obstacle's share (Shadle
+ * 1991: a jet hitting an obstacle is the broadband source; a free jet, a wall or the lower lip falls
+ * faster). CALIBRATED against the human recordings: /f/ 6.1 to 2.9 dB from the human shape, /θ/
+ * 12.2 to 9.0, Jongman spectral mean error 1.46 to 0.81 kHz; at 2500 Hz /f/ went dull (6.6).
+ */
+const P2_HZ = 3500;
 /** Constriction detection, x k^2 cm^2: under this, and the run's tolerance (Birkholz 2014). */
 const CONSTRICTED = 1.0;
 const RUN_TOL = 0.2;
@@ -437,6 +472,8 @@ export class JunctionAirway {
   private readonly vS = new Float64Array(NSRC);
   private readonly aF = new Float64Array(NSRC);
   private readonly nL = new Float64Array(NSRC);
+  private readonly nL2 = new Float64Array(NSRC);
+  private readonly cLp2 = new Float64Array(NSRC).fill(1);
   private readonly cLp = new Float64Array(NSRC);
   /** Block sums of |v_c| and of |v_c|^3 sqrt(A), and the convective delay in samples at the block's start and end. */
   private readonly vAcc = new Float64Array(NSRC);
@@ -647,6 +684,7 @@ export class JunctionAirway {
     this.vS.fill(0);
     this.aF.fill(0);
     this.nL.fill(0);
+    this.nL2.fill(0);
     this.vAcc.fill(0);
     this.lvAcc.fill(0);
     this.noiseLevel.fill(0);
@@ -1042,11 +1080,15 @@ export class JunctionAirway {
       lab = labio + lips;
       let wf = (dk - D_WALL_LO) / (D_WALL_HI - D_WALL_LO);
       wf = wf < 0 ? 0 : wf > 1 ? 1 : wf * wf * (3 - 2 * wf);
+      // an obstacle needs the incisors downstream of separation: a jet that separates at or past their
+      // edge (the dental /θ/) blows into free air, a wall-type source with nothing ahead of it
+      let ob = dk / D_FREE;
+      ob = ob <= 0 ? 0 : ob >= 1 ? 1 : ob * ob * (3 - 2 * ob);
       this.tx = exit + (WALL_DOWN * k) / dx;
-      this.tw = (1 - lab) * wf * G_WALL;
+      this.tw = (1 - lab) * (wf * G_WALL + (1 - wf) * (1 - ob) * G_FREE);
       this.addAt(q);
       this.tx = this.teethX;
-      this.tw = (1 - lab) * (1 - wf) * G_OBSTACLE;
+      this.tw = (1 - lab) * (1 - wf) * ob * G_OBSTACLE;
       this.addAt(q);
       this.tx = exit + (LABIAL_DOWN * k) / dx;
       this.tw = labio * G_LABIAL + lips * G_LIPS;
@@ -1056,9 +1098,15 @@ export class JunctionAirway {
       let fc = (FC_LINGUAL * v) / d;
       fc = fc < 200 ? 200 : fc > 0.45 * rate ? 0.45 * rate : fc;
       this.cLp[q] = 1 - Math.exp((-2 * Math.PI * fc) / rate);
+      // the obstacle's share keeps its single corner (Shadle 1991: an obstacle source is broadband); a free
+      // jet, a wall and the lower lip fall a second order above P2_HZ
+      const wo = (1 - lab) * (1 - wf) * ob;
+      let f2 = P2_HZ * Math.exp(wo * Math.log((0.45 * rate) / P2_HZ));
+      f2 = f2 > 0.45 * rate ? 0.45 * rate : f2;
+      this.cLp2[q] = 1 - Math.exp((-2 * Math.PI * f2) / rate);
       // the convective delay from the separation point to where the source sits
       const dObs = dk > 0 ? dk * k : 0;
-      const ds = (1 - lab) * (wf * WALL_DOWN * k + (1 - wf) * dObs) + lab * LABIAL_DOWN * k;
+      const ds = (1 - lab) * (wf * WALL_DOWN * k + (1 - wf) * (ob * dObs + (1 - ob) * WALL_DOWN * k)) + lab * LABIAL_DOWN * k;
       let tau = v > 1 ? ds / (CONVECT * v) : TAU_MAX;
       tau = (tau < TAU_MAX ? tau : TAU_MAX) * rate;
       this.tau0[q] = this.tau1[q];
@@ -1074,7 +1122,7 @@ export class JunctionAirway {
       this.tx = x;
       // Birkholz's aspiration gain is variable (0.005 to 0.5 of the others): less in modal voicing
       const vo = this.voicing;
-      this.tw = G_ASPIRATION * (1 - vo) + G_ASPIRATION_VOICED * vo;
+      this.tw = G_ASPIRATION * (1 - vo) + G_ASPIRATION_VOICED * Math.pow(k, ASPIRATION_VOICED_K) * vo;
       this.addAt(q);
       const ga = this.agMean > 1e-4 ? this.agMean : 1e-4;
       let fc = (FC_LINGUAL * (this.vAcc[q] / blk)) / (2 * Math.sqrt(ga / Math.PI));
@@ -1117,6 +1165,7 @@ export class JunctionAirway {
     this.vF[q] = 0;
     this.vS[q] = 0;
     this.nL[q] = 0;
+    this.nL2[q] = 0;
     this.aF[q] = q < 3 ? this.tgtMin[s] : q === SRC_ASP ? this.ag : this.velum > 1e-4 ? this.velum : 1e-4;
     this.tau0[q] = this.tau1[q] = 0;
     this.ring.fill(0, q * MOD_RING, (q + 1) * MOD_RING);
@@ -1347,10 +1396,17 @@ export class JunctionAirway {
         s = Math.imul(s ^ (s >>> 15), s | 1);
         s ^= s + Math.imul(s ^ (s >>> 7), s | 61);
         const wv = ((((s ^ (s >>> 14)) >>> 0) / 4294967296) * 2 - 1) * 1.7320508075688772;
-        const nl = this.nL[q] + this.cLp[q] * (wv - this.nL[q]);
-        this.nL[q] = nl;
+        const nl1 = this.nL[q] + this.cLp[q] * (wv - this.nL[q]);
+        this.nL[q] = nl1;
+        const nl2 = this.nL2[q] + this.cLp2[q] * (nl1 - this.nL2[q]);
+        this.nL2[q] = nl2;
+        const nl = nl2;
         // the dipole's sign follows the flow's, continuously through zero
-        const ls = shut * lev * Math.sqrt(af);
+        const sa = Math.sqrt(af);
+        // a jet is turbulent only above the critical Reynolds number: Re = v d / nu, d = 2 sqrt(A / pi)
+        let tu = (av * sa * RE_PER_VSA - RE_LO) * RE_SPAN;
+        tu = q === SRC_ASP ? 1 : tu <= 0 ? 0 : tu >= 1 ? 1 : tu * tu * (3 - 2 * tu);
+        const ls = shut * tu * lev * sa;
         this.lvAcc[q] += ls;
         const v = (noiseScale * ls * nl * vf) / (av + 1);
         if (vel) {

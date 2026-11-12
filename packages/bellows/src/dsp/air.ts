@@ -28,8 +28,11 @@ export interface WallTissue {
  * voice bars with M = 2.0 g/cm^2 for all, K 65,000 to 100,000 dyn/cm^3 and B 800 to 2000 dyn s/cm^3,
  * uniform over the tract. K and B are chosen here by the voice bar's duration and level
  * (docs/VOICE-2.md, "Noise sources, walls and velum"). CHIMERA's WALL_SOFT was m 1.5, r 1600, k 3e5.
+ * The mass stays CHIMERA's 1.5, under their 2.0: with the six-stage articulators and the retuned
+ * noise, 2.0 put five of the comparison renders 0.2 to 0.27 dB further from CHIMERA (DTW), the
+ * vowels line most (docs/VOICE-2.md, "Integration 4").
  */
-export const WALL_TRACT: WallTissue = { m: 2.0, r: 2000, k: 1e5 };
+export const WALL_TRACT: WallTissue = { m: 1.5, r: 2000, k: 1e5 };
 /** The trachea's cartilage-ringed wall (physics.rs WALL_TRACHEA). */
 export const WALL_TRACHEA: WallTissue = { m: 0.6, r: 1000, k: 1e6 };
 /** The nasal cavity's mucosa over bone (physics.rs WALL_NASAL). */
