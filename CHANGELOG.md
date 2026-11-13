@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.2.0
+
+A singing voice, and a new license. `git diff --shortstat v0.1.9..v0.2.0 -- packages/bellows/src`
+is 43 files and about 11,400 insertions, nearly all of it the voice and its lyric layer.
+
+### Added
+
+- **`vocal`, an articulatory singing voice.** A gesture planner drives the 17 articulators of
+  CHIMERA (Jameson Hodge's physical-model voice synthesizer, MIT; see `THIRD_PARTY_NOTICES.md`)
+  through a six-stage cascade, CHIMERA's mouth geometry gives the tract's shape, and a junction
+  airway (a waveguide that carries the air itself, at the output rate) makes the sound: pressure
+  behind closures, bursts, voice bars, turbulence from Stevens' law with Birkholz's placement, a
+  yielding wall, nasals through a velum port. Male, female and child bodies; 41 phonemes; three
+  vocal fold models on `glottis` (a drawn pulse, the default; geometric folds; self-oscillating
+  two-mass folds under a pitch servo); `ring` and `tuning`. About a microsecond a sample at 48 kHz.
+- **`Instrument.sing(lyrics, notes, opts?)`**, and the pure lyric layer under it:
+  `lyricsToSyllables`, `planSung`, `sungEvents`, `parseCmudict`, `b.dictionary`, English
+  letter-to-sound with built-in function words, irregular words and contractions, IPA between
+  slashes, and American allophones (`allophones: false` for classical diction). Without a
+  dictionary, 77 percent of 469 common lyric words read exactly as the CMU dictionary has them.
+- `VOCAL_PHONEMES` and `vocalPhonemeIndex(ipa)` for holding one sound without a lyric.
+
+### Changed
+
+- **License: MIT** from this release, by the owner's choice, so attribution travels with every
+  copy. Versions already published stay Apache-2.0. The parts ported from CHIMERA keep Jameson
+  Hodge's MIT notice, and every bundle carries a one-line banner naming both.
+
+### Fixed
+
+- **`b.render()` is reproducible for the rng form the docs teach.** A stream captured once,
+  `const melody = b.rng('melody')`, bound the callback to the live stream, so two renders of one
+  seed produced different music. A render now replays it from the seed.
+- **A non-finite audio sample no longer latches a recursive unit.** `EnvelopeFollower`, `Svf`,
+  `LadderFilter`, `OnePole` and `DcBlocker` each held NaN forever after one bad input; each now
+  holds its last good state.
+- Smaller fixes from the audit register: the modal mode tables say which are measured, and the
+  voice-leading docs no longer claim a crossing penalty the code does not apply.
+
 ## 0.1.9
 
 Three silent failures become loud ones, plus the gates and the documents behind them.
