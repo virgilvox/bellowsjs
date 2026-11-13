@@ -335,13 +335,15 @@ describe('CritDamp allocation', () => {
     const one = tracker(48000, 0.08, 0, 1);
     const bank = new CritDampBank(15, 48000 / 32);
     for (let i = 0; i < 15; i++) bank.setTarget(i, 100 * i);
+    // the results go to a typed slot, not a local: Node 20's on-stack-replaced loop boxed a double
+    // accumulator on every step (MEASURED: 31 collections there, none with the result unused or here)
+    const acc = new Float64Array(1);
     const runOne = (n: number) => {
-      let acc = 0;
       for (let i = 0; i < n; i++) {
         if ((i & 4095) === 0) one.setTarget(i & 8192 ? 1 : -1);
-        acc += one.step();
+        acc[0] += one.step();
       }
-      return acc;
+      return acc[0];
     };
     const runBank = (n: number) => {
       for (let i = 0; i < n; i++) {

@@ -111,13 +111,14 @@ describe('PitchGlide', () => {
     // inside a synchronous run was caused by what the run allocated
     const g = new PitchGlide(48000);
     g.setPreparation(0.3);
+    // into a typed slot, not a local: Node 20 boxed a double accumulator (see the CritDamp probe)
+    const acc = new Float64Array(1);
     const runs = (n: number) => {
-      let acc = 0;
       for (let i = 0; i < n; i++) {
         if ((i & 4095) === 0) g.setTarget(i & 8192 ? 3 : -2);
-        acc += g.step();
+        acc[0] += g.step();
       }
-      return acc;
+      return acc[0];
     };
     runs(300_000);
     const starts: number[] = [];
