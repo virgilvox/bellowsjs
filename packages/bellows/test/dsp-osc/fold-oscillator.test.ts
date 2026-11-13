@@ -135,12 +135,20 @@ describe('PitchServo', () => {
     s.target = 200;
     s.tau = 0.05;
     s.measured = 100;
+    s.pending = 1;
     s.cycle();
     expect(s.correction).toBe(1);
     s.measured = 180;
+    s.pending = 1;
     s.cycle();
     const g = 1 - Math.exp(-1 / (180 * 0.05));
     expect(Math.log2(s.correction)).toBeCloseTo(g * Math.log2(200 / 180), 12);
+    expect(s.pending).toBe(0);
+    // with no cycle pending (the folds call it every sample) it changes nothing
+    const c = s.correction;
+    s.measured = 190;
+    s.cycle();
+    expect(s.correction).toBe(c);
   });
 });
 

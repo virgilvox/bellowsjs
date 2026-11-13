@@ -170,7 +170,12 @@ const GESTURE_KEYS = 12;
 const SAME = 0.003;
 /** Segments whose influence has certainly ended this long ago are dropped, seconds. */
 const FORGET = 1.5;
-/** A phrase-initial consonant starts this much earlier (the prototype's measured choice: a phrase-initial /ʃ/ was 17 dB weak without it). */
+/**
+ * A phrase-initial consonant starts this much earlier (the prototype's measured choice: a phrase-initial
+ * /ʃ/ was 17 dB weak without it). Only the first: the rest of an onset cluster keeps its own time, or the
+ * /t/ of /stɹ/ held the tongue tip from 5 ms after the note-on, outranked the /s/ and left it silent
+ * (MEASURED: 45 dB under CHIMERA's above 2.5 kHz, every body).
+ */
 const INITIAL_LEAD = 0.06;
 /** No consonant holds the articulator. */
 const NO_RANK = 127;
@@ -602,7 +607,7 @@ export class VocalPlanner {
         this.key(KEY_ABDUCTION, 0.035);
         this.emit(t0, t1, 0.03, 0.03, 3, 0);
       }
-      if (s < firstVowel) {
+      if (s === 0 && s < firstVowel) {
         for (let g = before; g < this.gCount; g++) {
           const kc = this.gKeyCount[g];
           let glottal = false;

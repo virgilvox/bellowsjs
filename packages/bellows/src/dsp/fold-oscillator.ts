@@ -123,6 +123,8 @@ export class FoldOscillator {
   private bh1 = 0;
   private bh2 = 0;
   private q = 1;
+  /** 1 when tune() has asked for new coefficients, which the next step() computes. */
+  private stale = 1;
   /* Cycle detection: samples since reset, the last v1, the last turning point's time (-1: none). */
   private n = 0;
   private lastV1 = 0;
@@ -131,7 +133,6 @@ export class FoldOscillator {
   constructor(rate: number) {
     this.rate = rate;
     this.dt = 1 / rate;
-    this.tune();
   }
 
   reset(): void {
@@ -145,32 +146,47 @@ export class FoldOscillator {
     this.tune();
   }
 
-  /** The tension for the servo's target and correction and the perturbation: once a block. */
+  /**
+   * The tension for the servo's target and correction and the perturbation: once a block. It only marks
+   * the coefficients stale and the next step() computes them, inside the per-sample code V8 optimizes. A
+   * method called once a block or once a cycle can stay unoptimized, and then every double it computes is
+   * a heap number: with that, the event call that took two doubles and the clamps below written as
+   * conditionals, a held vowel on these folds grew new space by 1.2 to 1.5 bytes a sample, against 0.03
+   * for the other fold models (MEASURED; test/engines-physical/vocal.test.ts, "allocation").
+   */
   tune(): void {
-    let q = (this.servo.target / FOLD_F_REF) * this.servo.correction * this.perturb;
-    q = q < MIN_Q ? MIN_Q : q > MAX_Q ? MAX_Q : q;
-    if (q !== q) q = 1;
-    this.q = q;
-    const qm = 1 / (q * Math.sqrt(q));
-    const qk = Math.sqrt(q);
-    this.m1 = M1 * qm;
-    this.m2 = M2 * qm;
-    this.k1 = K1 * qk;
-    this.k2 = K2 * qk;
-    this.kc = KC * qk;
-    this.b1 = 2 * ZETA1 * Math.sqrt(this.m1 * this.k1);
-    this.b2 = 2 * ZETA2 * Math.sqrt(this.m2 * this.k2);
-    this.bh1 = 2 * HIT_ZETA * Math.sqrt(this.m1 * this.k1);
-    this.bh2 = 2 * HIT_ZETA * Math.sqrt(this.m2 * this.k2);
+    this.stale = 1;
   }
 
-  /** The tension last set, Q (white box). */
+  /** The tension Q the coefficients are (or, after tune(), will be) computed for (white box, not the audio path). */
   get tension(): number {
-    return this.q;
+    if (!this.stale) return this.q;
+    const q = (this.servo.target / FOLD_F_REF) * this.servo.correction * this.perturb;
+    return q < MIN_Q ? MIN_Q : q > MAX_Q ? MAX_Q : q === q ? q : 1;
   }
 
   /** One sample: forces from the last pressures, the masses moved, the areas and a cycle check. */
   step(): void {
+    if (this.stale) {
+      // the coefficients for the tension: masses as Q^-1.5, springs as Q^0.5, so f0 scales as Q
+      this.stale = 0;
+      // clamped with Math.min and Math.max: a conditional that merges a double with a module-level
+      // constant made V8 box the result (MEASURED: one heap number each time this ran)
+      const raw = (this.servo.target / FOLD_F_REF) * this.servo.correction * this.perturb;
+      const q = Math.min(Math.max(raw === raw ? raw : 1, MIN_Q), MAX_Q);
+      this.q = q;
+      const qk = Math.sqrt(q);
+      const qm = 1 / (q * qk);
+      this.m1 = M1 * qm;
+      this.m2 = M2 * qm;
+      this.k1 = K1 * qk;
+      this.k2 = K2 * qk;
+      this.kc = KC * qk;
+      this.b1 = 2 * ZETA1 * Math.sqrt(this.m1 * this.k1);
+      this.b2 = 2 * ZETA2 * Math.sqrt(this.m2 * this.k2);
+      this.bh1 = 2 * HIT_ZETA * Math.sqrt(this.m1 * this.k1);
+      this.bh2 = 2 * HIT_ZETA * Math.sqrt(this.m2 * this.k2);
+    }
     const L = this.length;
     const twoL = 2 * L;
     const r1 = this.rest1 > 0 ? this.rest1 : 0;
@@ -219,14 +235,16 @@ export class FoldOscillator {
     const k1 = this.k1;
     const k2 = this.k2;
     const kc = this.kc;
+    const m1 = this.m1;
+    const m2 = this.m2;
     const dt = this.dt;
     // forces: pressure (times how free the folds are), springs, coupling, collision
     const F1 = free * p1 * L * D1 - k1 * x1 - kc * (x1 - x2) + HIT * k1 * c1;
     const F2 = free * p2 * L * D2 - k2 * x2 - kc * (x2 - x1) + HIT * k2 * c2;
     const bb1 = this.b1 + this.bh1 * f1;
     const bb2 = this.b2 + this.bh2 * f2;
-    const v1 = (this.v1 + (dt * F1) / this.m1) / (1 + (dt * bb1) / this.m1);
-    const v2 = (this.v2 + (dt * F2) / this.m2) / (1 + (dt * bb2) / this.m2);
+    const v1 = (this.v1 + (dt * F1) / m1) / (1 + (dt * bb1) / m1);
+    const v2 = (this.v2 + (dt * F2) / m2) / (1 + (dt * bb2) / m2);
     this.v1 = v1;
     this.v2 = v2;
     this.x1 = x1 + dt * v1;
@@ -235,24 +253,23 @@ export class FoldOscillator {
     this.area1 = a1 + ch;
     this.area2 = a2 + ch;
     this.area = (a1 < a2 ? a1 : a2) + ch;
-    // a cycle: the lower mass turns from opening to closing
+    // a cycle: the lower mass turns from opening to closing, between this sample and the last; the period
+    // since the previous turn goes to the servo (written out here: a call taking these doubles boxed them)
     this.n++;
     const lv = this.lastV1;
     this.lastV1 = v1;
-    if (lv > 0 && v1 <= 0) this.event(lv, v1);
-  }
-
-  /** A turning point between this sample and the last: the period since the previous one. */
-  private event(lv: number, v: number): void {
-    const t = this.n - 1 + lv / (lv - v);
-    if (this.lastT >= 0) {
+    if (lv > 0 && v1 <= 0) {
+      const t = this.n - 1 + lv / (lv - v1);
       const period = t - this.lastT;
-      if (period > 1) {
+      if (this.lastT >= 0 && period > 1) {
         this.servo.measured = this.rate / period;
-        this.servo.cycle();
+        this.servo.pending = 1;
         this.cycles++;
       }
+      this.lastT = t;
     }
-    this.lastT = t;
+    // every sample, so V8 optimizes and inlines it; it works only on a sample that measured a cycle (a call
+    // once a cycle stayed unoptimized and boxed its doubles)
+    this.servo.cycle();
   }
 }

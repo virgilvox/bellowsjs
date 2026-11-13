@@ -161,11 +161,11 @@ describe('JunctionAirway', () => {
     const wall = constricted(10, 11, 0.1, 38);
     let q = loudest(wall);
     expect(wall.noisePlace[q]).toBeCloseTo(12 + 0.25 / dx, 1);
-    // D = 2.5 sections (0.9 cm): an obstacle source at the incisors, 15 / 7 of the wall's gain
+    // D = 2.5 sections (0.9 cm): an obstacle source at the incisors, 18 / 7 of the wall's gain
     const obstacle = constricted(30, 31, 0.1, 34.5);
     q = loudest(obstacle);
     expect(obstacle.noisePlace[q]).toBeCloseTo(34.5, 1);
-    expect(obstacle.noiseGain[q]).toBeCloseTo((15 / 7) * wall.noiseGain[loudest(wall)], 6);
+    expect(obstacle.noiseGain[q]).toBeCloseTo((18 / 7) * wall.noiseGain[loudest(wall)], 6);
     // separation past the incisors, formed by the lower lip: labiodental, 0.15 cm downstream
     const labio = constricted(36, 37, 0.15, 37.5, 8, 1);
     q = loudest(labio);

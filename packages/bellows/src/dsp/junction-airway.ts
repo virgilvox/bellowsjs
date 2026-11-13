@@ -69,7 +69,9 @@
  * adds). In voicing, frication pulses at f0 behind a convective delay,
  * tau = D / (0.5 v_jet), with its modulation index soft-limited near 0.5
  * (Jackson and Shadle 2000; Pincas and Jackson 2005). A section at the closed
- * area makes no noise: its leak is the area floor's, not a jet. The gains are
+ * area makes no noise: its leak is the area floor's, not a jet; and a closing
+ * seal's source reads the area the articulators command where the area rate
+ * law still holds the airway's open, so a seal is not a fricative. The gains are
  * CALIBRATED here against the human recordings and CHIMERA's levels (Birkholz
  * fitted his to his own tract: wall 5, obstacle 10, labiodental 3, aspiration
  * 0.005 to 0.5).
@@ -147,12 +149,19 @@ const MOD_RING = 512;
  * Source gains by type, CALIBRATED from Birkholz's (ISSP 2014, Table 1: wall 5, obstacle 10,
  * labiodental 3). Wall 1.4 times his: at 10 and 5, the voiced /z/'s frication lay under its voicing
  * in the female and child bodies (shape distance to the human 25.4 and 26.0 dB; at 14 and 7, 12.6 and
- * 12.6). The obstacle 15: with the retuned scale and Reynolds threshold the child's /z/ fell under its
- * voicing again at 14 (26.0 dB from the human shape; at 15, 11.0). The labiodental one: at his 3, /f/
+ * 12.6). The obstacle 18, chosen on the mean of five noise seeds: the child's /z/ sits at a threshold
+ * where its frication either clears its voicing or does not, and the seed decides which. Its shape
+ * distance to the human, mean [range] over the seeds: at 14, 26.1 [26.0..26.3]; at 15, 23.5 [12.8..26.3]
+ * (frication on one seed of five); at 17, 18.0 [12.6..26.3]; at 18, 12.6 [12.4..12.9] (this airway's
+ * predecessor, before the noise round, 12.4 [12.2..12.7]). The child's mean over the fricatives goes 12.16 to 10.81
+ * from 15 to 18, the male's 10.23 to 10.18, the female's 10.96 to 10.89; the cost is DTW distance to
+ * CHIMERA on the strengths line, female and child, 0.06 and 0.07 dB (docs/VOICE-2.md, "Fixes after
+ * verification"). Lowering the Reynolds window's floor did not move the threshold (over Re 500 to 2000
+ * and 0 to 2000, the same 23.5). The labiodental one: at his 3, /f/
  * lay 37 dB under its vowel (CHIMERA 18, the earlier library 25); at 25, with the second pole below, 27.
  */
 const G_WALL = 7;
-const G_OBSTACLE = 15;
+const G_OBSTACLE = 18;
 const G_LABIAL = 25;
 /** A constriction at the lips that is not labiodental (rounding): Birkholz's labiodental gain, unfitted. */
 const G_LIPS = 3;
@@ -458,6 +467,12 @@ export class JunctionAirway {
   private readonly srcExit = new Int32Array(NSRC).fill(-1);
   private readonly srcUJ = new Int32Array(NSRC);
   private readonly srcSec = new Int32Array(NSRC);
+  /**
+   * Each constriction slot's commanded area, the least of the run's sections before the area rate law, at the
+   * block's start and end, cm^2: the source reads it where it is under the airway's (a closing seal).
+   */
+  private readonly srcCmd0 = new Float64Array(NSRC);
+  private readonly srcCmd1 = new Float64Array(NSRC);
   /** Junction taps per source: junction, weight at the block's start and end (G folded in). */
   private readonly nTap = new Int32Array(NSRC);
   private readonly tapJ = new Int32Array(NSRC * TAPS);
@@ -679,6 +694,8 @@ export class JunctionAirway {
     this.srcExit.fill(-1);
     this.srcUJ.fill(0);
     this.srcSec.fill(0);
+    this.srcCmd0.fill(0);
+    this.srcCmd1.fill(0);
     this.nTap.fill(0);
     this.vF.fill(0);
     this.vS.fill(0);
@@ -1059,13 +1076,19 @@ export class JunctionAirway {
       const mi = this.runMin[r];
       const exit = runHi[r] + 1;
       const a = gmn[mi];
-      if (this.nTap[q] === 0) this.freshSource(q, mi);
+      const fresh = this.nTap[q] === 0;
+      if (fresh) this.freshSource(q, mi);
       this.srcExit[q] = exit;
       // the flow through the narrowest section itself, where the kinetic loss holds it to A sqrt(2 dp / rho); read
       // further on, a sealed section's v = U / A took the flow the cavity in between pumps (MEASURED: frication
       // at a /d/ closure as loud as the /s/)
       this.srcUJ[q] = mi + 1;
       this.srcSec[q] = mi;
+      // the area the articulators command, before the rate law holds a closing seal open
+      let cmd = 1e9;
+      for (let s = conLo[r]; s <= conHi[r]; s++) if (this.gridMin[s] < cmd) cmd = this.gridMin[s];
+      this.srcCmd0[q] = fresh ? cmd : this.srcCmd1[q];
+      this.srcCmd1[q] = cmd;
       // D, the separation point to the incisors, x k cm
       const dk = ((this.teethX - exit) * dx) / k;
       // labiodental where the lower lip forms it at or past the incisors (/f v/); a tongue there (/θ/) keeps the
@@ -1348,23 +1371,33 @@ export class JunctionAirway {
         if (nt === 0 && !(vel && (this.velW0 > 0 || this.velW1 > 0))) continue;
         let u: number;
         let a: number;
+        // the source's area: the airway's, or the commanded one where that is less
+        let as: number;
         if (q < 3) {
           u = U[this.srcUJ[q]];
           a = aMin[this.srcSec[q]];
           if (a > area[this.srcSec[q]]) a = area[this.srcSec[q]];
+          as = this.srcCmd0[q] + (this.srcCmd1[q] - this.srcCmd0[q]) * w;
+          if (as > a) as = a;
         } else if (q === SRC_ASP) {
           u = this.uG;
           a = ag;
+          as = a;
         } else {
           u = this.uV;
           a = this.velNow;
+          as = a;
         }
         // a section at the closed area is shut: its floor's leak is numerical, not a jet (MEASURED: read as one, a
-        // /t/ closure carried frication 30 dB over CHIMERA's silence); the source fades in to 5 times that area
-        let shut = (a - 2e-4) * 1250;
+        // /t/ closure carried frication 30 dB over CHIMERA's silence); the source fades in to 5 times that area.
+        // The area rate law closes the last 0.4 cm^2 slowly so a seal does not click; the source reads the
+        // commanded area there, or that dwell was a fricative (MEASURED: 10 to 20 ms at the vowel's level
+        // before each /t tʃ/ closure, -2 dB re the phrase for the male /tʃ/, CHIMERA -23 to -32)
+        let shut = (as - 2e-4) * 1250;
         shut = q === SRC_ASP ? 1 : shut <= 0 ? 0 : shut >= 1 ? 1 : shut * shut * (3 - 2 * shut);
         if (a < 1e-4) a = 1e-4;
-        const af = this.aF[q] + cVc * (a - this.aF[q]);
+        if (as < 1e-4) as = 1e-4;
+        const af = this.aF[q] + cVc * (as - this.aF[q]);
         this.aF[q] = af;
         // no jet outruns the lungs: the flow and the area it reads can disagree for a sample as a section seals
         let vr = u / a;

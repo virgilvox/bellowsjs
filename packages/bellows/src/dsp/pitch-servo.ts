@@ -18,6 +18,9 @@
  * period doubling) are ignored rather than chased.
  *
  * Inputs and outputs are fields; cycle() takes nothing and returns nothing.
+ * The folds call it every sample so V8 optimizes and inlines it, and it
+ * works only when a new cycle is pending: called once a cycle, it stayed
+ * unoptimized and boxed its doubles.
  */
 
 /** Correction limits: an octave each way. */
@@ -35,22 +38,26 @@ export class PitchServo {
   correction = 1;
   /** The servo's time constant, s. */
   tau = 0.04;
+  /** 1 when `measured` holds a cycle cycle() has not used yet. */
+  pending = 0;
 
   reset(): void {
     this.correction = 1;
     this.measured = this.target;
+    this.pending = 0;
   }
 
-  /** One measured cycle: update the correction. */
+  /** One measured cycle: update the correction. A no-op unless a cycle is pending (see FoldOscillator.step). */
   cycle(): void {
+    if (this.pending === 0) return;
+    this.pending = 0;
     const m = this.measured;
     const t = this.target;
     if (!(m > 0) || !(t > 0)) return;
     const ratio = t / m;
     if (ratio > MAX_RATIO || ratio < 1 / MAX_RATIO) return;
     const g = 1 - Math.exp(-1 / (m * this.tau));
-    let c = this.correction * Math.pow(ratio, g);
-    c = c < MIN_CORRECTION ? MIN_CORRECTION : c > MAX_CORRECTION ? MAX_CORRECTION : c;
-    this.correction = c;
+    // Math.min and Math.max, not a conditional: V8 boxed a double merged with a module-level constant
+    this.correction = Math.min(Math.max(this.correction * Math.pow(ratio, g), MIN_CORRECTION), MAX_CORRECTION);
   }
 }

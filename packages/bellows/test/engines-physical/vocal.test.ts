@@ -702,6 +702,63 @@ describe('vocal engine: consonants', () => {
     expect(r).toBeLessThan(v);
   });
 
+  it('the phrase-initial /s/ of /stɹ/ hisses before its /t/ closes, in every body', () => {
+    /*
+     * MEASURED with the harness's seeds, energy above 2.5 kHz in 0.25 to
+     * 0.43 s re the phrase's 95th-percentile level: CHIMERA -28 -39 -42,
+     * the voice before the six-stage cascade -28 -36 -41, and -73 -85 -81
+     * once every onset consonant took INITIAL_LEAD: the /t/ then held the
+     * tongue tip from 5 ms after the note-on and outranked the /s/. Here:
+     * the loudest 5 ms above 2.5 kHz inside the /s/ against the vowel's
+     * level in the same band and window.
+     */
+    for (let b = 0; b < 3; b++) {
+      const { x, spans, sr } = sungLine(PHRASES.strengths, b, { seed: `int-strengths-${b}` });
+      const s = spans[0];
+      const v = spans.find((q) => q.kind === 'nucleus')!;
+      expect(s.ipa).toBe('s');
+      let hiss = -Infinity;
+      for (let u = s.start + 0.003; u < s.end; u += 0.0025) hiss = Math.max(hiss, bandDb(x, sr, u, 2500, 12000, 256));
+      const vowel = bandDb(x, sr, (v.start + v.end) / 2, 0, 12000, 256);
+      expect(hiss - vowel, `body ${b}`).toBeGreaterThan(-25);
+    }
+  }, 60000);
+
+  it('makes no noise burst as a voiceless alveolar closure seals: no 5 ms above 2 kHz within 30 ms before it reaches the vowel\'s level less 15 dB', () => {
+    /*
+     * CHIMERA's area rate law closes the last 0.4 cm^2 slowly so a seal does
+     * not click; read through Stevens' v^3 sqrt(A) that dwell was a fricative,
+     * 10 to 20 ms of noise at the vowel's level before each /t tʃ/ closure.
+     * MEASURED, this figure on the comparison renders, male female child: /t/ 4.1 -7.5 -4.3,
+     * /tʃ/ -4.4 -10.1 -4.1 dB; CHIMERA -27 -48 -33 and -37 -38 -18; now
+     * -22 -40 -53 and -57 -57 -53. The voiced /d dʒ/ keep their voicing in
+     * the window (CHIMERA's child: -18 and -16), so they are not gated here.
+     */
+    for (let b = 0; b < 3; b++) {
+      const { x, spans, sr } = stops[b];
+      for (const [ipa, i] of [['t', 2], ['tʃ', 6]] as const) {
+        const beat = 0.5 + 0.6 * i;
+        const c = spans.find((q) => q.ipa === ipa && q.end > beat - 0.3 && q.start < beat + 0.01)!;
+        const vowel = bandDb(x, sr, beat - 0.3, 0, 12000, 256);
+        let quiet = Infinity;
+        let shut = c.start;
+        for (let u = c.start - 0.06; u < c.end; u += 0.0025) {
+          const e = bandDb(x, sr, u, 0, 12000, 256);
+          if (e < quiet) {
+            quiet = e;
+            shut = u;
+          }
+        }
+        // the closure's start: the first frame back from its quietest within 10 dB of it
+        let start = shut;
+        while (start > shut - 0.06 && bandDb(x, sr, start - 0.0025, 0, 12000, 256) < quiet + 10) start -= 0.0025;
+        let burst = -Infinity;
+        for (let u = start - 0.03; u <= start; u += 0.0025) burst = Math.max(burst, bandDb(x, sr, u, 2000, 12000, 256));
+        expect(burst - vowel, `body ${b} /${ipa}/`).toBeLessThan(-15);
+      }
+    }
+  });
+
   it('frication: /s/ /ʃ/ high and strong, /f/ weak and flat, with CHIMERA\'s ordering by centroid', () => {
     const { x, spans, sr } = fric[0];
     const level = (ipa: string, i: number) => {
@@ -943,4 +1000,42 @@ describe('vocal engine: allocation', () => {
     expect(inRun).toBe(0);
     expect((n1 - n0) / (blocks * 128)).toBeLessThan(1.5);
   }, 120000);
+
+  for (const glottis of [2, 0, 1]) it(`holds a vowel with no garbage: new space grows under 0.15 bytes a sample over 40 s (glottis ${glottis})`, async () => {
+    /*
+     * The steady state alone: one held /ɑ/ at 220 Hz, no events. MEASURED
+     * (the verifier's bundled probe, 60 s): 0.03 bytes a sample for every
+     * fold model; the self-oscillating folds had grown 1.2 to 1.5 before
+     * their once-a-block and once-a-cycle code moved into step() and their
+     * clamps stopped merging doubles with module-level constants. New space
+     * is handed out in buffers of about 135 KB, 0.07 bytes a sample over
+     * 40 s, so the bound sits one buffer above the measured rate.
+     */
+    const voice = makeVoice({ seed: 'held', params: { glottis } });
+    const l = new Float32Array(128);
+    const r = new Float32Array(128);
+    voice.setParam('phoneme', ph('ɑ'));
+    voice.noteOn(220, 0.8);
+    const run = (blocks: number) => {
+      for (let k = 0; k < blocks; k++) voice.process(l, r, 0, 128);
+    };
+    run(Math.round((10 * SR) / 128));
+    const newSpace = () => v8.getHeapSpaceStatistics().find((s) => s.space_name === 'new_space')!.space_used_size;
+    const starts: number[] = [];
+    const obs = new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) starts.push(e.startTime);
+    });
+    obs.observe({ entryTypes: ['gc'] });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const blocks = Math.round((40 * SR) / 128);
+    const t0 = performance.now();
+    const n0 = newSpace();
+    run(blocks);
+    const n1 = newSpace();
+    const t1 = performance.now();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    obs.disconnect();
+    expect(starts.filter((t) => t >= t0 && t <= t1).length).toBe(0);
+    expect((n1 - n0) / (blocks * 128)).toBeLessThan(0.15);
+  }, 180000);
 });
