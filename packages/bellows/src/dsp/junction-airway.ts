@@ -103,7 +103,7 @@ import { AirwayTube, TUBE_RING, evenNodes } from './airway-tube';
 import { AreaSlew } from './area-rate';
 import { GlottalSource } from './glottal';
 import { GEO_AMPLITUDE, GeometricGlottis } from './geometric-glottis';
-import { FoldOscillator } from './fold-oscillator';
+import { FoldOscillator, VOICED_GAP } from './fold-oscillator';
 import { PhonationThreshold } from './phonation-threshold';
 
 /** The fold models: kinematic two-edge, self-oscillating two-mass, the parametric pulse (the default). */
@@ -259,6 +259,13 @@ export function ductMin(rate: number): number {
   const dx = SOUND_SPEED / (2 * rate);
   return DUCT_MIN > 3.2 * dx ? DUCT_MIN : 3.2 * dx;
 }
+
+/** The share of the pressure under the folds that backs up above them before the pitch servo lets go, and over how much it does. */
+const BACK_FREE = 0.1;
+const BACK_SPAN = 0.2;
+/** The opening (over k^2, cm^2) past which the pitch servo lets go, and over how much it does. */
+const OPEN_FREE = 0.03;
+const OPEN_SPAN = 0.05;
 
 /** GlottalSource's area block, called through Reflect.apply so V8 never inlines it into beginBlock(). */
 const AREA_BLOCK = GlottalSource.prototype.processArea;
@@ -871,7 +878,11 @@ export class JunctionAirway {
     let ag0 = (this.agStatic - 0.0125 * k2 - 0.08) / 0.14;
     ag0 = ag0 < 0 ? 0 : ag0 > 1 ? 1 : ag0 * ag0 * (3 - 2 * ag0);
     const agate = 1 - ag0;
-    this.voicing += (1 - Math.exp(-2 * Math.PI * 25 * dt)) * (pg * agate * (1 - closure) - this.voicing);
+    // the pulse's alone: the fold models report their own (the folds' turning, the geometric threshold),
+    // and this gate under the folds' voicing held it near 0.5 wherever the two disagreed (MEASURED: 0.40
+    // before the folds' first cycle)
+    const model = this.model;
+    if (model === GLOTTIS_PULSE) this.voicing += (1 - Math.exp(-2 * Math.PI * 25 * dt)) * (pg * agate * (1 - closure) - this.voicing);
     let effort = (this.pLung / CM_H2O - 3) / 10;
     effort = effort < 0 ? 0 : effort > 1 ? 1 : effort;
     this.aVib0 = this.aVib;
@@ -889,7 +900,6 @@ export class JunctionAirway {
     this.paAcc = 0;
     this.pTrans += c30 * (dpMean - this.pTrans);
     this.pSupra += c30 * (paMean - this.pSupra);
-    const model = this.model;
     if (model === GLOTTIS_GEOMETRIC) this.geometricBlock(closure);
     else if (model === GLOTTIS_SELF_OSCILLATING) this.foldBlock(closure);
     else this.pulseBlock();
@@ -949,25 +959,43 @@ export class JunctionAirway {
     const L = this.foldLength > 0.1 ? this.foldLength : 0.1;
     const shut = 1 - 0.92 * closure;
     const chink = (this.chink > 0 ? this.chink : 0) * shut;
-    // the rest from the block's start to its end, ramped per step as the pulse ramps its opening
     const rest = this.agSt - chink;
     let r = (rest > 0 ? rest : 0) / L + this.restOffset;
     r = r > 0 ? r : 0;
-    const rest0 = this.agSt0 - chink;
-    let r0 = (rest0 > 0 ? rest0 : 0) / L + this.restOffset;
-    r0 = r0 > 0 ? r0 : 0;
-    f.length = L;
-    f.chink = chink;
-    f.rest1 = r0;
-    f.rest2 = r0;
+    // the block's end values, ramped per step from where the last block left them (the first block of a
+    // note starts on them). Restarted each block from values computed afresh, a change of chink, length or
+    // press between blocks still stepped the area at the block's edge
+    if (this.blocks === 1) {
+      f.rest1 = r;
+      f.rest2 = r;
+      f.chink = chink;
+      f.length = L;
+    }
     f.rest1To = r;
     f.rest2To = r;
+    f.chinkTo = chink;
+    f.lengthTo = L;
     f.rampLeft = this.block;
     f.free = 1 - closure;
     // the cycle unit still runs, for its drift and jitter: the servo aims at the drifted pitch, the
     // cycle's period scale perturbs the tension
     this.glottis.processPhase(this.areaBuf, 0, this.block);
     f.servo.target = this.f0 * this.glottis.pitchFactor;
+    // the servo learns the tension, not the pressure: with the pressure backing up above the folds (a voiced
+    // closure, a narrow constriction) f0 falls for the pressure's sake, and the servo at full weight raised
+    // the tension through the dip and sent the release 190 cents sharp (MEASURED, a 60 ms lip closure). The
+    // back pressure's share stays under 0.08 in 95 percent of vowel frames in every body and runs 0.2 to
+    // 0.97 in closures (MEASURED over twinkle, stops, fric and son)
+    // Math.min and Math.max, not conditionals: V8 boxed a double merged with a module-level constant
+    const back = this.pSupra / Math.max(this.pSubSmooth, CM_H2O);
+    const bc = Math.min(Math.max((back - BACK_FREE) / BACK_SPAN, 0), 1);
+    const bk = bc * bc * (3 - 2 * bc);
+    // and not while the folds are drawn apart: f0 sags as they open into a voiceless sound, and the servo
+    // wound the tension up through that offset and began the next onset 200 to 400 cents sharp (MEASURED, an
+    // aspirated stop at 110 to 460 Hz). Voiced vowels hold the opening at 0.0147 k^2 in every body (MEASURED)
+    const ac = Math.min(Math.max((this.agSt / (this.k * this.k) - OPEN_FREE) / OPEN_SPAN, 0), 1);
+    const ab = ac * ac * (3 - 2 * ac);
+    f.servo.weight = (1 - bk) * (1 - ab);
     f.perturb = 1 / this.glottis.scale;
     f.tune();
     // voicing is whether the folds turned within the last 1.6 periods of the target, smoothed as the pulse's
@@ -975,7 +1003,7 @@ export class JunctionAirway {
     // first cycle: the aspiration kept its quiet voiced gain and its pulsing, and the onset after a
     // voiceless stop rang the tract (MEASURED: a 1.5 kHz tone 15 dB over the pulse's in "twinkle", female)
     const per = this.f0 > 20 ? this.rate / this.f0 : this.rate / 20;
-    const on = f.sinceTurn < 1.6 * per ? 1 : 0;
+    const on = f.sinceTurn < VOICED_GAP * per ? 1 : 0;
     this.voicing += (1 - Math.exp((-2 * Math.PI * 25 * this.block) / this.rate)) * (on - this.voicing);
   }
 

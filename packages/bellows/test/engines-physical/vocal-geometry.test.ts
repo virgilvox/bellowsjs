@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { VocalPlanner, KEY_ABDUCTION } from '../../src/engines/vocal-planner';
 import { ART } from '../../src/engines/vocal-articulators';
 import { ChimeraGeometry, GEOMETRY_BODIES } from '../../src/engines/vocal-geometry';
-import { VocalDrive } from '../../src/engines/vocal-drive';
+import { VocalDrive, VOCAL_KEY_BLOCKS } from '../../src/engines/vocal-drive';
 import { JunctionAirway } from '../../src/dsp/junction-airway';
 import { AreaSlew } from '../../src/dsp/area-rate';
 import { VOCAL_BODIES, VOCAL_NEUTRAL } from '../../src/engines/vocal-tables.gen';
@@ -166,6 +166,69 @@ describe('VocalDrive', () => {
       expect(air.gridMin[mi]).toBeLessThan(0.01);
       expect(mi).toBeGreaterThanOrEqual(lo);
     }
+  });
+
+  /** A neutral tract, then /t/'s articulators as the next keyframes; the total wall flow each block, cm^3/s. */
+  function tongueUp(blocks: number): number[] {
+    const air = new JunctionAirway(48000, 40, rng('drive'));
+    air.configure(1, 40, 19);
+    const d = new VocalDrive(48000);
+    d.setBody(1, 1, 2.25, 4.6);
+    const a = Float64Array.from(VOCAL_NEUTRAL);
+    d.key(a, true);
+    d.u = 1;
+    d.toAirway(air);
+    const row = VOCAL_BODIES[0].consonantTargets[vocalPhonemeIndex('t')];
+    for (let i = 0; i < 17; i++) if (row[i] === row[i]) a[i] = row[i];
+    const flow: number[] = [];
+    for (let b = 0; b < blocks; b++) {
+      const u = b % VOCAL_KEY_BLOCKS;
+      if (u === 0) d.key(a, false);
+      d.u = (u + 1) / VOCAL_KEY_BLOCKS;
+      d.toAirway(air);
+      let s = 0;
+      for (let j = 0; j <= 40; j++) s += air.vflow[j];
+      flow.push(s);
+    }
+    return flow;
+  }
+
+  it('moves the wall flow smoothly from block to block, keyframes included (it stepped once a keyframe)', () => {
+    const flow = tongueUp(12 * VOCAL_KEY_BLOCKS);
+    let peak = 0;
+    let jump = 0;
+    for (let b = 0; b < flow.length; b++) {
+      peak = Math.max(peak, Math.abs(flow[b]));
+      jump = Math.max(jump, Math.abs(flow[b] - (b > 0 ? flow[b - 1] : 0)));
+    }
+    expect(peak).toBeGreaterThan(10);
+    expect(jump / peak).toBeLessThan(0.25);
+  });
+
+  it('carries the volume the tract loses as the tongue rises: the flow over the move is the profile volume change', () => {
+    const flow = tongueUp(30 * VOCAL_KEY_BLOCKS);
+    const dt = 32 / 48000;
+    const moved = flow.reduce((s, f) => s + f * dt, 0);
+    // the profile volume at either end: a snapped drive at the start shape and at the settled end shape
+    const volume = (ipa: string | null) => {
+      const air = new JunctionAirway(48000, 40, rng('drive'));
+      air.configure(1, 40, 19);
+      const d = new VocalDrive(48000);
+      d.setBody(1, 1, 2.25, 4.6);
+      const a = Float64Array.from(VOCAL_NEUTRAL);
+      if (ipa) {
+        const row = VOCAL_BODIES[0].consonantTargets[vocalPhonemeIndex(ipa)];
+        for (let i = 0; i < 17; i++) if (row[i] === row[i]) a[i] = row[i];
+      }
+      d.key(a, true);
+      d.u = 1;
+      d.toAirway(air);
+      return (d as unknown as { vol: Float64Array }).vol.reduce((s, v) => s + v, 0);
+    };
+    const lost = volume(null) - volume('t');
+    expect(lost).toBeGreaterThan(1);
+    expect(moved).toBeCloseTo(lost, 3);
+    expect(flow[flow.length - 1]).toBeCloseTo(0, 3);
   });
 });
 

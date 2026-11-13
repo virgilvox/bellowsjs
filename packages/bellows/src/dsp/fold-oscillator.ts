@@ -82,6 +82,10 @@ const MIN_Q = 0.25;
 const DEPTH = 0.2;
 /** The swing over its mean that a cycle needs before the servo tunes on it. */
 const TUNE_DEPTH = 0.03;
+/** A gap in full cycles longer than this many target periods ends voicing (the airway reads voicing so too). */
+export const VOICED_GAP = 1.6;
+/** How long after the first full cycle that follows a gap the servo may speed up for a large error, s. */
+const ONSET_S = 0.05;
 const MAX_Q = 12;
 
 export class FoldOscillator {
@@ -92,19 +96,22 @@ export class FoldOscillator {
   /** Rest displacements of the lower and upper masses at the vocal processes, cm. */
   rest1 = 0.01;
   rest2 = 0.01;
-  /**
-   * Where rest1 and rest2 ramp to, and over how many more steps (0: no ramp). The caller sets the
-   * block's start in rest1 and rest2 and its end here: a rest that stepped once a block moved the
-   * glottis in steps at the block rate, and a fast adduction rang the tract (MEASURED: a 1.5 kHz
-   * tone 20 to 35 dB over the pulse's while the folds closed after a voiceless stop).
-   */
-  rest1To = 0.01;
-  rest2To = 0.01;
-  rampLeft = 0;
   /** Posterior chink, cm^2. */
   chink = 0.01;
   /** Fold length, cm. */
   length = 1.4;
+  /**
+   * Where rest1, rest2, chink and length ramp to, and over how many more steps (0: no ramp). A caller
+   * that updates once a block sets the block's end here and the ramp goes on from where the last
+   * ended: a rest that stepped once a block moved the glottis in steps at the block rate, and a fast
+   * adduction rang the tract (MEASURED: a 1.5 kHz tone 20 to 35 dB over the pulse's while the folds
+   * closed after a voiceless stop). The chink and the length enter the area directly, so they ramp too.
+   */
+  rest1To = 0.01;
+  rest2To = 0.01;
+  chinkTo = 0.01;
+  lengthTo = 1.4;
+  rampLeft = 0;
   /** A multiplier on the tension (drift, jitter), applied after the servo. */
   perturb = 1;
   /** 0..1: how far the folds are free to move (1 - a glottal stop's closure); 0 holds them shut. */
@@ -143,6 +150,8 @@ export class FoldOscillator {
   private lastV1 = 0;
   private lastT = -1;
   private lastVoiced = -1;
+  /** The sample index until which the cycles are an onset's (the servo's fast rate). */
+  private onsetEnd = -1;
   /**
    * Samples since the last voiced cycle's turning point (a large number before the first): whether the
    * folds are vibrating now. A cycle is voiced when the glottal area swings by DEPTH of its mean or more:
@@ -166,10 +175,12 @@ export class FoldOscillator {
     this.lastV1 = 0;
     this.lastT = -1;
     this.lastVoiced = -1;
+    this.onsetEnd = -1;
     this.sinceTurn = 1e9;
     this.aLo = 1e9;
     this.aHi = 0;
     this.cycles = 0;
+    this.rampLeft = 0;
     this.servo.reset();
     this.tune();
   }
@@ -199,6 +210,8 @@ export class FoldOscillator {
       const k = 1 / this.rampLeft;
       this.rest1 += (this.rest1To - this.rest1) * k;
       this.rest2 += (this.rest2To - this.rest2) * k;
+      this.chink += (this.chinkTo - this.chink) * k;
+      this.length += (this.lengthTo - this.length) * k;
       this.rampLeft--;
     }
     if (this.stale) {
@@ -305,11 +318,19 @@ export class FoldOscillator {
         // sharp for 55 ms) but not the shiver of abducted folds, whose turns come at any rate (44 to 854 Hz
         // under a 460 Hz target) and pulled the correction off before the note began (MEASURED)
         const deep = swing > DEPTH * mean ? 1 : 0;
+        if (deep) {
+          // the first full cycle after a gap opens an onset
+          if (this.lastVoiced < 0 || t - this.lastVoiced > (VOICED_GAP * this.rate) / this.servo.target) {
+            this.onsetEnd = t + ONSET_S * this.rate;
+            this.servo.restart = 1;
+          }
+          this.lastVoiced = t;
+        }
         this.servo.measured = this.rate / period;
         this.servo.deep = deep;
+        this.servo.onset = t < this.onsetEnd ? 1 : 0;
         this.servo.pending = 1;
         this.cycles++;
-        if (deep) this.lastVoiced = t;
       }
       this.lastT = t;
       this.aLo = 1e9;

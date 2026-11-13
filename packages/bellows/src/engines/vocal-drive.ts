@@ -18,10 +18,13 @@
  *     labiodental articulator tells the airway whether a front constriction
  *     is the lower lip's (a labiodental noise source) or the tongue's;
  *   - the anatomical moving-wall flow: each profile section's volume change
- *     across the keyframe interval, as -dV/dt at its place on the grid. It
- *     must not be differenced from grid areas: a grid that slides along the
- *     anatomy is not a volume change (MEASURED in the airway's prototype, a
- *     spurious 382 cm^3/s at one near-closure).
+ *     over the block, as -dV/dt at its place on the grid, from the smoothed
+ *     profile the airway hears. It must not be differenced from grid areas: a
+ *     grid that slides along the anatomy is not a volume change (MEASURED in
+ *     the airway's prototype, a spurious 382 cm^3/s at one near-closure).
+ *     Differenced across the keyframe interval instead, it stepped every
+ *     10.7 ms and ran ahead of the smoothed areas, and a tongue leaving the
+ *     roof pumped a sealed closure at 80 to 500 Hz.
  *
  * CHIMERA's area rate law (human_airway.rs:190-262) limits each keyframe's
  * sections against the last, as CHIMERA limits its own. Learned from
@@ -103,14 +106,24 @@ export class VocalDrive {
   private readonly vProf = new Float64Array(2 * MAX_TUBE);
   private readonly sMin = new Float64Array(2 * MAX_TUBE);
   private readonly vMin = new Float64Array(2 * MAX_TUBE);
+  /*
+   * The pharynx and oral lengths and the incisors through the same smoother, so the profile moves as
+   * one: interpolated straight, a length's slope turned at every keyframe while the areas eased, and
+   * the volume's rate (the wall flow) stepped there (MEASURED: 228 cm^3/s in one block at a /t/).
+   */
+  private readonly lenIn = new Float64Array(3);
+  private readonly sLen = new Float64Array(3);
+  private readonly vLen = new Float64Array(3);
   private sa = 1;
   private sb = 0;
   private sc = 0;
   private sd = 1;
   private snapped = true;
-  /** -dV/dt per profile section over the current keyframe interval, cm^3/s. */
+  /** -dV/dt per profile section over the last block, cm^3/s, and each section's volume then, cm^3. */
   private readonly dvdt = new Float64Array(2 * MAX_TUBE);
+  private readonly vol = new Float64Array(2 * MAX_TUBE);
   private keyDt = 0.01;
+  private readonly blockDt: number = 0;
   private readonly lbMin: number = 0;
   private readonly dx: number = 0;
   /** Fraction of the keyframe interval toAirway() reads, [0, 1]; a field, so no double crosses the call. */
@@ -119,8 +132,14 @@ export class VocalDrive {
   constructor(rate: number) {
     this.dx = SOUND_SPEED / (2 * rate);
     this.lbMin = ductMin(rate);
-    this.geometry = new ChimeraGeometry({ scale: 1, pharynx: 1, tongueRadius: 2.25, lipWidth: 4.6 });
+    this.geometry = new ChimeraGeometry({
+      scale: 1,
+      pharynx: 1,
+      tongueRadius: 2.25,
+      lipWidth: 4.6,
+    });
     const blockDt = Math.max(8, Math.round((32 * rate) / 48000)) / rate;
+    this.blockDt = blockDt;
     this.keyDt = VOCAL_KEY_BLOCKS * blockDt;
     this.slew.setStep(this.keyDt);
     // the smoother's exact step over one block: [e', v'] = [[sa, sb], [sc, sd]] [e, v]
@@ -172,10 +191,6 @@ export class VocalDrive {
       for (let i = 0; i < nPh; i++) if (q.phMin[i] > q.ph[i]) q.phMin[i] = q.ph[i];
       for (let i = 0; i < nOr; i++) if (q.orMin[i] > q.or[i]) q.orMin[i] = q.or[i];
     }
-    // each section's volume change across the interval, -dV/dt
-    const dt = this.keyDt;
-    for (let i = 0; i < nPh; i++) this.dvdt[i] = snap ? 0 : -((q.ph[i] * q.phLen - p.ph[i] * p.phLen) / nPh) / dt;
-    for (let i = 0; i < nOr; i++) this.dvdt[nPh + i] = snap ? 0 : -((q.or[i] * q.orLen - p.or[i] * p.orLen) / nOr) / dt;
   }
 
   /**
@@ -191,8 +206,30 @@ export class VocalDrive {
     const nPh = this.nPh;
     const nOr = this.nOr;
     const c = nPh + nOr;
-    const phLen = p.phLen * w0 + q.phLen * u;
-    const orLen = p.orLen * w0 + q.orLen * u;
+    const sa = this.sa;
+    const sb = this.sb;
+    const sc = this.sc;
+    const sd = this.sd;
+    const fresh = this.snapped;
+    const li = this.lenIn;
+    const sl = this.sLen;
+    const vl = this.vLen;
+    li[0] = p.phLen * w0 + q.phLen * u;
+    li[1] = p.orLen * w0 + q.orLen * u;
+    li[2] = p.teeth * w0 + q.teeth * u;
+    for (let i = 0; i < 3; i++) {
+      if (fresh) {
+        sl[i] = li[i];
+        vl[i] = 0;
+      } else {
+        const e = sl[i] - li[i];
+        const v = vl[i];
+        sl[i] = li[i] + sa * e + sb * v;
+        vl[i] = sc * e + sd * v;
+      }
+    }
+    const phLen = sl[0];
+    const orLen = sl[1];
     const edge = this.edge;
     const prof = this.prof;
     const pmin = this.pmin;
@@ -212,7 +249,7 @@ export class VocalDrive {
     const vp = this.vProf;
     const sm = this.sMin;
     const vm = this.vMin;
-    if (this.snapped) {
+    if (fresh) {
       for (let i = 0; i < c; i++) {
         sp[i] = prof[i];
         sm[i] = pmin[i];
@@ -221,26 +258,31 @@ export class VocalDrive {
       }
       this.snapped = false;
     } else {
-      const a = this.sa;
-      const b = this.sb;
-      const cc = this.sc;
-      const d = this.sd;
       for (let i = 0; i < c; i++) {
         let e = sp[i] - prof[i];
         let v = vp[i];
-        sp[i] = prof[i] + a * e + b * v;
-        vp[i] = cc * e + d * v;
+        sp[i] = prof[i] + sa * e + sb * v;
+        vp[i] = sc * e + sd * v;
         e = sm[i] - pmin[i];
         v = vm[i];
-        sm[i] = pmin[i] + a * e + b * v;
-        vm[i] = cc * e + d * v;
+        sm[i] = pmin[i] + sa * e + sb * v;
+        vm[i] = sc * e + sd * v;
       }
     }
+    // each section's volume change over the block, -dV/dt, as the areas the airway hears move
+    const iDt = 1 / this.blockDt;
+    const lPh = phLen / nPh;
+    const lOr = orLen / nOr;
+    const vol = this.vol;
+    const dvdt = this.dvdt;
     for (let i = 0; i < c; i++) {
       const a = sp[i] > 0 ? sp[i] : 0;
       prof[i] = a;
       const m = sm[i] > 0 ? sm[i] : 0;
       pmin[i] = m < a ? m : a;
+      const v = a * (i < nPh ? lPh : lOr);
+      dvdt[i] = fresh ? 0 : -(v - vol[i]) * iDt;
+      vol[i] = v;
     }
     const L = phLen + orLen;
     const n = air.nG;
@@ -285,7 +327,7 @@ export class VocalDrive {
       gridMin[i] = mn < ga ? mn : ga;
     }
     // incisors and split as grid positions; the velum port
-    const teeth = p.teeth * w0 + q.teeth * u;
+    const teeth = sl[2];
     air.teethX = (teeth - lb) / step;
     air.splitI = (phLen - lb) / step;
     air.velum = p.velum * w0 + q.velum * u;

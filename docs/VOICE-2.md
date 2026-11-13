@@ -847,6 +847,9 @@ spread; the female's and the child's do not.
   -60.4). The flow comes from the tongue tip leaving the roof about 10 ms before the release,
   stepped at the 512-sample keyframes (male, 1.600 to 1.605 s: -32 dB re the phrase against
   int3's -51).
+  Fixed in the audit below: the flow now comes from the smoothed profile per block, and it adds
+  0.2 dB to the closures' 80-500 Hz where it added 3.1 (7 in the female and child "stops"). The
+  rest of the excess is not the wall flow.
 - The /t/ releases after /s/ (/stɹ/ at 0.445 s, "street" at 3.115 s) burst 13 to 16 dB over
   CHIMERA's above 2 kHz.
 - DTW: the two strengths renders above, from obstacle 18.
@@ -879,6 +882,42 @@ onsets. Three causes, each measured in scratch chirp/ and fixed:
 - Not fixed: near 500 Hz (female melisma, /o/) f0 meets F1 and the folds lock to it, about 100
   cents flat with the servo at its working limit. That is source-tract interaction, which the
   `tuning` setting addresses as a singer does.
+
+## Audit of the onset fix (2026-11-13)
+
+An audit of bf9fe42, with an independent review, found five faults; each has a test that fails
+on the code before it.
+
+- The fold voicing was blended with the pulse's pressure gate: beginBlock() still moved it toward
+  the gate, then foldBlock() moved it toward the folds, so it settled near the mean of the two
+  (0.40 before the folds' first cycle). The gate now runs for the pulse only.
+- The ramp restarted each block from a rest computed afresh, so a change of chink, fold length or
+  press between blocks still stepped the area. Rest, chink and length now ramp on from where the
+  last block ended (FoldOscillator chinkTo, lengthTo).
+- The speed-up chased the pressure. In a voiced closure f0 falls as the pressure backs up, two
+  full cycles agree, and the speed-up took the correction from 1.08 to 1.76 in 25 ms; past the
+  servo's 1.6 ratio limit every cycle was then ignored, and the child's /bɑ/ in "stops" sang 0.5 s
+  at 1.8 times its note. The speed-up now runs only in the first 50 ms after a voicing gap, a run
+  of three full cycles far off on one side is chased at the limit ratio, and the servo's memory of
+  the last error clears at a gap.
+- The plain servo also chased the dips. Each cycle now counts by a weight from the airway: down
+  from 1 to 0 as the pressure above the folds rises from 0.1 to 0.3 of the pressure under them
+  (vowels under 0.08 in 95 percent of frames in every body, closures 0.2 to 0.97), and as the
+  opening rises from 0.03 to 0.08 k^2 (voiced vowels hold 0.0147 k^2). Over a 60 ms lip closure the
+  correction moves 63 cents (641 before); through an aspirated stop's opening, 0 to 4 cents (77 to
+  403 before), so the next onset no longer starts on a wound-up tension.
+- The moving-wall flow was differenced across the 10.7 ms keyframe, so it stepped there and ran
+  ahead of the smoothed areas; and the lengths and incisors were interpolated straight while the
+  areas eased, so the volume's rate turned at every keyframe (228 cm^3/s in one block at a /t/).
+  The drive now differences the smoothed profile per block and smooths the lengths and incisors
+  with the areas. Low band in voiceless closures: -45.4 dB re the phrase before, -48.5 after; with
+  the flow removed, -48.7. Fricative shape distance to the human: 10.13 dB before, 10.02 after.
+
+Measured on all 21 self-oscillating renders against the pulse: mean |f0 difference| 18.1 cents
+before, 13.2 after; frames over 50 cents 1378 to 1114. The 1.5 kHz scan flags 62 frames, all in
+the male body, each sampled one an integer harmonic (9th to 13th). Twinkle and melisma alone went
+from 19.5 to 21.9 cents: the dips of voiced consonants are now left in, and the pulse they are
+measured against has none. That is a choice by ear, not a gate.
 
 ## The phases, each with a gate
 

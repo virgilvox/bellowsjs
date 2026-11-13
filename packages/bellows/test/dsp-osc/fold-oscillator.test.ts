@@ -60,7 +60,16 @@ describe('FoldOscillator', () => {
     for (const rate of [22050, 44100, 48000, 96000]) {
       for (const hz of [98, 196, 392]) {
         const a = airway(rate, GLOTTIS_SELF_OSCILLATING, hz);
-        const out = run(a, 1.2);
+        // the pitch as the mean over the last 0.3 s: one cycle's reading wanders by up to 9 cents at 22050 Hz
+        // under a steady correction (the period's zero crossings on a coarse grid)
+        let sum = 0;
+        let k = 0;
+        const from = Math.round((0.9 * rate) / a.block);
+        const out = run(a, 1.2, (b) => {
+          if (b <= from) return;
+          sum += Math.log2(a.folds.servo.measured / hz);
+          k++;
+        });
         let bad = 0;
         let pk = 0;
         for (const v of out) {
@@ -70,7 +79,7 @@ describe('FoldOscillator', () => {
         expect(bad, `${rate} ${hz}`).toBe(0);
         expect(pk, `${rate} ${hz}`).toBeLessThan(1e9);
         expect(a.folds.cycles, `${rate} ${hz}`).toBeGreaterThan(0.5 * hz);
-        const cents = 1200 * Math.log2(a.folds.servo.measured / hz);
+        const cents = (1200 * sum) / k;
         expect(Math.abs(cents), `${rate} Hz, target ${hz}: ${cents.toFixed(2)} cents`).toBeLessThan(5);
       }
     }
@@ -190,7 +199,7 @@ describe('PitchServo', () => {
 });
 
 describe('PitchServo, adaptive rate', () => {
-  it('speeds up by 1 + |error| / 40 cents when two cycles in a row agree, and not when they disagree', () => {
+  it('in an onset, speeds up by 1 + |error| / 40 cents when two cycles in a row agree, and not when they disagree', () => {
     const step = (s: PitchServo, m: number) => {
       s.measured = m;
       s.pending = 1;
@@ -201,6 +210,7 @@ describe('PitchServo, adaptive rate', () => {
     const s = new PitchServo();
     s.target = 220;
     s.tau = 0.04;
+    s.onset = 1;
     step(s, flat);
     const c1 = s.correction;
     // the first has no agreeing predecessor: the plain rate
@@ -216,23 +226,122 @@ describe('PitchServo, adaptive rate', () => {
     const g3 = 1 - Math.exp(-1 / (sharp * 0.04));
     expect(Math.log(s.correction / c2)).toBeCloseTo(g3 * Math.log(220 / sharp), 9);
   });
+
+  it('mid-note keeps tau for any error: the dip of a voiced closure is left in, not chased', () => {
+    const flat = 220 / Math.pow(2, 300 / 1200);
+    const s = new PitchServo();
+    s.target = 220;
+    s.tau = 0.04;
+    s.onset = 0;
+    let c = 1;
+    for (let i = 0; i < 4; i++) {
+      s.measured = flat;
+      s.pending = 1;
+      s.cycle();
+      const g = 1 - Math.exp(-1 / (flat * 0.04));
+      expect(Math.log(s.correction / c)).toBeCloseTo(g * Math.log(220 / flat), 9);
+      c = s.correction;
+    }
+  });
+
+  it('forgets the last error at a restart: the first cycle after a gap has nothing to agree with', () => {
+    const flat = 220 / Math.pow(2, 200 / 1200);
+    const s = new PitchServo();
+    s.target = 220;
+    s.onset = 1;
+    s.measured = flat;
+    s.pending = 1;
+    s.cycle();
+    const c1 = s.correction;
+    s.restart = 1;
+    s.measured = flat;
+    s.pending = 1;
+    s.cycle();
+    const g = 1 - Math.exp(-1 / (flat * 0.04));
+    expect(Math.log(s.correction / c1)).toBeCloseTo(g * Math.log(220 / flat), 9);
+  });
+
+  it('weights each cycle: at weight 0 nothing moves, at 0.5 the exponent halves', () => {
+    const s = new PitchServo();
+    s.target = 220;
+    s.onset = 0;
+    s.weight = 0;
+    s.measured = 200;
+    s.pending = 1;
+    s.cycle();
+    expect(s.correction).toBe(1);
+    s.weight = 0.5;
+    s.measured = 200;
+    s.pending = 1;
+    s.cycle();
+    const g = 1 - Math.exp(-0.5 / (200 * 0.04));
+    expect(Math.log(s.correction)).toBeCloseTo(g * Math.log(220 / 200), 12);
+  });
+
+  it('ignores one cycle far off, but a run of full ones on one side is chased at the limit ratio: it cannot stay lost', () => {
+    // the folds run at target * correction / 1.1; a correction of 1.9 holds them 720 cents sharp, past the limit
+    const s = new PitchServo();
+    s.target = 300;
+    s.tau = 0.04;
+    s.onset = 0;
+    s.correction = 1.9;
+    const run = (n: number) => {
+      for (let i = 0; i < n; i++) {
+        s.measured = (s.target * s.correction) / 1.1;
+        s.pending = 1;
+        s.cycle();
+      }
+    };
+    run(2);
+    expect(s.correction).toBe(1.9);
+    run(60);
+    expect(Math.abs(Math.log2(s.correction / 1.1)) * 1200).toBeLessThan(5);
+    // shallow cycles never count toward the run
+    const t = new PitchServo();
+    t.target = 300;
+    t.correction = 1.9;
+    t.deep = 0;
+    for (let i = 0; i < 10; i++) {
+      t.measured = (300 * t.correction) / 1.1;
+      t.pending = 1;
+      t.cycle();
+    }
+    expect(t.correction).toBe(1.9);
+  });
 });
 
 describe('FoldOscillator rest ramp', () => {
-  it('moves rest1 and rest2 linearly to their targets over rampLeft steps, then holds them', () => {
+  it('moves rest1, rest2, chink and length linearly to their targets over rampLeft steps, then holds them', () => {
     const f = new FoldOscillator(96000);
     f.rest1 = f.rest2 = 0.3;
+    f.chink = 0.05;
+    f.length = 1.2;
     f.rest1To = 0.01;
     f.rest2To = 0.02;
+    f.chinkTo = 0.01;
+    f.lengthTo = 1.6;
     f.rampLeft = 64;
     for (let i = 1; i <= 64; i++) {
       f.step();
       expect(f.rest1).toBeCloseTo(0.3 + ((0.01 - 0.3) * i) / 64, 12);
       expect(f.rest2).toBeCloseTo(0.3 + ((0.02 - 0.3) * i) / 64, 12);
+      expect(f.chink).toBeCloseTo(0.05 + ((0.01 - 0.05) * i) / 64, 12);
+      expect(f.length).toBeCloseTo(1.2 + ((1.6 - 1.2) * i) / 64, 12);
     }
     f.step();
     expect(f.rest1).toBeCloseTo(0.01, 12);
+    expect(f.chink).toBeCloseTo(0.01, 12);
     expect(f.rampLeft).toBe(0);
+  });
+
+  it('reset() drops a ramp in progress', () => {
+    const f = new FoldOscillator(48000);
+    f.rest1 = f.rest2 = 0.02;
+    f.rest1To = f.rest2To = 0.3;
+    f.rampLeft = 32;
+    f.reset();
+    f.step();
+    expect(f.rest1).toBe(0.02);
   });
 });
 
@@ -244,6 +353,86 @@ describe('the self-oscillating folds in the airway: voicing and adduction', () =
     a.agStatic = 0.3;
     run(a, 0.06);
     expect(a.voicing).toBeLessThan(0.1);
+  });
+
+  it('leaves the f0 dip of a voiced closure in: the correction moves little over a 60 ms lip closure, and the note returns', () => {
+    const a = airway(48000, GLOTTIS_SELF_OSCILLATING, 220);
+    const n = a.nG;
+    run(a, 0.4);
+    const before = a.folds.servo.correction;
+    let most = before;
+    run(a, 0.06, () => {
+      a.gridIn[n - 1] = a.gridMin[n - 1] = 1e-4;
+      a.gridIn[n - 2] = a.gridMin[n - 2] = 1e-4;
+      most = Math.max(most, a.folds.servo.correction);
+    });
+    run(a, 0.2, () => {
+      a.gridIn.fill(3);
+      a.gridMin.fill(3);
+      most = Math.max(most, a.folds.servo.correction);
+    });
+    expect(Math.log2(most / before) * 1200).toBeLessThan(150);
+    expect(Math.abs(Math.log2(a.folds.servo.measured / 220) * 1200)).toBeLessThan(10);
+  });
+
+  it('does not wind the tension up as the folds open into a voiceless sound: the correction holds through the gap', () => {
+    // an aspirated stop as the planner shapes it: the opening ramps in over 35 ms, holds 60 ms, ramps out over 45 ms
+    for (const hz of [110, 460]) {
+      const a = airway(48000, GLOTTIS_SELF_OSCILLATING, hz);
+      run(a, 0.4);
+      const before = a.folds.servo.correction;
+      let b0 = -1;
+      run(a, 0.095, (b) => {
+        if (b0 < 0) b0 = b;
+        const t = ((b - b0) * a.block) / a.rate;
+        a.agStatic = 0.015 + (0.36 - 0.015) * Math.min(t / 0.035, 1);
+      });
+      const moved = Math.abs(Math.log2(a.folds.servo.correction / before) * 1200);
+      expect(moved, `${hz} Hz: ${moved.toFixed(0)} cents`).toBeLessThan(30);
+    }
+  });
+
+  it('takes voicing from the folds alone: none before their first full cycle, though the pressure is up', () => {
+    // the pulse's pressure gate opens within a few ms of the lungs; the folds need longer to build a cycle
+    const a = airway(48000, GLOTTIS_SELF_OSCILLATING, 200);
+    let before = 0;
+    let blocks = 0;
+    run(a, 0.2, () => {
+      if (a.folds.sinceTurn < 1e9) return;
+      blocks++;
+      before = Math.max(before, a.voicing);
+    });
+    expect(blocks).toBeGreaterThan(5);
+    expect(before).toBe(0);
+    expect(a.voicing).toBeGreaterThan(0.9);
+  });
+
+  it('carries the rest, chink and length across block boundaries: each block ramps on from where the last ended', () => {
+    // a glottal stop's release, a breathier chink, a longer fold and a firmer press, all changing between blocks
+    const a = airway(48000, GLOTTIS_SELF_OSCILLATING, 200);
+    const f = a.folds;
+    const r = rng('fold-inputs');
+    const out = new Float32Array(a.block);
+    const env = new Float32Array(a.block).fill(1);
+    const keys = ['rest1', 'rest2', 'chink', 'length'] as const;
+    let worst = 0;
+    let moved = 0;
+    for (let b = 0; b < 400; b++) {
+      if (b > 0) {
+        a.closure = r() < 0.3 ? r() : 0;
+        a.chink = 0.005 + 0.05 * r();
+        a.foldLength = 1 + r();
+        a.restOffset = 0.02 * r();
+        a.agStatic = 0.01 + 0.2 * r();
+      }
+      const was = keys.map((key) => f[key]);
+      a.beginBlock();
+      if (b > 0) for (let i = 0; i < 4; i++) worst = Math.max(worst, Math.abs(f[keys[i]] - was[i]));
+      a.render(out, out, 0, a.block, 0, env);
+      moved = Math.max(moved, Math.abs(f.chink - was[2]));
+    }
+    expect(worst).toBe(0);
+    expect(moved).toBeGreaterThan(0.01);
   });
 
   it('a fast adduction puts no tone at the block rate into the output (the rest ramps within each block)', () => {
