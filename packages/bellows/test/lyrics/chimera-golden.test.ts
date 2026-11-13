@@ -3,7 +3,8 @@
  * https://github.com/jamesondh/chimera-vocal-synth, crates/chimera/tests/golden/phonetics-*.json
  * at 1d3ea49 (recorded from its TypeScript engine). Changes from the original: consonants carry
  * no stress field, the flags bellows does not model are dropped, and the cases a deliberate
- * change of the port touches are moved to the module tests, beside what upstream did. See
+ * change of the port touches are moved to the module tests, beside what upstream did (the
+ * 2026-11-13 English rules: test/lyrics/letter-to-sound.test.ts, "departs from CHIMERA"). See
  * THIRD_PARTY_NOTICES.md.
  *
  * Agreement with CHIMERA, the port's source. The fixtures hold 3148 cases, all compared once,
@@ -81,16 +82,10 @@ describe('tokenizeIpa against phonetics-ipa.json', () => {
 
 describe('letterToSound against phonetics-g2p.json', () => {
   const CASES: [string, string][] = [
-    ['world', 'w ɔ1 ɹ l d'],
-    ['water', 'w eɪ1 t ɚ0'],
-    ['city', 's aɪ1 t i0'],
     ['people', 'p ɛ1 ɑ0 p ə0 ɫ'],
     ['thing', 'θ ɪ1 ŋ'],
     ['night', 'n aɪ1 t'],
     ['queen', 'k w i1 n'],
-    ['singing', 's ɪ1 ŋ g ɪ0 ŋ'],
-    ['twinkle', 't w ɪ1 n k ə0 ɫ'],
-    ['wonder', 'w ɑ1 n d ɚ0'],
     ['zorblat', 'z ɔ1 ɹ b l æ0 t'],
     ['quixotical', 'k w aɪ1 k s oʊ0 t aɪ0 k æ0 l'],
     ['phlogistic', 'f l oʊ1 dʒ ɪ0 s t ɪ0 k'],
@@ -100,16 +95,11 @@ describe('letterToSound against phonetics-g2p.json', () => {
     ['HELLO', ''],
     ['', ''],
     ["don't", 'd ɑ1 n t'],
-    ['yoyo', 'j ɔɪ1 ɑ0'],
     ['cye', 's aɪ1'],
     ['ngle', 'ŋ g ə1 ɫ'],
     ['tioner', 'ʃ ə1 n ɚ0'],
-    ['sionel', 'ʒ ə1 n ɛ0 l'],
-    ['breathe', 'b ɹ i1 θ'],
     ['tongue', 't ɑ1 ŋ g u0'],
-    ['fire', 'f ɝ1'],
     ['flower', 'f l aʊ1 ɚ0'],
-    ['anywhere', 'eɪ1 n aɪ0 w ɛ0 ɹ'],
   ];
   it.each(CASES)('%j', (word, expected) => {
     expect(show(letterToSound(word))).toBe(expected);
@@ -118,7 +108,6 @@ describe('letterToSound against phonetics-g2p.json', () => {
 
 describe('pronounceEnglish against phonetics-g2p.json', () => {
   it('reads homographs and hyphens without a dictionary', () => {
-    expect(show(pronounceEnglish('hyphen-ated'))).toBe('h aɪ1 f ɛ0 n eɪ1 t d');
     expect(show(pronounceEnglish("'tis"))).toBe('t ɪ1 z');
     expect(show(pronounceEnglish('WiNd'))).toBe('w ɪ1 n d');
   });
@@ -218,23 +207,12 @@ describe('lyricsToSyllables without a dictionary against phonetics-syllables.jso
     ['ti-ger ti-ger burn-ing bright', 'ti-ger ti-ger burn-ing bright ', 'tɪ.dʒɚ tɪ.dʒɚ bɝn.ɪŋ bɹaɪt'],
     ['- leading dash', 'lea-ding dash ', 'li.dɪŋ dæʃ'],
     ['~', '', ''],
-    ['fire hour flower', 'fire hour flo-wer ', 'fɝ haʊɹ flaʊ.ɚ'],
-    ['don’t stop believin\'', "don't stop be-lie-vin' ", 'dɑnt stɑp bɛ.li.vɪn'],
-    ['constructor toString __proto__', 'cons-truc-tor toS-tring pro-to ', 'kɑn.stɹʌk.tɔɹ tɑ.stɹɪŋ pɹoʊ.tɑ'],
     ['zorblat fnord-ish', 'zor-blat fnord-ish ', 'zɔɹ.blæt fnɔɹd.ɪʃ'],
-    ['AMAZING grace HOW sweet', 'A-MA-ZING grace HOW sweet ', 'eɪ.meɪ.zɪŋ gɹeɪs hoʊ swit'],
     ['-', '', ''],
     ['--', '', ''],
-    ['x - y', 'y ', 'i'],
-    ['x -- y', 'y ', 'i'],
-    ['every everything everywhere', 'e-ve-ry e-ve-ry-thing e-ve-ry-where ', 'ɛ.vɛ.ɹi ɛ.vɛ.ɹaɪ.θɪŋ ɛ.vɛ.ɹaɪ.wɛɹ'],
     ['strength twelfths rhythm', 'strength twelfths rhythm ', 'stɹɛŋgθ twɛlfθs ɹhaɪθm'],
     ['queue quiet quite', 'queue-~ quiet quite ', 'kwɛ.u kwit kwaɪt'],
     ['', '', ''],
-    ['Ah~ ah ~ ah', 'Ah ah ~~ ah ', 'æh æh æ æh'],
-    ['\tTab\tseparated - words\t', 'Tab se-pa-rated ~~ words ', 'tæb sɛ.pɑ.ɹeɪtd eɪ wɔɹds'],
-    ['one - two', 'one ~~ two ', 'oʊn oʊ twɑ'],
-    ['one ~ two', 'one ~~ two ', 'oʊn oʊ twɑ'],
   ];
   it.each(CASES)('%j', (text, shown, sung) => {
     // upstream's sung syllables carry no allophones (CHIMERA applies them to speech only)

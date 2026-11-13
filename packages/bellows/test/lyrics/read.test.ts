@@ -44,7 +44,7 @@ describe('lyricsToSyllables, the conventions', () => {
   });
 
   it('falls back to letter-to-sound for a word the dictionary lacks, or with none', () => {
-    expect(sungIpa(lyricsToSyllables('heavenly'))).toBe('hi.vɛn.li');
+    expect(sungIpa(lyricsToSyllables('heavenly'))).toBe('hɛ.vɛn.li');
     expect(sungIpa(sing('zorblat'))).toBe('zɔɹ.blæt');
   });
 
@@ -110,11 +110,12 @@ describe('lyricsToSyllables, the conventions', () => {
         'Breathe in, breathe out, I am made of air. Tongue and lips and throat, singing anywhere.',
         'Breathe in /breathe out /I am made of air /Ton-gue and lips and throat /sin-ging a-ny-where /',
         // upstream: ... ɪ æm meɪd ɑf eɪɹ tɑŋ.gu ænd lɪps ænd ...
-        'bɹiθ ɪn bɹiθ aʊt aɪ æm meɪd ʌv eɪɹ tɑŋ.gu ənd lɪps ənd θɹoʊt sɪŋ.gɪŋ eɪ.naɪ.wɛɹ',
+        'bɹið ɪn bɹið aʊt aɪ æm meɪd ʌv eɪɹ tɑŋ.gu ənd lɪps ənd θɹoʊt sɪŋ.ɪŋ ɛ.ni.wɛɹ',
       ],
-      ['a -b c- d - e ~f g~ ~', 'a ~~ ~~ ', 'ə ə ə'], // upstream: æ æ æ
+      // upstream: æ æ æ; a letter with no vowel now keeps its note on its own sound rather than vanishing
+      ['a -b c- d - e ~f g~ ~', 'a b c d ~~ f g ~~ ', 'ə b k d d f g g'],
       ['a-', 'a ', 'ə'], // upstream: æ
-      ['123 numbers 4 you', 'num-bers you ', 'nʌm.bɝs ju'], // upstream: nʌm.bɝs jaʊ
+      ['123 numbers 4 you', 'num-bers you ', 'nʌm.bɝz ju'], // upstream: nʌm.bɝs jaʊ
       ['la la la - - la', 'la la la ~~ ~~ la ', 'lɑ lɑ lɑ ɑ ɑ lɑ'], // upstream: læ læ læ æ æ læ
     ];
     for (const [text, shown, sung] of CASES) {
@@ -143,7 +144,8 @@ describe('lyricsToSyllables, the conventions', () => {
       const a = lyricsToSyllables(text);
       expect(lyricsToSyllables(text)).toEqual(a);
       for (const s of a) {
-        expect(isVowel(s.nucleus.ipa), JSON.stringify(text)).toBe(true);
+        // a vowel, or the one sound that carries a word with none ("hmm", /pst/)
+        expect(isVowel(s.nucleus.ipa) || s.onset.concat(s.coda).every((x) => !isVowel(x.ipa)), JSON.stringify(text)).toBe(true);
         for (const x of [...s.onset, ...s.coda]) expect(isVowel(x.ipa)).toBe(false);
         expect(typeof s.wordEnd).toBe('boolean');
         expect(typeof s.phraseEnd).toBe('boolean');
@@ -228,8 +230,8 @@ describe('readLyrics with other front ends', () => {
     };
     expect(shownText(readLyrics('la la', [shout, englishFrontEnd()]))).toBe('LA LA ');
     expect(shownText(readLyrics('la la', [englishFrontEnd(), shout]))).toBe('la la ');
-    /* Without the IPA front end, slashes are plain text. */
-    expect(shownText(readLyrics('/ˈlɑ/', [englishFrontEnd()]))).toBe('');
+    /* Without the IPA front end, slashes are plain text: the l is all English reads, and it keeps its note. */
+    expect(shownText(readLyrics('/ˈlɑ/', [englishFrontEnd()]))).toBe('l ');
     expect(shownText(readLyrics('/ˈlɑ/', [ipaFrontEnd]))).toBe('ˈlɑ ');
   });
 

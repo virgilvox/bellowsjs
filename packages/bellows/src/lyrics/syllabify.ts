@@ -39,6 +39,26 @@ const CLUSTER_SPELLING: ReadonlyMap<string, string> = new Map([
   ['ɫ', 'l'],
 ]);
 
+const SONORANTS = new Set(Array.from('mɱnɳɲŋɴlɫɭʎɹɻrʀʙɾɽjwʋɥɰ'));
+const FRICATIVES = new Set(Array.from('ɸβfvθðszʃʒʂʐçʝxɣχʁħʕhɦɬɮɕʑ'));
+
+/** Nasals and approximants over fricatives over the rest, for a word that has no vowel. */
+function sonority(ipa: string): number {
+  return SONORANTS.has(ipa) ? 2 : FRICATIVES.has(ipa) ? 1 : 0;
+}
+
+/**
+ * A word with no vowel as one syllable, carried by its most sonorous sound: "hmm" hums on its m,
+ * "shh" and /pst/ hiss, so the word keeps its note rather than vanishing and moving every later
+ * syllable one note early. Undefined for a word with no sounds at all.
+ */
+export function vowelless(segs: readonly Segment[]): SyllableParts | undefined {
+  if (segs.length === 0) return undefined;
+  let n = 0;
+  for (let i = 1; i < segs.length; i++) if (sonority(segs[i].ipa) > sonority(segs[n].ipa)) n = i;
+  return { onset: segs.slice(0, n), nucleus: segs[n], coda: segs.slice(n + 1) };
+}
+
 /** The longest onset clusters are three consonants long ("str"). */
 const MAX_ONSET = 3;
 

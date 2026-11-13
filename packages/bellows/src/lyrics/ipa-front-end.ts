@@ -17,7 +17,7 @@
 
 import type { FrontEnd, Segment, Syllable } from './types';
 import { BREAK_SYLLABLE, BREAK_WORD, PAUSE, readIpa } from './ipa';
-import { syllabifySegments, type SyllableParts } from './syllabify';
+import { syllabifySegments, vowelless, type SyllableParts } from './syllabify';
 
 const SLASH = '/';
 
@@ -56,15 +56,11 @@ export function ipaToSyllables(ipa: string): Syllable[] {
 
 function closeWord(chunks: Segment[][], out: Syllable[]): void {
   const parts = chunks.length > 1 ? byChunks(chunks) : syllabifySegments(chunks[0]);
-  /* A word with no vowel still takes its note, carried by its most sonorous
-     sound: /m/ hums, /pst/ hisses on its s, and a symbol no voice has keeps
-     its note and reaches the facade's unknown list instead of vanishing. */
+  /* a symbol no voice has keeps its note and reaches the facade's unknown list instead of vanishing */
   if (parts.length === 0) {
-    const all = chunks.flat();
-    if (all.length === 0) return;
-    let n = 0;
-    for (let i = 1; i < all.length; i++) if (sonority(all[i].ipa) > sonority(all[n].ipa)) n = i;
-    parts.push({ onset: all.slice(0, n), nucleus: all[n], coda: all.slice(n + 1) });
+    const carried = vowelless(chunks.flat());
+    if (!carried) return;
+    parts.push(carried);
   }
   for (let i = 0; i < parts.length; i++) {
     const { onset, nucleus, coda } = parts[i];
@@ -97,14 +93,6 @@ function byChunks(chunks: Segment[][]): SyllableParts[] {
     out.push(...parts);
   }
   return out;
-}
-
-const SONORANTS = new Set(Array.from('mɱnɳɲŋɴlɫɭʎɹɻrʀʙɾɽjwʋɥɰ'));
-const FRICATIVES = new Set(Array.from('ɸβfvθðszʃʒʂʐçʝxɣχʁħʕhɦɬɮɕʑ'));
-
-/** Nasals and approximants over fricatives over the rest, for a word that has no vowel. */
-function sonority(ipa: string): number {
-  return SONORANTS.has(ipa) ? 2 : FRICATIVES.has(ipa) ? 1 : 0;
 }
 
 function shown(s: SyllableParts): string {

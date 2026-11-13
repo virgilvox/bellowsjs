@@ -21,7 +21,7 @@ import type { FrontEnd, PronouncingDictionary, Segment, Syllable } from './types
 import { arpabetToSegments } from './arpabet';
 import { isVowel } from './ipa';
 import { letterToSound } from './letter-to-sound';
-import { splitSpelling, syllabifySegments } from './syllabify';
+import { splitSpelling, syllabifySegments, vowelless } from './syllabify';
 
 export interface EnglishOptions {
   /** Lower-case word to ARPAbet with stress digits, as parseCmudict returns it. */
@@ -74,6 +74,38 @@ const FUNCTION_WORDS: ReadonlyMap<string, string> = new Map([
   ['not', 'N AA1 T'], ['no', 'N OW1'],
 ]);
 
+/**
+ * Common words the letter-to-sound rules cannot read and contractions, from the CMU dictionary (BSD),
+ * never weakened. Where CMU lists a one-syllable form (fire, hour, desire) it is the one taken: a sung
+ * word keeps one note. MEASURED against the CMU dictionary, with these and the 2026-11-13 rules: 77.0
+ * percent of 469 common and lyric words exact (49.7 before), 74.8 percent of 397 inflected ones (9.6).
+ */
+const IRREGULAR: ReadonlyMap<string, string> = new Map([
+  ['one', 'W AH1 N'], ['once', 'W AH1 N S'], ['what', 'W AH1 T'], ['who', 'HH UW1'], ['two', 'T UW1'],
+  ['into', 'IH1 N T UW0'], ['through', 'TH R UW1'], ['where', 'W EH1 R'], ['these', 'DH IY1 Z'],
+  ['those', 'DH OW1 Z'], ['thee', 'DH IY1'], ['thou', 'DH AW1'], ['thy', 'DH AY1'], ['thine', 'DH AY1 N'],
+  ['though', 'DH OW1'], ['people', 'P IY1 P AH0 L'], ['eye', 'AY1'], ['eyes', 'AY1 Z'], ['said', 'S EH1 D'],
+  ['any', 'EH1 N IY0'], ['many', 'M EH1 N IY0'], ['anywhere', 'EH1 N IY0 W EH2 R'],
+  ['anything', 'EH1 N IY0 TH IH2 NG'], ['anyone', 'EH1 N IY0 W AH2 N'], ['everything', 'EH1 V R IY0 TH IH2 NG'],
+  ['everywhere', 'EH1 V R IY0 W EH2 R'], ['everyone', 'EH1 V R IY0 W AH2 N'], ['great', 'G R EY1 T'],
+  ['friend', 'F R EH1 N D'], ['hour', 'AW1 R'], ['whole', 'HH OW1 L'], ['woman', 'W UH1 M AH0 N'],
+  ['women', 'W IH1 M AH0 N'], ['touch', 'T AH1 CH'], ['ocean', 'OW1 SH AH0 N'], ['together', 'T AH0 G EH1 DH ER0'],
+  ['get', 'G EH1 T'], ['forget', 'F ER0 G EH1 T'], ['give', 'G IH1 V'], ['again', 'AH0 G EH1 N'],
+  ['against', 'AH0 G EH1 N S T'], ['because', 'B IH0 K AO1 Z'], ['even', 'IY1 V IH0 N'], ['busy', 'B IH1 Z IY0'],
+  ['sure', 'SH UH1 R'], ['sugar', 'SH UH1 G ER0'], ['enough', 'IH0 N AH1 F'], ['young', 'Y AH1 NG'],
+  ['done', 'D AH1 N'], ['gone', 'G AO1 N'], ['none', 'N AH1 N'], ['bear', 'B EH1 R'], ['wear', 'W EH1 R'],
+  ['break', 'B R EY1 K'], ['guy', 'G AY1'], ['buy', 'B AY1'], ['lose', 'L UW1 Z'], ['move', 'M UW1 V'],
+  ['goes', 'G OW1 Z'], ['door', 'D AO1 R'], ['fire', 'F AY1 R'], ['desire', 'D IH0 Z AY1 R'], ["i'm", 'AY1 M'],
+  ["i'll", 'AY1 L'], ["i've", 'AY1 V'], ["i'd", 'AY1 D'], ["you're", 'Y UH1 R'], ["you'll", 'Y UW1 L'],
+  ["you've", 'Y UW1 V'], ["we're", 'W IY1 R'], ["we'll", 'W IY1 L'], ["they're", 'DH EH1 R'], ["don't", 'D OW1 N T'],
+  ["won't", 'W OW1 N T'], ["can't", 'K AE1 N T'], ["isn't", 'IH1 Z AH0 N T'], ["it's", 'IH1 T S'],
+  ["that's", 'DH AE1 T S'], ["there's", 'DH EH1 R Z'], ["let's", 'L EH1 T S'], ["ain't", 'EY1 N T'],
+  ["didn't", 'D IH1 D AH0 N T'], ["doesn't", 'D AH1 Z AH0 N T'], ["wasn't", 'W AA1 Z AH0 N T'],
+  ["couldn't", 'K UH1 D AH0 N T'], ["wouldn't", 'W UH1 D AH0 N T'], ["shouldn't", 'SH UH1 D AH0 N T'],
+  ["he's", 'HH IY1 Z'], ["she's", 'SH IY1 Z'], ["what's", 'W AH1 T S'], ["o'er", 'OW1 R'], ["ne'er", 'N EH1 R'],
+  ["e'er", 'EH1 R'],
+]);
+
 /** Vowels a weak form reduces to schwa; i ɪ eɪ aɪ oʊ keep their quality. */
 const REDUCES = new Set(['ʌ', 'æ', 'ɑ', 'ɛ', 'ɔ', 'u', 'ʊ']);
 /** Function words whose weak form keeps its vowel ("you", "to" do not become jə, tə here). */
@@ -90,7 +122,7 @@ const EDGE_APOSTROPHES = /^'+|'+$/g;
 export function pronounceEnglish(word: string, opts: EnglishOptions = {}): Segment[] {
   const clean = word.toLowerCase().replace(EDGE_APOSTROPHES, '');
   const folded = clean.normalize('NFD').replace(COMBINING, '');
-  const entry = HOMOGRAPHS.get(folded) ?? lookup(opts.dictionary, clean, folded) ?? FUNCTION_WORDS.get(folded);
+  const entry = HOMOGRAPHS.get(folded) ?? lookup(opts.dictionary, clean, folded) ?? FUNCTION_WORDS.get(folded) ?? IRREGULAR.get(folded);
   if (entry) {
     const segs = arpabetToSegments(entry);
     if (opts.reduce && FUNCTION_WORDS.has(folded)) weaken(segs, folded);
@@ -142,7 +174,12 @@ function englishSyllables(word: string, opts: EnglishOptions): Syllable[] {
   const parts = word.split('-').filter((p) => p !== '');
   const out: Syllable[] = [];
   for (const part of parts) {
-    const syllables = syllabifySegments(pronounceEnglish(part, opts));
+    const segs = pronounceEnglish(part, opts);
+    const syllables = syllabifySegments(segs);
+    if (syllables.length === 0) {
+      const carried = vowelless(segs);
+      if (carried) syllables.push(carried);
+    }
     const spelling = parts.length > 1 ? [part] : splitSpelling(part, syllables.length);
     for (let i = 0; i < syllables.length; i++) {
       const { onset, nucleus, coda } = syllables[i];
