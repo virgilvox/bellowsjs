@@ -84,8 +84,8 @@ afterEach(() => {
 });
 
 /** Evaluate the shipped bundle against a real global scope and drive it. */
-function loadWorklet(sampleRate = SR, startFrame = 0): WorkletHost {
-  let Ctor: (new () => Processor) | null = null;
+function loadWorklet(sampleRate = SR, startFrame = 0, options?: { processorOptions?: unknown }): WorkletHost {
+  let Ctor: (new (o?: unknown) => Processor) | null = null;
   let registeredAs = '';
   const frameRef = { value: startFrame };
   const meters: Array<Record<string, number>> = [];
@@ -106,7 +106,7 @@ function loadWorklet(sampleRate = SR, startFrame = 0): WorkletHost {
     {
       sampleRate,
       AudioWorkletProcessor: FakeAudioWorkletProcessor,
-      registerProcessor(name: string, ctor: new () => Processor) {
+      registerProcessor(name: string, ctor: new (o?: unknown) => Processor) {
         registeredAs = name;
         Ctor = ctor;
       },
@@ -118,7 +118,7 @@ function loadWorklet(sampleRate = SR, startFrame = 0): WorkletHost {
    * scope chain to globalThis, which is what the browser does. */
   new Function(workletCode)();
   if (!Ctor) throw new Error('worklet bundle did not call registerProcessor');
-  const proc = new (Ctor as new () => Processor)();
+  const proc = new (Ctor as new (o?: unknown) => Processor)(options);
 
   return {
     meters,
@@ -298,6 +298,41 @@ describe('the shipped worklet bundle against the offline renderer', () => {
     ).not.toThrow();
     expect(w.errors.length).toBe(1);
     expect(w.errors[0]).toMatch(/no-such-engine/);
+  });
+
+  it('takes a whole score at construction through processorOptions, and renders what renderOffline renders', () => {
+    /* How Bellows.render() drives it in an OfflineAudioContext: the score in the constructor, so it
+     * is in place before the first block. Posted through the port instead, it races startRendering(). */
+    const w = loadWorklet(SR, 0, { processorOptions: { setup: setupMessages(), meters: false } });
+    const live = w.render(BLOCKS);
+    expect(w.errors).toEqual([]);
+    const off = renderOffline(setupMessages(), {
+      seconds: (BLOCKS * BLOCK) / SR,
+      sampleRate: SR,
+      kernel: { resolveBankEngine: bankEngineResolver },
+    });
+    let worst = 0;
+    for (let i = 0; i < off.left.length; i++) {
+      worst = Math.max(worst, Math.abs(live.left[i] - off.left[i]), Math.abs(live.right[i] - off.right[i]));
+    }
+    expect(worst).toBe(0);
+    expect(firstNonZero(live.left)).toBeGreaterThanOrEqual(0);
+    /* meters: false, so an offline render posts nothing */
+    expect(w.meters).toEqual([]);
+  });
+
+  it('reports a bad message in its constructor setup through the port, and keeps the rest', () => {
+    const w = loadWorklet(SR, 0, {
+      processorOptions: {
+        setup: [
+          { type: 'createChannel', id: 0, engineId: 'no-such-engine', params: {}, seed: 'x' },
+          ...setupMessages(),
+        ],
+      },
+    });
+    expect(w.errors.length).toBe(1);
+    expect(w.errors[0]).toMatch(/no-such-engine/);
+    expect(firstNonZero(w.render(BLOCKS).left)).toBeGreaterThanOrEqual(0);
   });
 
   it('posts a meter every eight blocks and no more often', () => {

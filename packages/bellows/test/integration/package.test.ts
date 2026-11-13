@@ -157,11 +157,17 @@ describe('the published package', () => {
      * registerBuiltins() is explicit rather than a side effect of import.
      * If a module ever registers at import time, this fails and the flag
      * has to go. */
-    const list = pkgExports.listEngines as () => unknown[];
-    const before = list().length;
-    expect(before).toBe(0);
-    (pkgExports.registerBuiltins as () => void)();
+    const get = pkgExports.getEngine as (id: string) => { createVoice?: unknown };
+    expect(() => get('va')).toThrow(/unknown engine/);
+    /* listEngines() describes the built-ins from the catalog without registering any: ids, labels
+     * and params, and no DSP, so a page can draw them while the code lives in the worklet. */
+    const list = pkgExports.listEngines as () => Array<{ id: string; createVoice?: unknown }>;
     expect(list().length).toBeGreaterThan(10);
+    expect(list().every((e) => e.createVoice === undefined)).toBe(true);
+    (pkgExports.registerBuiltins as () => void)();
+    expect(typeof get('va').createVoice).toBe('function');
+    /* once registered, the real definitions stand in for their descriptions */
+    expect(list().every((e) => typeof e.createVoice === 'function')).toBe(true);
   });
 
   it('renders audio through the built bundle, not just through src', () => {

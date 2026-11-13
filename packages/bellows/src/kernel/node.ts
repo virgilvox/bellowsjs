@@ -11,6 +11,14 @@ import type { KernelMessage, KernelReply } from './messages';
 
 export const KERNEL_PROCESSOR_NAME = 'bellows-kernel';
 
+/** What the kernel processor takes at construction (AudioWorkletNodeOptions.processorOptions). */
+export interface KernelProcessorOptions {
+  /** Messages applied in the processor's constructor, before its first block (an offline render's whole score). */
+  setup?: KernelMessage[];
+  /** false: post no meter replies (an offline render has nobody to read them). */
+  meters?: boolean;
+}
+
 let blobUrl: string | null = null;
 
 function kernelUrl(): string {
@@ -29,7 +37,7 @@ export interface KernelNode {
 
 export async function createKernelNode(
   ctx: BaseAudioContext,
-  opts?: { workletUrl?: string },
+  opts?: { workletUrl?: string; processorOptions?: KernelProcessorOptions },
 ): Promise<KernelNode> {
   const url = opts?.workletUrl ?? kernelUrl();
   try {
@@ -45,6 +53,7 @@ export async function createKernelNode(
     numberOfInputs: 1,
     numberOfOutputs: 1,
     outputChannelCount: [2],
+    ...(opts?.processorOptions ? { processorOptions: opts.processorOptions } : {}),
   });
   const listeners = new Set<(reply: KernelReply) => void>();
   node.port.onmessage = (e: MessageEvent) => {

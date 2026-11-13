@@ -35,8 +35,10 @@ export {
   type NamedRng,
   type Voice,
   type EngineDef,
+  type EngineInfo,
   type Effect,
   type EffectDef,
+  type EffectInfo,
   type ParamSpec,
   type TimeValue,
   type KernelEvent,
@@ -45,7 +47,8 @@ export {
 
 /* core */
 export { rng, xmur3, mulberry32 } from './core/prng';
-export { registerEngine, registerEffect, getEngine, getEffect, listEngines, listEffects } from './core/registry';
+export { registerEngine, registerEffect, getEngine, getEffect } from './core/registry';
+export { listEngines, listEffects } from './core/catalog';
 export { registerBuiltins } from './register';
 export { VoicePool } from './core/voicepool';
 export { Scheduler } from './core/scheduler';

@@ -45,6 +45,8 @@
     "build": "node scripts/gen-worklet.mjs && vite build && tsc -p tsconfig.build.json && node scripts/postbuild.mjs",
     "typecheck": "tsc --noEmit",
     "gen:worklet": "node scripts/gen-worklet.mjs",
+    "gen:catalog": "node scripts/gen-catalog.mjs",
+    "gen:catalog:check": "node scripts/gen-catalog.mjs --check",
     "gen:vocal": "node scripts/gen-vocal-tract.mjs",
     "gen:vocal:check": "node scripts/gen-vocal-tract.mjs --check"
   },

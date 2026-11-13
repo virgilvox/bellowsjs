@@ -87,6 +87,12 @@ export interface EngineDef {
   createVoice(sampleRate: number, params: Record<string, number>, rng: NamedRng): Voice;
 }
 
+/**
+ * An engine described without its DSP: what a UI, a reference or a parameter panel needs. The main
+ * thread can list every built-in engine this way without carrying its code (src/core/catalog.ts).
+ */
+export type EngineInfo = Omit<EngineDef, 'createVoice'>;
+
 /** A stereo in-place effect. */
 export interface Effect {
   process(l: Float32Array, r: Float32Array, from: number, to: number): void;
@@ -100,6 +106,9 @@ export interface EffectDef {
   params: ParamSpec[];
   create(sampleRate: number, params: Record<string, number>): Effect;
 }
+
+/** An effect described without its DSP (see EngineInfo). */
+export type EffectInfo = Omit<EffectDef, 'create'>;
 
 /** A mono analysis tap fed post-mix. */
 export interface Analyzer {

@@ -97,7 +97,6 @@
 
 import type { EngineDef, NamedRng, ParamSpec, Voice } from '../types';
 import { clamp } from '../types';
-import { CRITDAMP_SETTLE_98 } from '../dsp/critdamp';
 import { CascadeBank } from '../dsp/cascade';
 import { PitchGlide } from '../dsp/pitchglide';
 import { Adsr } from '../dsp/envelopes';
@@ -109,11 +108,12 @@ import { ART, ARTICULATORS } from './vocal-articulators';
 import { ARTICULATOR_MAX, ARTICULATOR_RATE, ARTICULATOR_TARGET_MIN, LIP_COMPRESSED, VocalPlanner, restTipFrom } from './vocal-planner';
 import { VocalRoof } from './vocal-roof';
 import { VOCAL_KEY_BLOCKS, VocalDrive } from './vocal-drive';
+import { VOCAL_GLIDE_DEFAULTS, vocalDamping, vocalGlideSpeed } from './vocal-lead';
+
+export { VOCAL_PLAN_LEAD, vocalDamping, vocalGlideLead, vocalGlideSpeed } from './vocal-lead';
 
 const PHONEMES = VOCAL_PHONEMES.length;
 
-/** How far ahead src/sing.ts posts each sound as `nextPhoneme`, seconds. */
-export const VOCAL_PLAN_LEAD = 0.3;
 
 /** The largest jaw opening the tuning rule uses (template cm). */
 const OPEN_MAX = 1.5;
@@ -163,34 +163,7 @@ const STEPS = VOCAL_KEY_BLOCKS / 2;
 /** CHIMERA's geometry body constants per table body (human.rs:276-278). */
 const LIP_WIDTH = [4.6, 4.4, 4.0];
 
-/** Damping for an overshoot fraction of a step without preparation: the inverse of exp(-pi zeta / sqrt(1 - zeta^2)). */
-export function vocalDamping(overshoot: number): number {
-  const os = overshoot > 0 ? (overshoot < 0.6 ? overshoot : 0.6) : 0;
-  if (!(os > 1e-6)) return 1;
-  const l = Math.log(os);
-  return -l / Math.sqrt(Math.PI * Math.PI + l * l);
-}
-
-/** The glide's natural frequency for a `glide` time, Hz. */
-export function vocalGlideSpeed(glide: number): number {
-  const g = clamp(glide, 0.005, 0.5);
-  return CRITDAMP_SETTLE_98 / (2 * Math.PI * g);
-}
-
-/**
- * Seconds a pitch change takes to be half way, for a channel's glide,
- * overshoot and preparation (the engine's defaults where undefined): post a
- * bend this much early and the glide crosses the middle on the note.
- */
-export function vocalGlideLead(glide?: number, overshoot?: number, preparation?: number): number {
-  const g = new PitchGlide(1000);
-  g.setSpeed(vocalGlideSpeed(Number.isFinite(glide) ? (glide as number) : DEFAULTS.glide));
-  g.setDamping(vocalDamping(Number.isFinite(overshoot) ? (overshoot as number) : DEFAULTS.overshoot));
-  g.setPreparation(clamp(Number.isFinite(preparation) ? (preparation as number) : DEFAULTS.preparation, 0, 1));
-  return g.leadTime();
-}
-
-const DEFAULTS = { glide: 0.17, overshoot: 0.095, preparation: 0.25 };
+const DEFAULTS = VOCAL_GLIDE_DEFAULTS;
 
 function initial(params: Record<string, number>, spec: ParamSpec): number {
   const v = params[spec.name];

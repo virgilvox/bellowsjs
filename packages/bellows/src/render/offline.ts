@@ -6,6 +6,7 @@
 
 import { KernelEngine, type KernelOptions } from '../kernel/engine';
 import type { KernelMessage } from '../kernel/messages';
+import { registerBuiltins } from '../register';
 
 export interface OfflineRenderOptions {
   seconds: number;
@@ -23,6 +24,10 @@ export interface RenderedAudio {
 
 export function renderOffline(setup: KernelMessage[], opts: OfflineRenderOptions): RenderedAudio {
   const sampleRate = opts.sampleRate ?? 44100;
+  // the built-in engines and effects, which an in-process render cannot do without: Bellows.boot()
+  // used to register them on every page, and code that rendered after a boot relied on it.
+  // Idempotent, and engines registered by the caller stay registered.
+  registerBuiltins();
   const engine = new KernelEngine(sampleRate, opts.kernel);
   for (const msg of setup) engine.apply(msg);
 

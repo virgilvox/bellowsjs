@@ -21,12 +21,11 @@ import { parseNote } from './theory/notes';
 import { Scale } from './theory/scales';
 import { Tuning } from './theory/tuning';
 import { euclid } from './seq/euclid';
-import { internParam, KernelEngine } from './kernel/engine';
+import { internParam } from './kernel/engine';
 import { createKernelNode, type KernelNode } from './kernel/node';
 import type { FxSpec, KernelMessage, MeterFrame, SamplerZoneData } from './kernel/messages';
-import { renderOffline, type RenderedAudio } from './render/offline';
-import { bankEngineResolver } from './render/banks';
-import { registerBuiltins } from './register';
+import type { RenderedAudio } from './render/offline';
+import { canRenderInWorklet, renderInWorklet, renderWorkletInProcess } from './kernel/offline-context';
 import { encodeWav } from './io/wav';
 import { SoundFont } from './io/sf2';
 import { samplerBankFromSf2 } from './engines/soundfont';
@@ -35,7 +34,7 @@ import type { PronouncingDictionary, SungNote, SungPlan, Syllable } from './lyri
 import { lyricsToSyllables } from './lyrics/read';
 import { planSung } from './lyrics/sing';
 import { sungEvents, type SungWindow } from './sing';
-import { VOCAL_PLAN_LEAD, vocalGlideLead } from './engines/vocal';
+import { VOCAL_PLAN_LEAD, vocalGlideLead } from './engines/vocal-lead';
 
 export interface BootOptions {
   seed?: string;
@@ -203,11 +202,14 @@ export class Bellows {
 
   /** boot() made the context, so dispose() is the one allowed to close it */
   private ownsContext: boolean;
+  /** The worklet source boot() loaded, for the offline renders that run it again. */
+  private readonly workletUrl: string | undefined;
 
   private constructor(ctx: AudioContext, kernel: KernelNode, opts: BootOptions, ownsContext = false) {
     this.ctx = ctx;
     this.kernel = kernel;
     this.ownsContext = ownsContext;
+    this.workletUrl = opts.workletUrl;
     this.seed = opts.seed ?? 'bellows-' + bootCount++;
     this.initialBpm = opts.bpm ?? 120;
     this.initialMeter = opts.meter ?? DEFAULT_METER;
@@ -234,7 +236,9 @@ export class Bellows {
   }
 
   static async boot(opts: BootOptions = {}): Promise<Bellows> {
-    registerBuiltins();
+    // no registerBuiltins() here: the engines play in the worklet, which registers its own, and the
+    // main thread lists them from the catalog (core/catalog.ts). Importing every engine here put a
+    // second copy of all their DSP in every page.
     const ownsContext = opts.closeContextOnDispose ?? opts.context === undefined;
     const ctx = opts.context ?? new AudioContext({ latencyHint: 'interactive' });
     if (ctx.state === 'suspended') {
@@ -806,7 +810,10 @@ export class Bellows {
    * Render the piece offline through a fresh kernel: same setup messages,
    * same clock callbacks, fresh seeded rng streams (a render equals what a
    * fresh page load would play, as long as randomness flows through
-   * b.rng()). Returns audio plus a wav() encoder.
+   * b.rng()). In a browser the kernel is the worklet in an
+   * OfflineAudioContext, so the render runs off the main thread; elsewhere
+   * the same worklet code runs on the calling thread. Returns audio plus a
+   * wav() encoder.
    */
   async render(opts: {
     bars?: number;
@@ -840,6 +847,7 @@ export class Bellows {
     // which is where the replayed setup leaves the channel, and no lines
     const singing = new Map<number, SingState>();
     for (const [id, st] of this.singing) singing.set(id, { ...st, windows: [] });
+    let messages: KernelMessage[];
     this.renderCtx = { events: [], transport: offTransport, rngCache: new Map(), now: 0, singing };
     try {
       const ticks: Array<{ t: number; step: number; cb: TickCallback }> = [];
@@ -856,19 +864,31 @@ export class Bellows {
 
       const events = this.renderCtx.events;
       const setup = this.setup.messages.filter((m) => m.type !== 'events');
-      const rendered = renderOffline([...setup, { type: 'events', events }], {
-        seconds,
-        sampleRate,
-        kernel: { resolveBankEngine: bankEngineResolver },
-      });
-      return {
-        ...rendered,
-        wav: (bitDepth: 16 | 24 | 32 = 16) =>
-          encodeWav([rendered.left, rendered.right], sampleRate, { bitDepth }),
-      };
+      messages = [...setup, { type: 'events', events }];
     } finally {
+      // cleared before the audio renders, which awaits: a live clock tick that ran during the render
+      // would otherwise read the render's time and send its events into the render
       this.renderCtx = null;
     }
+
+    // the score renders through the kernel worklet, the code that plays live: in a browser in an
+    // OfflineAudioContext, off the main thread; elsewhere (Node, tests) the same worklet string on
+    // this thread. Either way the page carries no second copy of the engines, and the samples are
+    // renderOffline's (test/kernel/worklet-parity.test.ts)
+    let rendered: RenderedAudio;
+    if (canRenderInWorklet()) {
+      rendered = await renderInWorklet(messages, {
+        frames: Math.ceil(seconds * sampleRate),
+        sampleRate,
+        workletUrl: this.workletUrl,
+      });
+    } else {
+      rendered = renderWorkletInProcess(messages, { frames: Math.ceil(seconds * sampleRate), sampleRate });
+    }
+    return {
+      ...rendered,
+      wav: (bitDepth: 16 | 24 | 32 = 16) => encodeWav([rendered.left, rendered.right], sampleRate, { bitDepth }),
+    };
   }
 
   /** True once dispose() has run. Everything below it is torn down. */
