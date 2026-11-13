@@ -635,7 +635,9 @@ What moved, and why:
 
 - A Reynolds threshold. A constriction makes noise only above Re 1000 to 2000 (Re = v d / nu).
   The /tʃ/ closure in the stops line leaked through 0.001 to 0.004 cm^2 at about 2400 cm/s for
-  10 ms, frication 9 dB under the /s/'s (Re about 1000): now silent. Over Re 1800 to 3000
+  10 ms, frication 9 dB under the /s/'s (Re about 1000): now silent. (The closure only: the
+  closing gesture before it carried a new burst at the vowel's level, fixed after verification,
+  below.) Over Re 1800 to 3000
   (CHIMERA's critical number) the female /z/ fell under its voicing, 25.3 dB from the human shape
   against 12.7.
 - No obstacle past the incisors. The /θ/ channel separates 0.3 cm past the incisors' edge, so
@@ -649,7 +651,9 @@ What moved, and why:
   breaths are /h/, read 0.3 dB further from CHIMERA; /θ/ no longer needs it with the second
   pole); voiced aspiration 3 times k^3.5 (male 3, female 2.1, child 1.1: the male line at 1 read
   1.1 dB further from CHIMERA, the child's at 3 0.24 dB further); obstacle 14 to 15 (the child's
-  /z/ fell under its voicing at 14: 26.0 dB from the human shape, 11.0 at 15); labiodental 18 to
+  /z/ fell under its voicing at 14: 26.0 dB from the human shape; at 15, 12.8 on the default seed,
+  and 26 on four other seeds: verification found the 11.0 first written here was the child's mean
+  over all fricatives, and the gain is now 18, below); labiodental 18 to
   25 (keeps /f/ at -27 dB re its vowel under the second pole).
 - The wall keeps CHIMERA's mass, 1.5 g/cm^2, with Birkholz and Zhang's K 100,000 and B 2000:
   with 2.0 five renders read 0.20 to 0.27 dB further from CHIMERA, the male vowels line most. The
@@ -686,9 +690,10 @@ folds, int4sing-* ring 1 and tuning 1), against int3, CHIMERA and the human data
 
 Cost per part (pulse, best of 4, load average 4.2 on 8 cores): airway 0.66 to 0.85 us a sample,
 the rest of the voice (planner, cascade, geometry, drive, pitch) 0.15 to 0.18, the kernel 0.03.
-The two fold models cost the same within 0.03. Zero allocation is the existing GC-count test (0
-collections over 5 s of a sung line, each of the three models), which now runs the Reynolds gate,
-the free jet and the second pole.
+The two fold models cost the same within 0.03. Zero allocation was claimed from the existing
+GC-count test (0 collections over 5 s of a sung line, each of the three models); it did not hold
+for the self-oscillating folds (1.2 to 1.5 bytes a sample on a held vowel), fixed after
+verification, below.
 
 The fold models under the new noise (DTW to CHIMERA on twinkle, stops, fric, son over three
 bodies): geometric 5.07 dB, self-oscillating 5.76, pulse 3.83 (int3 3.77). The self-oscillating
@@ -701,7 +706,10 @@ strengths at 2.39 s).
 Tests: the merge kept the cascade round's /l/ dip test (mean of eight seeds, within 1.5 dB of
 -2.8) over the noise round's single seed at 1.6; it passes. The placement test now expects the
 free jet past the incisors and the obstacle at 15 / 7 of the wall's gain, and the wall test
-CHIMERA's mass. 117 files, 1863 tests.
+CHIMERA's mass. 117 files, 1863 tests. (Verification found that the Reynolds gate, the second
+pole, the v_c low-pass, the convective delay, the voicing modulation, the aspiration place, the
+velic source, the geometric lag and double pulse and the fold tension law could each be broken
+with every test still passing; each now has a test, below.)
 
 ### Not met
 
@@ -727,6 +735,121 @@ CHIMERA's mass. 117 files, 1863 tests.
 - Vowel frames lost 6 to 13 kHz against CHIMERA (male 6-9 kHz -0.7 to -4.3 dB): int3's came from
   its Reynolds-law jets in close vowels, which Stevens' v^3 law leaves near silent. No human
   measure here says which is right.
+
+## Fixes after verification (2026-11-12)
+
+Two independent verifiers re-rendered Integration 4 and measured it against int3, CHIMERA and the
+human recordings. Every issue they raised reproduced. What was wrong, why, and what changed;
+every number is a render of the standard set through the kernel (S/int4-*, overwritten; the
+renders before these fixes are S/int4o-*), and the human-data gates are now read over five noise
+seeds (the default and s1 to s4), mean and range.
+
+- **The phrase-initial /s/ of /stɹ/ was gone**, in every body and seed: energy above 2.5 kHz over
+  0.25 to 0.43 s re the phrase's 95th-percentile level, male / female / child, CHIMERA -28.0
+  -39.0 -41.5, int3 -27.8 -36.4 -40.8, int4 -72.5 -85.2 -80.8. Not the noise law: the tract was
+  shut from the note-on. The planner moved every onset consonant 60 ms earlier (INITIAL_LEAD),
+  so the /t/ was fully under way 5 ms after the note-on and, by the cascade round's priority
+  rule (a closure wins a shared articulator), held the tongue tip from the start. Only the
+  phrase's first consonant leads now. After: -23.1 -33.7 -31.8 (seeds s1 to s4 within 2.0, 0.7
+  and 0.4 dB). A vocal test asks the loudest 5 ms above 2.5 kHz inside that /s/ to be within
+  25 dB of its vowel's level (on the harness renders, before -66 -72 -65, now -10 -17 -16;
+  CHIMERA -18 -25 -27).
+- **A noise burst before every voiceless alveolar closure**, 10 to 20 ms at the vowel's level.
+  CHIMERA's area rate law (dsp/area-rate.ts) closes the last 0.4 cm^2 slowly so a seal does not
+  click, and Stevens' v^3 sqrt(A) read that dwell as a fricative: at the male /tʃ/ the airway's
+  area was still 0.05 cm^2 while the articulators had sealed (commanded 5e-4), at 3000 cm/s. The
+  source now reads the commanded area where it is under the airway's, so a closing seal is quiet;
+  opening and steady constrictions are unchanged (the airway's area is the smaller there). Level
+  above 2 kHz at 3.985 to 4.005 s (/tʃ/), dB re the phrase: CHIMERA -24 -38 -42, int3 -34 -46
+  -46, int4 before -4 -12 -7, now -46 -47 -50; before the /t/ of "ta" (1.565 to 1.575 s), before
+  2.6 -12 -7, now -40 -47 -60. A vocal test gates the loudest 5 ms above 2 kHz in the 30 ms
+  before /t tʃ/ close at the vowel's level less 15 dB (harness renders, male: before +4.1 and
+  -4.4, now -20 and -57; CHIMERA -27 and -37). The male closures the verifiers found short were this burst read as open tract:
+  /t d k/ closure 15 13 42 ms before, 32 29 59 now (CHIMERA 37 29 56), and the male /d/ voice
+  bar -3.2 dB before, -19.6 now (int3 -20.6, CHIMERA -27.5). The excess scanner (5 ms frames
+  above 2 kHz more than 15 dB over both CHIMERA and int3) flagged stops at 3.99 s in all three
+  bodies before; now it flags only the /t/ release of /stɹ/ at 0.445 s (male -3.5, child -13.1
+  dB re the phrase), a burst the restored /s/ now precedes. 'past' at 2.355 s reads -10 against
+  CHIMERA's -27: its /s/ runs 5 ms longer into the closure, at its own level, not a burst.
+  The /t/ of "ta" now closes 15 ms before CHIMERA's and int3's (1.565 s reads -40 against their
+  vowel, -7 and 0).
+- **The child /z/ result behind obstacle 15 was one seed.** Its shape distance to the human,
+  mean [range] over five seeds: int3 12.4 [12.2..12.7]; obstacle 14, 26.1 [26.0..26.3]; 15,
+  23.5 [12.8..26.3]; 17, 18.0 [12.6..26.3]; 18, 12.6 [12.4..12.9]. The frication either clears
+  the voicing or not and the seed decides; lowering the Reynolds window's floor (500 to 2000,
+  0 to 2000) did not move it (23.5). The obstacle gain is 18, the smallest that holds on all
+  five. Cost: DTW to CHIMERA on the strengths line female and child, +0.23 and +0.24 dB over
+  int3 (at 15, with the two fixes above, +0.17 and +0.17); the human measures below are the
+  reason.
+- **The VOT gain was a detector artifact.** The old detector took a -49 dB tick at 0.360 s as
+  the male /p/'s release and any 80-500 Hz energy as voicing. A new one (scratch fix5/vot2.ts)
+  takes the release at the largest 2-12 kHz jump among frames within 30 dB of the vowel's level,
+  and voicing where a 20 ms window is periodic at the note (autocorrelation over 0.6) for three
+  steps. Mean |VOT error| re Lisker and Abramson over p b t d k g and three bodies: CHIMERA 14.3,
+  int3 12.6, int4 7.2 ms; the voiceless stops alone 7.4 (int3) and 7.8 (int4), the voiced 17.7
+  and 6.8 (int3 read prevoicing on the male /g/ and child /d/). Male /k/ reads 57 ms (the old
+  detector 0; by eye about 75). The fixes do not change any VOT.
+- **The self-oscillating folds allocated**: a held /ɑ/ at 220 Hz grew new space 1.24 to 1.53
+  bytes a sample (the verifier's probe, bundled, 128 MB semi-space), against 0.036 for the other
+  models. Three causes, each measured: the tension clamps were conditionals merging a double
+  with module-level constants (V8 boxed the result: computing the coefficients every sample
+  made 16 bytes a sample); tune() and the servo's cycle(), called once a block and once a cycle,
+  stayed unoptimized and boxed what they computed; the turning point went to a call taking two
+  doubles. The clamps are Math.min and Math.max, tune() marks the coefficients stale for step()
+  to compute, step() calls the servo every sample (it works only on a pending cycle) and writes
+  the turning point out. After, over 60 s: 0.032 bytes a sample for all three models. A test
+  holds a vowel 40 s per model under 0.15 (one 135 KB allocation buffer above the rate; before,
+  0.28 for the folds under vitest).
+- **Untested physics.** White-box tests now cover the Reynolds gate (no noise under Re 1000,
+  v^3 sqrt(A) within 5 percent over 2300, between at 1500), the free jet's second pole (4 to
+  8 kHz against 2 to 4 kHz, 8.2 dB steeper than the obstacle's at matched places, 4.3 with the
+  pole removed), the 500 Hz v_c low-pass and the convective delay D / (0.5 v), the voicing
+  modulation (block spread over mean 0.32 voiced, 0.81 with the limit removed, 0.01 unvoiced),
+  the aspiration place, the velic source, the geometric upper edge's lag (the open phase loses
+  its first 70 degrees, not its last), double pulsing (alternate peaks 0.8 at d 0.2) and the
+  fold tension law (at Q 2, f0 x1.97 and swing x0.73, where Q^-0.5 is 0.71 and Ishizaka and
+  Flanagan's law 0.5). Each of the verifiers' ten mutants now fails a test.
+
+| measure | CHIMERA | int3 | int4 before | int4 now |
+| --- | --- | --- | --- | --- |
+| DTW to CHIMERA, mean of 21 renders, dB | 0 | 3.80 | 3.86 | 3.87 |
+| DTW renders more than 0.2 dB over int3 | | | 1 (strengths female +0.23) | 2 (strengths female +0.23, child +0.24) |
+| fricative shape distance to the human, 5 seeds, male, mean [range], dB | 12.09 | 10.44 [10.23..10.59] | 10.23 [10.00..10.45] | 10.18 [9.96..10.40] |
+| the same, female | 12.33 | 11.55 [10.96..11.92] | 10.96 [10.59..11.09] | 10.89 [10.54..11.02] |
+| the same, child | 13.57 | 11.44 [11.33..11.58] | 12.16 [11.00..12.47] | 10.81 [10.75..10.95] |
+| Jongman spectral mean error, male / female / child, kHz | 1.94 1.58 1.53 | 1.10 1.51 1.86 | 0.81 0.98 0.95 | 0.81 0.98 0.95 |
+| voiced fricatives, frication over voicing (80-500 Hz), mean distance to the human, male / female / child, dB | 15.6 15.0 17.0 | 12.8 15.0 16.8 | 17.4 15.7 17.5 | 16.1 15.6 17.4 |
+| voiceless /t/ closure, 80-500 Hz re vowel, male / female / child, dB | -65.0 -69.9 -67.8 | -49.0 -56.1 -61.2 | -38.6 -45.5 -50.8 | -38.6 -45.5 -50.8 |
+| voice bar, mean of /b d g dʒ/, male, dB | -20.7 | -19.4 | -14.8 | -18.8 |
+| cost through the kernel, worst, us a sample (load average) | | | 1.07 | 1.07 pulse (4.4 to 4.9), 1.12 fold models (5.3 to 6.1) |
+
+Per fricative and body over the five seeds (shape distance to the human, dB, mean), int3 / int4
+now: male s 7.3/5.8, ʃ 6.5/5.9, f 4.0/3.3, θ 8.9/9.2, h 15.1/15.2, z 9.0/9.9, v 18.4/16.1, ʒ
+14.3/15.9; female s 7.5/4.6, ʃ 6.0/5.5, f 7.7/4.1, θ 8.7/9.8, h 14.4/14.8, z 12.2/11.9, v
+13.0/12.5, ʒ 23.0/24.0; child s 7.6/4.1, ʃ 5.6/5.3, f 5.2/3.9, θ 10.4/10.2, h 14.0/14.1, z
+12.4/12.6, v 11.2/10.5, ʒ 25.1/25.8. The male mean's gain over int3 lies within the seeds'
+spread; the female's and the child's do not.
+
+### Still open, measured
+
+- /θ/ is further from the human than int3 in the male and female bodies (8.9 to 9.2, 8.7 to 9.8),
+  and further from CHIMERA's shape in all three (5.7 to 9.3, 4.4 to 7.7, 4.2 to 7.4 on the
+  default seed, as the verifiers measured; this round did not move /θ/). /ʒ/ is further in every
+  body (14.3 to 15.9, 23.0 to 24.0, 25.1 to 25.8), /h/ in every body by 0.1 to 0.4, /z/ in the
+  male and child (9.0 to 9.9, 12.4 to 12.6). These are regressions, not ties.
+- Voiced fricatives are further from the human balance than int3 in all 9 body-by-fricative
+  cells (frication 2.5-11 kHz over voicing 50-900 Hz; human z 11.4, ʒ 15.4, v -9.2): male z
+  -1.7 (int3 1.2), ʒ -19.1 (-16.2), v -16.8 (-13.7). Obstacle 18 moved the male /z/ from -3.3
+  toward the human; /ʒ/ and /v/ did not move.
+- The voiceless closures carry 10 dB more 80-500 Hz than int3 in every body. Not the walls and
+  not the voicing gate: with CHIMERA's stiffer wall (K 3e5) the male /t/ reads -37.7, with no
+  wall radiation -38.3, and with the articulators' moving-wall flow (vflow) removed -48.2 (/k/
+  -60.4). The flow comes from the tongue tip leaving the roof about 10 ms before the release,
+  stepped at the 512-sample keyframes (male, 1.600 to 1.605 s: -32 dB re the phrase against
+  int3's -51).
+- The /t/ releases after /s/ (/stɹ/ at 0.445 s, "street" at 3.115 s) burst 13 to 16 dB over
+  CHIMERA's above 2 kHz.
+- DTW: the two strengths renders above, from obstacle 18.
 
 ## The phases, each with a gate
 
