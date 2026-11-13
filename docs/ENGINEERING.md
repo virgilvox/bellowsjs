@@ -54,6 +54,8 @@ Chromium is the only full-stack engine (AAC encode, setSinkId, relaxed SIMD, Web
 
 ## 2. DSP algorithm choices (formulas and constants to implement)
 
+The singing voice (`vocal`) is documented apart: its design, sources and every measurement are in docs/VOICE-2.md (docs/VOICE.md records the formant design it replaced), and the CHIMERA-derived parts and their MIT notice are listed in packages/bellows/THIRD_PARTY_NOTICES.md.
+
 This section is the research brief that drove the first implementation, and it is dated 2026-07.
 Three of its specifications were not what shipped, and in two of those cases the code rejected
 the specification on a measurement. Each one now carries an AS BUILT note naming the file that

@@ -42,7 +42,7 @@ Notes on the model:
   2 meaning two beats) or { seconds }.
 - Instrument.on(note, vel?, at?) returns a note id for indefinite holds;
   Instrument.off(id, at?) releases it.
-- Instrument.sing(lyrics, notes, { at, dictionary, scale }) sings on an
+- Instrument.sing(lyrics, notes, { at, dictionary, scale, allophones }) sings on an
   instrument made with b.voice('vocal') and throws on any other engine. See
   Singing and lyrics below.
 - b.clock.at('16n', (t, step) => ...) fires ahead of every subdivision tick;
@@ -844,7 +844,9 @@ const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   between slashes, which sets the sounds directly. A hyphen inside a word splits
   syllables, a free-standing '-' or '~' holds the vowel onto the next note,
   and . , ; : ! ? or a line break ends a phrase with a breath. A Syllable[]
-  is accepted in place of text.
+  is accepted in place of text. English words get the American flap and
+  dark l unless opts.allophones is false (classical diction); IPA is sung
+  as written.
 - Each vowel lands on its note time; onset consonants are sung before it.
   The returned plan has phrases (spans of IPA with start/end seconds, and
   pitches) and leadIn, the most any phrase starts before its first note:
@@ -856,6 +858,12 @@ const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   that is singing at that moment. Live with no at, the line starts as soon
   as its opening consonants can all still sound.
 - Inside a clock callback, b.render() replays sing() exactly as note().
+- The voice's own params: glottis picks the vocal folds (2 a drawn pulse,
+  the default; 0 geometric folds whose swing follows the pressure; 1
+  self-oscillating folds steered to the note, which bend with consonants
+  and can lock onto F1 near 500 Hz). ring adds a singer's formant near
+  3 kHz (about 1 dB); tuning opens the jaw on high notes so F1 stays above
+  the pitch. body 0 male, 1 female, 2 child, blending in between.
 - Each phrase is one note with Param events inside: 'phoneme' (an index
   into VOCAL_PHONEMES; vocalPhonemeIndex(ipa)) and 'bend' in semitones. One
   instrument sings one line at a time; give a harmony its own voice(). A
@@ -865,7 +873,7 @@ const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
 - Without the facade: planSung(notes in seconds and Hz, syllables) gives the
   plan, sungEvents(plan, { channel, phonemeParam: internParam('phoneme'),
   bendParam: internParam('bend') }) gives kernel events for renderOffline.
-  lyricsToSyllables(text, { dictionary }), readLyrics(text, frontEnds) with
+  lyricsToSyllables(text, { dictionary, allophones }), readLyrics(text, frontEnds) with
   englishFrontEnd(opts) and ipaFrontEnd, tokenizeIpa(ipa),
   arpabetToSegments(phones) and parseCmudict(text) are the lyric layer.
 

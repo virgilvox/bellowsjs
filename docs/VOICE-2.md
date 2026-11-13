@@ -919,6 +919,26 @@ the male body, each sampled one an integer harmonic (9th to 13th). Twinkle and m
 from 19.5 to 21.9 cents: the dips of voiced consonants are now left in, and the pulse they are
 measured against has none. That is a choice by ear, not a gate.
 
+## Release audit (2026-11-13)
+
+Three independent reviews before the merge to main: the docs and site against the code, the voice
+code, and the English lyric reader.
+
+- Voice code: no NaN or blow-up at any parameter extreme, sample rate (8 to 192 kHz) or note, and
+  no allocation on the audio path. Three faults, each fixed with a test that fails on the old code:
+  the self-oscillating folds started a note on the last note's pressures (a reused voice parted from
+  a fresh one at sample 19); a glottis change moved the sounding note's rest (2.4 dB) though it waits
+  for the next note; and with a long glide a short opening note was sung at the second note's pitch,
+  because its bend reached the fresh voice at the NoteOn and snapped. The first bend now waits half
+  its note. Left open: level rises steeply with pitch (about -31 dB at 80 Hz, -7 at 1200 Hz, peaks
+  over 1.0 above 1.3 kHz), and a female /ɑ/ at 880 Hz on the self-oscillating folds locks to F1.
+- Lyric reader: 202 English rules scored against the CMU dictionary went in ahead of CHIMERA's,
+  with a table of irregular words and contractions and stress on the first full vowel. Exact against
+  CMU: 77.0 percent of 469 common lyric words (49.7 before), 74.8 of 397 inflected ones (9.6). A word
+  with no vowel ("hmm", "TV") now keeps its note on its most sonorous sound instead of vanishing and
+  moving every later syllable a note early. Fire, hour and desire stay one syllable, a sung word's
+  one note. The CHIMERA golden cases these change moved to the module tests beside upstream's reading.
+
 ## The phases, each with a gate
 
 0. **Is the tube enough?** A float Kelly-Lochbaum tract at 48 kHz, driven both by CHIMERA's own

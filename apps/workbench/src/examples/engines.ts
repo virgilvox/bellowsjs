@@ -284,8 +284,8 @@ var room = b.bus(['plate'], { level: 0.35 });
 singer.send(room, 0.4);
 b.bpm(96);
 
-// letter-to-sound reads "how", "wonder" and "what" wrongly, so that line is IPA
-var lyric = 'twinkle twinkle little star, /haʊ ˈaɪ ˈwʌn.dɚ ˈwʌt ju ɑɹ/';
+// plain English: a word the rules misread could be written as IPA between slashes
+var lyric = 'twinkle twinkle little star, how I wonder what you are';
 var tune = ['C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4'];
 var melody = tune.map(function (n, i) {
   return { note: n, dur: i === 6 ? '2n' : '4n' };
@@ -354,7 +354,7 @@ b.start();`,
     title: 'VOCAL: A TRAINED SOPRANO',
     category: 'ENGINES',
     description:
-      'One female voice sings the same high line twice: first plain, then with the singer\'s formant (ring) and first-resonance tuning on. Ring narrows the tube above the folds, which lifts the band near 3 kHz that lets a trained voice carry. Tuning opens the jaw on high notes so the vowel\'s first resonance stays above the pitch, as sopranos do, which keeps the top notes from going thin. The pitch prepares and overshoots at each note change.',
+      'One female voice sings the same high line twice: first plain, then with the singer\'s formant (ring) and first-resonance tuning on. Ring narrows the tube above the folds, which lifts the band near 3 kHz that lets a trained voice carry, here by about 1 dB, so listen for a slight edge. Tuning opens the jaw on high notes so the vowel\'s first resonance stays above the pitch, as sopranos do, which keeps the top notes from going thin. The pitch prepares and overshoots at each note change.',
     seed: 'vocal-soprano',
     code: `var singer = b.voice('vocal', { body: 1, vibratoDepth: 0.35, overshoot: 0.12 });
 var room = b.bus(['plate'], { level: 0.3 });

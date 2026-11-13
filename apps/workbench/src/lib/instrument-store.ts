@@ -568,7 +568,7 @@ export function fromSlider(spec: ParamSpec, t: number): number {
  * the vocal engine's phoneme reads as its IPA symbol, not as 17.3.
  */
 const NAMED_STEPS: Record<string, Record<string, readonly string[]>> = {
-  vocal: { phoneme: VOCAL_PHONEMES, nextPhoneme: VOCAL_PHONEMES },
+  vocal: { phoneme: VOCAL_PHONEMES, nextPhoneme: VOCAL_PHONEMES, glottis: ['geometric', 'self-oscillating', 'pulse'] },
 };
 
 export function stepNamesFor(engineId: string, param: string): readonly string[] | null {

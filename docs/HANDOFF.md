@@ -1,28 +1,26 @@
 # HANDOFF
 
-State of the project as of 2026-09-04. Read this first when picking the work back up.
+State of the project as of 2026-11-13 for the singing voice, 2026-09-04 for everything else. Read this first when picking the work back up.
 
 **Read this before anything else: as of 2026-09-13 this file is on `main`, and the branch warning it used to open with is gone.** Both outstanding branches were merged that day: the nine commits of `audit-backlog-2026-08-23`, which was pull request #2, and `esp32c3-platform`, a new ESP32-C3 adapter for the embedded library. Both went in as merge commits after the full VERIFY block in `docs/KICKOFF.md` was run against the merged tree, which is how the one defect neither branch could see on its own was found: the embedded LLM reference had gone out of sync, because one branch added a header and the other added the gate that catches exactly that. **Merging is not shipping, and the two have been confused here before.** npm still serves `bellowsjs@0.1.9` from 2026-08-21, both embedded registries still serve `Bellows@0.1.2`, and bellows.live is now BEHIND `main` rather than level with it, because the audit work touched `apps/workbench` and there is no deploy on push. The embedded source tree also now carries one header more than the published 0.1.2, so the next embedded release has to be 0.1.3 rather than a re-cut of 0.1.2.
 
 Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` and `docs/AUDIT-2.md` and `docs/AUDIT-3.md` (findings with evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists and where this leads), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session), `docs/prototype-0.html` (the original design probe).
 
-## The 2026-11-11 and 12 session: a singing voice, and a new license
+## The 2026-11-11 to 13 sessions: a singing voice, and a new license
 
-**Superseded the same day, read this first.** The formant voice described below was replaced on 2026-11-12. `vocal` is now an articulatory voice: our planner drives CHIMERA's 17 articulators, CHIMERA's exact geometry gives the shape, and a junction airway (a waveguide that carries the air itself, at the output rate) makes the sound. Design and every measurement: `docs/VOICE-2.md`, sections "The junction airway, in the library" and after. Open there: click events at about 2.6 per render against CHIMERA (most are real bursts at this planner's own times), /θ/ too bright in two bodies, `ring` weaker than the prototype (+1.4 dB), a little allocation when the body changes at note-on and as the planner rebuilds at each phoneme, and the embedded port. The two "not done" items about voice-bar decay and 8 to 16 kHz vowel noise below are done.
+`vocal` is an articulatory singing voice: our gesture planner drives CHIMERA's 17 articulators through a six-stage cascade, CHIMERA's exact geometry gives the tract's shape, and a junction airway (a waveguide that carries the air itself, at the output rate) makes the sound. `Instrument.sing(lyrics, notes, opts)` sings English and IPA through the pure lyric layer in `src/lyrics`. The first design, Klatt-style formant synthesis, was replaced on 2026-11-12; `docs/VOICE.md` records it and `docs/VOICE-2.md` holds the current design and every measurement since.
 
-Uncommitted at the time of writing; check `git status`. Plan of record and every measurement: `docs/VOICE.md`.
-
-- **What was added.** A `vocal` engine (Klatt-style formant synthesis with consonants; glottal source ported from CHIMERA, MIT), a pure lyric layer in `src/lyrics`, and `Instrument.sing(lyrics, notes, opts)` through `src/sing.ts`. It costs 0.54 of a `formant` voice. The workbench gained a Singing docs page, two examples (`vocal-sing`, `vocal-harmony`), and phoneme names on the instrument page.
-- **How it was checked.** A build workflow, then three reviewers (21 findings, all fixed), then two independent audits of the fixes. Those found and fixed: a mid-move overshoot in `CritDamp.setOmega` (a bend went 57 semitones past its target), a NoteOff ordering bug between lines posted out of order, and early stop releases that deleted a /t/ after a short rest. Every fix has a test that fails without it.
+- **What the voice has.** Male, female and child bodies; 41 phonemes; turbulence from Stevens' law placed as Birkholz places it; Birkholz and Zhang's yielding wall; three fold models on the `glottis` param (CHIMERA's drawn pulse, the default; geometric folds; self-oscillating two-mass folds under a pitch servo); `ring` and `tuning`; a stiffness gesture for microprosody. Cost about a microsecond a sample at 48 kHz through the kernel (1.07 to 1.12 in the worst case on an M1), about a quarter of CHIMERA's.
+- **How it was checked.** Calibrated against human recordings (fricative spectra, Jongman 2000; VOT, Lisker and Abramson) as well as against CHIMERA, on five seeds where a gate sits near its threshold. Each round had independent reviews; the 2026-11-13 audit of the self-oscillating folds found five faults (a voicing blend, block-edge steps, a servo that chased consonant dips and could hold a note at 1.8 times its pitch, a keyframe-stepped wall flow), all fixed with tests that fail on the old code (VOICE-2.md, "Audit of the onset fix").
 - **License: MIT since 2026-11-12, by the owner's choice** (PRD item 8), so attribution travels with every copy. The CHIMERA-derived files keep Jameson Hodge's MIT notice in `packages/bellows/THIRD_PARTY_NOTICES.md` and a banner in every bundle. The embedded library has no CHIMERA code. Published versions stay Apache-2.0.
 - **Decided in the owner's place and open to reversal:** the bundle budget moved to 30,000 bytes for the voice (VOICE.md decision 7; the standalone gzip grew 26.6 percent), and no vocal presets.
-- **Not done:**
-  - Nobody has listened to it.
-  - Shorter consonant timings for fast passages: voiceless stops at sixteenths lose about 19 dB.
-  - Voice-bar decay through a closure, and vowel noise from 8 to 16 kHz.
-  - A lyric cursor so patterns and MIDI can sing one syllable per note.
-  - The embedded port: feasible on M7 boards and not on the ESP32-C3 (VOICE.md decision 6).
-  - Asking Jameson Hodge whether he is happy with the credit.
+- **Still open, measured** (VOICE-2.md, "Still open, measured"):
+  - /θ/, /ʒ/, /h/ and /z/ further from the human than the round before; voiced fricatives further from the human frication-to-voicing balance in all nine body-by-fricative cells.
+  - /t/ after /s/ bursts 13 to 16 dB over CHIMERA above 2 kHz.
+  - Voiceless closures carry more 80 to 500 Hz than int3; the moving-wall flow is no longer the cause.
+  - Self-oscillating folds: onsets up to about 280 cents sharp in the child body for 30 to 40 ms, and near 500 Hz the folds lock onto F1 (`tuning` helps).
+  - English letter-to-sound reads 77 percent of 469 common lyric words exactly as the CMU dictionary does (from 49.7 on 2026-11-13); no pronouncing dictionary ships, and numbers and letter names ("TV") are not spelled out.
+  - A lyric cursor so patterns and MIDI can sing one syllable per note; the embedded port (VOICE.md decision 6); asking Jameson Hodge whether he is happy with the credit.
 
 ## The 2026-08-13 session, which changed the shape of the project
 
@@ -1062,7 +1060,7 @@ the same as anyone being able to use it.
     `arduino-cli` prints on failure too, and called two broken examples fine. The 0.1.1 run on
     2026-08-20 also diffed the zip against the mirror clone that had been compiled by hand,
     `diff -rq` reporting only `.git` and `.gitignore`.
-- Library test suite: 117 files, 1892 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
+- Library test suite: 117 files, 1875 tests, counted by `npx vitest list` and re-counted by `check-docs.mjs` so this line cannot drift the way it did twice, all passing in plain Node, including golden-render regression (`test/golden`, regenerate with `GOLDEN_UPDATE=1` only alongside an intentional DSP change).
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 52 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
 - Embedded: 52 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All seventeen examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library, except `12_DacOut`, which declines with an `#error` because a 4.x has no DAC. This line said 43 and five until 2026-08-20, while the state section fourteen lines up said 51 and 17.
