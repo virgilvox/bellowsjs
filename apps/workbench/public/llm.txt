@@ -844,7 +844,14 @@ const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   between slashes, which sets the sounds directly. A hyphen inside a word splits
   syllables, a free-standing '-' or '~' holds the vowel onto the next note,
   and . , ; : ! ? or a line break ends a phrase with a breath. A Syllable[]
-  is accepted in place of text. English words get the American flap and
+  is accepted in place of text.
+- Without a dictionary, common function words, irregular words (one, two,
+  what, people, eye, again, ...) and contractions (I'm, don't, you're, ...)
+  are built in, and the rules cover the rest: about three common lyric words
+  in four read exactly as CMUdict has them, most of the rest differing only
+  in an unstressed vowel. Fire, hour and desire stay one syllable (one note).
+  Write a misread word as IPA between slashes. A word with no vowel ("hmm",
+  "shh", "TV") keeps its note on its most sonorous sound; digits are skipped. English words get the American flap and
   dark l unless opts.allophones is false (classical diction); IPA is sung
   as written.
 - Each vowel lands on its note time; onset consonants are sung before it.
