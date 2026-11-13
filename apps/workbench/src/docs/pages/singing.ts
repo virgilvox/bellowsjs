@@ -104,7 +104,7 @@ Velocity is breath: it sets the pressure in the lungs, so a louder note is also 
 
 ## Harmony, and lines that meet
 
-One instrument sings one line at a time, because \`phoneme\` and \`bend\` are channel parameters. Give each part its own \`voice('vocal')\`. Pitches go through \`b.tuning\` like every other note, so a choir in just intonation is one assignment: the VOCAL: THREE PARTS, JUST TUNED example in [Code mode](/#code/vocal-harmony) switches between 12-EDO and pure thirds on every pass. [Tuning](/docs/tuning) covers the tunings themselves.
+One instrument sings one line at a time, because \`phoneme\` and \`bend\` are channel parameters. Give each part its own \`voice('vocal')\`. Pitches go through \`b.tuning\` like every other note, so a choir in just intonation is one assignment: the VOCAL: THREE PARTS, JUST TUNED example in [Code mode](/#code) switches between 12-EDO and pure thirds on every pass. [Tuning](/docs/tuning) covers the tunings themselves.
 
 A line that would start while the same instrument is still singing starts where the earlier line ends, losing the opening consonants that overlapped it, and \`plan.trimmed\` says how much went. End a line on a rest, or on a shorter last note, to leave the next one room for its lead-in.
 
