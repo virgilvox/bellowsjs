@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { GLOTTIS_GEOMETRIC, GLOTTIS_SELF_OSCILLATING, JunctionAirway } from '../../src/dsp/junction-airway';
+import { GLOTTIS_GEOMETRIC, GLOTTIS_PULSE, GLOTTIS_SELF_OSCILLATING, JunctionAirway } from '../../src/dsp/junction-airway';
 import { FOLD_F_REF, FoldOscillator } from '../../src/dsp/fold-oscillator';
 import { PitchServo } from '../../src/dsp/pitch-servo';
 import { CM_H2O } from '../../src/dsp/air';
@@ -186,6 +186,99 @@ describe('PitchServo', () => {
     s.measured = 190;
     s.cycle();
     expect(s.correction).toBe(c);
+  });
+});
+
+describe('PitchServo, adaptive rate', () => {
+  it('speeds up by 1 + |error| / 40 cents when two cycles in a row agree, and not when they disagree', () => {
+    const step = (s: PitchServo, m: number) => {
+      s.measured = m;
+      s.pending = 1;
+      s.cycle();
+    };
+    // two cycles 200 cents flat (two semitones under a 220 Hz target)
+    const flat = 220 / Math.pow(2, 200 / 1200);
+    const s = new PitchServo();
+    s.target = 220;
+    s.tau = 0.04;
+    step(s, flat);
+    const c1 = s.correction;
+    // the first has no agreeing predecessor: the plain rate
+    const g1 = 1 - Math.exp(-1 / (flat * 0.04));
+    expect(Math.log(c1)).toBeCloseTo(g1 * Math.log(220 / flat), 12);
+    step(s, flat);
+    const g2 = 1 - Math.exp(-(1 + 200 / 40) / (flat * 0.04));
+    expect(Math.log(s.correction / c1)).toBeCloseTo(g2 * Math.log(220 / flat), 9);
+    // a sharp cycle after a flat one: no speed-up
+    const sharp = 220 * Math.pow(2, 200 / 1200);
+    const c2 = s.correction;
+    step(s, sharp);
+    const g3 = 1 - Math.exp(-1 / (sharp * 0.04));
+    expect(Math.log(s.correction / c2)).toBeCloseTo(g3 * Math.log(220 / sharp), 9);
+  });
+});
+
+describe('FoldOscillator rest ramp', () => {
+  it('moves rest1 and rest2 linearly to their targets over rampLeft steps, then holds them', () => {
+    const f = new FoldOscillator(96000);
+    f.rest1 = f.rest2 = 0.3;
+    f.rest1To = 0.01;
+    f.rest2To = 0.02;
+    f.rampLeft = 64;
+    for (let i = 1; i <= 64; i++) {
+      f.step();
+      expect(f.rest1).toBeCloseTo(0.3 + ((0.01 - 0.3) * i) / 64, 12);
+      expect(f.rest2).toBeCloseTo(0.3 + ((0.02 - 0.3) * i) / 64, 12);
+    }
+    f.step();
+    expect(f.rest1).toBeCloseTo(0.01, 12);
+    expect(f.rampLeft).toBe(0);
+  });
+});
+
+describe('the self-oscillating folds in the airway: voicing and adduction', () => {
+  it('reports voicing from the folds turning: near 1 while they vibrate, near 0 within 60 ms of a wide abduction', () => {
+    const a = airway(48000, GLOTTIS_SELF_OSCILLATING, 200);
+    run(a, 0.5);
+    expect(a.voicing).toBeGreaterThan(0.9);
+    a.agStatic = 0.3;
+    run(a, 0.06);
+    expect(a.voicing).toBeLessThan(0.1);
+  });
+
+  it('a fast adduction puts no tone at the block rate into the output (the rest ramps within each block)', () => {
+    // 10 ms from a wide voiceless opening to the voiced one, as after a voiceless stop
+    const line = (model: number) => {
+      const a = airway(48000, model, 220);
+      a.agStatic = 0.3;
+      const blocks = Math.round(0.01 * a.rate / a.block);
+      let b0 = -1;
+      const out = run(a, 0.35, (b) => {
+        const t = (b * a.block) / a.rate;
+        if (t < 0.25) return;
+        if (b0 < 0) b0 = b;
+        const k = Math.min((b - b0) / blocks, 1);
+        a.agStatic = 0.3 + (0.015 - 0.3) * k;
+      });
+      // the block rate's line over the 30 ms from the adduction's start, against the bands a fifth either side
+      const s0 = Math.round(0.25 * a.rate);
+      const n = Math.round(0.03 * a.rate);
+      const lv = (f: number) => {
+        let re = 0;
+        let im = 0;
+        for (let i = 0; i < n; i++) {
+          const w = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / n);
+          re += out[s0 + i] * w * Math.cos((2 * Math.PI * f * i) / a.rate);
+          im += out[s0 + i] * w * Math.sin((2 * Math.PI * f * i) / a.rate);
+        }
+        return 20 * Math.log10(Math.hypot(re, im) + 1e-12);
+      };
+      const fb = a.rate / a.block;
+      return lv(fb) - Math.max(lv(fb / 1.5), lv(fb * 1.5));
+    };
+    const folds = line(GLOTTIS_SELF_OSCILLATING);
+    const pulse = line(GLOTTIS_PULSE);
+    expect(folds, `folds ${folds.toFixed(1)} dB, pulse ${pulse.toFixed(1)} dB`).toBeLessThan(pulse + 6);
   });
 });
 

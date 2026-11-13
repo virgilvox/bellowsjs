@@ -78,6 +78,10 @@ const HIT_ZETA = 1;
  */
 export const FOLD_F_REF = 158;
 const MIN_Q = 0.25;
+/** The glottal area's swing over its mean that makes a cycle voiced. */
+const DEPTH = 0.2;
+/** The swing over its mean that a cycle needs before the servo tunes on it. */
+const TUNE_DEPTH = 0.03;
 const MAX_Q = 12;
 
 export class FoldOscillator {
@@ -88,6 +92,15 @@ export class FoldOscillator {
   /** Rest displacements of the lower and upper masses at the vocal processes, cm. */
   rest1 = 0.01;
   rest2 = 0.01;
+  /**
+   * Where rest1 and rest2 ramp to, and over how many more steps (0: no ramp). The caller sets the
+   * block's start in rest1 and rest2 and its end here: a rest that stepped once a block moved the
+   * glottis in steps at the block rate, and a fast adduction rang the tract (MEASURED: a 1.5 kHz
+   * tone 20 to 35 dB over the pulse's while the folds closed after a voiceless stop).
+   */
+  rest1To = 0.01;
+  rest2To = 0.01;
+  rampLeft = 0;
   /** Posterior chink, cm^2. */
   chink = 0.01;
   /** Fold length, cm. */
@@ -129,6 +142,17 @@ export class FoldOscillator {
   private n = 0;
   private lastV1 = 0;
   private lastT = -1;
+  private lastVoiced = -1;
+  /**
+   * Samples since the last voiced cycle's turning point (a large number before the first): whether the
+   * folds are vibrating now. A cycle is voiced when the glottal area swings by DEPTH of its mean or more:
+   * abducted folds still shiver by micrometres, and counting those turns as cycles kept the voicing on
+   * through voiceless sounds (MEASURED: voicing 0.5 after 60 ms of a 0.3 cm^2 opening).
+   */
+  sinceTurn = 1e9;
+  /* The area's range since the last turning point. */
+  private aLo = 1e9;
+  private aHi = 0;
 
   constructor(rate: number) {
     this.rate = rate;
@@ -141,6 +165,10 @@ export class FoldOscillator {
     this.n = 0;
     this.lastV1 = 0;
     this.lastT = -1;
+    this.lastVoiced = -1;
+    this.sinceTurn = 1e9;
+    this.aLo = 1e9;
+    this.aHi = 0;
     this.cycles = 0;
     this.servo.reset();
     this.tune();
@@ -167,6 +195,12 @@ export class FoldOscillator {
 
   /** One sample: forces from the last pressures, the masses moved, the areas and a cycle check. */
   step(): void {
+    if (this.rampLeft > 0) {
+      const k = 1 / this.rampLeft;
+      this.rest1 += (this.rest1To - this.rest1) * k;
+      this.rest2 += (this.rest2To - this.rest2) * k;
+      this.rampLeft--;
+    }
     if (this.stale) {
       // the coefficients for the tension: masses as Q^-1.5, springs as Q^0.5, so f0 scales as Q
       this.stale = 0;
@@ -256,18 +290,32 @@ export class FoldOscillator {
     // a cycle: the lower mass turns from opening to closing, between this sample and the last; the period
     // since the previous turn goes to the servo (written out here: a call taking these doubles boxed them)
     this.n++;
+    const ar = this.area;
+    this.aLo = Math.min(this.aLo, ar);
+    this.aHi = Math.max(this.aHi, ar);
     const lv = this.lastV1;
     this.lastV1 = v1;
     if (lv > 0 && v1 <= 0) {
       const t = this.n - 1 + lv / (lv - v1);
       const period = t - this.lastT;
-      if (this.lastT >= 0 && period > 1) {
+      const swing = this.aHi - this.aLo;
+      const mean = 0.5 * (this.aHi + this.aLo);
+      if (this.lastT >= 0 && period > 1 && swing > TUNE_DEPTH * mean) {
+        // the servo takes the onset's shallow first cycles (gating them at DEPTH left onsets up to 370 cents
+        // sharp for 55 ms) but not the shiver of abducted folds, whose turns come at any rate (44 to 854 Hz
+        // under a 460 Hz target) and pulled the correction off before the note began (MEASURED)
+        const deep = swing > DEPTH * mean ? 1 : 0;
         this.servo.measured = this.rate / period;
+        this.servo.deep = deep;
         this.servo.pending = 1;
         this.cycles++;
+        if (deep) this.lastVoiced = t;
       }
       this.lastT = t;
+      this.aLo = 1e9;
+      this.aHi = 0;
     }
+    this.sinceTurn = this.lastVoiced >= 0 ? this.n - this.lastVoiced : 1e9;
     // every sample, so V8 optimizes and inlines it; it works only on a sample that measured a cycle (a call
     // once a cycle stayed unoptimized and boxed its doubles)
     this.servo.cycle();

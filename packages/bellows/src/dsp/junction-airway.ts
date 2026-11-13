@@ -949,13 +949,20 @@ export class JunctionAirway {
     const L = this.foldLength > 0.1 ? this.foldLength : 0.1;
     const shut = 1 - 0.92 * closure;
     const chink = (this.chink > 0 ? this.chink : 0) * shut;
+    // the rest from the block's start to its end, ramped per step as the pulse ramps its opening
     const rest = this.agSt - chink;
     let r = (rest > 0 ? rest : 0) / L + this.restOffset;
     r = r > 0 ? r : 0;
+    const rest0 = this.agSt0 - chink;
+    let r0 = (rest0 > 0 ? rest0 : 0) / L + this.restOffset;
+    r0 = r0 > 0 ? r0 : 0;
     f.length = L;
     f.chink = chink;
-    f.rest1 = r;
-    f.rest2 = r;
+    f.rest1 = r0;
+    f.rest2 = r0;
+    f.rest1To = r;
+    f.rest2To = r;
+    f.rampLeft = this.block;
     f.free = 1 - closure;
     // the cycle unit still runs, for its drift and jitter: the servo aims at the drifted pitch, the
     // cycle's period scale perturbs the tension
@@ -963,7 +970,13 @@ export class JunctionAirway {
     f.servo.target = this.f0 * this.glottis.pitchFactor;
     f.perturb = 1 / this.glottis.scale;
     f.tune();
-    this.voicing = f.cycles > 0 ? 1 : 0;
+    // voicing is whether the folds turned within the last 1.6 periods of the target, smoothed as the pulse's
+    // gate is (25 Hz). A count of cycles since reset left it at 1 through every voiceless sound after the
+    // first cycle: the aspiration kept its quiet voiced gain and its pulsing, and the onset after a
+    // voiceless stop rang the tract (MEASURED: a 1.5 kHz tone 15 dB over the pulse's in "twinkle", female)
+    const per = this.f0 > 20 ? this.rate / this.f0 : this.rate / 20;
+    const on = f.sinceTurn < 1.6 * per ? 1 : 0;
+    this.voicing += (1 - Math.exp((-2 * Math.PI * 25 * this.block) / this.rate)) * (on - this.voicing);
   }
 
   /**

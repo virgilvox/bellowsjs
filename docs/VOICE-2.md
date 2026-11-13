@@ -851,6 +851,35 @@ spread; the female's and the child's do not.
   CHIMERA's above 2 kHz.
 - DTW: the two strengths renders above, from obstacle 18.
 
+## The self-oscillating folds' onset chirp (2026-11-12)
+
+Heard on the listening page: the self-oscillating folds (glottis 1) put a short chirp at some
+onsets. Three causes, each measured in scratch chirp/ and fixed:
+
+- A 1.5 kHz tone while the folds closed after a voiceless stop. The airway set the folds' rest
+  once a block (32 samples at 48 kHz), so a fast adduction moved the glottis in steps at 48000 /
+  32 = 1500 Hz and rang the tract: the 1.5 kHz band ran 20 to 35 dB over the pulse's from 1.078
+  to 1.093 s in the female "twinkle". The rest now ramps across each block, as the pulse ramps its
+  opening (FoldOscillator rest1To, rest2To, rampLeft). Frames with a 1.5 kHz line 15 dB over the
+  pulse's, over all 21 renders: 470 before, 60 after, the rest male harmonics near 1.5 kHz, not a
+  line. The line's prominence in a 10 ms adduction (test/dsp-osc/fold-oscillator.test.ts): 9.2 dB
+  before, under the pulse's plus 6 after.
+- The voicing flag stayed 1 from the first cycle on (a count since reset), and abducted folds
+  shiver by micrometres, so turns alone also read as voicing (0.5 after 60 ms at 0.3 cm^2). A cycle
+  now counts as voiced when the area swings by 20 percent of its mean; voicing is whether one
+  came in the last 1.6 target periods, smoothed at 25 Hz as the pulse's gate is.
+- Onsets 1 to 2.7 semitones sharp, sliding down over 60 to 100 ms. The shiver's turns (44 to 854
+  Hz under a 460 Hz target) reached the servo and moved its correction before the note began, and
+  the servo's 40 ms took the rest that long. The servo now tunes only on cycles that swing the
+  area by 3 percent; its time constant shrinks by 1 + |error| / 40 cents when a full cycle's error
+  agrees with the cycle before. Mean |f0 difference| from the pulse over twinkle and melisma, 3
+  bodies: 28.2 cents before, 19.5 after; frames over 50 cents 683 to 360. Onsets still begin up to
+  280 cents sharp in the child body, settling in 30 to 40 ms: the pressure under the closing folds
+  overshoots (10 against 6 to 8 cmH2O).
+- Not fixed: near 500 Hz (female melisma, /o/) f0 meets F1 and the folds lock to it, about 100
+  cents flat with the servo at its working limit. That is source-tract interaction, which the
+  `tuning` setting addresses as a singer does.
+
 ## The phases, each with a gate
 
 0. **Is the tube enough?** A float Kelly-Lochbaum tract at 48 kHz, driven both by CHIMERA's own
