@@ -170,6 +170,9 @@ export class FoldOscillator {
 
   reset(): void {
     this.x1 = this.x2 = this.v1 = this.v2 = 0;
+    // the pressures too: the airway writes them after each step, so the first step of a note read the last
+    // note's (MEASURED: a reused voice parted from a fresh one at sample 19)
+    this.ps = this.pe = 0;
     this.area = this.area1 = this.area2 = 0;
     this.n = 0;
     this.lastV1 = 0;

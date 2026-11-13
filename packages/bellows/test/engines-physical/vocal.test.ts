@@ -379,7 +379,8 @@ describe('vocal engine: rates, determinism, robustness', () => {
     }
   });
 
-  it('starts every note from rest: a reused voice sings what a fresh one does, from the same stream state', () => {
+  it('starts every note from rest: a reused voice sings what a fresh one does, from the same stream state, on every fold model', () => {
+   for (const glottis of [0, 1, 2]) {
     /* Streams whose state the test rewinds before each note-on: what is left is the voice's own state. */
     const states: Array<{ s: number; seed: number }> = [];
     const stream = (label: string): NamedRng => {
@@ -398,19 +399,31 @@ describe('vocal engine: rates, determinism, robustness', () => {
     const rewind = () => {
       for (const st of states) st.s = st.seed;
     };
+    states.length = 0;
     const o: DriveOpts = { seconds: 0.6, gate: 0.5, freq: 147, events: [at(0.1, 'ʃ'), at(0.2, 'u'), { t: 0.3, name: 'bend', value: -2 }] };
-    const used = makeVoice({ rng: stream('reuse') });
+    const used = makeVoice({ rng: stream('reuse'), params: { glottis } });
     drive(used, { seconds: 0.9, gate: 0.4, freq: 220, events: [at(0.1, 'd'), at(0.16, 'i'), { t: 0.2, name: 'bend', value: 5 }, at(0.3, 'n')] });
     used.setParam('bend', 0);
     used.setParam('phoneme', ph('ɑ'));
     rewind();
     const a = drive(used, o);
     states.length = 0;
-    const fresh = makeVoice({ rng: stream('reuse') });
+    const fresh = makeVoice({ rng: stream('reuse'), params: { glottis } });
     rewind();
     const b = drive(fresh, o);
-    expect(countDiffs(a, b)).toBe(0);
+    expect(countDiffs(a, b), `glottis ${glottis}`).toBe(0);
+   }
   });
+
+  it('changes its fold model at the next note: a glottis change while a note sounds leaves that note alone', () => {
+    for (const [from, to] of [[1, 0], [0, 1]]) {
+      const held: DriveOpts = { seconds: 1.1, gate: 1.05, freq: 220, params: { glottis: from }, events: [at(0, 'ɑ')] };
+      const plain = drive(makeVoice({ ...held, seed: 'switch' }), held);
+      const switched = drive(makeVoice({ ...held, seed: 'switch' }), { ...held, events: [at(0, 'ɑ'), { t: 0.5, name: 'glottis', value: to }] });
+      expect(countDiffs(plain, switched), `${from} to ${to}`).toBe(0);
+    }
+  });
+
 
   it('releases to silence and goes inactive', () => {
     const voice = makeVoice({ seed: 'rel' });

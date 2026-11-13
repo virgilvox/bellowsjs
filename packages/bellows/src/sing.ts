@@ -299,7 +299,11 @@ function phraseEvents(phrase: SungPhrase, noteId: number, opts: SungEventOptions
     const st = 12 * Math.log2(phrase.pitches[p].hz / openHz);
     if (st === bend || !Number.isFinite(st)) continue;
     bend = st;
-    const at = Math.max(start, t - lead);
+    // the first change waits at least half its note: posted at the NoteOn it reached a fresh voice, which
+    // snaps, and a short opening note under a long glide was sung at the second note's pitch (MEASURED:
+    // 100 ms at 220 Hz then 330 Hz with glide 0.5 sang 330 throughout)
+    const floor = p === p0 + 1 ? phrase.pitches[p0].time + 0.5 * (t - phrase.pitches[p0].time) : start;
+    const at = Math.max(start, floor, t - lead);
     inner.push([at, 1, param(at, opts.bendParam, st)]);
   }
   const ahead = opts.planLead !== undefined && opts.planLead > 0 ? opts.planLead : 0;

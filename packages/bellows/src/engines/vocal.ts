@@ -508,7 +508,9 @@ class VocalVoice implements Voice {
   private applyTension(): void {
     const t = clamp(this.tension + 0.35 * (this.vel - 0.8), 0, 1);
     this.air.glottis.setTension(t);
-    const base = this.glottisModel === GLOTTIS_SELF_OSCILLATING ? SELF_REST : this.foldRest;
+    // the model that is sounding: a change waits for the next note, and the queued model's rest moved the
+    // sounding folds (MEASURED: 2.4 dB on a held note switched from 1 to 0)
+    const base = this.air.model === GLOTTIS_SELF_OSCILLATING ? SELF_REST : this.foldRest;
     this.air.restOffset = base + PRESS * (0.5 - t);
   }
 

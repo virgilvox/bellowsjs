@@ -744,4 +744,21 @@ describe('sungEvents(): the sounds ahead and the early bends', () => {
     const change = plan.phrases[0].pitches[1];
     expect(bends.find((e) => e.b !== 0)!.time).toBeCloseTo(change.time - 0.05, 12);
   });
+  it('starts a bend no earlier than half way through the note before it: a short first note keeps its own pitch', () => {
+    // a 100 ms opening note under a 137 ms lead: posted at the NoteOn, the bend reached a fresh voice and
+    // snapped, so the first note sang at the second's pitch
+    const short = planSung(
+      [
+        { time: 1, dur: 0.1, hz: 220 },
+        { time: 1.1, dur: 0.5, hz: 330 },
+      ],
+      lyricsToSyllables('/ɑ o/'),
+    );
+    const { events } = sungEvents(short, { ...opts, bendLead: 0.137 });
+    const on = events.find((e) => e.kind === EventKind.NoteOn)!;
+    const bend = events.find((e) => e.kind === EventKind.Param && e.a === 8 && e.b !== 0)!;
+    const vowel = short.phrases[0].spans.find((sp) => sp.kind === 'nucleus')!.start;
+    expect(bend.time).toBeGreaterThan(on.time);
+    expect(bend.time).toBeCloseTo(vowel + 0.5 * (1.1 - vowel), 12);
+  });
 });
