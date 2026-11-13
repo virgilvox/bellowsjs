@@ -46,10 +46,10 @@ LLM reference was out of sync, because the adapter added a header and the gate
 that would have caught it only exists in CI because the OTHER branch added it.
 That is the argument for verifying the merged tree and not the two halves.
 
-What has NOT moved is everything downstream of git. npm still serves
-`bellowsjs@0.1.9`, both embedded registries still serve `Bellows@0.1.2`, and
-bellows.live is now BEHIND `main` rather than level with it, because the audit
-branch touched `apps/workbench` and there is no deploy on push. Merging is not
+Downstream of git, as of 2026-11-13: npm serves `bellowsjs@0.2.0` (the singing voice, MIT),
+tagged `v0.2.0`, and bellows.live was deployed from the same commit. Both embedded registries
+still serve `Bellows@0.1.2`; the next embedded release is 0.1.3 and would carry the MIT license.
+There is no deploy on push. Merging is not
 shipping, and this file has confused the two before.
 
 Three claims this repository stated as hard facts were false when checked, and
@@ -111,9 +111,10 @@ WHAT IS TRUE TODAY, and each of these is checkable in one command:
   MicroMod or a Daisy, and **nothing has been compared to the browser by ear**.
   41 parity rows, 428 value rows and 1054 preset values stand in for that and
   are not the same thing.
-- `bellowsjs@0.1.9` is on npm and tagged, and `Bellows@0.1.2` is on both embedded registries.
+- `bellowsjs@0.2.0` is on npm and tagged (2026-11-13), and `Bellows@0.1.2` is on both embedded registries.
   Publishing to npm needs a token that bypasses 2FA or an `--otp=<code>`: a plain `npm publish`
-  packs the tarball and then returns E403, which reads like a permissions problem.
+  packs the tarball and then returns E403, which reads like a permissions problem. The token in
+  `~/.npmrc` on the owner's machine bypasses it (0.1.9 and 0.2.0 went out with it).
 - `main` carries everything: there are no unmerged branches, and PR #2 is
   closed by the merge rather than open. bellows.live was deployed on 2026-08-21
   and was byte-identical to `main` when compared by content on 2026-09-04, but
@@ -134,7 +135,7 @@ WHAT IS TRUE TODAY, and each of these is checkable in one command:
   `arduino-cli lib install Bellows@0.1.1` into a clean sketchbook was followed
   by 16 of 17 examples compiling for a Teensy 4.1, the seventeenth being
   `12_DacOut` declining by `#error` because a 4.x has no DAC. It versions
-  independently of the npm package, 0.1.2 against 0.1.9, and has its own release
+  independently of the npm package, 0.1.2 against 0.2.0, and has its own release
   ritual in HANDOFF. Publishing it found that
   every example failed to compile once installed, which had been true for the
   whole life of the port and which only installing it could reveal.
