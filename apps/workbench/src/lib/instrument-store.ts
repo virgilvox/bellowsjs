@@ -10,7 +10,6 @@ import { computed, reactive } from 'vue';
 import {
   listEngines,
   listEffects,
-  registerBuiltins,
   getPreset,
   SAMPLER_PARAMS,
   VOCAL_PHONEMES,
@@ -22,9 +21,6 @@ import {
 import { bellows as bellowsRef, ensureBellows } from './audio';
 import { ensureRegistered, sfState } from './soundfonts';
 
-/* the registries fill at boot normally; fill them now so the UI can list
- * engines and effects before the first sound */
-registerBuiltins();
 
 export const MELODIC_ENGINE_IDS = [
   'va',

@@ -20,7 +20,7 @@ audio.sampleRate;  // 44100 unless you passed sampleRate
 const wavBuf = audio.wav(24); // ArrayBuffer: 16, 24, or 32 bit
 \`\`\`
 
-\`b.render({ bars | beats | seconds, sampleRate? })\` does not record what the speakers played. It rebuilds the piece: every structural call you made (voices, effect chains, buses, sample banks) was recorded as a kernel message, and every \`clock.at\` callback re-runs against an offline transport, tick by tick, with the same \`t\` and \`step\` values live playback would produce. The event stream renders through a fresh kernel faster than real time, tempo ramps and swing included.
+\`b.render({ bars | beats | seconds, sampleRate? })\` does not record what the speakers played. It rebuilds the piece: every structural call you made (voices, effect chains, buses, sample banks) was recorded as a kernel message, and every \`clock.at\` callback re-runs against an offline transport, tick by tick, with the same \`t\` and \`step\` values live playback would produce. The event stream renders through a fresh kernel faster than real time, tempo ramps and swing included. In a browser that kernel is the worklet itself, run in an OfflineAudioContext: the code that plays live, rendering off the main thread so the page stays responsive, and no second copy of the engines in your bundle. Outside a browser the same worklet code runs on the calling thread. Either way the samples equal \`renderOffline\`'s.
 
 ## The fresh-stream rule
 
@@ -61,7 +61,7 @@ const out = renderOffline(setup, { seconds: 2, sampleRate: 44100 });
 writeFileSync('out.wav', Buffer.from(encodeWav([out.left, out.right], 44100, { bitDepth: 16 })));
 \`\`\`
 
-There is no AudioContext in Node, so this is the message-stream form: the same kernel the worklet runs, driven by a plain array. \`createChannel\` makes an instrument slot, \`events\` carries timestamped kernel events where \`time\` is seconds, \`a\` is a note id, \`b\` is frequency in Hz, and \`c\` is velocity. Call \`registerBuiltins()\` once first. Output is bit-identical on every run, which is why the library's own regression suite diffs renders against golden files in CI. Higher-level Node scores are straightforward: compute frequencies with the [theory](/docs/theory) and [tuning](/docs/tuning) helpers, then emit event pairs.
+There is no AudioContext in Node, so this is the message-stream form: the same kernel the worklet runs, driven by a plain array. \`createChannel\` makes an instrument slot, \`events\` carries timestamped kernel events where \`time\` is seconds, \`a\` is a note id, \`b\` is frequency in Hz, and \`c\` is velocity. \`renderOffline\` registers the built-in engines itself; call \`registerBuiltins()\` when you want them elsewhere on that thread, through \`getEngine\`. Output is bit-identical on every run, which is why the library's own regression suite diffs renders against golden files in CI. Higher-level Node scores are straightforward: compute frequencies with the [theory](/docs/theory) and [tuning](/docs/tuning) helpers, then emit event pairs.
 
 ## Opus, where available
 

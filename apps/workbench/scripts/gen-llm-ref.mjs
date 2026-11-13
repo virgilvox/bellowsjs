@@ -98,7 +98,8 @@ Node (offline): import { registerBuiltins, renderOffline, encodeWav } from 'bell
 
 In the browser, the AudioContext needs a user gesture: call Bellows.boot() or
 play() from a click handler. In Node there is no audio device: use
-registerBuiltins() once, then renderOffline() (see Offline rendering).
+renderOffline(), which registers the built-in engines itself (see Offline
+rendering).
 
 ## Tier 1: immediate sound
 
@@ -141,7 +142,14 @@ Notes on the model:
 - b.render({ bars | beats | seconds, sampleRate? }) re-runs the recorded
   setup and clock callbacks offline and returns { left, right, sampleRate,
   wav(bitDepth?) }. Renders equal a fresh page load of the same seed as long
-  as randomness flows through b.rng().
+  as randomness flows through b.rng(). In a browser it renders through the
+  kernel worklet in an OfflineAudioContext (off the main thread); elsewhere
+  the same worklet code runs on the calling thread. Same samples either way.
+- listEngines() / listEffects() describe every built-in (id, label, params)
+  without loading its DSP, plus anything registered on this thread.
+  getEngine(id) returns a full definition only once registered there:
+  registerBuiltins() registers the built-ins (Bellows.boot() does not; the
+  engines play in the worklet).
 - b.tuning is settable: Tuning.edo(19), Tuning.ji([...ratios]), or
   tuningFromScala(parseScl(text)). All note resolution flows through it.
 - b.defEngine(def) / b.defEffect(def) register custom DSP (tier 3): the def

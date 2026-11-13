@@ -18,7 +18,8 @@ Node (offline): import { registerBuiltins, renderOffline, encodeWav } from 'bell
 
 In the browser, the AudioContext needs a user gesture: call Bellows.boot() or
 play() from a click handler. In Node there is no audio device: use
-registerBuiltins() once, then renderOffline() (see Offline rendering).
+renderOffline(), which registers the built-in engines itself (see Offline
+rendering).
 
 ## Tier 1: immediate sound
 
@@ -61,7 +62,14 @@ Notes on the model:
 - b.render({ bars | beats | seconds, sampleRate? }) re-runs the recorded
   setup and clock callbacks offline and returns { left, right, sampleRate,
   wav(bitDepth?) }. Renders equal a fresh page load of the same seed as long
-  as randomness flows through b.rng().
+  as randomness flows through b.rng(). In a browser it renders through the
+  kernel worklet in an OfflineAudioContext (off the main thread); elsewhere
+  the same worklet code runs on the calling thread. Same samples either way.
+- listEngines() / listEffects() describe every built-in (id, label, params)
+  without loading its DSP, plus anything registered on this thread.
+  getEngine(id) returns a full definition only once registered there:
+  registerBuiltins() registers the built-ins (Bellows.boot() does not; the
+  engines play in the worklet).
 - b.tuning is settable: Tuning.edo(19), Tuning.ji([...ratios]), or
   tuningFromScala(parseScl(text)). All note resolution flows through it.
 - b.defEngine(def) / b.defEffect(def) register custom DSP (tier 3): the def
@@ -78,7 +86,7 @@ import { type Meter } from './seq/time';
 import { Scale } from './theory/scales';
 import { Tuning } from './theory/tuning';
 import type { FxSpec, KernelMessage, MeterFrame, SamplerZoneData } from './kernel/messages';
-import { type RenderedAudio } from './render/offline';
+import type { RenderedAudio } from './render/offline';
 import { SoundFont } from './io/sf2';
 import type { PronouncingDictionary, SungPlan, Syllable } from './lyrics/types';
 export interface BootOptions {
@@ -200,6 +208,8 @@ export declare class Bellows {
     dictionary: PronouncingDictionary | null;
     /** boot() made the context, so dispose() is the one allowed to close it */
     private ownsContext;
+    /** The worklet source boot() loaded, for the offline renders that run it again. */
+    private readonly workletUrl;
     private constructor();
     static boot(opts?: BootOptions): Promise<Bellows>;
     /**
@@ -359,7 +369,10 @@ export declare class Bellows {
      * Render the piece offline through a fresh kernel: same setup messages,
      * same clock callbacks, fresh seeded rng streams (a render equals what a
      * fresh page load would play, as long as randomness flows through
-     * b.rng()). Returns audio plus a wav() encoder.
+     * b.rng()). In a browser the kernel is the worklet in an
+     * OfflineAudioContext, so the render runs off the main thread; elsewhere
+     * the same worklet code runs on the calling thread. Returns audio plus a
+     * wav() encoder.
      */
     render(opts: {
         bars?: number;
@@ -1312,6 +1325,11 @@ export interface EngineDef {
     polyphony?: number;
     createVoice(sampleRate: number, params: Record<string, number>, rng: NamedRng): Voice;
 }
+/**
+ * An engine described without its DSP: what a UI, a reference or a parameter panel needs. The main
+ * thread can list every built-in engine this way without carrying its code (src/core/catalog.ts).
+ */
+export type EngineInfo = Omit<EngineDef, 'createVoice'>;
 /** A stereo in-place effect. */
 export interface Effect {
     process(l: Float32Array, r: Float32Array, from: number, to: number): void;
@@ -1324,6 +1342,8 @@ export interface EffectDef {
     params: ParamSpec[];
     create(sampleRate: number, params: Record<string, number>): Effect;
 }
+/** An effect described without its DSP (see EngineInfo). */
+export type EffectInfo = Omit<EffectDef, 'create'>;
 /** A mono analysis tap fed post-mix. */
 export interface Analyzer {
     /** Consume samples; may produce results via poll methods on the concrete type. */

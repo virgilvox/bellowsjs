@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased (0.3.0)
+
+The engines ship once. Every engine used to travel twice in a page: inside the AudioWorklet's
+string, and again as main-thread code, because `Bellows.boot()` registered all of them so that
+`b.render()` and `listEngines()` could work. A page that boots, sings and renders bundled
+175,417 gzipped bytes; it now bundles 110,930, of which 76,985 are the worklet.
+
+### Changed
+
+- **`b.render()` renders through the kernel worklet.** In a browser it runs the worklet in an
+  OfflineAudioContext, the Tone.Offline pattern, so a render runs off the main thread and the page
+  stays responsive; the score goes to the processor's constructor (`processorOptions`) so it is in
+  place before the first block. Outside a browser the same worklet string runs on the calling
+  thread. Every path renders `renderOffline`'s samples exactly (tested, and checked in Chrome). In
+  Chrome a render through the worklet takes about 25 percent longer than one on the main thread.
+  `Bellows.boot({ workletUrl })` applies to renders too.
+- **`Bellows.boot()` no longer registers the built-in engines on the main thread.** They play in
+  the worklet, which registers its own. `getEngine(id)` on the main thread returns a definition
+  only once it is registered there: call `registerBuiltins()` first, as Node code already does.
+- **`listEngines()` and `listEffects()` describe every built-in without loading its DSP**, from a
+  generated catalog (`EngineInfo` and `EffectInfo`: id, label, params, polyphony), plus anything
+  registered on the thread; a registered definition stands in for its description. Their return
+  types narrow from `EngineDef[]` and `EffectDef[]` accordingly.
+- **`renderOffline()` registers the built-in engines itself.** Code that rendered in a browser
+  after a boot, relying on the boot's registration, keeps working; `registerBuiltins()` first is
+  harmless.
+
 ## 0.2.0
 
 A singing voice, and a new license. `git diff --shortstat v0.1.9..v0.2.0 -- packages/bellows/src`
