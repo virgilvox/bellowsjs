@@ -3,6 +3,7 @@ import { JunctionAirway, ductMin } from '../../src/dsp/junction-airway';
 import { AirwayTube, evenNodes } from '../../src/dsp/airway-tube';
 import { CM_H2O, WALL_TRACHEA, WALL_TRACT } from '../../src/dsp/air';
 import { rng } from '../../src/core/prng';
+import { bandEnergy, magSpectrum } from '../engines-physical/helpers';
 
 /** An airway of n sections at `rate`, every section `area` cm^2, glottis held open, lungs at `pLung` cmH2O. */
 function airway(rate: number, n: number, area: number, pLung: number): JunctionAirway {
@@ -121,8 +122,9 @@ describe('JunctionAirway', () => {
   });
 
   /** A tract of 3 cm^2 with a constriction of area `ac` over sections [lo, hi], unvoiced. */
-  function constricted(lo: number, hi: number, ac: number, teethX: number, pLung = 8, labial = 0): JunctionAirway {
+  function constricted(lo: number, hi: number, ac: number, teethX: number, pLung = 8, labial = 0, agStatic = 0.3): JunctionAirway {
     const a = airway(48000, 40, 3, pLung);
+    a.agStatic = agStatic;
     for (let s = lo; s <= hi; s++) {
       a.gridIn[s] = ac;
       a.gridMin[s] = ac;
@@ -194,6 +196,130 @@ describe('JunctionAirway', () => {
   it('makes no noise through a sealed section: its leak is the area floor, not a jet', () => {
     const a = constricted(30, 31, 1e-6, 34.5);
     for (let q = 0; q < 3; q++) expect(a.noiseLevel[q]).toBe(0);
+  });
+
+  it('makes no jet noise under Re 1000 and the full v^3 sqrt(A) over Re 2000, ramped between', () => {
+    // Re = v d / nu, d = 2 sqrt(A / pi), from the source's own block means
+    const nu = 1.86e-4 / 1.14e-3;
+    const rows = [0.03, 0.08, 0.15, 0.25, 0.4, 1, 8].map((p) => {
+      const a = constricted(30, 31, 0.1, 34.5, p);
+      const q = loudest(a);
+      const v = a.noiseVelocity[q];
+      const A = a.noiseArea[q];
+      return { re: (v * 2 * Math.sqrt(A / Math.PI)) / nu, law: a.noiseLevel[q] / (v * v * v * Math.sqrt(A) + 1e-30) };
+    });
+    const below = rows.filter((r) => r.re < 900);
+    const ramp = rows.filter((r) => r.re > 1150 && r.re < 1850);
+    const above = rows.filter((r) => r.re > 2300);
+    expect(below.length).toBeGreaterThan(0);
+    expect(ramp.length).toBeGreaterThan(0);
+    expect(above.length).toBeGreaterThan(0);
+    for (const r of below) expect(r.law).toBe(0);
+    for (const r of ramp) {
+      expect(r.law).toBeGreaterThan(0.02);
+      expect(r.law).toBeLessThan(0.9);
+    }
+    for (const r of above) expect(r.law).toBeGreaterThan(0.95);
+  });
+
+  it('gives a free jet a second pole the obstacle source lacks: at matched places, 4 to 8 kHz falls further below 2 to 4 kHz', () => {
+    // separation 0.3 cm behind the incisors (an obstacle) against at their edge (a free jet), the tract alike
+    const dx = 35000 / 96000;
+    const band = (x: Float32Array, lo: number, hi: number) => {
+      let e = 0;
+      for (let f = 9600; f + 2048 < x.length; f += 1024) e += bandEnergy(magSpectrum(x, f, 2048), 48000, 2048, lo, hi);
+      return 10 * Math.log10(e);
+    };
+    const tilt = (lo: number, hi: number, teethX: number) => {
+      const a = airway(48000, 40, 3, 8);
+      for (let s = lo; s <= hi; s++) a.gridIn[s] = a.gridMin[s] = 0.1;
+      a.teethX = teethX;
+      const x = run(a, 48000);
+      return band(x, 4000, 8000) - band(x, 2000, 4000);
+    };
+    // MEASURED: obstacle +7.6 dB, free jet -0.6; with the free jet's second pole taken out, +7.7 and +3.4
+    // (the rest of the difference is the two places' transfer to the lips)
+    expect(tilt(30, 31, 32 + 0.3 / dx) - tilt(31, 32, 33)).toBeGreaterThan(6);
+    // and the coefficients themselves: the free jet's second pole at 3.5 kHz, the obstacle's out of the band
+    const c2 = (teethX: number, lo: number) => {
+      const a = constricted(lo, lo + 1, 0.1, teethX);
+      return (a as unknown as { cLp2: Float64Array }).cLp2[loudest(a)];
+    };
+    expect(c2(33, 31)).toBeCloseTo(1 - Math.exp((-2 * Math.PI * 3500) / 48000), 9);
+    expect(c2(32 + 0.3 / dx, 30)).toBeCloseTo(1 - Math.exp((-2 * Math.PI * 0.45 * 48000) / 48000), 9);
+  });
+
+  it('low-passes the constriction velocity at 500 Hz and delays a source by D / (0.5 v): longer the further the obstacle', () => {
+    const a = constricted(30, 31, 0.1, 34.5);
+    const w = a as unknown as { cVc: number; tau1: Float64Array };
+    expect(w.cVc).toBeCloseTo(1 - Math.exp((-2 * Math.PI * 500) / 48000), 12);
+    const dx = 35000 / 96000;
+    const tauOf = (teethX: number) => {
+      const b = constricted(30, 31, 0.1, teethX);
+      const q = loudest(b);
+      return { tau: (b as unknown as { tau1: Float64Array }).tau1[q] / 48000, v: b.noiseVelocity[q], d: (teethX - 32) * dx };
+    };
+    const near = tauOf(32 + 0.5 / dx);
+    const far = tauOf(32 + 1.5 / dx);
+    expect(far.tau).toBeGreaterThan(2 * near.tau);
+    expect(near.tau).toBeCloseTo(near.d / (0.5 * near.v), 4);
+    expect(far.tau).toBeCloseTo(far.d / (0.5 * far.v), 4);
+  });
+
+  it('pulses frication at f0 in voicing, its modulation index held near 0.5', () => {
+    // voiced: the pulse glottis nearly closed; the source's level each block, its spread against its mean
+    const index = (ag: number) => {
+      const a = airway(48000, 40, 3, 8);
+      a.agStatic = ag;
+      for (let s = 30; s <= 31; s++) a.gridIn[s] = a.gridMin[s] = 0.1;
+      a.teethX = 34.5;
+      const lv: number[] = [];
+      run(a, 0.6 * 48000, (b) => {
+        if (b > 120) lv.push(a.noiseLevel[0] + a.noiseLevel[1] + a.noiseLevel[2]);
+      });
+      const mean = lv.reduce((p, q) => p + q, 0) / lv.length;
+      let sd = 0;
+      for (const v of lv) sd += (v - mean) ** 2;
+      return { m: Math.sqrt(sd / lv.length) / mean, voicing: a.voicing };
+    };
+    const voiced = index(0.03);
+    expect(voiced.voicing).toBeGreaterThan(0.9);
+    // MEASURED, the spread of the block means over their mean: 0.32 voiced, 0.01 unvoiced, and 0.81 voiced
+    // with the modulation's limit taken out (the raw v^3 of the pulsing flow)
+    expect(voiced.m).toBeGreaterThan(0.1);
+    expect(voiced.m).toBeLessThan(0.5);
+    expect(index(0.3).m).toBeLessThan(0.05);
+  });
+
+  it('places the aspiration source 1.5 k cm above the glottis', () => {
+    const dx = 35000 / 96000;
+    for (const duct of [1.25, 0.5 + 1.25]) {
+      const a = airway(48000, 40, 3, 8);
+      a.ductLen = duct;
+      run(a, 4800);
+      expect(a.noisePlace[3]).toBeCloseTo(Math.max(0, (1.5 - duct) / dx), 6);
+    }
+    const a = airway(48000, 40, 3, 8);
+    a.ductLen = 1.25;
+    run(a, 4800);
+    expect(a.noisePlace[3]).toBeGreaterThan(0.5);
+  });
+
+  it('makes noise in a narrow velum port (a velic release), and none with the port shut', () => {
+    const port = (velum: number) => {
+      const a = airway(48000, 40, 3, 8);
+      a.gridIn[38] = a.gridMin[38] = 1e-6;
+      a.velum = velum;
+      run(a, 0.2 * 48000);
+      return a;
+    };
+    const open = port(0.1);
+    expect(open.noiseGain[4]).toBeGreaterThan(0);
+    expect(open.noiseLevel[4]).toBeGreaterThan(0);
+    expect(open.noisePlace[4]).toBe(open.jv);
+    const shut = port(0);
+    expect(shut.noiseGain[4]).toBe(0);
+    expect(shut.noiseLevel[4]).toBe(0);
   });
 
   it("takes Birkholz and Zhang's wall stiffness and damping in their fitted ranges, CHIMERA's mass (air.ts says why)", () => {

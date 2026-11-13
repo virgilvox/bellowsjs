@@ -129,6 +129,43 @@ describe('FoldOscillator', () => {
   });
 });
 
+describe('FoldOscillator tension', () => {
+  it('scales the masses as Q^-1.5 and the springs as Q^0.5: f0 rises as Q and the swing falls as Q^-0.5', () => {
+    // the folds alone under fixed pressures, the servo frozen (tau huge), at Q 1 and 2
+    const swing = (q: number) => {
+      const f = new FoldOscillator(96000);
+      f.rest1 = f.rest2 = 0.005;
+      f.chink = 0;
+      f.length = 1.4;
+      f.servo.target = q * FOLD_F_REF;
+      f.servo.tau = 1e9;
+      f.tune();
+      f.x1 = 0.02;
+      let mn = Infinity;
+      let mx = -Infinity;
+      for (let i = 0; i < 96000; i++) {
+        f.ps = 8 * CM_H2O;
+        f.pe = 0;
+        f.step();
+        if (i > 48000) {
+          mn = Math.min(mn, f.x1);
+          mx = Math.max(mx, f.x1);
+        }
+      }
+      return { swing: mx - mn, cycles: f.cycles, q: f.tension };
+    };
+    const one = swing(1);
+    const two = swing(2);
+    expect(one.q).toBeCloseTo(1, 9);
+    expect(two.q).toBeCloseTo(2, 9);
+    expect(two.cycles / one.cycles).toBeGreaterThan(1.8);
+    expect(two.cycles / one.cycles).toBeLessThan(2.2);
+    // Ishizaka and Flanagan's own law (masses Q^-1, springs Q^1) would halve it
+    expect(two.swing / one.swing).toBeGreaterThan(0.62);
+    expect(two.swing / one.swing).toBeLessThan(0.8);
+  });
+});
+
 describe('PitchServo', () => {
   it('moves its correction by 1 - exp(-T / tau) of the log error a cycle, and ignores a cycle far off', () => {
     const s = new PitchServo();

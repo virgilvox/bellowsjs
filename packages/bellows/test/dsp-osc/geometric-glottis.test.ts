@@ -81,6 +81,45 @@ describe('GeometricGlottis', () => {
     expect(open(70)).toBeCloseTo(0.5 - 70 / 360, 2);
   });
 
+  it('lags the upper edge: the glottis opens later by the lag and closes when the lower edge does', () => {
+    // the first opening and the closing after it, in samples (100 Hz: 480 a cycle)
+    const crossings = (lagDeg: number, from: number) => {
+      const a = areas({ lag: lagDeg / 360 });
+      let open = from;
+      while (!(a[open - 1] <= 1e-12 && a[open] > 1e-12)) open++;
+      let shut = open;
+      while (a[shut] > 1e-12) shut++;
+      return { open, shut };
+    };
+    const none = crossings(0, 960);
+    const lag = crossings(70, none.open - 20);
+    // the same source from the same start: the open phase loses its first 70 degrees, not its last
+    expect(lag.shut - none.shut).toBe(0);
+    expect(lag.open - none.open).toBeCloseTo((70 / 360) * 480, -1);
+  });
+
+  it('double pulses: every second cycle peaks lower, by the fraction d', () => {
+    const a = areas({ doublePulse: 0.2 }, 100);
+    // one peak a cycle (480 samples), skipping the first
+    const peaks: number[] = [];
+    for (let c = 1; c < 9; c++) {
+      let mx = 0;
+      for (let i = c * 480; i < (c + 1) * 480; i++) mx = Math.max(mx, a[i]);
+      peaks.push(mx);
+    }
+    for (let c = 1; c < peaks.length; c++) {
+      const lo = Math.min(peaks[c], peaks[c - 1]);
+      const hi = Math.max(peaks[c], peaks[c - 1]);
+      expect(lo / hi).toBeCloseTo(0.8, 2);
+    }
+    const flat = areas({ doublePulse: 0 }, 100);
+    let p0 = 0;
+    let p1 = 0;
+    for (let i = 480; i < 960; i++) p0 = Math.max(p0, flat[i]);
+    for (let i = 960; i < 1440; i++) p1 = Math.max(p1, flat[i]);
+    expect(p1 / p0).toBeCloseTo(1, 6);
+  });
+
   it('skews the pulse to the right for s > 0: the peak moves from a quarter of the cycle toward (1 + s) / 4', () => {
     const peakAt = (skew: number) => {
       const a = areas({ skew }, 100);
