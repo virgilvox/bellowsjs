@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (0.3.0)
+## 0.3.0
 
 The engines ship once. Every engine used to travel twice in a page: inside the AudioWorklet's
 string, and again as main-thread code, because `Bellows.boot()` registered all of them so that

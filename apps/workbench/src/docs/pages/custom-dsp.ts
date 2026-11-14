@@ -156,6 +156,8 @@ const peak = Math.max(...out.left.map(Math.abs));
 console.log('peak', peak.toFixed(3)); // nonzero, deterministic on every run
 \`\`\`
 
+**Changed in 0.3.0:** \`Bellows.boot()\` no longer registers the built-in engines on the main thread (they play in the worklet), so \`getEngine(id)\` there needs \`registerBuiltins()\` first, and \`listEngines()\` lists the built-ins as descriptions (id, label, params) until they are registered. \`renderOffline\` registers them itself.
+
 In Node, \`registerEngine\` and \`registerEffect\` put your defs in the same registry \`registerBuiltins\` fills, and \`renderOffline\` drives them through the real kernel with no browser anywhere. Renders are deterministic, so you can assert exact peaks or diff whole buffers against a golden file, which is how the library tests its own DSP. It is the fastest loop for developing an op: edit, render, listen or assert, repeat, then paste the finished def into \`b.defEngine\` for the [live kernel](/docs/getting-started).
 
 One deployment note: serialized defs are rehydrated with new Function in the worklet, both during playback and inside b.render(), which renders through the worklet in an OfflineAudioContext, so a CSP that blocks eval breaks tier 3 in both. A CSP that blocks blob URLs is the separate case, and the one fixed by \`Bellows.boot({ workletUrl })\` pointed at the packaged \`bellowsjs/worklet.js\`; renders load the worklet from the same URL.

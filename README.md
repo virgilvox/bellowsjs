@@ -127,6 +127,14 @@ const audio = await b.render({ bars: 16 });
 const wav = audio.wav(24); // ArrayBuffer, ready to download
 ```
 
+## Upgrading to 0.3.0
+
+Each engine now ships once, inside the AudioWorklet, instead of twice; a page that boots, sings and renders is about a third smaller. Three behaviours change:
+
+- `b.render()` renders through the worklet in an OfflineAudioContext, off the main thread. The samples are the same; in Chrome a render takes about a quarter longer.
+- `Bellows.boot()` no longer registers the built-in engines on the main thread. `getEngine(id)` there needs `registerBuiltins()` first; `renderOffline()` registers them itself.
+- `listEngines()` and `listEffects()` describe every built-in (id, label, params) without loading its code, so their entries have no `createVoice` or `create` until registered.
+
 ## What ships
 
 Synthesis: virtual analog (tabulated-BLEP oscillators, worst alias measured at -85 dB through the musical range and -73 dB at the top of the band, ladder and SVF filters, per-voice drift), FM (2/4/6 operators, DX-style algorithm routing), additive, wavetable (mipmapped, position scan), granular (64-grain clouds), extended Karplus-Strong, waveguide string and tube, modal banks (bar, membrane, bell, glass, wood), west coast (wavefolder into a vactrol low-pass gate), formant vocal synthesis, a singing voice, five drum engines, noise synth, and a DDSP-style harmonic-plus-noise engine with a frame-driven control input.
