@@ -324,6 +324,33 @@ describe('sing(): events', () => {
     expect(rules).toContain('k');
   });
 
+  it('sings in b.accent, and opts.accent overrides it', async () => {
+    const b = await boot();
+    const v = b.voice('vocal');
+    b.dictionary = parseCmudict('GOAT  G OW1 T\nCAR  K AA1 R\n');
+    const sounds = (p: SungPlan) => p.phrases.flatMap((ph) => ph.spans.map((s) => s.ipa)).join(' ');
+    const notes = [{ note: 'C4', dur: '4n' }, { note: 'D4', dur: '4n' }];
+    expect(sounds(v.sing('goat car', notes, { at: 1 }))).toBe('g o u t k ɑ ɹ');
+    b.accent = 'southern-british';
+    expect(sounds(v.sing('goat car', notes, { at: 3 }))).toBe('g ə ʊ ʔ k ɑ');
+    expect(sounds(v.sing('goat car', notes, { at: 5, accent: 'irish' }))).toBe('g o t k a ɹ');
+    expect(() => v.sing('goat', notes, { at: 7, accent: 'martian' })).toThrow(/unknown accent/);
+  });
+
+  it('speaks: one phrase per clause, falling at a full stop and rising at a question mark', async () => {
+    const b = await boot();
+    const v = b.voice('vocal');
+    b.dictionary = parseCmudict('GOAT  G OW1 T\nCAR  K AA1 R\n');
+    const stated = v.speak('goat car.', { at: 1, hz: 100 });
+    const asked = v.speak('goat car?', { at: 5, hz: 100 });
+    const last = (p: SungPlan) => p.phrases[p.phrases.length - 1].pitches.at(-1)!.hz;
+    expect(last(stated)).toBeLessThan(100);
+    expect(last(asked)).toBeGreaterThan(100);
+    expect(v.speak('goat, car.', { at: 9 }).phrases).toHaveLength(2);
+    expect(stated.unknown).toEqual([]);
+    expect(() => b.voice('pluck').speak('goat')).toThrow(/'vocal'/);
+  });
+
   it('refuses an instrument whose engine cannot sing, and says which engine to use', async () => {
     const b = await boot();
     const pluck = b.voice('pluck');

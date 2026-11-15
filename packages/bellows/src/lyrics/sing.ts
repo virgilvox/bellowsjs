@@ -60,6 +60,7 @@
 
 import { clamp } from '../types';
 import { SUNG_CONSONANT_SCALE, consonantDuration } from './durations';
+import { isVowel } from './ipa';
 import type {
   Segment,
   SungNote,
@@ -87,7 +88,7 @@ export const SHORTEST_VOWEL = 0.02;
 const BREATH = 0.12;
 /** ...but no more than this share of the note it is taken from. */
 const BREATH_SHARE = 0.3;
-/** A diphthong holds its first vowel for this share of the vowel time. */
+/** A diphthong holds its first vowel for this share of the vowel time, unless its segment says (an accent's hold). */
 const DIPHTHONG_HOLD = 0.8;
 /** A gap longer than this (s) between one note's end and the next note is a rest. */
 const REST = 0.001;
@@ -114,9 +115,17 @@ const DIPHTHONGS: ReadonlyMap<string, readonly [string, string]> = new Map([
   ['ɔɪ', ['ɔ', 'ɪ']],
 ]);
 
-/** The two vowels a diphthong is sung as ("aɪ" to ["a", "ɪ"]), or undefined for a plain vowel. */
+/**
+ * The two vowels a diphthong is sung as ("aɪ" to ["a", "ɪ"]), or undefined for a plain vowel.
+ * General American's five use the targets above; any other two-vowel nucleus, which an accent
+ * writes (accents.ts: "əʊ", "ɐʉ"), is sung as its two vowels.
+ */
 export function splitDiphthong(ipa: string): readonly [string, string] | undefined {
-  return DIPHTHONGS.get(ipa);
+  const known = DIPHTHONGS.get(ipa);
+  if (known !== undefined || ipa.length !== 2) return known;
+  const a = ipa[0];
+  const b = ipa[1];
+  return isVowel(a) && isVowel(b) ? [a, b] : undefined;
 }
 
 /*
@@ -346,7 +355,7 @@ function layPhrase(
     const vowelEnd = Math.max(p.time, end - total(coda[k]));
     const chainEnds = k === j || placed[k + 1].syl.melisma !== true;
     const continues = k > i && p.syl.melisma === true;
-    layNucleus(spans, p.syl.nucleus.ipa, p.time, vowelEnd, chainEnds, continues);
+    layNucleus(spans, p.syl.nucleus, p.time, vowelEnd, chainEnds, continues);
     layConsonants(spans, coda[k], vowelEnd, end, 'coda');
     if (k < j) {
       /* the onset moves the pitch at its first consonant; with no onset, on the beat */
@@ -392,15 +401,16 @@ function layConsonants(
  */
 function layNucleus(
   spans: SungSpan[],
-  ipa: string,
+  nucleus: Segment,
   from: number,
   to: number,
   chainEnds: boolean,
   continues: boolean,
 ): void {
+  const ipa = nucleus.ipa;
   const parts = splitDiphthong(ipa);
   if (parts !== undefined && chainEnds) {
-    const glide = from + DIPHTHONG_HOLD * (to - from);
+    const glide = from + (nucleus.hold ?? DIPHTHONG_HOLD) * (to - from);
     layVowel(spans, parts[0], from, glide, continues);
     layVowel(spans, parts[1], glide, to, false);
   } else {

@@ -89,6 +89,10 @@ const PUBLIC_API: string[] = [
   'tremoloDef', 'tubeEngine', 'tuningFromScala', 'vaEngine', 'vocalEngine', 'vocalPhonemeIndex',
   'voiceLead', 'wavetableEngine', 'weightedWalk', 'westcoastEngine', 'whisperDef', 'writeMidi',
   'xmur3', 'yin', 'zcr',
+  // accents, pronunciation and speech (lyrics/accents.ts, lexical-sets.ts, pronounce.ts, speech.ts)
+  'ACCENTS', 'AUSTRALIAN', 'DEFAULT_PROSODY', 'GENERAL_AMERICAN', 'IRISH', 'LEXICAL_SETS', 'LONDON', 'NEW_ZEALAND',
+  'SCOTTISH', 'SOUTHERN_BRITISH', 'SOUTHERN_US', 'applyAccent', 'estimateFormants', 'pronounce', 'resolveAccent',
+  'speechPlan', 'tagLexicalSets', 'toIPA',
 ];
 
 describe('the published package', () => {

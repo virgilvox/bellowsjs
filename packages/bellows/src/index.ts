@@ -20,6 +20,7 @@ export {
   type SingNote,
   type SingOptions,
   type SingResult,
+  type SpeakOptions,
 } from './bellows';
 export { sungEvents, type SungEventOptions, type SungEvents, type SungWindow } from './sing';
 
@@ -76,6 +77,29 @@ export { tokenizeIpa } from './lyrics/ipa';
 export { arpabetToSegments } from './lyrics/arpabet';
 export { parseCmudict } from './lyrics/cmudict';
 export { planSung, type PlanSungOptions } from './lyrics/sing';
+export {
+  ACCENTS,
+  GENERAL_AMERICAN,
+  SOUTHERN_BRITISH,
+  LONDON,
+  AUSTRALIAN,
+  NEW_ZEALAND,
+  IRISH,
+  SCOTTISH,
+  SOUTHERN_US,
+  DEFAULT_PROSODY,
+  resolveAccent,
+  applyAccent,
+  type Accent,
+  type Prosody,
+  type TRule,
+  type LRule,
+  type ThRule,
+  type RRule,
+} from './lyrics/accents';
+export { LEXICAL_SETS, tagLexicalSets, type LexicalSet } from './lyrics/lexical-sets';
+export { pronounce, toIPA, type PronounceOptions, type PronouncedWord, type Pronunciation } from './lyrics/pronounce';
+export { speechPlan, type SpeechOptions, type SpeechPlan, type SpokenNote } from './lyrics/speech';
 export type {
   Segment,
   Syllable,
@@ -179,6 +203,7 @@ export * from './analysis/onset';
 export * from './analysis/chroma';
 export * from './analysis/descriptors';
 export * from './analysis/loudness';
+export * from './analysis/formants';
 
 /* io */
 export { encodeWav, decodeWav } from './io/wav';

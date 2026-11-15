@@ -22,6 +22,7 @@ import { arpabetToSegments } from './arpabet';
 import { isVowel } from './ipa';
 import { letterToSound } from './letter-to-sound';
 import { splitSpelling, syllabifySegments, vowelless } from './syllabify';
+import { tagLexicalSets } from './lexical-sets';
 
 export interface EnglishOptions {
   /** Lower-case word to ARPAbet with stress digits, as parseCmudict returns it. */
@@ -175,6 +176,8 @@ function englishSyllables(word: string, opts: EnglishOptions): Syllable[] {
   const out: Syllable[] = [];
   for (const part of parts) {
     const segs = pronounceEnglish(part, opts);
+    // each vowel's lexical set, which an accent re-voices (accents.ts)
+    tagLexicalSets(part, segs);
     const syllables = syllabifySegments(segs);
     if (syllables.length === 0) {
       const carried = vowelless(segs);

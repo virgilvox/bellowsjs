@@ -48,7 +48,8 @@
     "gen:catalog": "node scripts/gen-catalog.mjs",
     "gen:catalog:check": "node scripts/gen-catalog.mjs --check",
     "gen:vocal": "node scripts/gen-vocal-tract.mjs",
-    "gen:vocal:check": "node scripts/gen-vocal-tract.mjs --check"
+    "gen:vocal:check": "node scripts/gen-vocal-tract.mjs --check",
+    "gen:vowels": "node scripts/gen-extra-vowels.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

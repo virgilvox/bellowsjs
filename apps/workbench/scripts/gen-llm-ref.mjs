@@ -123,9 +123,10 @@ Notes on the model:
   2 meaning two beats) or { seconds }.
 - Instrument.on(note, vel?, at?) returns a note id for indefinite holds;
   Instrument.off(id, at?) releases it.
-- Instrument.sing(lyrics, notes, { at, dictionary, scale, allophones }) sings on an
-  instrument made with b.voice('vocal') and throws on any other engine. See
-  Singing and lyrics below.
+- Instrument.sing(lyrics, notes, { at, dictionary, scale, allophones, accent }) sings on an
+  instrument made with b.voice('vocal') and throws on any other engine.
+  Instrument.speak(text, { at, accent, hz, rate, dictionary }) says text with
+  the accent's rhythm and melody. See Singing and lyrics below.
 - b.clock.at('16n', (t, step) => ...) fires ahead of every subdivision tick;
   schedule with the provided t and placement is sample accurate even under
   main-thread load or background-tab timer throttling.
@@ -203,6 +204,27 @@ const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   "shh", "TV") keeps its note on its most sonorous sound; digits are skipped. English words get the American flap and
   dark l unless opts.allophones is false (classical diction); IPA is sung
   as written.
+- Accents: b.accent (default 'general-american') or opts.accent picks how
+  English is said: 'general-american', 'southern-british', 'london',
+  'australian', 'new-zealand', 'irish', 'scottish', 'southern-us', or an
+  Accent object. The reader tags every vowel with its Wells lexical set
+  (KIT, BATH, GOAT, NURSE, ...); an accent maps each set to a vowel or a
+  diphthong (with its glide timing), says or drops r after a vowel (linking
+  it before a vowel), and sets t (flap, released, glottal), l (dark-coda,
+  clear, dark, vocalized), th (fricative, stop, front), r (approximant,
+  tap) and h-dropping. An Accent is plain data: spread a built-in and
+  change a set ({ ...ACCENTS.irish, sets: { ...ACCENTS.irish.sets, FACE:
+  'eɪ' } }) to make a new one. IPA between slashes ignores the accent.
+- pronounce(text, { accent, dictionary }) returns words (spelling, IPA with
+  stress marks, syllables, lexical sets) and the whole line's IPA;
+  toIPA(text, opts) returns just the IPA. Use them to check a lyric before
+  singing it; pronounce(text).syllables can be edited and passed to sing().
+- speak(): each clause is a phrase. Stressed syllables take about twice an
+  unstressed one's time, the last lengthens, the baseline declines, each
+  stressed syllable gets a pitch accent, and the last one falls (or rises:
+  Australian and New Zealand statements, and any clause ending in '?').
+  The accent's prosody (tune, range in semitones, declination, rate) sets
+  it. speechPlan(syllables, opts) is the same without the facade.
 - Each vowel lands on its note time; onset consonants are sung before it.
   The returned plan has phrases (spans of IPA with start/end seconds, and
   pitches) and leadIn, the most any phrase starts before its first note:
@@ -229,7 +251,7 @@ const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
 - Without the facade: planSung(notes in seconds and Hz, syllables) gives the
   plan, sungEvents(plan, { channel, phonemeParam: internParam('phoneme'),
   bendParam: internParam('bend') }) gives kernel events for renderOffline.
-  lyricsToSyllables(text, { dictionary, allophones }), readLyrics(text, frontEnds) with
+  lyricsToSyllables(text, { dictionary, allophones, accent }), readLyrics(text, frontEnds) with
   englishFrontEnd(opts) and ipaFrontEnd, tokenizeIpa(ipa),
   arpabetToSegments(phones) and parseCmudict(text) are the lyric layer.
 

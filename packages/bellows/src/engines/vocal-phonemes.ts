@@ -39,6 +39,12 @@ export const VOCAL_PHONEMES = [
   'ɾ', 'ʔ',
   /* 41: the velarized (dark) lateral of a syllable coda, "tell", "milk" */
   'ɫ',
+  /*
+   * 42 to 53: vowels other accents need and General American lacks, bellows' own, solved from formant
+   * targets (scripts/gen-extra-vowels.mjs): British LOT and NURSE, Australian STRUT and GOOSE, the
+   * central and rounded front and unrounded back qualities.
+   */
+  'ɒ', 'ɐ', 'ɜ', 'ʉ', 'ɨ', 'ɘ', 'ɵ', 'y', 'ø', 'œ', 'ɯ', 'ɤ',
 ] as const;
 
 export type VocalPhoneme = (typeof VOCAL_PHONEMES)[number];
@@ -46,16 +52,10 @@ export type VocalPhoneme = (typeof VOCAL_PHONEMES)[number];
 /** Spellings that mean a phoneme above. */
 const ALIASES: Readonly<Record<string, VocalPhoneme>> = {
   ɚ: 'ɝ',
-  ɜ: 'ɝ',
   ɡ: 'g',
   r: 'ɹ',
-  ɒ: 'ɑ',
-  ɐ: 'ʌ',
   ʧ: 'tʃ',
   ʤ: 'dʒ',
-  ɨ: 'ɪ',
-  ʉ: 'u',
-  y: 'i',
 };
 
 const INDEX = new Map<string, number>(VOCAL_PHONEMES.map((s, i) => [s, i]));
@@ -138,6 +138,7 @@ const SOUNDS: Readonly<Record<VocalPhoneme, Row>> = {
   ɾ: { cls: 'flap', voiced: true },
   ʔ: { cls: 'glottal', voiced: false },
   ɫ: { cls: 'approximant', voiced: true },
+  ɒ: V, ɐ: V, ɜ: V, ʉ: V, ɨ: V, ɘ: V, ɵ: V, y: V, ø: V, œ: V, ɯ: V, ɤ: V,
 };
 
 /** One row per entry of VOCAL_PHONEMES, in the same order. */

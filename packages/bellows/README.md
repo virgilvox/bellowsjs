@@ -94,6 +94,13 @@ singer.sing('twinkle twinkle little star', [
 
 Words go through letter-to-sound rules unless you load a pronouncing dictionary (`b.dictionary = parseCmudict(text)`; bellows ships none), and IPA between slashes, `/ˈlɪt.əl/`, sets the sounds directly, so no dictionary is needed. Symbols the voice has no sound for are listed in the returned plan's `unknown`, and its `leadIn` is the longest any phrase starts before its first beat, which is how far ahead a live call has to be.
 
+Accents are data. `b.accent = 'southern-british'` (or `'london'`, `'australian'`, `'new-zealand'`, `'irish'`, `'scottish'`, `'southern-us'`; the default is `'general-american'`) changes which vowel each word takes, by its lexical set (BATH, GOAT, NURSE...), whether r after a vowel is said, and how t, l, th and r come out. `speak()` says text with the accent's rhythm and melody, and `toIPA()` shows what will be said:
+
+```js
+singer.speak('Where are you from?', { accent: 'australian' });
+toIPA('far away', { accent: 'southern-british' }); // 'fɑɹ ə.ˈweɪ'
+```
+
 Tier 3, the kernel. Custom engines and effects implement small contracts and become addressable by id like the built-ins, in realtime and offline both:
 
 ```js

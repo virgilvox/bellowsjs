@@ -32,6 +32,8 @@ import { samplerBankFromSf2 } from './engines/soundfont';
 import { serializeDef } from './core/serialize';
 import type { PronouncingDictionary, SungNote, SungPlan, Syllable } from './lyrics/types';
 import { lyricsToSyllables } from './lyrics/read';
+import { resolveAccent, type Accent } from './lyrics/accents';
+import { speechPlan } from './lyrics/speech';
 import { planSung } from './lyrics/sing';
 import { sungEvents, type SungWindow } from './sing';
 import { VOCAL_PLAN_LEAD, vocalGlideLead } from './engines/vocal-lead';
@@ -84,9 +86,26 @@ export interface SingOptions {
   /** Scale for { degree } notes, as note()'s third argument. Default C major. */
   scale?: Scale;
   /**
-   * American flaps and dark l on English words ("little" sings lɪ.ɾəɫ), default true. False
-   * keeps every /t d l/ as written, as classical diction does. IPA is sung as written either way.
+   * The accent's t and l rules on English words (General American: "little" sings lɪ.ɾəɫ), default
+   * true. False keeps every /t d l/ as written, as classical diction does. IPA is sung as written
+   * either way.
    */
+  allophones?: boolean;
+  /** Accent for this line, over b.accent: an id from ACCENTS ('southern-british', 'australian', ...) or an Accent. */
+  accent?: Accent | string;
+}
+
+export interface SpeakOptions {
+  /** Context time the first syllable's vowel lands. Left out, as soon as the opening consonants can sound. */
+  at?: number;
+  dictionary?: PronouncingDictionary;
+  /** Accent, over b.accent. Its prosody sets the melody and rate. */
+  accent?: Accent | string;
+  /** Baseline pitch, Hz. Default 110. */
+  hz?: number;
+  /** Rate over the accent's own, 1 normal. */
+  rate?: number;
+  /** The accent's t and l rules, default true. */
   allophones?: boolean;
 }
 
@@ -199,6 +218,13 @@ export class Bellows {
    * sounds directly either way.
    */
   dictionary: PronouncingDictionary | null = null;
+
+  /**
+   * The accent sing() and speak() read English in: an id from ACCENTS ('general-american',
+   * 'southern-british', 'london', 'australian', 'new-zealand', 'irish', 'scottish', 'southern-us') or
+   * an Accent. Default General American.
+   */
+  accent: Accent | string = 'general-american';
 
   /** boot() made the context, so dispose() is the one allowed to close it */
   private ownsContext: boolean;
@@ -630,7 +656,11 @@ export class Bellows {
   ): SingResult {
     const syllables =
       typeof lyrics === 'string'
-        ? lyricsToSyllables(lyrics, { dictionary: opts.dictionary ?? this.dictionary ?? undefined, allophones: opts.allophones })
+        ? lyricsToSyllables(lyrics, {
+            dictionary: opts.dictionary ?? this.dictionary ?? undefined,
+            allophones: opts.allophones,
+            accent: opts.accent ?? this.accent,
+          })
         : lyrics;
     const state = this.singState(channel);
     const now = this.renderCtx ? this.renderCtx.now : this.ctx.currentTime;
@@ -663,6 +693,33 @@ export class Bellows {
     if (posted.events.length > 0) this.postEvents(posted.events);
     state.windows = state.windows.concat(posted.windows).sort((a, b) => a.start - b.start);
     return { phrases: plan.phrases, leadIn: posted.leadIn, unknown: posted.unknown, trimmed: posted.trimmed };
+  }
+
+  /**
+   * Speak text: sentences read in the accent, timed and pitched by its prosody (lyrics/speech.ts),
+   * then sung as notes. A sentence ending in "?" ends rising.
+   *
+   * @internal
+   */
+  speakEvents(channel: number, text: string, opts: SpeakOptions = {}): SingResult {
+    const accent = resolveAccent(opts.accent ?? this.accent);
+    const syllables: Syllable[] = [];
+    const questions: boolean[] = [];
+    // each sentence or clause is a phrase; its closing mark sets its tune
+    for (const m of text.matchAll(/[^.!?;:,\n]+[.!?;:,\n]*/g)) {
+      const part = lyricsToSyllables(m[0], {
+        dictionary: opts.dictionary ?? this.dictionary ?? undefined,
+        allophones: opts.allophones,
+        accent,
+      });
+      if (part.length === 0) continue;
+      part[part.length - 1].phraseEnd = true;
+      syllables.push(...part);
+      questions.push(m[0].includes('?'));
+    }
+    const plan = speechPlan(syllables, { hz: opts.hz, rate: opts.rate, prosody: accent.prosody }, questions);
+    const notes: SingNote[] = plan.notes.map((n) => (n.rest ? { note: null, dur: { seconds: n.dur } } : { note: { hz: n.hz }, dur: { seconds: n.dur } }));
+    return this.singEvents(channel, plan.syllables, notes, { at: opts.at });
   }
 
   /**
@@ -996,6 +1053,24 @@ export class Instrument {
       );
     }
     return this.b.singEvents(this.channel, lyrics, notes, opts);
+  }
+
+  /**
+   * Speak text in an accent (b.accent or opts.accent): its vowels and consonants from the accent's
+   * rules, its rhythm stress-timed and its melody from the accent's prosody, a statement falling (or,
+   * in Australian and New Zealand English, rising) and a question rising. Needs the 'vocal' engine.
+   * Returns the plan, as sing() does.
+   */
+  speak(text: string, opts: SpeakOptions = {}): SingResult {
+    if (this.gone) return { phrases: [], leadIn: 0, unknown: [], trimmed: 0 };
+    if (this.engineId !== 'vocal') {
+      const which = this.engineId === undefined ? 'an engine voice() did not record' : `'${this.engineId}'`;
+      throw new Error(
+        `bellows: speak() needs an instrument on the 'vocal' engine, and this one runs ${which}. ` +
+          `Create one with b.voice('vocal').`,
+      );
+    }
+    return this.b.speakEvents(this.channel, text, opts);
   }
 
   /** Sustain a note; returns an id for off(). Disposed: returns -1. */

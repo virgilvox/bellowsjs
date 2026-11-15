@@ -16,12 +16,13 @@ import {
 import { VOCAL_INVENTORY, VOCAL_TABLE_PHONEMES } from '../../src/engines/vocal-tables.gen';
 
 describe('VOCAL_PHONEMES', () => {
-  it('is append only: the 41 indices the formant voice shipped keep their sounds, and ɫ is appended', () => {
+  it('is append only: the 41 indices the formant voice shipped keep their sounds, then ɫ, then the accents\' vowels', () => {
     expect(VOCAL_PHONEMES.slice(0, 41).join(' ')).toBe(
       '_ ɑ æ ʌ ɔ ɛ ɝ ɪ i ʊ u e o a ə p b t d k g f v θ ð s z ʃ ʒ h tʃ dʒ m n ŋ l ɹ w j ɾ ʔ',
     );
     expect(VOCAL_PHONEMES[41]).toBe('ɫ');
-    expect(VOCAL_PHONEMES.length).toBe(42);
+    expect(VOCAL_PHONEMES.slice(42).join(' ')).toBe('ɒ ɐ ɜ ʉ ɨ ɘ ɵ y ø œ ɯ ɤ');
+    expect(VOCAL_PHONEMES.length).toBe(54);
     expect(VOCAL_PHONEMES[VOCAL_DEFAULT_PHONEME]).toBe('ɑ');
   });
 
@@ -47,24 +48,18 @@ describe('vocalPhonemeIndex', () => {
     VOCAL_PHONEMES.forEach((ipa, i) => expect(vocalPhonemeIndex(ipa)).toBe(i));
     const aliases: Record<string, string> = {
       ɚ: 'ɝ',
-      ɜ: 'ɝ',
       ɡ: 'g',
       r: 'ɹ',
-      ɒ: 'ɑ',
-      ɐ: 'ʌ',
       ʧ: 'tʃ',
       ʤ: 'dʒ',
-      ɨ: 'ɪ',
-      ʉ: 'u',
-      y: 'i',
     };
     for (const [alias, target] of Object.entries(aliases)) {
       expect(vocalPhonemeIndex(alias), alias).toBe(VOCAL_PHONEMES.indexOf(target as (typeof VOCAL_PHONEMES)[number]));
       expect(vocalPhonemeIndex(alias)).toBeGreaterThanOrEqual(0);
     }
     for (const unknown of ['x', 'ʀ', '', 'aɪ', 'ts']) expect(vocalPhonemeIndex(unknown)).toBe(-1);
-    /* the dark l is its own sound now, at the end of the list */
-    expect(vocalPhonemeIndex('ɫ')).toBe(VOCAL_PHONEMES.length - 1);
+    /* the dark l is its own sound, after the formant voice's 41 */
+    expect(vocalPhonemeIndex('ɫ')).toBe(41);
     expect(vocalPhonemeIndex('ɫ')).not.toBe(vocalPhonemeIndex('l'));
   });
 });

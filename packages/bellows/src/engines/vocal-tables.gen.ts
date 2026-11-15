@@ -2,6 +2,8 @@
 /*
  * CHIMERA's articulatory data and body constants, by Jameson Hodge (MIT,
  * https://github.com/jamesondh/chimera-vocal-synth at 1d3ea49).
+ * The vowels after the velarized lateral are bellows' own (MIT), solved from formant targets by
+ * scripts/gen-extra-vowels.mjs into data/vocal/extra-vowels.json.
  * See data/vocal/README.md and THIRD_PARTY_NOTICES.md.
  */
 // prettier-ignore
@@ -15,8 +17,8 @@ export const VOCAL_ARTICULATOR_HZ: readonly number[] = [10, 12, 12, 13, 13, 9, 9
 /** CHIMERA's NEUTRAL posture, the performer's rest (anatomy/human.rs). */
 export const VOCAL_NEUTRAL: readonly number[] = [0.6, 2.9, 6.85, 6.45, 7.3, 0, 0, 0.7, 0.2, 0.5, 0, -0.15, 0, 0, 0, 0, 0];
 
-/** The phonemes the tables describe: VOCAL_PHONEMES order, then the velarized lateral. */
-export const VOCAL_TABLE_PHONEMES = ["_","ɑ","æ","ʌ","ɔ","ɛ","ɝ","ɪ","i","ʊ","u","e","o","a","ə","p","b","t","d","k","g","f","v","θ","ð","s","z","ʃ","ʒ","h","tʃ","dʒ","m","n","ŋ","l","ɹ","w","j","ɾ","ʔ","ɫ"] as const;
+/** The phonemes the tables describe, VOCAL_PHONEMES order: CHIMERA's, the velarized lateral, then bellows' solved vowels. */
+export const VOCAL_TABLE_PHONEMES = ["_","ɑ","æ","ʌ","ɔ","ɛ","ɝ","ɪ","i","ʊ","u","e","o","a","ə","p","b","t","d","k","g","f","v","θ","ð","s","z","ʃ","ʒ","h","tʃ","dʒ","m","n","ŋ","l","ɹ","w","j","ɾ","ʔ","ɫ","ɒ","ɐ","ɜ","ʉ","ɨ","ɘ","ɵ","y","ø","œ","ɯ","ɤ"] as const;
 export const VOCAL_MANNERS = ["silence","vowel","stop","fricative","affricate","nasal","approximant","lateral","tap","glottal"] as const;
 export const VOCAL_PLACES = ["none","bilabial","labiodental","dental","alveolar","postalveolar","retroflex","palatal","velar","uvular","labial-velar","glottal"] as const;
 
@@ -76,6 +78,18 @@ export const VOCAL_INVENTORY: readonly VocalInventoryRow[] = [
   { manner: 'tap', voiced: true, place: 'alveolar', dominant: [3, 4], release: -1, nasal: false, glottal: 'none' }, // ɾ
   { manner: 'glottal', voiced: false, place: 'glottal', dominant: [], release: -1, nasal: false, glottal: 'stop' }, // ʔ
   { manner: 'lateral', voiced: true, place: 'alveolar', dominant: [3, 4, 15, 1, 2], release: -1, nasal: false, glottal: 'none' }, // ɫ
+  { manner: 'vowel', voiced: true, place: 'none', dominant: [], release: -1, nasal: false, glottal: 'none' }, // ɒ
+  { manner: 'vowel', voiced: true, place: 'none', dominant: [], release: -1, nasal: false, glottal: 'none' }, // ɐ
+  { manner: 'vowel', voiced: true, place: 'none', dominant: [], release: -1, nasal: false, glottal: 'none' }, // ɜ
+  { manner: 'vowel', voiced: true, place: 'none', dominant: [], release: -1, nasal: false, glottal: 'none' }, // ʉ
+  { manner: 'vowel', voiced: true, place: 'none', dominant: [], release: -1, nasal: false, glottal: 'none' }, // ɨ
+  { manner: 'vowel', voiced: true, place: 'none', dominant: [], release: -1, nasal: false, glottal: 'none' }, // ɘ
+  { manner: 'vowel', voiced: true, place: 'none', dominant: [], release: -1, nasal: false, glottal: 'none' }, // ɵ
+  { manner: 'vowel', voiced: true, place: 'none', dominant: [], release: -1, nasal: false, glottal: 'none' }, // y
+  { manner: 'vowel', voiced: true, place: 'none', dominant: [], release: -1, nasal: false, glottal: 'none' }, // ø
+  { manner: 'vowel', voiced: true, place: 'none', dominant: [], release: -1, nasal: false, glottal: 'none' }, // œ
+  { manner: 'vowel', voiced: true, place: 'none', dominant: [], release: -1, nasal: false, glottal: 'none' }, // ɯ
+  { manner: 'vowel', voiced: true, place: 'none', dominant: [], release: -1, nasal: false, glottal: 'none' }, // ɤ
 ];
 
 export interface VocalBodyTable {
@@ -157,6 +171,18 @@ export const VOCAL_BODIES: readonly VocalBodyTable[] = [
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɾ
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ʔ
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɫ
+      [1.32069, 1.25678, 6.02835, NaN, NaN, 0, -0.335276, 0.998411, 0.463491, 0.539, NaN, NaN, 0.175, NaN, NaN, NaN, NaN], // ɒ
+      [0.959344, 1.81494, 6.27513, NaN, NaN, 0.002, -0.655744, 2.0817, -0.2, 0.607, NaN, NaN, 0.053, NaN, NaN, NaN, NaN], // ɐ
+      [1.04883, 2.45673, 6.28233, NaN, NaN, 0.002, 0.275032, 0.237875, -0.00604252, 0.607, NaN, NaN, 0.053, NaN, NaN, NaN, NaN], // ɜ
+      [0.196691, 3.67139, 7.59105, NaN, NaN, 0, 0.118988, 0.21855, 1.28252, 0.065, NaN, NaN, 0.252, NaN, NaN, NaN, NaN], // ʉ
+      [-0.0486764, 4.14389, 6.68275, NaN, NaN, 0, 0.363131, 0.0911767, 1.06718, 0.199, NaN, NaN, 0.425, NaN, NaN, NaN, NaN], // ɨ
+      [0.401239, 2.74333, 7.30483, NaN, NaN, 0, 0.836646, 0.545774, 0.312847, 1, NaN, NaN, 0.357, NaN, NaN, NaN, NaN], // ɘ
+      [0.543948, 2.70384, 7.05207, NaN, NaN, 0, 0.483956, 0.540973, 1.24207, 0.199, NaN, NaN, 0.425, NaN, NaN, NaN, NaN], // ɵ
+      [0.259827, 4.68061, 4.80757, NaN, NaN, 0, 0.425163, 0.164055, 1.5, 0.065, NaN, NaN, 0.252, NaN, NaN, NaN, NaN], // y
+      [1.52518, 2.84169, 7.66767, NaN, NaN, 0, -0.71472, 0.755555, 0.744262, 1, NaN, NaN, 0.506, NaN, NaN, NaN, NaN], // ø
+      [1.10488, 2.15801, 7.0783, NaN, NaN, 0, 0.0687887, 1.67217, 0.0623865, 1, NaN, NaN, 0.379, NaN, NaN, NaN, NaN], // œ
+      [0.255433, 3.06882, 6.81746, NaN, NaN, 0, 0.522489, 0.0507891, 1.44655, 0.065, NaN, NaN, 0.252, NaN, NaN, NaN, NaN], // ɯ
+      [0.673371, 1.81111, 5.83671, NaN, NaN, 0, 0.404942, 0.572677, 0.510262, 0.027, NaN, NaN, 0.061, NaN, NaN, NaN, NaN], // ɤ
     ],
     consonantTargets: [
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // _
@@ -201,11 +227,23 @@ export const VOCAL_BODIES: readonly VocalBodyTable[] = [
       [NaN, NaN, NaN, 6.25, 9.68, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɾ
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ʔ
       [NaN, 1.9, 6.8, 6.25, 9.68, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, 1, NaN], // ɫ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɒ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɐ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɜ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ʉ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɨ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɘ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɵ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // y
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ø
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // œ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɯ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɤ
     ],
-    tuneR1: [0, 732.4219, 621.0938, 612.3047, 606.4453, 568.3594, 445.3125, 410.1563, 322.2656, 445.3125, 348.6328, 459.9609, 468.75, 723.6328, 492.1875, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    tuneSlope: [0, -29.29688, 43.94531, 0, -8.789063, 76.17188, 67.38281, 143.5547, 190.4297, 84.96094, 149.4141, 120.1172, 32.22656, -43.94531, 14.64844, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    tuneJaw: [0, 1.685, 1.516, 1.022, 1.182, 1.041, 0.976, 0.575, 0.413, 0.516, 0.203, 0.745, 0.668, 1.649, 0.505, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    tuneR1Max: [0, 673.8281, 638.6719, 597.6563, 541.9922, 653.3203, 515.625, 603.5156, 574.2188, 524.4141, 509.7656, 626.9531, 498.0469, 644.5313, 571.2891, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    tuneR1: [0, 732.4219, 621.0938, 612.3047, 606.4453, 568.3594, 445.3125, 410.1563, 322.2656, 445.3125, 348.6328, 459.9609, 468.75, 723.6328, 492.1875, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 606.4453, 612.3047, 612.3047, 348.6328, 445.3125, 410.1563, 445.3125, 348.6328, 459.9609, 568.3594, 348.6328, 468.75],
+    tuneSlope: [0, -29.29688, 43.94531, 0, -8.789063, 76.17188, 67.38281, 143.5547, 190.4297, 84.96094, 149.4141, 120.1172, 32.22656, -43.94531, 14.64844, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -8.789063, 0, 0, 149.4141, 84.96094, 143.5547, 84.96094, 149.4141, 120.1172, 76.17188, 149.4141, 32.22656],
+    tuneJaw: [0, 1.685, 1.516, 1.022, 1.182, 1.041, 0.976, 0.575, 0.413, 0.516, 0.203, 0.745, 0.668, 1.649, 0.505, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.182, 1.022, 1.022, 0.203, 0.516, 0.575, 0.516, 0.203, 0.745, 1.041, 0.203, 0.668],
+    tuneR1Max: [0, 673.8281, 638.6719, 597.6563, 541.9922, 653.3203, 515.625, 603.5156, 574.2188, 524.4141, 509.7656, 626.9531, 498.0469, 644.5313, 571.2891, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 541.9922, 597.6563, 597.6563, 509.7656, 524.4141, 603.5156, 524.4141, 509.7656, 626.9531, 653.3203, 509.7656, 498.0469],
   },
   {
     name: 'female',
@@ -261,6 +299,18 @@ export const VOCAL_BODIES: readonly VocalBodyTable[] = [
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɾ
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ʔ
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɫ
+      [1.40904, 1.15905, 5.53522, NaN, NaN, 0, -0.452782, 1.07461, 0.301223, 0.59, NaN, NaN, 0.254, NaN, NaN, NaN, NaN], // ɒ
+      [1.05001, 1.67781, 6.04703, NaN, NaN, 0.002, -0.1278, 1.88944, -0.197514, 1, NaN, NaN, 0.087, NaN, NaN, NaN, NaN], // ɐ
+      [1.2978, 2.25892, 6.13862, NaN, NaN, 0.002, 0.291513, 0.217835, 0.153579, 1, NaN, NaN, 0.087, NaN, NaN, NaN, NaN], // ɜ
+      [0.748835, 3.88263, 7.45553, NaN, NaN, 0, -0.373731, 0.0944109, 0.996741, 0.301, NaN, NaN, 0.24, NaN, NaN, NaN, NaN], // ʉ
+      [0.530736, 3.70811, 5.39006, NaN, NaN, 0, 0.457426, 0.114866, 1.43778, 0.301, NaN, NaN, 0.382, NaN, NaN, NaN, NaN], // ɨ
+      [0.638896, 2.6998, 7.38642, NaN, NaN, 0, 0.281391, 0.975347, 0.239022, 1, NaN, NaN, 0.196, NaN, NaN, NaN, NaN], // ɘ
+      [1.34709, 2.70038, 6.73629, NaN, NaN, 0, -0.953099, 0.366066, 1.47198, 0.301, NaN, NaN, 0.382, NaN, NaN, NaN, NaN], // ɵ
+      [-0.0601416, 4.75205, 5.57332, NaN, NaN, 0, 0.153204, 0.151234, 1.33915, 0.301, NaN, NaN, 0.24, NaN, NaN, NaN, NaN], // y
+      [0.486386, 2.7133, 7.67124, NaN, NaN, 0, -0.995394, 2.03666, 0.823076, 1, NaN, NaN, 0.853, NaN, NaN, NaN, NaN], // ø
+      [1.09814, 2.26515, 7.21004, NaN, NaN, 0, -0.0773372, 1.86078, 0.153965, 1, NaN, NaN, 0.773, NaN, NaN, NaN, NaN], // œ
+      [0.0242767, 2.92052, 6.7245, NaN, NaN, 0, 0.17196, 0.00556334, 1.35377, 0.301, NaN, NaN, 0.24, NaN, NaN, NaN, NaN], // ɯ
+      [0.537281, 2.37085, 7.18489, NaN, NaN, 0, 0.271071, 0.60755, 1.2741, 0.304, NaN, NaN, 0.46, NaN, NaN, NaN, NaN], // ɤ
     ],
     consonantTargets: [
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // _
@@ -305,11 +355,23 @@ export const VOCAL_BODIES: readonly VocalBodyTable[] = [
       [NaN, NaN, NaN, 6.25, 9.68, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɾ
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ʔ
       [NaN, 1.9, 6.8, 6.25, 9.68, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, 1, NaN], // ɫ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɒ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɐ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɜ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ʉ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɨ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɘ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɵ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // y
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ø
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // œ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɯ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɤ
     ],
-    tuneR1: [0, 840.8203, 653.3203, 741.2109, 714.8438, 706.0547, 492.1875, 468.75, 416.0156, 486.3281, 433.5938, 521.4844, 521.4844, 823.2422, 571.2891, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    tuneSlope: [0, 20.50781, 55.66406, 49.80469, 46.875, 43.94531, 64.45313, 146.4844, 193.3594, 114.2578, 149.4141, 137.6953, 82.03125, 11.71875, 70.3125, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    tuneJaw: [0, 1.682, 1.483, 1.067, 1.256, 1.181, 0.694, 0.567, 0.459, 0.573, 0.266, 0.8, 0.966, 1.637, 0.818, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    tuneR1Max: [0, 855.4688, 697.2656, 817.3828, 755.8594, 747.0703, 583.0078, 659.1797, 662.1094, 609.375, 591.7969, 700.1953, 621.0938, 820.3125, 659.1797, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    tuneR1: [0, 840.8203, 653.3203, 741.2109, 714.8438, 706.0547, 492.1875, 468.75, 416.0156, 486.3281, 433.5938, 521.4844, 521.4844, 823.2422, 571.2891, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 714.8438, 741.2109, 741.2109, 433.5938, 486.3281, 468.75, 486.3281, 433.5938, 521.4844, 706.0547, 433.5938, 521.4844],
+    tuneSlope: [0, 20.50781, 55.66406, 49.80469, 46.875, 43.94531, 64.45313, 146.4844, 193.3594, 114.2578, 149.4141, 137.6953, 82.03125, 11.71875, 70.3125, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 46.875, 49.80469, 49.80469, 149.4141, 114.2578, 146.4844, 114.2578, 149.4141, 137.6953, 43.94531, 149.4141, 82.03125],
+    tuneJaw: [0, 1.682, 1.483, 1.067, 1.256, 1.181, 0.694, 0.567, 0.459, 0.573, 0.266, 0.8, 0.966, 1.637, 0.818, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.256, 1.067, 1.067, 0.266, 0.573, 0.567, 0.573, 0.266, 0.8, 1.181, 0.266, 0.966],
+    tuneR1Max: [0, 855.4688, 697.2656, 817.3828, 755.8594, 747.0703, 583.0078, 659.1797, 662.1094, 609.375, 591.7969, 700.1953, 621.0938, 820.3125, 659.1797, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 755.8594, 817.3828, 817.3828, 591.7969, 609.375, 659.1797, 609.375, 591.7969, 700.1953, 747.0703, 591.7969, 621.0938],
   },
   {
     name: 'child',
@@ -365,6 +427,18 @@ export const VOCAL_BODIES: readonly VocalBodyTable[] = [
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɾ
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ʔ
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɫ
+      [1.19584, 1.005, 6.15846, NaN, NaN, 0, -0.461571, 0.918682, 1.45202, 0.461, NaN, NaN, -0.049, NaN, NaN, NaN, NaN], // ɒ
+      [0.826508, 1.53041, 6.55857, NaN, NaN, 0, -0.117684, 0.884437, 0.373767, 0.516, NaN, NaN, -0.157, NaN, NaN, NaN, NaN], // ɐ
+      [0.655674, 2.67915, 7.45479, NaN, NaN, 0, -0.133794, 0.34988, 0.797836, 0.516, NaN, NaN, -0.157, NaN, NaN, NaN, NaN], // ɜ
+      [0.133509, 3.13399, 7.96958, NaN, NaN, 0, -0.991959, 0.561642, 0.399755, 0.054, NaN, NaN, -0.327, NaN, NaN, NaN, NaN], // ʉ
+      [0.439487, 3.18761, 7.94796, NaN, NaN, 0, -0.410189, 0.694782, 0.496471, 0.279, NaN, NaN, -0.249, NaN, NaN, NaN, NaN], // ɨ
+      [0.747307, 3.0391, 7.41261, NaN, NaN, 0, 0.0226394, 0.228696, 0.183817, 0.55, NaN, NaN, -0.025, NaN, NaN, NaN, NaN], // ɘ
+      [0.504898, 2.38409, 7.58125, NaN, NaN, 0, -0.987977, 1.11439, 0.843035, 0.279, NaN, NaN, -0.249, NaN, NaN, NaN, NaN], // ɵ
+      [0.39757, 3.4521, 8.0045, NaN, NaN, 0, -0.998927, 0.733525, 0.365173, 0.054, NaN, NaN, -0.327, NaN, NaN, NaN, NaN], // y
+      [1.00669, 3.33113, 7.16419, NaN, NaN, 0, 0.0409327, 0.0676099, 0.618111, 0.55, NaN, NaN, -0.14, NaN, NaN, NaN, NaN], // ø
+      [1.19737, 2.32862, 7.48863, NaN, NaN, 0, -0.922591, 1.1836, 0.179866, 0.548, NaN, NaN, -0.168, NaN, NaN, NaN, NaN], // œ
+      [0.179337, 2.6655, 7.85598, NaN, NaN, 0, -0.87943, 0.748314, 0.52383, 0.054, NaN, NaN, -0.327, NaN, NaN, NaN, NaN], // ɯ
+      [0.74463, 2.16743, 7.1599, NaN, NaN, 0, -0.504715, 0.156535, 1.25212, 0.301, NaN, NaN, -0.209, NaN, NaN, NaN, NaN], // ɤ
     ],
     consonantTargets: [
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // _
@@ -409,10 +483,22 @@ export const VOCAL_BODIES: readonly VocalBodyTable[] = [
       [NaN, NaN, NaN, 6.25, 9.68, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɾ
       [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ʔ
       [NaN, 1.9, 6.8, 6.25, 9.68, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, 1, NaN], // ɫ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɒ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɐ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɜ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ʉ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɨ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɘ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɵ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // y
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ø
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // œ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɯ
+      [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], // ɤ
     ],
-    tuneR1: [0, 972.6563, 700.1953, 717.7734, 758.7891, 717.7734, 489.2578, 483.3984, 421.875, 533.2031, 462.8906, 536.1328, 544.9219, 978.5156, 626.9531, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    tuneSlope: [0, -46.875, 55.66406, 84.96094, -14.64844, 26.36719, 29.29688, 166.9922, 213.8672, 172.8516, 213.8672, 125.9766, 102.5391, -49.80469, 120.1172, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    tuneJaw: [0, 1.905, 1.367, 0.861, 1.408, 1.071, 0.05, 0.489, 0.096, 0.498, 0.162, 0.676, 0.78, 1.816, 0.804, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    tuneR1Max: [0, 893.5547, 767.5781, 779.2969, 750, 723.6328, 489.2578, 676.7578, 682.6172, 697.2656, 667.9688, 682.6172, 650.3906, 899.4141, 741.2109, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    tuneR1: [0, 972.6563, 700.1953, 717.7734, 758.7891, 717.7734, 489.2578, 483.3984, 421.875, 533.2031, 462.8906, 536.1328, 544.9219, 978.5156, 626.9531, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 758.7891, 717.7734, 717.7734, 462.8906, 533.2031, 483.3984, 533.2031, 462.8906, 536.1328, 717.7734, 462.8906, 544.9219],
+    tuneSlope: [0, -46.875, 55.66406, 84.96094, -14.64844, 26.36719, 29.29688, 166.9922, 213.8672, 172.8516, 213.8672, 125.9766, 102.5391, -49.80469, 120.1172, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -14.64844, 84.96094, 84.96094, 213.8672, 172.8516, 166.9922, 172.8516, 213.8672, 125.9766, 26.36719, 213.8672, 102.5391],
+    tuneJaw: [0, 1.905, 1.367, 0.861, 1.408, 1.071, 0.05, 0.489, 0.096, 0.498, 0.162, 0.676, 0.78, 1.816, 0.804, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.408, 0.861, 0.861, 0.162, 0.498, 0.489, 0.498, 0.162, 0.676, 1.071, 0.162, 0.78],
+    tuneR1Max: [0, 893.5547, 767.5781, 779.2969, 750, 723.6328, 489.2578, 676.7578, 682.6172, 697.2656, 667.9688, 682.6172, 650.3906, 899.4141, 741.2109, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 750, 779.2969, 779.2969, 667.9688, 697.2656, 676.7578, 697.2656, 667.9688, 682.6172, 723.6328, 667.9688, 650.3906],
   },
 ];

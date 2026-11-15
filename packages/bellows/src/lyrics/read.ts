@@ -32,6 +32,7 @@ import type { FrontEnd, PronouncingDictionary, Syllable } from './types';
 import { englishFrontEnd } from './english';
 import { ipaFrontEnd } from './ipa-front-end';
 import { applyAllophones } from './allophones';
+import { GENERAL_AMERICAN, applyAccent, resolveAccent, type Accent } from './accents';
 
 const SPACE = /\s/;
 /** A word character in any script: a delimited word may not open right after one. */
@@ -89,14 +90,18 @@ export function readLyrics(text: string, frontEnds: readonly FrontEnd[]): Syllab
  * one is given and letter-to-sound rules otherwise, and IPA between slashes. The English words
  * then get American flaps and dark l (allophones.ts) unless `allophones` is false, which is
  * how CHIMERA's own sung syllables come out and how classical diction sings; IPA is sung as
- * written either way.
+ * written either way. `accent` (an id from ACCENTS or an Accent) re-voices the English words'
+ * vowels and r, th and h first (accents.ts), and picks the t and l rules; General American, the
+ * default, leaves them as the reader gave them.
  */
 export function lyricsToSyllables(
   text: string,
   opts: {
     dictionary?: PronouncingDictionary;
-    /** American flaps and dark l on English words, default true; false for classical diction, as CHIMERA sings. */
+    /** The accent's t and l rules on English words, default true; false for classical diction, as CHIMERA sings. */
     allophones?: boolean;
+    /** An accent id ('southern-british', 'australian', ...; see ACCENTS) or an Accent. Default General American. */
+    accent?: Accent | string;
   } = {},
 ): Syllable[] {
   const english = englishFrontEnd({ dictionary: opts.dictionary });
@@ -111,8 +116,11 @@ export function lyricsToSyllables(
     },
   };
   const out = readLyrics(text, [tagged, ipaFrontEnd]);
+  const accent = resolveAccent(opts.accent);
+  const isEnglish = (syl: Syllable) => read.has(syl);
+  if (accent !== GENERAL_AMERICAN) applyAccent(out, isEnglish, accent);
   // flaps and dark l need the next sound, which can be in the next word (allophones.ts)
-  if (opts.allophones !== false) applyAllophones(out, (syl) => read.has(syl));
+  if (opts.allophones !== false) applyAllophones(out, isEnglish, { t: accent.t, l: accent.l });
   return out;
 }
 

@@ -229,3 +229,6 @@ export function estimateFreq(
 export function cents(f: number, ref: number): number {
   return 1200 * Math.log2(f / ref);
 }
+
+/** LPC formants around a sample; the library's estimateFormants, under the name the tests used first. */
+export { estimateFormants as lpcFormants } from '../../src/analysis/formants';

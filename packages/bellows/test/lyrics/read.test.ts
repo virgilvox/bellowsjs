@@ -33,7 +33,7 @@ describe('lyricsToSyllables, the conventions', () => {
     );
     // dark l and the flap of "little" (allophones.ts)
     expect(sungIpa(syls)).toBe('twɪŋ.kəɫ twɪŋ.kəɫ lɪ.ɾəɫ stɑɹ haʊ aɪ wʌn.dɚ wʌt ju ɑɹ');
-    expect(syls[0].nucleus).toEqual({ ipa: 'ɪ', stress: 1 });
+    expect(syls[0].nucleus).toEqual({ ipa: 'ɪ', stress: 1, set: 'KIT' });
   });
 
   it('reads "heavenly" from a fixture dictionary', () => {
@@ -59,7 +59,7 @@ describe('lyricsToSyllables, the conventions', () => {
     expect(shownText(syls)).toBe('how I ~~ won-der ~~ ~~ ');
     const m = syls[2];
     expect(m).toEqual({
-      text: '~', onset: [], nucleus: { ipa: 'aɪ', stress: 1 }, coda: [], melisma: true,
+      text: '~', onset: [], nucleus: { ipa: 'aɪ', stress: 1, set: 'PRICE' }, coda: [], melisma: true,
       wordEnd: true, phraseEnd: false,
     });
     /* A copy: changing one note's vowel does not change the other's. */

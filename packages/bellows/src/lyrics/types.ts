@@ -13,10 +13,13 @@
  * crates/chimera/src/phonetics/mod.rs (Segment, Syllable) and syllables.rs
  * (the FrontEnd trait) at 1d3ea49 (TypeScript original at
  * cd247a6^:src/engine/phonetics/syllables.ts and planner.ts). Changes from
- * the original: Segment keeps only ipa, stress and dur; FrontEnd.continues
- * has no default; PronouncingDictionary and the Sung* plan types are new.
+ * the original: Segment keeps only ipa, stress and dur (set and hold, for
+ * accents, are bellows' own); FrontEnd.continues has no default;
+ * PronouncingDictionary and the Sung* plan types are new.
  * See THIRD_PARTY_NOTICES.md.
  */
+
+import type { LexicalSet } from './lexical-sets';
 
 /** One phoneme, as IPA. Diphthongs stay one segment ("aɪ") until the sung planner splits them. */
 export interface Segment {
@@ -25,6 +28,10 @@ export interface Segment {
   stress?: 0 | 1 | 2;
   /** Duration override in seconds. */
   dur?: number;
+  /** A vowel's lexical set (lexical-sets.ts), set by the English reader; what an accent re-voices. */
+  set?: LexicalSet;
+  /** A two-vowel nucleus: the share of its time on the first vowel (lyrics/sing.ts), set by an accent. */
+  hold?: number;
 }
 
 /** A sung syllable: what one note (or a melisma of notes) carries. */

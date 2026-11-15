@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased
+
+Accents. Every voice used to speak one accent, General American, and listeners heard it as an old
+Irish man; a voice can now be given any accent, as data. See docs/ACCENTS.md.
+
+### Added
+
+- **Accents.** `b.accent`, `sing(..., { accent })` and `lyricsToSyllables(text, { accent })` take an
+  id ('general-american', the default, 'southern-british', 'london', 'australian', 'new-zealand',
+  'irish', 'scottish', 'southern-us') or an `Accent` object. The English reader tags each vowel with
+  its Wells lexical set (`LexicalSet`, `tagLexicalSets`); an accent maps the sets to vowels and
+  diphthongs, sets the diphthongs' glide timing, says or drops r after a vowel (linking it before a
+  vowel), and picks its t, l, th, r and h rules. General American output is unchanged.
+- **`speak(text, opts)`** on a vocal instrument: clauses spoken with stress-timed rhythm, final
+  lengthening, declination, pitch accents and a final fall or rise from the accent's `prosody`; a
+  clause ending in "?" rises. `speechPlan()` is the same without the facade.
+- **`pronounce(text, opts)` and `toIPA(text, opts)`**: what will be said, word by word, with stress
+  marks, syllables and lexical sets.
+- **Twelve vowels**: ɒ ɐ ɜ ʉ ɨ ɘ ɵ y ø œ ɯ ɤ, solved from formant targets into articulator targets
+  for each body (`scripts/gen-extra-vowels.mjs`, `src/engines/vowel-solver.ts`) and checked through
+  the engine (F1 and F2 within 3 percent for the male body, except the child body's y, about 12
+  percent high in F1). They are appended to `VOCAL_PHONEMES` at indices 42 to 53, so saved indices
+  keep their sounds.
+- **`estimateFormants(x, sampleRate, center)`**: LPC formant estimates around a sample index.
+
+### Changed
+
+- ɜ ɒ ɐ ɨ ʉ and y written in IPA used to be read as General American's nearest vowel (ɝ ɑ ʌ ɪ u
+  i); they are now their own sounds.
+- `applyAllophones()` takes the accent's t and l rules as a third argument; left out, the rules are
+  General American's as before.
+- A nucleus of any two vowels is sung as a diphthong, gliding at its segment's `hold` (an accent
+  sets it) or General American's 0.8.
+
 ## 0.3.0
 
 The engines ship once. Every engine used to travel twice in a page: inside the AudioWorklet's
