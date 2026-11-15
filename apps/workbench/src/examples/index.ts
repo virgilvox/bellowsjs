@@ -7,6 +7,7 @@ import type { Example } from './types';
 import { basicsExamples } from './basics';
 import { firstSounds } from './firstsounds';
 import { engineExamples } from './engines';
+import { voiceExamples } from './voice';
 import { sequencingExamples } from './sequencing';
 import { theoryExamples } from './theory';
 import { effectExamples } from './effects';
@@ -24,6 +25,7 @@ export const categories: ExampleCategory[] = [
   { name: 'FIRST SOUNDS', examples: firstSounds },
   { name: 'BASICS', examples: basicsExamples },
   { name: 'ENGINES', examples: engineExamples },
+  { name: 'VOCALS', examples: voiceExamples },
   { name: 'SEQUENCING', examples: sequencingExamples },
   { name: 'THEORY + TUNING', examples: theoryExamples },
   { name: 'EFFECTS', examples: effectExamples },
