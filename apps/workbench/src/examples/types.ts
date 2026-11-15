@@ -11,4 +11,9 @@ export interface Example {
   description: string;
   seed: string;
   code: string;
+  /**
+   * An interactive panel shown in place of the editor ('voice': components/code/VoiceLab.vue).
+   * `code` is then what the panel's defaults do, so the example still runs as code.
+   */
+  lab?: 'voice';
 }

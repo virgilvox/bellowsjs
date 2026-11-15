@@ -17,6 +17,7 @@ import { runner, runExample, stopRun } from '../lib/runner';
 import ExampleRail from '../components/code/ExampleRail.vue';
 import CodeEditor from '../components/code/CodeEditor.vue';
 import RunConsole from '../components/code/RunConsole.vue';
+import VoiceLab from '../components/code/VoiceLab.vue';
 
 /*
  * Two trees on one page: javascript, and the C++ port.
@@ -224,8 +225,11 @@ onActivated(() => {
         </div>
       </div>
 
+      <!-- an interactive lab stands in for the editor -->
+      <VoiceLab v-if="!embedded && current.lab === 'voice'" />
+
       <!-- JAVASCRIPT: the source IS the thing that runs. -->
-      <div v-if="!embedded" class="panel">
+      <div v-if="!embedded && !current.lab" class="panel">
         <div class="panel-title">
           09 SOURCE
           <em>async (b, lib, log, onCleanup) {{ isEdited ? '// EDITED' : '' }}</em>
@@ -242,7 +246,7 @@ onActivated(() => {
         </div>
       </div>
 
-      <RunConsole />
+      <RunConsole v-if="!current.lab" />
     </section>
   </div>
 </template>

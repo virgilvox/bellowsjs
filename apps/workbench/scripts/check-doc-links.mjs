@@ -29,6 +29,7 @@
  */
 
 import { DOC_PAGES, EMBEDDED_DOC_PAGES, DOC_GROUPS, EMBEDDED_DOC_GROUPS } from '../src/docs/index.ts';
+import { exampleById } from '../src/examples/index.ts';
 
 /* The hash routes App.vue knows. A link to anything else that is not /docs
  * lands on the home page with no error, which reads as a dead link. */
@@ -50,6 +51,12 @@ for (const page of all) {
     }
     if (href.startsWith('/#') || href === '/') {
       const hash = href.slice(1) || '#';
+      // a deep link into Code mode names an example, which has to exist
+      const ex = /^#code\/(.+)$/.exec(hash);
+      if (ex) {
+        if (!exampleById(decodeURIComponent(ex[1]))) problems.push(`${page.slug}: ${href} names no Code mode example`);
+        continue;
+      }
       if (!MODES.has(hash)) problems.push(`${page.slug}: ${href} is not a mode App.vue knows`);
       continue;
     }

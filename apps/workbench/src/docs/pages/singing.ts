@@ -2,12 +2,14 @@ import type { DocPage } from '../types';
 
 const page: DocPage = {
   slug: 'singing',
-  title: 'Singing',
-  blurb: 'Words on a melody, and speech: the bellows-voice package.',
+  title: 'Singing and speech',
+  blurb: 'A physical model of a singer: lyrics, speech, twenty accents, IPA and the mouth, in the bellows-voice package.',
   prev: 'engines',
   next: 'presets',
   body: `
-By the end of this page you can make a singer sing a lyric on a melody, give it an accent, make it speak, fix a word it reads wrongly, and stack singers into harmony in any tuning.
+By the end of this page you can make a singer sing a lyric on a melody, make it speak, give it any of twenty accents or one of your own, check what it will say before it says it, draw its mouth, fix a word it reads wrongly, and stack singers into harmony in any tuning.
+
+**Try it first.** The [Voice Lab](/#code/voice-lab) in Code mode has all of this behind controls: type a line, pick an accent, sing or speak it, move every parameter, hold any sound, and watch the mouth follow along. Its SHOW CODE button writes your settings out as code. The other VOCALS examples there each take one idea further.
 
 ## Installing the voice
 
@@ -69,39 +71,110 @@ alto.dictionary = parseCmudict(text);                      // every line from no
 
 \`opts.dictionary\` does the same for one line, in place of the singer's. Words the dictionary in use lacks go through the rules.
 
-## Accents
-
-\`singer.accent\` (or \`singer(b, params, { accent })\`) sets the accent every line is read in, and \`opts.accent\` sets it for one line. The default is \`'general-american'\`; the others built in are \`'southern-british'\`, \`'london'\`, \`'australian'\`, \`'new-zealand'\`, \`'irish'\`, \`'scottish'\` and \`'southern-us'\`.
-
-\`\`\`js
-alto.accent = 'southern-british';
-alto.sing('the water in the bath was far too hot', melody, { at });
-alto.sing('the water in the bath was far too hot', melody, { at: later, accent: 'scottish' });
-\`\`\`
-
-An accent is mostly its vowels. The reader names the vowel of every English word by its lexical set, J. C. Wells's names for "the vowel in": KIT, DRESS, TRAP, LOT, STRUT, FOOT, BATH, CLOTH, NURSE, FLEECE, FACE, PALM, THOUGHT, GOAT, GOOSE, PRICE, CHOICE, MOUTH, NEAR, SQUARE, START, NORTH, FORCE, CURE, and the weak happY, lettER and commA. An accent says how it voices each set: Southern British sings BATH with PALM's vowel and GOAT as əʊ, Australian fronts GOOSE to ʉ, Irish keeps FACE and GOAT as long single vowels. Two vowels make a diphthong, and the accent sets how long the first is held before the glide.
-
-It also sets the consonants: whether r after a vowel is said (a non-rhotic accent still links it before a vowel, "far away"), t (flapped, released, or a glottal stop), l (dark after a vowel, clear, dark everywhere, or vocalized to a w), th (fricative, stopped to t and d, or fronted to f and v), r (approximant or tap), and whether h is dropped.
-
-An accent is plain data, so a new one starts from a built-in:
-
-\`\`\`js
-const mine = { ...ACCENTS.irish, id: 'mine', name: 'Mine',
-  sets: { ...ACCENTS.irish.sets, FACE: 'eɪ', GOAT: 'oʊ' }, th: 'fricative' };
-alto.sing('they think it goes', melody, { accent: mine });
-\`\`\`
-
 ## Speaking
 
-\`speak(text, opts?)\` says text instead of singing it. Each clause is a phrase. Stressed syllables take about twice as long as unstressed ones, the last syllable of a phrase lengthens, function words take their weak forms ("the" ðə), the pitch sinks across the phrase, each stressed syllable gets a rise, and the phrase ends falling, or rising for a question. The accent sets that melody: Australian and New Zealand statements end rising, Southern British has the widest range, Southern US speaks slowest.
+\`speak(text, opts?)\` says text instead of singing it.
 
 \`\`\`js
 alto.speak('Good morning. Where are you from?', { accent: 'australian', hz: 120, rate: 1 });
 \`\`\`
 
+| Option | Default | What it does |
+|---|---|---|
+| \`at\` | as soon as the opening consonants can sound | context time the first vowel lands |
+| \`accent\` | the singer's | how the words are said, and the melody they are said with |
+| \`hz\` | 110 | the speaker's baseline pitch |
+| \`rate\` | 1 | speed over the accent's own |
+| \`dictionary\`, \`allophones\` | the singer's, true | as for \`sing()\` |
+
+Speech is a line the voice plans itself. Each clause (up to a comma, full stop, question mark, colon or line break) is a phrase with a short breath after it. Function words take their weak forms ("the" ðə, "and" ənd). A stressed syllable takes about twice as long as an unstressed one, the last syllable of a phrase lengthens by half, and each consonant takes its spoken length. The pitch follows a simple reading of English intonation: a baseline that sinks across the phrase, a rise on each stressed syllable (the first one highest), and on the phrase's last stressed syllable the tune that ends it, a fall below the baseline or a rise above it, moving inside that syllable when it is the last. A clause that ends in "?" rises whatever the accent.
+
+The accent's \`prosody\` sets all of that: \`tune\` ('fall' or 'rise'), \`range\` (how high a stressed syllable goes, in semitones), \`declination\` (how far the baseline sinks), \`rate\`, and \`stressRatio\` (how much longer a stressed vowel is than an unstressed one). That last one is what separates stress-timed English, where unstressed syllables are squeezed (2, General American and British), from the syllable-timed Englishes of India, Nigeria, Singapore and the Caribbean, where every syllable takes nearly the same time (1 to 1.3). Australian, New Zealand, Geordie, Belfast and Welsh statements end rising; Southern British and Welsh have the widest ranges; Southern US speaks slowest.
+
+It is a model of read speech, not of a person: one melody per clause, no emphasis you did not write. For a line that must land exactly, sing it on notes you choose: \`{ hz }\` notes and \`{ seconds }\` durations make \`sing()\` a speech editor.
+
+## Accents
+
+\`singer.accent\` (or \`singer(b, params, { accent })\`) sets the accent every line is read in, and \`opts.accent\` sets it for one line. Twenty are built in, each a broad transcription of the accent's mainstream form from the published lexical-set tables (Wells, and the Handbook of Varieties of English), not a recording of any one speaker. The last column is what each says for "The water in the bath was far too hot." straight from \`toIPA()\`.
+
+| Accent | What you hear | "The water in the bath was far too hot." |
+|---|---|---|
+| \`general-american\` | rhotic; flapped t (water); dark l after a vowel; diphthongs held long | ðə ˈwɔ.ɾɚ ɪn ðə bæθ wɑz fɑɹ tu hɑt |
+| \`canadian\` | cot and caught merge; Canadian raising: price, house start high before p t k f s | ðə ˈwɒ.ɾɚ ɪn ðə baθ wɒz fɑɹ tu hɒt |
+| \`californian\` | fronted GOOSE and GOAT; TRAP lowered; cot and caught merge | ðə ˈwɑ.ɾɚ ɪn ðə baθ wɑz fɑɹ tʉ hɑt |
+| \`new-york\` | non-rhotic; raised THOUGHT (oə); tensed BATH (eə) | ðə ˈwoə.ɾəɹ ɪn ðə beəθ wɑz fɑ tu hɑt |
+| \`southern-us\` | PRICE a single long vowel (pɹas); GOAT and GOOSE fronted; dark l | ðə ˈwɒɔ.ɾɚ ɪn ðə bæθ wɑz fɑɹ tʉ hɑt |
+| \`southern-british\` | non-rhotic with linking r; BATH with PALM vowel; GOAT əʊ; t glottalled before consonants | ðə ˈwo.təɹ ɪn ðə bɑθ wɒz fɑ tʉ hɒt |
+| \`london\` | TH-fronting (fink, bruvver); h dropped; glottal t; vocalized l (mɪwk) | də ˈwo.ʔəɹ ɪn də bɑf wɒz fɑ tʉ ɒʔ |
+| \`northern-english\` | FOOT and STRUT merge; short BATH; FACE and GOAT single vowels; h dropped | ðə ˈwo.təɹ ɪn ðə baθ wɒz fa tu ɒt |
+| \`geordie\` | FOOT and STRUT merge; FACE eə, GOAT ɵ, NURSE ø, MOUTH u; statements rise | ðə ˈwɒ.tɐɹ ɪn ðə baθ wɒz fɑ tʉ hɒt |
+| \`scottish\` | rhotic with tapped r; FOOT and GOOSE merge as ʉ; NURSE ʌɾ; dark l | ðə ˈwɔ.təɾ ɘn ðə baθ wɔz faɾ tʉ hɔt |
+| \`welsh\` | tapped r, non-rhotic; clear l; PRICE əɪ; a rising, lilting tune | ðə ˈwo.təɾ ɪn ðə baθ wɒz fa tʉ hɒt |
+| \`irish\` | TH-stopping (tink, dis); FACE and GOAT long single vowels; clear l; rhotic | də ˈwɒ.tɚ ɪn də bat wɑz faɹ tu hɑt |
+| \`northern-irish\` | statements rise; FACE eə; MOUTH ɘʉ; fronted GOOSE and FOOT | ðə ˈwɔ.ɾɚ ɘn ðə bɑθ wɔz fɑɹ tʉ hɔt |
+| \`australian\` | non-rhotic; GOAT ɐʉ, PRICE ɒe, FACE æɪ; fronted GOOSE; statements rise | ðə ˈwo.ɾəɹ ɪn ðə bɐθ wɔz fɐ tʉ hɔt |
+| \`new-zealand\` | KIT centralized to ɘ; DRESS raised; NURSE ø; statements rise | ðə ˈwo.ɾɘɹ ɘn ðə bɐθ wɒz fɐ tʉ hɒt |
+| \`south-african\` | non-rhotic; NURSE ø; GOAT œʊ; BATH ɑ; clear l | ðə ˈwo.təɹ ɪn ðə bɑθ wɒz fɑ tʉ hɒt |
+| \`nigerian\` | no central vowels (STRUT ɔ, NURSE ɛ); TH-stopping; tapped r; syllable-timed | də ˈwɔ.taɾ in də bat wɔz fa tu hɔt |
+| \`jamaican\` | FACE ie, GOAT uo; TRAP and LOT merge; TH-stopping; h dropped; syllable-timed | də ˈwa.taɹ ɪn də bat waz fa tu at |
+| \`indian\` | FACE and GOAT single vowels; TH-stopping; tapped r; syllable-timed | də ˈwɔ.təɾ ɪn də bɑt wɒz fɑɾ tu hɒt |
+| \`singaporean\` | long and short pairs merge (KIT with FLEECE); glottal final t; syllable-timed | də ˈwɔ.təɹ in də bɑt wɔz fɑ tu hɔt |
+
+\`\`\`js
+alto.accent = 'scottish';
+alto.sing('the water in the bath was far too hot', melody, { at });
+alto.speak('Where are you from?', { accent: 'jamaican' });   // one line in another accent
+\`\`\`
+
+### What an accent is made of
+
+An accent is mostly its vowels. The reader names the vowel of every English word by its lexical set, J. C. Wells's names for "the vowel in" a keyword, which let you talk about a vowel without saying how any one accent says it:
+
+| Set | Words | Set | Words | Set | Words |
+|---|---|---|---|---|---|
+| KIT | ship, bit | FLEECE | see, keep | NEAR | here, beer |
+| DRESS | step, bed | FACE | day, wait | SQUARE | care, fair |
+| TRAP | cat, map | PALM | father, calm | START | car, heart |
+| LOT | hot, stop | THOUGHT | caught, law | NORTH | for, war |
+| STRUT | cup, love | GOAT | go, home | FORCE | four, more |
+| FOOT | put, good | GOOSE | too, food | CURE | pure, tour |
+| BATH | bath, dance | PRICE | ride, time | happY | the y of happy |
+| CLOTH | cloth, dog | CHOICE | boy, coin | lettER | the er of letter |
+| NURSE | bird, word | MOUTH | how, down | commA | the a of comma |
+
+General American merges some of these (LOT with PALM in "bother" and "father", TRAP with BATH), so the reader separates them by spelling: "calm" is PALM, "cot" is LOT, "bath", "staff" and "dance" are BATH. Each field of an accent:
+
+| Field | What it sets |
+|---|---|
+| \`sets\` | each lexical set's vowel, as IPA: one vowel (\`'e'\`), a diphthong (\`'əʊ'\`), or a vowel and an r (\`'ʌɾ'\`). A set left out keeps General American's |
+| \`rhotic\` | whether r after a vowel is said ("car"). A non-rhotic accent still says it before a vowel ("far away") |
+| \`t\` | 'flap' (water with a tap), 'released', 'glottal-coda' (a glottal stop before a consonant), 'glottal' (also between vowels and before a pause) |
+| \`l\` | 'dark-coda' (dark after a vowel), 'clear', 'dark' (everywhere), 'vocalized' (milk as mɪwk) |
+| \`th\` | 'fricative', 'stop' (think as tɪŋk), 'front' (think as fɪŋk, brother as bɹɐvə) |
+| \`r\` | 'approximant' or 'tap' |
+| \`hDrop\` | drops h at the start of a word |
+| \`raised\` | vowels used before a voiceless consonant in the same word: Canadian "price" and "house" against "prize" and "how" |
+| \`hold\`, \`holds\` | how long a diphthong holds its first vowel before gliding, overall and per set |
+| \`prosody\` | the speech melody: tune, range, declination, rate, stressRatio (Speaking, above) |
+
+So a new accent starts from a built-in, and anything can change:
+
+\`\`\`js
+import { ACCENTS } from 'bellows-voice';
+const mine = {
+  ...ACCENTS.irish, id: 'mine', name: 'Irish, with diphthongs',
+  sets: { ...ACCENTS.irish.sets, FACE: 'eɪ', GOAT: 'oʊ' },
+  th: 'fricative',
+  prosody: { ...ACCENTS.irish.prosody, tune: 'rise' },
+};
+alto.sing('they think it goes', melody, { accent: mine });
+\`\`\`
+
+Every vowel an accent names must be one the voice has (The sounds, below). Writing a word as IPA between slashes takes it out of the accent's hands: it is sung exactly as written.
+
 ## Checking a pronunciation
 
-\`toIPA(text, opts?)\` shows what will be said, and \`pronounce(text, opts?)\` gives it word by word, with each syllable and the lexical set of each vowel. Its \`syllables\` can be edited and passed to \`sing()\` in place of the text.
+\`toIPA(text, opts?)\` shows what will be said, and \`pronounce(text, opts?)\` gives it word by word: each word's spelling, its IPA with stress marks and syllable dots, its syllables, and the lexical set of each vowel. Both take \`accent\`, \`dictionary\` and \`allophones\`, read exactly as \`sing()\` reads, and need no audio: they are also in \`bellows-voice/text\`, which a page, a server or a test can use without bellows. \`pronounce(text).syllables\` can be edited (a vowel changed, a syllable's stress moved) and passed to \`sing()\` in place of the text.
 
 \`\`\`js
 toIPA('far away', { accent: 'southern-british' });   // 'fɑɹ ə.ˈweɪ'
@@ -155,15 +228,68 @@ Velocity is breath: it sets the pressure in the lungs, so a louder note is also 
 
 \`phoneme\` and \`bend\` are the instrument's own sound and pitch offset. While a line sings they belong to it: any change to either reaches the line, so keep \`param()\` calls on them clear of sung lines. When a line ends the instrument gets back the values it was created with, or the last ones an untimed \`param()\` gave it.
 
+## Seeing the mouth
+
+\`bellows-voice/view\` runs the voice's own geometry, the one the engine runs, on the same per-phoneme articulator targets, so a page can draw what the mouth is doing. A consonant's targets overlay the vowel's posture as they do in the engine (what /m/ does not set stays where the vowel put it), the velum lowers for a nasal, and each articulator moves toward its target at the engine's own speed.
+
+\`\`\`js
+import { TractModel } from 'bellows-voice/view';
+
+const tract = new TractModel(1);                 // body: 0 male, 1 female, 2 child
+const plan = alto.sing(lyric, melody, { at });
+const spans = plan.phrases.flatMap((p) => p.spans);
+
+function frame() {
+  const now = b.now();
+  const span = spans.find((s) => now >= s.start && now < s.end);
+  tract.target(span ? span.ipa : '_');
+  tract.step(1 / 60);
+  const { upper, lower, area, velumPort, lipArea } = tract.shape();
+  // upper and lower are x, y pairs in centimetres from the glottis to the lips: draw them
+  requestAnimationFrame(frame);
+}
+\`\`\`
+
+\`shape()\` gives the upper wall (the back of the throat, the palate, the upper lip) and the lower wall (the tongue, the floor of the mouth, the lower lip) as point pairs, the cross-sectional area at each, the opening into the nose and between the lips, the tongue tip, and where the throat turns into the mouth. The Voice Lab's mouth is drawn from exactly this. It follows the plan, not the audio, so it shows the targets the voice is moving toward on the timing the line was planned with.
+
 ## Harmony, and lines that meet
 
 One singer sings one line at a time, because \`phoneme\` and \`bend\` are channel parameters. Give each part its own \`singer()\`. Pitches go through \`b.tuning\` like every other note, so a choir in just intonation is one assignment: the VOCAL: THREE PARTS, JUST TUNED example in [Code mode](/#code) switches between 12-EDO and pure thirds on every pass. [Tuning](/docs/tuning) covers the tunings themselves.
 
 A line that would start while the same singer is still singing starts where the earlier line ends, losing the opening consonants that overlapped it, and \`plan.trimmed\` says how much went. End a line on a rest, or on a shorter last note, to leave the next one room for its lead-in.
 
+## Rendering, Node, and the text alone
+
+\`b.render()\` renders through the worklet with the plugin loaded, exactly as it plays, so a sung line inside a clock callback exports sample for sample as you heard it. To render with \`renderOffline()\` or in Node without a worklet, register the engine on that thread first:
+
+\`\`\`js
+import { registerBuiltins, renderOffline } from 'bellowsjs';
+import { registerVoice } from 'bellows-voice/engine';
+registerBuiltins();
+registerVoice();
+\`\`\`
+
+| Import | What it has | Gzipped |
+|---|---|---|
+| \`bellows-voice\` | \`voice\` (the plugin), \`singer\`, \`ACCENTS\`, the text layer, \`VOCAL_PHONEMES\` | about 50 KB, nearly all of it the engine's worklet script |
+| \`bellows-voice/text\` | lyrics, accents, \`toIPA\`, \`pronounce\`, \`speechPlan\`: no audio, no bellows | small |
+| \`bellows-voice/engine\` | \`vocalEngine\`, \`registerVoice()\`, the glottal source: the DSP on this thread | about 26 KB |
+| \`bellows-voice/view\` | \`TractModel\`: the mouth, for drawing | shares the engine's geometry |
+| \`bellows-voice/worklet.js\` | the plugin script as a file, for a host whose CSP blocks blob: URLs (\`{ ...voice, workletUrl }\`) | |
+
 ## What it is and is not
 
-The voice is an articulatory synthesizer: a physical model of a singer. The lyric moves 17 articulators (jaw, tongue body and tip, lips, velum and the rest) between targets, overlapping them as speech does. Their positions become the shape of the throat and mouth, and the air from the lungs flows through that shape in a waveguide airway. Pressure building behind closed lips, the burst when they open, voicing that fades through a closure, the hiss of a narrow gap and the hum through the nose all come out of the flowing air, not out of rules. One voice costs about a microsecond a sample at 48 kHz (1.07 to 1.12 in the worst case measured on an M1). It sings and speaks English, in eight accents, and IPA. It is not a full text-to-speech system: its speech melody is a simple model, and words it does not know go through spelling rules.
+The voice is an articulatory synthesizer: a physical model of a singer. The lyric moves 17 articulators between targets, overlapping them as speech does:
+
+| Articulators | What they move |
+|---|---|
+| \`jaw\` | how far the mouth opens |
+| \`tbX\`, \`tbY\`, \`dorsum\`, \`root\` | the tongue body forward and up, its back, and its root in the throat |
+| \`ttX\`, \`ttY\`, \`ttCurl\`, \`lateral\` | the tongue tip, its curl, and the side opening of an l |
+| \`lipAp\`, \`lipProt\`, \`lipWidth\`, \`labiodental\` | the lips: open, pushed forward, spread, and the lower lip to the teeth for f and v |
+| \`velum\` | the soft palate, down for m, n and ŋ |
+| \`larynx\`, \`epilarynx\`, \`ventricular\` | the voice box's height and the tubes above the folds |
+ Their positions become the shape of the throat and mouth, and the air from the lungs flows through that shape in a waveguide airway. Pressure building behind closed lips, the burst when they open, voicing that fades through a closure, the hiss of a narrow gap and the hum through the nose all come out of the flowing air, not out of rules. One voice costs about a microsecond a sample at 48 kHz (1.07 to 1.12 in the worst case measured on an M1). It sings and speaks English, in twenty accents, and IPA. It is not a full text-to-speech system: its speech melody is a simple model, and words it does not know go through spelling rules.
 
 bellows-voice owes a large debt to [CHIMERA](https://github.com/jamesondh/chimera-vocal-synth), Jameson Hodge's physical-model voice synthesizer (MIT). The articulators and their speeds, the gesture planner, the mouth geometry, the airway's physical elements, the glottal source and the lyric front end are ported from it or learned from its code. What bellows-voice adds: the airway is a waveguide that carries the air at the output rate, so it runs at about a quarter of CHIMERA's cost; the pitch prepares, overshoots and follows breath pressure as a singer's does; the singer's formant and high-note tuning are parameters; and the voice is calibrated against measurements of human speech as well as against CHIMERA.
 `,

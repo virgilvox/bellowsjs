@@ -222,22 +222,29 @@ const plan = alto.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   dark l unless opts.allophones is false (classical diction); IPA is sung
   as written.
 - Accents: singer.accent (default 'general-american') or opts.accent picks how
-  English is said: 'general-american', 'southern-british', 'london',
-  'australian', 'new-zealand', 'irish', 'scottish', 'southern-us', or an
-  Accent object. The reader tags every vowel with its Wells lexical set
-  (KIT, BATH, GOAT, NURSE, ...); an accent maps each set to a vowel or a
-  diphthong (with its glide timing), says or drops r after a vowel (linking
-  it before a vowel), and sets t (flap, released, glottal), l (dark-coda,
-  clear, dark, vocalized), th (fricative, stop, front), r (approximant,
-  tap) and h-dropping. An Accent is plain data: spread a built-in and
-  change a set ({ ...ACCENTS.irish, sets: { ...ACCENTS.irish.sets, FACE:
-  'eɪ' } }) to make a new one. IPA between slashes ignores the accent.
+  English is said. Built in (ACCENTS): ${Object.keys(voiceLib.ACCENTS).join(', ')}.
+  Or an Accent object. The reader tags every vowel with its Wells lexical set
+  (KIT, BATH, GOAT, NURSE, ...); an Accent is plain data: sets (each set's
+  vowel, diphthong, or vowel plus r, as IPA), rhotic (r after a vowel; linked
+  before a vowel when false), t ('flap' | 'released' | 'glottal-coda' |
+  'glottal'), l ('dark-coda' | 'clear' | 'dark' | 'vocalized'), th
+  ('fricative' | 'stop' | 'front'), r ('approximant' | 'tap'), hDrop, raised
+  (realizations before a voiceless consonant: Canadian raising), hold/holds
+  (diphthong timing) and prosody { tune: 'fall' | 'rise', range (semitones),
+  declination, rate, stressRatio (2 stress-timed, near 1 syllable-timed) }.
+  Spread a built-in to make one: { ...ACCENTS.irish, sets: { ...ACCENTS.irish.sets,
+  FACE: 'eɪ' } }. IPA between slashes ignores the accent.
 - pronounce(text, { accent, dictionary }) returns words (spelling, IPA with
   stress marks, syllables, lexical sets) and the whole line's IPA;
   toIPA(text, opts) returns just the IPA. Use them to check a lyric before
   singing it; pronounce(text).syllables can be edited and passed to sing().
   These and the rest of the text layer are also in 'bellows-voice/text',
   which needs no audio and no bellows.
+- The mouth: import { TractModel } from 'bellows-voice/view'. new
+  TractModel(body); target(ipa) for the phoneme at each moment (from
+  plan.phrases[].spans); step(dt); shape() returns { upper, lower } wall
+  points (x, y pairs, cm, glottis to lips), area per point, velumPort,
+  lipArea, tipX/tipY, region, split. The voice's own geometry and targets.
 - speak(): each clause is a phrase. Stressed syllables take about twice an
   unstressed one's time, the last lengthens, the baseline declines, each
   stressed syllable gets a pitch accent, and the last one falls (or rises:

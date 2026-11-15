@@ -82,7 +82,7 @@ b.rampBpm(96, '8m');
 b.start();
 ```
 
-Singing and speech are a separate package, [bellows-voice](https://github.com/virgilvox/bellows-voice), loaded as a plugin, so a page that never sings never carries the voice. Each vowel lands on its note, the consonants around it are timed like a singer's, the pitches go through the tuning like any other note, and it speaks and sings English in eight accents:
+Singing and speech are a separate package, [bellows-voice](https://github.com/virgilvox/bellows-voice), loaded as a plugin, so a page that never sings never carries the voice. Each vowel lands on its note, the consonants around it are timed like a singer's, the pitches go through the tuning like any other note, and it speaks and sings English in twenty accents from around the world:
 
 ```js
 import { voice, singer } from 'bellows-voice';   // npm install bellows-voice
@@ -147,7 +147,7 @@ Each engine now ships once, inside the AudioWorklet, instead of twice; a page th
 
 Synthesis: virtual analog (tabulated-BLEP oscillators, worst alias measured at -85 dB through the musical range and -73 dB at the top of the band, ladder and SVF filters, per-voice drift), FM (2/4/6 operators, DX-style algorithm routing), additive, wavetable (mipmapped, position scan), granular (64-grain clouds), extended Karplus-Strong, waveguide string and tube, modal banks (bar, membrane, bell, glass, wood), west coast (wavefolder into a vactrol low-pass gate), formant vocal synthesis, five drum engines, noise synth, and a DDSP-style harmonic-plus-noise engine with a frame-driven control input.
 
-Voice: the articulatory singing and speaking voice (17 articulators, a waveguide airway, eight English accents, text to IPA) is the separate package [bellows-voice](https://github.com/virgilvox/bellows-voice), a plugin that loads into the worklet beside the kernel.
+Voice: the articulatory singing and speaking voice (17 articulators, a waveguide airway, twenty English accents from around the world, text to IPA, a view of the mouth) is the separate package [bellows-voice](https://github.com/virgilvox/bellows-voice), a plugin that loads into the worklet beside the kernel.
 
 Samples: a sampler engine with velocity layers, crossfades, round robins, and loop-seam crossfading; an SF2 parser implementing the generator resolution model of the spec; an SFZ parser covering the opcodes the popular free libraries actually use, with #include and #define.
 
