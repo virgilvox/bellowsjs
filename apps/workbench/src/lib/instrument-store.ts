@@ -12,12 +12,12 @@ import {
   listEffects,
   getPreset,
   SAMPLER_PARAMS,
-  VOCAL_PHONEMES,
   type Bellows,
   type Instrument,
   type InstrumentPreset,
   type ParamSpec,
 } from 'bellowsjs';
+import { VOCAL_PHONEMES } from 'bellows-voice';
 import { bellows as bellowsRef, ensureBellows } from './audio';
 import { ensureRegistered, sfState } from './soundfonts';
 

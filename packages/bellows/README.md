@@ -80,26 +80,23 @@ b.rampBpm(96, '8m');
 b.start();
 ```
 
-Singing is a lyric on a melody, on the `vocal` engine. Each vowel lands on its note, the consonants around it are timed like a singer's, and the pitches go through the tuning like any other note:
+Singing and speech are a separate package, [bellows-voice](https://github.com/virgilvox/bellows-voice), loaded as a plugin, so a page that never sings never carries the voice. Each vowel lands on its note, the consonants around it are timed like a singer's, the pitches go through the tuning like any other note, and it speaks and sings English in eight accents:
 
 ```js
-const singer = b.voice('vocal', { body: 1 }); // 0 male, 1 female, 2 child
-singer.sing('twinkle twinkle little star', [
+import { voice, singer } from 'bellows-voice';   // npm install bellows-voice
+
+const b = await Bellows.boot({ plugins: [voice] });
+const alto = singer(b, { body: 1 }, { accent: 'southern-british' }); // 0 male, 1 female, 2 child
+alto.sing('twinkle twinkle little star', [
   { note: 'C4', dur: '4n' }, { note: 'C4', dur: '4n' },
   { note: 'G4', dur: '4n' }, { note: 'G4', dur: '4n' },
   { note: 'A4', dur: '4n' }, { note: 'A4', dur: '4n' },
   { note: 'G4', dur: '2n' },
 ], { at: b.now() + 0.5 });
+alto.speak('Where are you from?', { accent: 'australian' });
 ```
 
-Words go through letter-to-sound rules unless you load a pronouncing dictionary (`b.dictionary = parseCmudict(text)`; bellows ships none), and IPA between slashes, `/ˈlɪt.əl/`, sets the sounds directly, so no dictionary is needed. Symbols the voice has no sound for are listed in the returned plan's `unknown`, and its `leadIn` is the longest any phrase starts before its first beat, which is how far ahead a live call has to be.
-
-Accents are data. `b.accent = 'southern-british'` (or `'london'`, `'australian'`, `'new-zealand'`, `'irish'`, `'scottish'`, `'southern-us'`; the default is `'general-american'`) changes which vowel each word takes, by its lexical set (BATH, GOAT, NURSE...), whether r after a vowel is said, and how t, l, th and r come out. `speak()` says text with the accent's rhythm and melody, and `toIPA()` shows what will be said:
-
-```js
-singer.speak('Where are you from?', { accent: 'australian' });
-toIPA('far away', { accent: 'southern-british' }); // 'fɑɹ ə.ˈweɪ'
-```
+Any package can ship engines and effects this way: a plugin is plain data whose script registers its definitions in the worklet (`BellowsPlugin`), loaded with `Bellows.boot({ plugins })` or `await b.use(plugin)`.
 
 Tier 3, the kernel. Custom engines and effects implement small contracts and become addressable by id like the built-ins, in realtime and offline both:
 
@@ -132,6 +129,10 @@ const audio = await b.render({ bars: 16 });
 const wav = audio.wav(24); // ArrayBuffer, ready to download
 ```
 
+## Upgrading to 0.5.0
+
+The singing voice moved to its own package, [bellows-voice](https://github.com/virgilvox/bellows-voice), with its history, and sounds exactly as it did. `npm install bellows-voice`, boot with `Bellows.boot({ plugins: [voice] })`, and replace `b.voice('vocal', params)` with `singer(b, params)`; `sing()` and `speak()` are the singer's, and so are `dictionary` and `accent` (they were `b.dictionary` and `b.accent`). The lyric layer, `VOCAL_PHONEMES`, `vocalEngine`, `GlottalSource` and the `CritDamp` units are exported from bellows-voice now. A page that does not sing is about half the size it was: the standalone bundle went from 211957 to 116924 gzipped bytes.
+
 ## Upgrading to 0.3.0
 
 Each engine now ships once, inside the AudioWorklet, instead of twice; a page that boots, sings and renders is about a third smaller. Three behaviours change:
@@ -142,9 +143,9 @@ Each engine now ships once, inside the AudioWorklet, instead of twice; a page th
 
 ## What ships
 
-Synthesis: virtual analog (tabulated-BLEP oscillators, worst alias measured at -85 dB through the musical range and -73 dB at the top of the band, ladder and SVF filters, per-voice drift), FM (2/4/6 operators, DX-style algorithm routing), additive, wavetable (mipmapped, position scan), granular (64-grain clouds), extended Karplus-Strong, waveguide string and tube, modal banks (bar, membrane, bell, glass, wood), west coast (wavefolder into a vactrol low-pass gate), formant vocal synthesis, a singing voice, five drum engines, noise synth, and a DDSP-style harmonic-plus-noise engine with a frame-driven control input.
+Synthesis: virtual analog (tabulated-BLEP oscillators, worst alias measured at -85 dB through the musical range and -73 dB at the top of the band, ladder and SVF filters, per-voice drift), FM (2/4/6 operators, DX-style algorithm routing), additive, wavetable (mipmapped, position scan), granular (64-grain clouds), extended Karplus-Strong, waveguide string and tube, modal banks (bar, membrane, bell, glass, wood), west coast (wavefolder into a vactrol low-pass gate), formant vocal synthesis, five drum engines, noise synth, and a DDSP-style harmonic-plus-noise engine with a frame-driven control input.
 
-Voice: `vocal`, an articulatory singing voice (17 articulators, a waveguide airway that carries the air itself) with male, female and child bodies, 41 phonemes including stops with bursts and voice onset times, affricates, nasals and fricatives, and a choice of three vocal fold models (CHIMERA's drawn pulse, geometric folds whose swing follows the air pressure, and self-oscillating two-mass folds steered to the note) with jitter, shimmer, drift and vocal fry. `ring` adds a singer's formant and `tuning` opens the jaw on high notes as sopranos do. `Instrument.sing()` takes lyrics and notes; the lyric layer under it (English letter-to-sound, an injected CMUdict, IPA between slashes, and sung timing) is pure TypeScript that never reaches the audio thread.
+Voice: the articulatory singing and speaking voice (17 articulators, a waveguide airway, eight English accents, text to IPA) is the separate package [bellows-voice](https://github.com/virgilvox/bellows-voice), a plugin that loads into the worklet beside the kernel.
 
 Samples: a sampler engine with velocity layers, crossfades, round robins, and loop-seam crossfading; an SF2 parser implementing the generator resolution model of the spec; an SFZ parser covering the opcodes the popular free libraries actually use, with #include and #define.
 
@@ -204,10 +205,8 @@ The workbench app doubles as the documentation: a generative bench showing every
 
 ## Acknowledgements
 
-The singing voice in bellows owes a large debt to [CHIMERA](https://github.com/jamesondh/chimera-vocal-synth), Jameson Hodge's physical-model voice synthesizer (MIT). The articulators and their speeds, the gesture planner, the mouth geometry, the airway's physical elements, the glottal pulse and the lyric front end are ported from it or learned from its code. What bellows adds: the airway is a waveguide that carries the air at the output rate, at about a quarter of CHIMERA's cost; the articulators move as a cascade with return gestures; turbulence follows Stevens' law with Birkholz's source placement; the pitch prepares, overshoots and follows breath pressure as a singer's does; two physical fold models sit beside the pulse; and the voice is calibrated against measurements of human speech as well as against CHIMERA.
-
-The notice and the list of files ported or learned from it are in `THIRD_PARTY_NOTICES.md`, which ships in the package.
+The singing voice, now in [bellows-voice](https://github.com/virgilvox/bellows-voice), owes a large debt to [CHIMERA](https://github.com/jamesondh/chimera-vocal-synth), Jameson Hodge's physical-model voice synthesizer (MIT); its notice travels with that package. bellowsjs itself no longer contains CHIMERA code.
 
 ## License
 
-MIT. See LICENSE: use it, change it, sell it, ship it, and keep the copyright notice with it. The parts ported from CHIMERA are MIT too, under Jameson Hodge's own notice; THIRD_PARTY_NOTICES.md carries it, and the built bundles carry a one-line banner naming both.
+MIT. See LICENSE: use it, change it, sell it, ship it, and keep the copyright notice with it.

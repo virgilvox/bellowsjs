@@ -17,12 +17,13 @@ export {
   type NoteOptions,
   type NoteValue,
   type FxInput,
-  type SingNote,
-  type SingOptions,
-  type SingResult,
-  type SpeakOptions,
+  type NoteSpec,
+  type LaidNote,
+  type ContextStateInit,
 } from './bellows';
-export { sungEvents, type SungEventOptions, type SungEvents, type SungWindow } from './sing';
+/* plugins: engines and effects in their own packages (kernel/plugin.ts) */
+export { KERNEL_HOOK, type BellowsPlugin, type KernelHook } from './kernel/plugin';
+export { addPluginModule } from './kernel/node';
 
 /* contracts */
 export {
@@ -62,55 +63,6 @@ export * from './theory/voicelead';
 export * from './theory/progressions';
 export { Tuning, degreeFreq } from './theory/tuning';
 export { parseScl, parseKbm, tuningFromScala } from './theory/scala';
-
-/*
- * lyrics. Listed rather than starred: the layer's modules also export the
- * helpers they share with each other (break constants, the syllabifier,
- * the letter-to-sound rules), and those are not a contract. readLyrics
- * takes front ends, so the two built-in ones are exported for a caller
- * who adds a third.
- */
-export { lyricsToSyllables, readLyrics } from './lyrics/read';
-export { englishFrontEnd, type EnglishOptions } from './lyrics/english';
-export { ipaFrontEnd } from './lyrics/ipa-front-end';
-export { tokenizeIpa } from './lyrics/ipa';
-export { arpabetToSegments } from './lyrics/arpabet';
-export { parseCmudict } from './lyrics/cmudict';
-export { planSung, type PlanSungOptions } from './lyrics/sing';
-export {
-  ACCENTS,
-  GENERAL_AMERICAN,
-  SOUTHERN_BRITISH,
-  LONDON,
-  AUSTRALIAN,
-  NEW_ZEALAND,
-  IRISH,
-  SCOTTISH,
-  SOUTHERN_US,
-  DEFAULT_PROSODY,
-  resolveAccent,
-  applyAccent,
-  type Accent,
-  type Prosody,
-  type TRule,
-  type LRule,
-  type ThRule,
-  type RRule,
-} from './lyrics/accents';
-export { LEXICAL_SETS, tagLexicalSets, type LexicalSet } from './lyrics/lexical-sets';
-export { pronounce, toIPA, type PronounceOptions, type PronouncedWord, type Pronunciation } from './lyrics/pronounce';
-export { speechPlan, type SpeechOptions, type SpeechPlan, type SpokenNote } from './lyrics/speech';
-export type {
-  Segment,
-  Syllable,
-  PronouncingDictionary,
-  FrontEnd,
-  SungNote,
-  SungSpan,
-  SungPitch,
-  SungPhrase,
-  SungPlan,
-} from './lyrics/types';
 
 /* sequencing */
 export { parseTime, beatsPerBar, DEFAULT_METER, type Meter } from './seq/time';
@@ -163,9 +115,7 @@ export * from './dsp/delayline';
 export * from './dsp/oversample';
 export * from './dsp/waveshaper';
 export * from './dsp/stft';
-export * from './dsp/glottal';
 export * from './dsp/resonator';
-export * from './dsp/critdamp';
 
 /* engines */
 export { vaEngine } from './engines/va';
@@ -179,8 +129,6 @@ export { stringEngine, tubeEngine } from './engines/waveguide';
 export { modalEngine } from './engines/modal';
 export { westcoastEngine } from './engines/westcoast';
 export { formantEngine } from './engines/formant';
-export { vocalEngine } from './engines/vocal';
-export { VOCAL_PHONEMES, vocalPhonemeIndex, type VocalPhoneme } from './engines/vocal-phonemes';
 export { granularEngine, makeGranularEngine } from './engines/granular';
 export { harmonicEngine } from './engines/harmonic';
 export { SamplerBank, makeSamplerEngine, SAMPLER_PARAMS, type SampleZone, type SampleZoneEnv } from './engines/sampler';

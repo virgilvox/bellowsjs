@@ -22,12 +22,22 @@ function merge<T extends { id: string }>(builtins: readonly T[], registered: T[]
   return out;
 }
 
-/** Every engine: the built-ins in their registration order, then any other registered on this thread. */
-export function listEngines(): EngineInfo[] {
-  return merge<EngineInfo>(BUILTIN_ENGINES, registeredEngines());
+/* Descriptions a plugin added (kernel/plugin.ts): its DSP runs in the worklet, not on this thread. */
+const pluginEngines: EngineInfo[] = [];
+const pluginEffects: EffectInfo[] = [];
+
+/** Describe a plugin's engines and effects, so the lists below include them without their DSP. */
+export function extendCatalog(engines: readonly EngineInfo[] = [], effects: readonly EffectInfo[] = []): void {
+  for (const e of engines) if (!pluginEngines.some((p) => p.id === e.id)) pluginEngines.push(e);
+  for (const e of effects) if (!pluginEffects.some((p) => p.id === e.id)) pluginEffects.push(e);
 }
 
-/** Every effect: the built-ins in their registration order, then any other registered on this thread. */
+/** Every engine: the built-ins in their registration order, then plugins', then any other registered on this thread. */
+export function listEngines(): EngineInfo[] {
+  return merge<EngineInfo>([...BUILTIN_ENGINES, ...pluginEngines], registeredEngines());
+}
+
+/** Every effect: the built-ins in their registration order, then plugins', then any other registered on this thread. */
 export function listEffects(): EffectInfo[] {
-  return merge<EffectInfo>(BUILTIN_EFFECTS, registeredEffects());
+  return merge<EffectInfo>([...BUILTIN_EFFECTS, ...pluginEffects], registeredEffects());
 }

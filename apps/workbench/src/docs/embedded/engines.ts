@@ -59,7 +59,7 @@ Not ported, with the reason:
 | \`granular\` | a buffer to graze on, which means host-side audio |
 | \`noise\` | small and simply not done yet |
 | \`clap\`, \`tom\` | \`drums.ts\` has five drums, \`drums.h\` has three |
-| \`vocal\` | the singing voice is TypeScript first: its consonants and phrase timing are still changing, and \`sing()\` plans lyrics on the main thread. A C++ port is the natural next step |
+| \`vocal\` | the singing voice is its own package, \`bellows-voice\`, and TypeScript first: its consonants and phrase timing are still changing, and \`sing()\` plans lyrics on the main thread. A C++ port is the natural next step |
 | \`sampler:*\`, soundfonts | SF2 and SFZ parsing is host-side work. Parse on a computer and ship a flat binary bank to SD |
 
 This matters when you read the browser docs, because those pages assume two things that stop being true here.

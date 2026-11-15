@@ -5,6 +5,7 @@
  */
 
 import { Bellows } from 'bellowsjs';
+import { voice } from 'bellows-voice';
 import { ref, shallowRef } from 'vue';
 
 export const bellows = shallowRef<Bellows | null>(null);
@@ -38,6 +39,8 @@ export async function ensureBellows(seed?: string): Promise<Bellows> {
     seed: seed ?? 'workbench',
     context: keptContext ?? undefined,
     closeContextOnDispose: false,
+    // the singing voice, which ships in its own package and loads into the worklet beside the kernel
+    plugins: [voice],
   }).then((b) => {
     keptContext = b.ctx;
     bellows.value = b;

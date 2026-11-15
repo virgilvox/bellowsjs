@@ -30,13 +30,8 @@ import { encodeWav } from './io/wav';
 import { SoundFont } from './io/sf2';
 import { samplerBankFromSf2 } from './engines/soundfont';
 import { serializeDef } from './core/serialize';
-import type { PronouncingDictionary, SungNote, SungPlan, Syllable } from './lyrics/types';
-import { lyricsToSyllables } from './lyrics/read';
-import { resolveAccent, type Accent } from './lyrics/accents';
-import { speechPlan } from './lyrics/speech';
-import { planSung, type PlanSungOptions } from './lyrics/sing';
-import { sungEvents, type SungWindow } from './sing';
-import { VOCAL_PLAN_LEAD, vocalGlideLead } from './engines/vocal-lead';
+import { addPluginModule } from './kernel/node';
+import { notePlugin, type BellowsPlugin } from './kernel/plugin';
 
 export interface BootOptions {
   seed?: string;
@@ -51,6 +46,11 @@ export interface BootOptions {
    * to keep a boot-created context alive for a later reboot.
    */
   closeContextOnDispose?: boolean;
+  /**
+   * Plugins to load into the worklet with the kernel: engines and effects that ship in their own
+   * package, such as the singing voice in bellows-voice. b.use() adds one later.
+   */
+  plugins?: readonly BellowsPlugin[];
 }
 
 export interface NoteOptions {
@@ -64,83 +64,28 @@ export interface NoteOptions {
 
 export type NoteValue = number | string | { hz: number } | { degree: number; octave?: number };
 
-/** One note of a sung line. `note: null` is a rest: it takes time and no syllable. */
-export interface SingNote {
+/** A note to lay out with layNotes(): a pitch (null for a rest) and a duration through the tempo map. */
+export interface NoteSpec {
   note: NoteValue | null;
   /** Beats, notation ('8n', '3/8'), or { seconds }, through the tempo map. */
   dur: TimeValue | { seconds: number };
-  /** Velocity 0..1, default 0.8. A phrase plays at its first note's. */
+  /** Velocity 0..1, carried through. */
   vel?: number;
 }
 
-export interface SingOptions {
-  /**
-   * Context time of the first note's beat, where its vowel lands. Left out,
-   * a live line starts as soon as its opening consonants can all still
-   * sound, and a line in a clock callback replayed by render() starts at the
-   * callback's tick.
-   */
-  at?: number;
-  /** Pronouncing dictionary for this line, over b.dictionary. */
-  dictionary?: PronouncingDictionary;
-  /** Scale for { degree } notes, as note()'s third argument. Default C major. */
-  scale?: Scale;
-  /**
-   * The accent's t and l rules on English words (General American: "little" sings lɪ.ɾəɫ), default
-   * true. False keeps every /t d l/ as written, as classical diction does. IPA is sung as written
-   * either way.
-   */
-  allophones?: boolean;
-  /** Accent for this line, over b.accent: an id from ACCENTS ('southern-british', 'australian', ...) or an Accent. */
-  accent?: Accent | string;
+/** A note laid out by layNotes(): absolute seconds and Hz. */
+export interface LaidNote {
+  time: number;
+  dur: number;
+  hz: number;
+  vel?: number;
 }
 
-export interface SpeakOptions {
-  /** Context time the first syllable's vowel lands. Left out, as soon as the opening consonants can sound. */
-  at?: number;
-  dictionary?: PronouncingDictionary;
-  /** Accent, over b.accent. Its prosody sets the melody and rate. */
-  accent?: Accent | string;
-  /** Baseline pitch, Hz. Default 110. */
-  hz?: number;
-  /** Rate over the accent's own, 1 normal. */
-  rate?: number;
-  /** The accent's t and l rules, default true. */
-  allophones?: boolean;
-}
-
-/**
- * What sing() planned and posted. `phrases` are the plan, each vowel on its
- * beat. `leadIn` is the longest any phrase starts before its own first
- * beat, which can be more than the plan's own lead-in: a phrase that opens
- * on an aspirated p, t or k releases it early, so its vowel is voiced on the
- * beat. Live, call at least that far ahead of the first beat.
- */
-export interface SingResult extends SungPlan {
-  /** IPA the vocal engine has no phoneme for, each once; those spans keep the sound before them. */
-  unknown: string[];
-  /**
-   * Seconds of the line left out because the instrument was still singing
-   * an earlier line there, or had a later one posted already: the opening
-   * consonants that would have overlapped it, or whole phrases. 0 when the
-   * instrument was free.
-   */
-  trimmed: number;
-}
-
-/**
- * A vocal channel's own phoneme and bend, which sung lines hand back when
- * they end (undefined: the engine's default), and the phrases sing() has
- * posted on it, so the next line fits around them.
- */
-interface SingState {
-  restPhoneme?: number;
-  restBend?: number;
-  /** The channel's own glide settings, which set how early sung bends go out. */
-  glide?: number;
-  overshoot?: number;
-  preparation?: number;
-  windows: SungWindow[];
+/** How a plugin's per-context state is made, and copied into a render (see contextState()). */
+export interface ContextStateInit<T> {
+  make: () => T;
+  /** The render's copy of the live state; left out, a render starts from make(). */
+  fork?: (live: T) => T;
 }
 
 export type FxInput = string | [string, Record<string, number>] | FxSpec;
@@ -161,8 +106,8 @@ interface RenderContext {
   rngCache: Map<string, NamedRng>;
   /** the tick time of the callback currently re-running, default for untimed calls */
   now: number;
-  /** sing() state per vocal channel, fresh for the render as the rng streams are */
-  singing: Map<number, SingState>;
+  /** plugins' state for the render (contextState), fresh as the rng streams are */
+  ext: Map<string, unknown>;
 }
 
 function normalizeFx(fx: FxInput[]): FxSpec[] {
@@ -196,7 +141,13 @@ export class Bellows {
   private nextNote = 1;
   private internedParams = new Map<string, number>();
   /** sing() state per vocal channel, live. A render keeps its own copy. */
-  private singing = new Map<number, SingState>();
+  /** plugins' live state (contextState) and how a render copies it */
+  private ext = new Map<string, unknown>();
+  private extForks = new Map<string, (live: unknown) => unknown>();
+  /** untimed param listeners by channel (onUntimedParam) */
+  private paramListeners = new Map<number, Array<(name: string, value: number) => void>>();
+  /** plugins loaded into this instance's worklet, in order */
+  private plugins: BellowsPlugin[] = [];
   private localDefs: Array<{ kind: 'engine' | 'effect'; code: string }> = [];
   private lastMeter: MeterFrame | null = null;
   private gone = false;
@@ -210,21 +161,6 @@ export class Bellows {
   private initialMeter: Meter;
 
   tuning: Tuning = Tuning.edo(12);
-
-  /**
-   * Pronunciations for sing(): lowercase word to CMUdict ARPAbet, as
-   * parseCmudict() returns. bellows ships none. While this is null, words
-   * go through letter-to-sound rules, and IPA between slashes sets the
-   * sounds directly either way.
-   */
-  dictionary: PronouncingDictionary | null = null;
-
-  /**
-   * The accent sing() and speak() read English in: an id from ACCENTS ('general-american',
-   * 'southern-british', 'london', 'australian', 'new-zealand', 'irish', 'scottish', 'southern-us') or
-   * an Accent. Default General American.
-   */
-  accent: Accent | string = 'general-american';
 
   /** boot() made the context, so dispose() is the one allowed to close it */
   private ownsContext: boolean;
@@ -277,8 +213,16 @@ export class Bellows {
         // resumes on the first user gesture; boot() from a click handler to avoid this
       }
     }
-    const kernel = await createKernelNode(ctx, { workletUrl: opts.workletUrl });
-    return new Bellows(ctx, kernel, opts, ownsContext);
+    const plugins: BellowsPlugin[] = [];
+    for (const p of opts.plugins ?? []) {
+      if (plugins.some((q) => q.id === p.id)) continue;
+      notePlugin(p);
+      plugins.push(p);
+    }
+    const kernel = await createKernelNode(ctx, { workletUrl: opts.workletUrl, plugins });
+    const b = new Bellows(ctx, kernel, opts, ownsContext);
+    b.plugins = plugins;
+    return b;
   }
 
   /* ------------------------------------------------------------ */
@@ -318,7 +262,7 @@ export class Bellows {
     // Posted straight to the kernel, never recorded: an offline replay should
     // not build the channel and then tear it down again.
     this.setup.forgetChannel(id);
-    this.singing.delete(id);
+    this.paramListeners.delete(id);
     if (releaseSeconds > 0) {
       this.postEvents([
         { time: this.ctx.currentTime, kind: EventKind.AllNotesOff, target: id, a: 0, b: 0, c: 0 },
@@ -355,6 +299,124 @@ export class Bellows {
    */
   now(): number {
     return this.renderCtx ? this.renderCtx.now : this.ctx.currentTime;
+  }
+
+  /* ------------------------------------------------------------ */
+  /* plugins, and the host API they drive channels through         */
+  /* ------------------------------------------------------------ */
+
+  /**
+   * Load a plugin into this instance's worklet: its engines and effects become addressable by id,
+   * live and in render(). Adding one twice adds it once. Plugins known at boot load faster through
+   * Bellows.boot({ plugins }), before the kernel's node exists.
+   */
+  async use(plugin: BellowsPlugin): Promise<void> {
+    if (this.plugins.some((p) => p.id === plugin.id)) return;
+    notePlugin(plugin);
+    await addPluginModule(this.ctx, plugin);
+    this.plugins.push(plugin);
+  }
+
+  /** True while render() is replaying clock callbacks: events go to the render, not the live kernel. */
+  get rendering(): boolean {
+    return this.renderCtx !== null;
+  }
+
+  /**
+   * Post timed kernel events: to the live kernel, or during render() into the render. The low level
+   * under note() and param(), for a plugin that schedules its own (a sung line's phonemes and bends).
+   * Param events name params by paramIndex().
+   */
+  postKernelEvents(events: KernelEvent[]): void {
+    if (events.length > 0) this.postEvents(events);
+  }
+
+  /** The kernel's index for a param name, interned on first use, for Param events. */
+  paramIndex(name: string): number {
+    let idx = this.internedParams.get(name);
+    if (idx === undefined) {
+      idx = internParam(name);
+      this.internedParams.set(name, idx);
+      this.post({ type: 'internParam', name, index: idx });
+    }
+    return idx;
+  }
+
+  /** Reserve `count` note ids for NoteOn and NoteOff events; returns the first. */
+  reserveNoteIds(count: number): number {
+    const first = this.nextNote;
+    this.nextNote += Math.max(0, Math.floor(count));
+    return first;
+  }
+
+  /**
+   * Notes laid end to end from `at`, in seconds and Hz: durations through the tempo map, pitches
+   * through the tuning and `scale`, a null note a rest that takes time. With the transport running
+   * each duration is measured from where its note starts, so a tempo ramp under the notes stretches
+   * the later ones; with it stopped their own beats run through the tempo map from their start, as a
+   * stopped note() measures from beat 0.
+   */
+  layNotes(notes: readonly NoteSpec[], at: number, scale?: Scale): LaidNote[] {
+    const tr = this.activeTransport();
+    const running = tr.state === 'running';
+    let t = at;
+    let beats = 0;
+    const out: LaidNote[] = [];
+    for (const n of notes) {
+      let d: number;
+      if (running || typeof n.dur === 'object') d = this.durationSeconds(n.dur, t);
+      else {
+        const b = parseTime(n.dur);
+        d = tr.tempo.beatToSeconds(beats + b) - tr.tempo.beatToSeconds(beats);
+        if (Number.isFinite(b) && b > 0) beats += b;
+      }
+      // one bad duration would otherwise push every later note to NaN
+      const dur = Number.isFinite(d) && d > 0 ? d : 0;
+      if (n.note !== null) out.push({ time: t, dur, hz: this.freqOf(n.note, scale), vel: n.vel });
+      t += dur;
+    }
+    return out;
+  }
+
+  /**
+   * A plugin's state for the current context, by key: the live state, or during render() the
+   * render's own, made from `init.fork` of the live one (or `init.make`) the first time it is asked
+   * for, so a render starts from the live state and never changes it. Without `init`, undefined
+   * when there is none yet.
+   */
+  contextState<T>(key: string, init?: ContextStateInit<T>): T | undefined {
+    if (init?.fork) this.extForks.set(key, init.fork as (live: unknown) => unknown);
+    if (this.renderCtx) {
+      const map = this.renderCtx.ext;
+      if (map.has(key)) return map.get(key) as T;
+      const live = this.ext.get(key);
+      const fork = this.extForks.get(key);
+      let value: unknown;
+      if (live !== undefined && fork) value = fork(live);
+      else if (init) value = init.make();
+      else return undefined;
+      map.set(key, value);
+      return value as T;
+    }
+    if (!this.ext.has(key)) {
+      if (!init) return undefined;
+      this.ext.set(key, init.make());
+    }
+    return this.ext.get(key) as T;
+  }
+
+  /**
+   * Call `cb` whenever an untimed param() reaches `channel` (before it is applied), so a plugin can
+   * track a channel's own values. Returns a function that removes it.
+   */
+  onUntimedParam(channel: number, cb: (name: string, value: number) => void): () => void {
+    let list = this.paramListeners.get(channel);
+    if (!list) this.paramListeners.set(channel, (list = []));
+    list.push(cb);
+    return () => {
+      const l = this.paramListeners.get(channel);
+      if (l) this.paramListeners.set(channel, l.filter((f) => f !== cb));
+    };
   }
 
   /** The stream a label resolves to right now: the render's cache during a
@@ -419,18 +481,6 @@ export class Bellows {
       seed: this.seed + '::ch' + id,
       polyphony: opts?.polyphony,
     });
-    if (engineId === 'vocal') {
-      // what the engine itself does with a creation value that is not a number
-      const own = (v: number | undefined) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
-      this.singing.set(id, {
-        restPhoneme: own(params.phoneme),
-        restBend: own(params.bend),
-        glide: own(params.glide),
-        overshoot: own(params.overshoot),
-        preparation: own(params.preparation),
-        windows: [],
-      });
-    }
     return new Instrument(this, id, engineId);
   }
 
@@ -640,162 +690,6 @@ export class Bellows {
     ]);
   }
 
-  /**
-   * Plan a sung line and post it: durations through the tempo map, pitches
-   * through the tuning, lyrics through the front ends, then one note per
-   * phrase with `phoneme` and `bend` events inside it (see src/sing.ts).
-   * Instrument.sing() is the API; this checks no engine.
-   *
-   * @internal
-   */
-  singEvents(
-    channel: number,
-    lyrics: string | readonly Syllable[],
-    notes: readonly SingNote[],
-    opts: SingOptions = {},
-    planOpts: PlanSungOptions = {},
-  ): SingResult {
-    const syllables =
-      typeof lyrics === 'string'
-        ? lyricsToSyllables(lyrics, {
-            dictionary: opts.dictionary ?? this.dictionary ?? undefined,
-            allophones: opts.allophones,
-            accent: opts.accent ?? this.accent,
-          })
-        : lyrics;
-    const state = this.singState(channel);
-    const now = this.renderCtx ? this.renderCtx.now : this.ctx.currentTime;
-    // live, a phrase that has ended can no longer meet a new one: its events are spent
-    if (!this.renderCtx) state.windows = state.windows.filter((w) => w.end >= now);
-    const post = (at: number) => {
-      const plan = planSung(this.sungNotes(notes, at, opts.scale), syllables, planOpts);
-      const posted = sungEvents(plan, {
-        channel,
-        phonemeParam: this.paramIndex('phoneme'),
-        bendParam: this.paramIndex('bend'),
-        nextPhonemeParam: this.paramIndex('nextPhoneme'),
-        nextInParam: this.paramIndex('nextIn'),
-        planLead: VOCAL_PLAN_LEAD,
-        bendLead: vocalGlideLead(state.glide, state.overshoot, state.preparation),
-        firstNoteId: this.nextNote,
-        restPhoneme: state.restPhoneme,
-        restBend: state.restBend,
-        busy: state.windows,
-        // a stop released before the render starts, or before now, never sounds
-        notBefore: this.renderCtx ? 0 : now,
-      });
-      return { plan, posted };
-    };
-    let { plan, posted } = post(opts.at ?? (this.renderCtx ? now : now + 0.005));
-    // live with no `at`, the first beat goes after the opening consonants, as
-    // soon as they can all still sound, instead of losing them to the past
-    if (opts.at === undefined && !this.renderCtx && posted.leadIn > 0) ({ plan, posted } = post(now + 0.005 + posted.leadIn));
-    this.nextNote += plan.phrases.length;
-    if (posted.events.length > 0) this.postEvents(posted.events);
-    state.windows = state.windows.concat(posted.windows).sort((a, b) => a.start - b.start);
-    return { phrases: plan.phrases, leadIn: posted.leadIn, unknown: posted.unknown, trimmed: posted.trimmed };
-  }
-
-  /**
-   * Speak text: sentences read in the accent, timed and pitched by its prosody (lyrics/speech.ts),
-   * then sung as notes. A sentence ending in "?" ends rising.
-   *
-   * @internal
-   */
-  speakEvents(channel: number, text: string, opts: SpeakOptions = {}): SingResult {
-    const accent = resolveAccent(opts.accent ?? this.accent);
-    const syllables: Syllable[] = [];
-    const questions: boolean[] = [];
-    // each sentence or clause is a phrase; its closing mark sets its tune
-    for (const m of text.matchAll(/[^.!?;:,\n]+[.!?;:,\n]*/g)) {
-      const part = lyricsToSyllables(m[0], {
-        dictionary: opts.dictionary ?? this.dictionary ?? undefined,
-        allophones: opts.allophones,
-        accent,
-        // running speech: weak function words
-        reduce: true,
-      });
-      if (part.length === 0) continue;
-      part[part.length - 1].phraseEnd = true;
-      syllables.push(...part);
-      questions.push(m[0].includes('?'));
-    }
-    const plan = speechPlan(syllables, { hz: opts.hz, rate: opts.rate, prosody: accent.prosody }, questions);
-    const notes: SingNote[] = plan.notes.map((n) => (n.rest ? { note: null, dur: { seconds: n.dur } } : { note: { hz: n.hz }, dur: { seconds: n.dur } }));
-    // spoken consonants at their full spoken length, where sung ones are shortened (durations.ts)
-    return this.singEvents(channel, plan.syllables, notes, { at: opts.at }, { consonantScale: 1 });
-  }
-
-  /**
-   * A sung line's notes laid end to end from `at`, in seconds and Hz. With
-   * the transport running each duration is measured from where its note
-   * starts, so a tempo ramp under the line stretches the later notes; with
-   * it stopped the line's own beats run through the tempo map from its
-   * start, as a stopped note() measures from beat 0.
-   */
-  private sungNotes(notes: readonly SingNote[], at: number, scale?: Scale): SungNote[] {
-    const tr = this.activeTransport();
-    const running = tr.state === 'running';
-    let t = at;
-    let beats = 0;
-    const sung: SungNote[] = [];
-    for (const n of notes) {
-      let d: number;
-      if (running || typeof n.dur === 'object') d = this.durationSeconds(n.dur, t);
-      else {
-        const b = parseTime(n.dur);
-        d = tr.tempo.beatToSeconds(beats + b) - tr.tempo.beatToSeconds(beats);
-        if (Number.isFinite(b) && b > 0) beats += b;
-      }
-      // one bad duration would otherwise push every later note to NaN
-      const dur = Number.isFinite(d) && d > 0 ? d : 0;
-      if (n.note !== null) sung.push({ time: t, dur, hz: this.freqOf(n.note, scale), vel: n.vel });
-      t += dur;
-    }
-    return sung;
-  }
-
-  /** The sing() state of a channel in the current context, made on first use. */
-  private singState(channel: number): SingState {
-    const map = this.renderCtx ? this.renderCtx.singing : this.singing;
-    let state = map.get(channel);
-    if (!state) {
-      state = { windows: [] };
-      map.set(channel, state);
-    }
-    return state;
-  }
-
-  /**
-   * An untimed phoneme or bend on a vocal channel becomes the channel's own,
-   * which sung lines hand back when they end. A line already posted would
-   * still hand back the old value at its end, so the new one is posted
-   * there too, after that line's resets, unless another line opens at that
-   * moment and owns the channel.
-   */
-  private restOnSungChannel(channel: number, name: string, value: number): void {
-    if (!Number.isFinite(value)) return;
-    const map = this.renderCtx ? this.renderCtx.singing : this.singing;
-    const state = map.get(channel);
-    if (!state) return;
-    if (name === 'glide' || name === 'overshoot' || name === 'preparation') {
-      state[name] = value;
-      return;
-    }
-    if (name !== 'phoneme' && name !== 'bend') return;
-    if (name === 'phoneme') state.restPhoneme = value;
-    else state.restBend = value;
-    const now = this.renderCtx ? this.renderCtx.now : this.ctx.currentTime;
-    const idx = this.paramIndex(name);
-    const fixes: KernelEvent[] = [];
-    for (const w of state.windows) {
-      if (!w.resets || w.end < now) continue;
-      if (state.windows.some((o) => o.start === w.end)) continue;
-      fixes.push({ time: w.end, kind: EventKind.Param, target: channel, a: idx, b: value, c: 0 });
-    }
-    if (fixes.length > 0) this.postEvents(fixes);
-  }
-
   noteOnEvent(channel: number, note: NoteValue, vel: number, at?: number): number {
     const t = at ?? (this.renderCtx ? this.renderCtx.now : this.ctx.currentTime + 0.005);
     const id = this.nextNote++;
@@ -810,20 +704,12 @@ export class Bellows {
     this.postEvents([{ time: t, kind: EventKind.NoteOff, target: channel, a: noteId, b: 0, c: 0 }]);
   }
 
-  /** Intern a param name once, telling the kernel the index it answers to. */
-  private paramIndex(name: string): number {
-    let idx = this.internedParams.get(name);
-    if (idx === undefined) {
-      idx = internParam(name);
-      this.internedParams.set(name, idx);
-      this.post({ type: 'internParam', name, index: idx });
-    }
-    return idx;
-  }
-
   paramEvent(channel: number, name: string, value: number, at?: number): void {
     const idx = this.paramIndex(name);
-    if (at === undefined) this.restOnSungChannel(channel, name, value);
+    if (at === undefined) {
+      const listeners = this.paramListeners.get(channel);
+      if (listeners) for (const cb of listeners) cb(name, value);
+    }
     if (at === undefined && !this.renderCtx) {
       this.post({ type: 'channelParam', id: channel, name, value });
       return;
@@ -906,10 +792,8 @@ export class Bellows {
     // rerun the clock callbacks against the offline transport
     // a render starts from each vocal channel's own values as they are now,
     // which is where the replayed setup leaves the channel, and no lines
-    const singing = new Map<number, SingState>();
-    for (const [id, st] of this.singing) singing.set(id, { ...st, windows: [] });
     let messages: KernelMessage[];
-    this.renderCtx = { events: [], transport: offTransport, rngCache: new Map(), now: 0, singing };
+    this.renderCtx = { events: [], transport: offTransport, rngCache: new Map(), now: 0, ext: new Map() };
     try {
       const ticks: Array<{ t: number; step: number; cb: TickCallback }> = [];
       for (const sub of this.subs) {
@@ -942,9 +826,10 @@ export class Bellows {
         frames: Math.ceil(seconds * sampleRate),
         sampleRate,
         workletUrl: this.workletUrl,
+        plugins: this.plugins,
       });
     } else {
-      rendered = renderWorkletInProcess(messages, { frames: Math.ceil(seconds * sampleRate), sampleRate });
+      rendered = renderWorkletInProcess(messages, { frames: Math.ceil(seconds * sampleRate), sampleRate, plugins: this.plugins });
     }
     return {
       ...rendered,
@@ -1015,66 +900,6 @@ export class Instrument {
     if (this.gone) return this;
     for (const n of notes) this.b.noteEvents(this.channel, n, opts);
     return this;
-  }
-
-  /**
-   * Sing a lyric on a melody. Needs the 'vocal' engine: b.voice('vocal').
-   *
-   * Notes are laid end to end from `at`, each `dur` through the tempo map
-   * and each pitch through the tuning and `scale`, so the line follows
-   * b.tuning however it divides the octave. Each note's vowel lands on its
-   * beat; opening consonants start before it. Lyrics are English (through
-   * b.dictionary or opts.dictionary when set, letter-to-sound rules
-   * otherwise) and IPA between slashes: 'the /ˈkæt/ sat'. A hyphen splits
-   * a word across notes, a free-standing '-' or '~' holds the vowel onto
-   * the next note, and punctuation or a rest ends a phrase with a breath.
-   *
-   * Returns the plan. Its `leadIn` is the longest any phrase starts before
-   * its own first beat: live, call at least that far ahead, or the opening
-   * consonants are already past when they reach the kernel. b.render() collects
-   * events before rendering, so a sing() inside a clock callback replays
-   * exactly.
-   *
-   * One instrument sings one line at a time, because `phoneme` and `bend`
-   * are channel parameters: give a harmony its own voice(). A line that
-   * would start while an earlier line on this instrument is still singing
-   * starts where that one ends, losing the opening consonants that
-   * overlapped it, and `trimmed` says how much went; leave room for the
-   * next line's `leadIn` (a rest, or a shorter last note) to hear all of
-   * it. While a line sings, `bend` belongs to it, so a channel's own bend
-   * does not transpose it; when the line ends the channel gets back the
-   * phoneme and bend it was created with, or last given by an untimed
-   * param(). Any phoneme or bend change, untimed included, also reaches a
-   * line that is singing at that moment, so keep them clear of sung lines.
-   */
-  sing(lyrics: string | readonly Syllable[], notes: readonly SingNote[], opts: SingOptions = {}): SingResult {
-    if (this.gone) return { phrases: [], leadIn: 0, unknown: [], trimmed: 0 };
-    if (this.engineId !== 'vocal') {
-      const which = this.engineId === undefined ? 'an engine voice() did not record' : `'${this.engineId}'`;
-      throw new Error(
-        `bellows: sing() needs an instrument on the 'vocal' engine, and this one runs ${which}. ` +
-          `Create one with b.voice('vocal').`,
-      );
-    }
-    return this.b.singEvents(this.channel, lyrics, notes, opts);
-  }
-
-  /**
-   * Speak text in an accent (b.accent or opts.accent): its vowels and consonants from the accent's
-   * rules, its rhythm stress-timed and its melody from the accent's prosody, a statement falling (or,
-   * in Australian and New Zealand English, rising) and a question rising. Needs the 'vocal' engine.
-   * Returns the plan, as sing() does.
-   */
-  speak(text: string, opts: SpeakOptions = {}): SingResult {
-    if (this.gone) return { phrases: [], leadIn: 0, unknown: [], trimmed: 0 };
-    if (this.engineId !== 'vocal') {
-      const which = this.engineId === undefined ? 'an engine voice() did not record' : `'${this.engineId}'`;
-      throw new Error(
-        `bellows: speak() needs an instrument on the 'vocal' engine, and this one runs ${which}. ` +
-          `Create one with b.voice('vocal').`,
-      );
-    }
-    return this.b.speakEvents(this.channel, text, opts);
   }
 
   /** Sustain a note; returns an id for off(). Disposed: returns -1. */

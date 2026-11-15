@@ -15,13 +15,12 @@ import type { EngineDef } from '../../src/types';
 describe('the engine and effect catalog', () => {
   it('describes the built-ins without registering any, so nothing is imported to list them', () => {
     expect(registeredEngines()).toEqual([]);
-    expect(() => getEngine('vocal')).toThrow(/unknown engine/);
+    expect(() => getEngine('pluck')).toThrow(/unknown engine/);
     const engines = listEngines();
-    expect(engines.map((e) => e.id)).toContain('vocal');
+    expect(engines.map((e) => e.id)).toContain('pluck');
     expect(engines.every((e) => !('createVoice' in e))).toBe(true);
     expect(listEffects().map((f) => f.id)).toContain('plate');
-    const vocal = engines.find((e) => e.id === 'vocal')!;
-    expect(vocal.params.find((p) => p.name === 'glottis')).toEqual({ name: 'glottis', min: 0, max: 2, default: 2 });
+    expect(engines.find((e) => e.id === 'pluck')!.params.length).toBeGreaterThan(0);
   });
 
   it('says exactly what the real definitions say, in their order', () => {

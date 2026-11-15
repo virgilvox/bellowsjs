@@ -28,7 +28,6 @@ import { stringEngine, tubeEngine } from './engines/waveguide';
 import { modalEngine } from './engines/modal';
 import { westcoastEngine } from './engines/westcoast';
 import { formantEngine } from './engines/formant';
-import { vocalEngine } from './engines/vocal';
 import { granularEngine } from './engines/granular';
 import { harmonicEngine } from './engines/harmonic';
 
@@ -65,7 +64,6 @@ export function registerBuiltins(): void {
     modalEngine,
     westcoastEngine,
     formantEngine,
-    vocalEngine,
     granularEngine,
     harmonicEngine,
   ]) {

@@ -6,6 +6,9 @@
 
 import { KernelEngine } from './engine';
 import { registerBuiltins } from '../register';
+import { registerEngine, registerEffect } from '../core/registry';
+import { KERNEL_HOOK, type KernelHook } from './hook';
+import type { EffectDef, EngineDef } from '../types';
 import { bankEngineResolver } from '../render/banks';
 import type { KernelMessage } from './messages';
 import type { KernelProcessorOptions } from './node';
@@ -22,6 +25,14 @@ declare class AudioWorkletProcessor {
 }
 
 registerBuiltins();
+
+/* The hook plugins register through (kernel/plugin.ts): their scripts run after this module, in this scope. */
+const hook: KernelHook = {
+  version: 1,
+  registerEngine: (def) => registerEngine(def as EngineDef),
+  registerEffect: (def) => registerEffect(def as EffectDef),
+};
+(globalThis as Record<string, unknown>)[KERNEL_HOOK] = hook;
 
 const METER_EVERY_BLOCKS = 8;
 

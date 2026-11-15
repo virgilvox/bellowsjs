@@ -165,10 +165,6 @@ async function piece(seed: string): Promise<Bellows> {
     lead.note(60 + melody.int(12), { at: t, dur: '16n' });
     if (step % 4 === 0) bass.note(36, { at: t, dur: '8n' });
   });
-  const singer = b.voice('vocal', { body: 1 });
-  b.clock.at('1m', (t, step) => {
-    if (step === 0) singer.sing('la la', [{ note: 'A4', dur: '4n' }, { note: 'C5', dur: '4n' }], { at: t + 0.1 });
-  });
   return b;
 }
 

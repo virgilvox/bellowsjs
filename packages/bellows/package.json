@@ -1,6 +1,6 @@
 {
   "name": "bellowsjs",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A browser-native audio engine for synthesis, samples, sequencing, analysis, and I/O. One clock, one kernel, seeded everywhere.",
   "license": "MIT",
   "type": "module",
@@ -18,8 +18,7 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE",
-    "THIRD_PARTY_NOTICES.md"
+    "LICENSE"
   ],
   "sideEffects": false,
   "keywords": [
@@ -46,10 +45,7 @@
     "typecheck": "tsc --noEmit",
     "gen:worklet": "node scripts/gen-worklet.mjs",
     "gen:catalog": "node scripts/gen-catalog.mjs",
-    "gen:catalog:check": "node scripts/gen-catalog.mjs --check",
-    "gen:vocal": "node scripts/gen-vocal-tract.mjs",
-    "gen:vocal:check": "node scripts/gen-vocal-tract.mjs --check",
-    "gen:vowels": "node scripts/gen-extra-vowels.mjs"
+    "gen:catalog:check": "node scripts/gen-catalog.mjs --check"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

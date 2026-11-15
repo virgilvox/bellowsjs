@@ -37,8 +37,12 @@ function paramTable(params) {
   return out;
 }
 
+/* the singing voice is its own package, a plugin; the site loads it, so the reference covers it */
+const voiceLib = await import('bellows-voice');
+const voicePkg = JSON.parse(readFileSync(join(app, '../../node_modules/bellows-voice/package.json'), 'utf8'));
+
 let engines = '';
-for (const e of lib.listEngines()) {
+for (const e of [...lib.listEngines(), ...voiceLib.voice.engines]) {
   engines += `### ${e.id} (${e.label})\n`;
   if (e.polyphony) engines += `default polyphony: ${e.polyphony}\n`;
   engines += paramTable(e.params) + '\n';
@@ -64,7 +68,7 @@ for (const [family, list] of lib.presetsByFamily()) {
 let phonemes = '';
 {
   let line = '';
-  lib.VOCAL_PHONEMES.forEach((p, i) => {
+  voiceLib.VOCAL_PHONEMES.forEach((p, i) => {
     const cell = `${i} ${p}`;
     if (line.length + cell.length + 2 > 76) {
       phonemes += line.trimEnd() + '\n';
@@ -123,10 +127,16 @@ Notes on the model:
   2 meaning two beats) or { seconds }.
 - Instrument.on(note, vel?, at?) returns a note id for indefinite holds;
   Instrument.off(id, at?) releases it.
-- Instrument.sing(lyrics, notes, { at, dictionary, scale, allophones, accent }) sings on an
-  instrument made with b.voice('vocal') and throws on any other engine.
-  Instrument.speak(text, { at, accent, hz, rate, dictionary }) says text with
-  the accent's rhythm and melody. See Singing and lyrics below.
+- Singing and speech are the bellows-voice package, a plugin: see Singing
+  and lyrics below.
+- Plugins: Bellows.boot({ plugins: [p] }) or await b.use(p) loads engines and
+  effects that ship in their own package into the worklet beside the
+  kernel; listEngines() then lists them. A plugin is plain data ({ id,
+  worklet: script, engines, effects, workletUrl? }) whose script registers
+  through globalThis.bellowsKernel.registerEngine(def). The host API a
+  plugin drives channels through: b.paramIndex(name), b.postKernelEvents(),
+  b.reserveNoteIds(n), b.layNotes(notes, at, scale), b.contextState(key,
+  init), b.onUntimedParam(channel, cb), b.rendering.
 - b.clock.at('16n', (t, step) => ...) fires ahead of every subdivision tick;
   schedule with the provided t and placement is sample accurate even under
   main-thread load or background-tab timer throttling.
@@ -175,10 +185,14 @@ Sampler engines expose SAMPLER_PARAMS:
 ${paramTable(lib.SAMPLER_PARAMS)}
 Granular over your own buffer: b.granular(float32Data, sampleRate, params?).
 
-## Singing and lyrics
+## Singing and lyrics (bellows-voice ${voicePkg.version})
 
-const singer = b.voice('vocal', { body: 1 });          // 0 male, 1 female, 2 child
-const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
+npm install bellows-voice. It peer-depends on bellowsjs.
+
+import { voice, singer } from 'bellows-voice';
+const b = await Bellows.boot({ plugins: [voice] });
+const alto = singer(b, { body: 1 }, { accent: 'general-american' }); // 0 male, 1 female, 2 child
+const plan = alto.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   { note: 'C4', dur: '4n' }, { note: 'C4', dur: '4n' }, { note: 'G4', dur: '4n' },
   { note: 'G4', dur: '4n' }, { note: 'A4', dur: '4n' }, { note: 'A4', dur: '4n' },
   { note: 'G4', dur: '2n' },
@@ -188,9 +202,12 @@ const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   note()), each dur through the tempo map and each pitch through b.tuning.
   { note: null, dur } is a rest. vel is per note; a phrase plays at its
   first note's velocity.
-- lyrics: English words (letter-to-sound rules, or b.dictionary /
+- A Singer has sing, speak, note, on, off, param, fx, send, gain, pan,
+  dispose, and .instrument, .dictionary, .accent. In code mode on
+  bellows.live, lib carries both packages: lib.singer(b, params).
+- lyrics: English words (letter-to-sound rules, or singer.dictionary /
   opts.dictionary, a ReadonlyMap from lowercase word to CMUdict ARPAbet such
-  as parseCmudict(text) returns; bellows ships no dictionary), and IPA
+  as parseCmudict(text) returns; none ships), and IPA
   between slashes, which sets the sounds directly. A hyphen inside a word splits
   syllables, a free-standing '-' or '~' holds the vowel onto the next note,
   and . , ; : ! ? or a line break ends a phrase with a breath. A Syllable[]
@@ -204,7 +221,7 @@ const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   "shh", "TV") keeps its note on its most sonorous sound; digits are skipped. English words get the American flap and
   dark l unless opts.allophones is false (classical diction); IPA is sung
   as written.
-- Accents: b.accent (default 'general-american') or opts.accent picks how
+- Accents: singer.accent (default 'general-american') or opts.accent picks how
   English is said: 'general-american', 'southern-british', 'london',
   'australian', 'new-zealand', 'irish', 'scottish', 'southern-us', or an
   Accent object. The reader tags every vowel with its Wells lexical set
@@ -219,6 +236,8 @@ const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   stress marks, syllables, lexical sets) and the whole line's IPA;
   toIPA(text, opts) returns just the IPA. Use them to check a lyric before
   singing it; pronounce(text).syllables can be edited and passed to sing().
+  These and the rest of the text layer are also in 'bellows-voice/text',
+  which needs no audio and no bellows.
 - speak(): each clause is a phrase. Stressed syllables take about twice an
   unstressed one's time, the last lengthens, the baseline declines, each
   stressed syllable gets a pitch accent, and the last one falls (or rises:
@@ -244,13 +263,15 @@ const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   the pitch. body 0 male, 1 female, 2 child, blending in between.
 - Each phrase is one note with Param events inside: 'phoneme' (an index
   into VOCAL_PHONEMES; vocalPhonemeIndex(ipa)) and 'bend' in semitones. One
-  instrument sings one line at a time; give a harmony its own voice(). A
+  singer sings one line at a time; give a harmony its own singer(). A
   line sings at its own pitches whatever the channel's bend, and when it
   ends the channel gets back the phoneme and bend it was created with or
   last given by an untimed param().
 - Without the facade: planSung(notes in seconds and Hz, syllables) gives the
   plan, sungEvents(plan, { channel, phonemeParam: internParam('phoneme'),
-  bendParam: internParam('bend') }) gives kernel events for renderOffline.
+  bendParam: internParam('bend') }) gives kernel events for renderOffline,
+  after registerVoice() from 'bellows-voice/engine' registers the engine on
+  that thread.
   lyricsToSyllables(text, { dictionary, allophones, accent }), readLyrics(text, frontEnds) with
   englishFrontEnd(opts) and ipaFrontEnd, tokenizeIpa(ipa),
   arpabetToSegments(phones) and parseCmudict(text) are the lyric layer.

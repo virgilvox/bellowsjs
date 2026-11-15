@@ -3,17 +3,31 @@ import type { DocPage } from '../types';
 const page: DocPage = {
   slug: 'singing',
   title: 'Singing',
-  blurb: 'Words on a melody: the vocal engine and sing().',
+  blurb: 'Words on a melody, and speech: the bellows-voice package.',
   prev: 'engines',
   next: 'presets',
   body: `
-By the end of this page you can make an instrument sing a lyric on a melody, give it an accent, make it speak, fix a word it reads wrongly, and stack singers into harmony in any tuning.
+By the end of this page you can make a singer sing a lyric on a melody, give it an accent, make it speak, fix a word it reads wrongly, and stack singers into harmony in any tuning.
+
+## Installing the voice
+
+The voice is its own package, \`bellows-voice\`, beside \`bellowsjs\`. It is a plugin: its engine loads into the AudioWorklet beside the kernel, so a page that never sings never carries it.
+
+\`\`\`js
+// npm install bellowsjs bellows-voice
+import { Bellows } from 'bellowsjs';
+import { voice, singer } from 'bellows-voice';
+
+const b = await Bellows.boot({ plugins: [voice] });   // or, after boot: await b.use(voice)
+\`\`\`
+
+**Changed in bellowsjs 0.5.0.** The voice shipped inside bellowsjs through 0.4.0, as \`b.voice('vocal').sing()\`. It moved, with its history, to [bellows-voice](https://github.com/virgilvox/bellows-voice), and sounds exactly as it did. \`singer(b, params)\` replaces \`b.voice('vocal', params)\`, and the dictionary and accent are the singer's (\`singer.dictionary\`, \`singer.accent\`) where they were \`b.dictionary\` and \`b.accent\`. In Code mode on this site \`lib\` carries both packages, so the examples write \`lib.singer(b, params)\`.
 
 ## A first line
 
 \`\`\`js
-const singer = b.voice('vocal', { body: 1 });   // 0 male, 1 female, 2 child
-const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
+const alto = singer(b, { body: 1 });   // 0 male, 1 female, 2 child
+const plan = alto.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   { note: 'C4', dur: '4n' }, { note: 'C4', dur: '4n' },
   { note: 'G4', dur: '4n' }, { note: 'G4', dur: '4n' },
   { note: 'A4', dur: '4n' }, { note: 'A4', dur: '4n' },
@@ -21,9 +35,9 @@ const plan = singer.sing('twinkle twinkle /ˈlɪt.əl/ star', [
 ], { at: b.now() + 0.5 });
 \`\`\`
 
-\`sing(lyrics, notes, opts?)\` needs an instrument on the \`vocal\` engine and throws on any other. Each note is \`{ note, dur, vel? }\`: \`note\` takes everything [\`note()\`](/docs/playing-notes) takes (a name, a midi number, \`{ hz }\`, or \`{ degree, octave }\` through \`opts.scale\`), and \`null\` is a rest. \`dur\` is beats, notation like \`'8n'\`, or \`{ seconds }\`, through the tempo map. The notes are laid end to end from \`opts.at\`, the time of the first beat.
+\`singer(b, params?, opts?)\` makes an instrument on the \`vocal\` engine (\`params\` are the voice's, below; \`opts\` takes \`accent\`, \`dictionary\` and \`polyphony\`) and throws if the voice is not loaded. It has \`sing\`, \`speak\`, \`note\`, \`on\`, \`off\`, \`param\`, \`fx\`, \`send\`, \`gain\`, \`pan\` and \`dispose\`, and the bellows instrument underneath as \`.instrument\`. Each note is \`{ note, dur, vel? }\`: \`note\` takes everything [\`note()\`](/docs/playing-notes) takes (a name, a midi number, \`{ hz }\`, or \`{ degree, octave }\` through \`opts.scale\`), and \`null\` is a rest. \`dur\` is beats, notation like \`'8n'\`, or \`{ seconds }\`, through the tempo map. The notes are laid end to end from \`opts.at\`, the time of the first beat.
 
-Played with \`note()\` or a keyboard, the same instrument sings whatever sound it holds, "ah" unless you set its \`phoneme\`.
+Played with \`note()\` or a keyboard, the same singer sings whatever sound it holds, "ah" unless you set its \`phoneme\`.
 
 ## How a line is timed
 
@@ -46,23 +60,23 @@ English words also get their accent's t and l: in the default General American, 
 
 Words go through English letter-to-sound rules, with the common short words, the irregular common words and the contractions built in. Measured against the CMU dictionary they read about three common lyric words in four exactly, and most of the rest differ only in an unstressed vowel. Write a word they misread as IPA. A word with no vowel ("hmm", "shh") keeps its note on its most sonorous sound. A symbol the engine has no sound for is listed in \`plan.unknown\` rather than thrown, and its span keeps the sound before it.
 
-For dictionary pronunciations, load a CMUdict file (the Carnegie Mellon Pronouncing Dictionary, BSD licensed) and hand it to bellows. bellows ships none, and this site loads none, so the examples here use IPA where the rules fail.
+For dictionary pronunciations, load a CMUdict file (the Carnegie Mellon Pronouncing Dictionary, BSD licensed) and hand it to bellows. None ships, and this site loads none, so the examples here use IPA where the rules fail.
 
 \`\`\`js
 const text = await (await fetch('/cmudict.dict')).text();  // your own copy
-b.dictionary = parseCmudict(text);                         // every line from now on
+alto.dictionary = parseCmudict(text);                      // every line from now on
 \`\`\`
 
-\`opts.dictionary\` does the same for one line, in place of \`b.dictionary\`. Words the dictionary in use lacks go through the rules.
+\`opts.dictionary\` does the same for one line, in place of the singer's. Words the dictionary in use lacks go through the rules.
 
 ## Accents
 
-\`b.accent\` sets the accent every line is read in, and \`opts.accent\` sets it for one line. The default is \`'general-american'\`; the others built in are \`'southern-british'\`, \`'london'\`, \`'australian'\`, \`'new-zealand'\`, \`'irish'\`, \`'scottish'\` and \`'southern-us'\`.
+\`singer.accent\` (or \`singer(b, params, { accent })\`) sets the accent every line is read in, and \`opts.accent\` sets it for one line. The default is \`'general-american'\`; the others built in are \`'southern-british'\`, \`'london'\`, \`'australian'\`, \`'new-zealand'\`, \`'irish'\`, \`'scottish'\` and \`'southern-us'\`.
 
 \`\`\`js
-b.accent = 'southern-british';
-singer.sing('the water in the bath was far too hot', melody, { at });
-singer.sing('the water in the bath was far too hot', melody, { at: later, accent: 'scottish' });
+alto.accent = 'southern-british';
+alto.sing('the water in the bath was far too hot', melody, { at });
+alto.sing('the water in the bath was far too hot', melody, { at: later, accent: 'scottish' });
 \`\`\`
 
 An accent is mostly its vowels. The reader names the vowel of every English word by its lexical set, J. C. Wells's names for "the vowel in": KIT, DRESS, TRAP, LOT, STRUT, FOOT, BATH, CLOTH, NURSE, FLEECE, FACE, PALM, THOUGHT, GOAT, GOOSE, PRICE, CHOICE, MOUTH, NEAR, SQUARE, START, NORTH, FORCE, CURE, and the weak happY, lettER and commA. An accent says how it voices each set: Southern British sings BATH with PALM's vowel and GOAT as əʊ, Australian fronts GOOSE to ʉ, Irish keeps FACE and GOAT as long single vowels. Two vowels make a diphthong, and the accent sets how long the first is held before the glide.
@@ -74,7 +88,7 @@ An accent is plain data, so a new one starts from a built-in:
 \`\`\`js
 const mine = { ...ACCENTS.irish, id: 'mine', name: 'Mine',
   sets: { ...ACCENTS.irish.sets, FACE: 'eɪ', GOAT: 'oʊ' }, th: 'fricative' };
-singer.sing('they think it goes', melody, { accent: mine });
+alto.sing('they think it goes', melody, { accent: mine });
 \`\`\`
 
 ## Speaking
@@ -82,7 +96,7 @@ singer.sing('they think it goes', melody, { accent: mine });
 \`speak(text, opts?)\` says text instead of singing it. Each clause is a phrase. Stressed syllables take about twice as long as unstressed ones, the last syllable of a phrase lengthens, function words take their weak forms ("the" ðə), the pitch sinks across the phrase, each stressed syllable gets a rise, and the phrase ends falling, or rising for a question. The accent sets that melody: Australian and New Zealand statements end rising, Southern British has the widest range, Southern US speaks slowest.
 
 \`\`\`js
-singer.speak('Good morning. Where are you from?', { accent: 'australian', hz: 120, rate: 1 });
+alto.speak('Good morning. Where are you from?', { accent: 'australian', hz: 120, rate: 1 });
 \`\`\`
 
 ## Checking a pronunciation
@@ -112,8 +126,8 @@ Diphthongs such as aɪ, aʊ, oʊ and eɪ are sung as their two vowels: in Genera
 To hold one sound without a lyric, set it and play notes:
 
 \`\`\`js
-singer.param('phoneme', vocalPhonemeIndex('m'));  // a hum
-singer.note('A3', { dur: '2n' });
+alto.param('phoneme', vocalPhonemeIndex('m'));  // a hum
+alto.note('A3', { dur: '2n' });
 \`\`\`
 
 ## The voice
@@ -143,15 +157,15 @@ Velocity is breath: it sets the pressure in the lungs, so a louder note is also 
 
 ## Harmony, and lines that meet
 
-One instrument sings one line at a time, because \`phoneme\` and \`bend\` are channel parameters. Give each part its own \`voice('vocal')\`. Pitches go through \`b.tuning\` like every other note, so a choir in just intonation is one assignment: the VOCAL: THREE PARTS, JUST TUNED example in [Code mode](/#code) switches between 12-EDO and pure thirds on every pass. [Tuning](/docs/tuning) covers the tunings themselves.
+One singer sings one line at a time, because \`phoneme\` and \`bend\` are channel parameters. Give each part its own \`singer()\`. Pitches go through \`b.tuning\` like every other note, so a choir in just intonation is one assignment: the VOCAL: THREE PARTS, JUST TUNED example in [Code mode](/#code) switches between 12-EDO and pure thirds on every pass. [Tuning](/docs/tuning) covers the tunings themselves.
 
-A line that would start while the same instrument is still singing starts where the earlier line ends, losing the opening consonants that overlapped it, and \`plan.trimmed\` says how much went. End a line on a rest, or on a shorter last note, to leave the next one room for its lead-in.
+A line that would start while the same singer is still singing starts where the earlier line ends, losing the opening consonants that overlapped it, and \`plan.trimmed\` says how much went. End a line on a rest, or on a shorter last note, to leave the next one room for its lead-in.
 
 ## What it is and is not
 
 The voice is an articulatory synthesizer: a physical model of a singer. The lyric moves 17 articulators (jaw, tongue body and tip, lips, velum and the rest) between targets, overlapping them as speech does. Their positions become the shape of the throat and mouth, and the air from the lungs flows through that shape in a waveguide airway. Pressure building behind closed lips, the burst when they open, voicing that fades through a closure, the hiss of a narrow gap and the hum through the nose all come out of the flowing air, not out of rules. One voice costs about a microsecond a sample at 48 kHz (1.07 to 1.12 in the worst case measured on an M1). It sings and speaks English, in eight accents, and IPA. It is not a full text-to-speech system: its speech melody is a simple model, and words it does not know go through spelling rules.
 
-The singing voice in bellows owes a large debt to [CHIMERA](https://github.com/jamesondh/chimera-vocal-synth), Jameson Hodge's physical-model voice synthesizer (MIT). The articulators and their speeds, the gesture planner, the mouth geometry, the airway's physical elements, the glottal source and the lyric front end are ported from it or learned from its code. What bellows adds: the airway is a waveguide that carries the air at the output rate, so it runs at about a quarter of CHIMERA's cost; the pitch prepares, overshoots and follows breath pressure as a singer's does; the singer's formant and high-note tuning are parameters; and the voice is calibrated against measurements of human speech as well as against CHIMERA.
+bellows-voice owes a large debt to [CHIMERA](https://github.com/jamesondh/chimera-vocal-synth), Jameson Hodge's physical-model voice synthesizer (MIT). The articulators and their speeds, the gesture planner, the mouth geometry, the airway's physical elements, the glottal source and the lyric front end are ported from it or learned from its code. What bellows-voice adds: the airway is a waveguide that carries the air at the output rate, so it runs at about a quarter of CHIMERA's cost; the pitch prepares, overshoots and follows breath pressure as a singer's does; the singer's formant and high-note tuning are parameters; and the voice is calibrated against measurements of human speech as well as against CHIMERA.
 `,
 };
 

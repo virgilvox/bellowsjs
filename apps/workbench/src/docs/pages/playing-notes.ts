@@ -85,7 +85,7 @@ lead.chord(['C4', 'E4', 'G4'], { dur: '2n', vel: 0.7 });
 
 ## Words
 
-An instrument on the \`vocal\` engine has one more way to play: \`sing(lyrics, notes, opts?)\` takes a lyric and a list of \`{ note, dur }\` and sings the words on the notes, each vowel on its beat. The notes take every pitch form above. [Singing](/docs/singing) has the rest.
+A singer from the \`bellows-voice\` package has one more way to play: \`sing(lyrics, notes, opts?)\` takes a lyric and a list of \`{ note, dur }\` and sings the words on the notes, each vowel on its beat. The notes take every pitch form above. [Singing](/docs/singing) has the rest.
 
 ## Channel gain and pan
 

@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.5.0
+
+The singing voice leaves bellowsjs for its own package, [bellows-voice](https://github.com/virgilvox/bellows-voice),
+with its history, and bellowsjs gains the plugin path it loads through. The voice sounds exactly as
+it did: renders across bodies, glottis models, accents and speech match 0.4.0 sample for sample,
+through `renderOffline` and through the worklet. A page that does not sing no longer carries the
+voice: the standalone bundle goes from 211957 to 116924 gzipped bytes, the worklet from 251 to 128 KB.
+
+### Added
+
+- **Plugins.** `Bellows.boot({ plugins })` and `await b.use(plugin)` load engines and effects that
+  ship in their own package into the worklet beside the kernel, in live playback and in
+  `b.render()` (an OfflineAudioContext, or the worklet string on the calling thread). A
+  `BellowsPlugin` is plain data: a self-contained script that registers its definitions through the
+  hook the kernel leaves on the worklet's global scope (`globalThis.bellowsKernel`, `KERNEL_HOOK`),
+  the engines and effects it registers for `listEngines()` and `listEffects()`, and an optional
+  `workletUrl` for hosts whose CSP blocks blob URLs. Loading uses `addModule`, never eval.
+- **A host API for plugins** that drive channels the way the facade does: `b.paramIndex(name)`,
+  `b.postKernelEvents(events)`, `b.reserveNoteIds(n)`, `b.layNotes(notes, at, scale)` (notes end to
+  end through the tempo map and tuning), `b.contextState(key, init)` (state that a render forks from
+  the live one and never writes back), `b.onUntimedParam(channel, cb)` and `b.rendering`.
+
+### Removed (moved to bellows-voice)
+
+- The `vocal` engine and `Instrument.sing()`, `Instrument.speak()`, `b.dictionary`, `b.accent`:
+  `singer(b, params)` from bellows-voice replaces `b.voice('vocal', params)`, with `dictionary` and
+  `accent` on the singer.
+- The lyric layer and its exports (`lyricsToSyllables`, `readLyrics`, `englishFrontEnd`,
+  `ipaFrontEnd`, `tokenizeIpa`, `arpabetToSegments`, `parseCmudict`, `planSung`, `sungEvents`,
+  accents, `pronounce`, `toIPA`, `speechPlan` and their types), `VOCAL_PHONEMES`,
+  `vocalPhonemeIndex`, `vocalEngine`, `GlottalSource` and the `CritDamp` units.
+- CHIMERA's code and notice: bellowsjs no longer contains any, and its banners say so.
+
 ## 0.4.0
 
 Accents. Every voice used to speak one accent, General American, and listeners heard it as an old

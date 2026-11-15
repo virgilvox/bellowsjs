@@ -18,6 +18,7 @@
 import type { KernelMessage, KernelReply } from './messages';
 import { createKernelNode, KERNEL_PROCESSOR_NAME, type KernelProcessorOptions } from './node';
 import { workletCode } from './worklet-code.gen';
+import type { BellowsPlugin } from './plugin';
 
 /** Whether this environment can render offline through the worklet (a browser; not Node). */
 export function canRenderInWorklet(): boolean {
@@ -34,11 +35,12 @@ export function canRenderInWorklet(): boolean {
  */
 export async function renderInWorklet(
   messages: KernelMessage[],
-  opts: { frames: number; sampleRate: number; workletUrl?: string },
+  opts: { frames: number; sampleRate: number; workletUrl?: string; plugins?: readonly BellowsPlugin[] },
 ): Promise<{ left: Float32Array; right: Float32Array; sampleRate: number }> {
   const ctx = new OfflineAudioContext({ numberOfChannels: 2, length: Math.max(1, opts.frames), sampleRate: opts.sampleRate });
   const kernel = await createKernelNode(ctx, {
     workletUrl: opts.workletUrl,
+    plugins: opts.plugins,
     processorOptions: { setup: messages, meters: false },
   });
   const errors: string[] = [];
@@ -75,6 +77,7 @@ let replies: ((msg: unknown) => void) | null = null;
 let frameNow = 0;
 let rateNow = 44100;
 let processorCtor: ProcessorCtor | null = null;
+const evaluatedPlugins = new Set<string>();
 
 class ScopePort {
   onmessage: ((e: { data: unknown }) => void) | null = null;
@@ -95,7 +98,7 @@ class ScopeProcessorBase {
  */
 export function renderWorkletInProcess(
   messages: KernelMessage[],
-  opts: { frames: number; sampleRate: number },
+  opts: { frames: number; sampleRate: number; plugins?: readonly BellowsPlugin[] },
 ): { left: Float32Array; right: Float32Array; sampleRate: number } {
   const g = globalThis as Record<string, unknown>;
   const saved = SCOPE_NAMES.map((n) => [n, Object.getOwnPropertyDescriptor(g, n)] as const);
@@ -116,6 +119,12 @@ export function renderWorkletInProcess(
     // evaluated once: its engines and their registry persist as a live worklet's do
     if (!processorCtor) new Function(workletCode)();
     if (!processorCtor) throw new Error('bellows: the worklet bundle registered no kernel processor');
+    // each plugin's script once, after the kernel's, as addModule runs it in a live scope
+    for (const plugin of opts.plugins ?? []) {
+      if (evaluatedPlugins.has(plugin.id)) continue;
+      new Function(plugin.worklet)();
+      evaluatedPlugins.add(plugin.id);
+    }
     replies = (msg) => {
       const m = msg as { type?: string; message?: unknown };
       if (m && m.type === 'error') errors.push(String(m.message));

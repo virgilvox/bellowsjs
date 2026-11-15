@@ -8,6 +8,7 @@
 
 import { workletCode } from './worklet-code.gen';
 import type { KernelMessage, KernelReply } from './messages';
+import { pluginModuleUrl, type BellowsPlugin } from './plugin';
 
 export const KERNEL_PROCESSOR_NAME = 'bellows-kernel';
 
@@ -35,9 +36,21 @@ export interface KernelNode {
   dispose(): void;
 }
 
+/** Load a plugin's script into a context whose kernel module is already loaded. */
+export async function addPluginModule(ctx: BaseAudioContext, plugin: BellowsPlugin): Promise<void> {
+  try {
+    await ctx.audioWorklet.addModule(pluginModuleUrl(plugin));
+  } catch (err) {
+    throw new Error(
+      `bellows: failed to load the plugin "${plugin.id}" into the worklet. If your Content-Security-Policy ` +
+        'blocks blob: script sources, give the plugin a workletUrl. Cause: ' + String(err),
+    );
+  }
+}
+
 export async function createKernelNode(
   ctx: BaseAudioContext,
-  opts?: { workletUrl?: string; processorOptions?: KernelProcessorOptions },
+  opts?: { workletUrl?: string; processorOptions?: KernelProcessorOptions; plugins?: readonly BellowsPlugin[] },
 ): Promise<KernelNode> {
   const url = opts?.workletUrl ?? kernelUrl();
   try {
@@ -49,6 +62,9 @@ export async function createKernelNode(
         String(err),
     );
   }
+  // after the kernel's module, whose hook they register through, and before the node, so the
+  // processor's constructor can already create their engines
+  for (const plugin of opts?.plugins ?? []) await addPluginModule(ctx, plugin);
   const node = new AudioWorkletNode(ctx, KERNEL_PROCESSOR_NAME, {
     numberOfInputs: 1,
     numberOfOutputs: 1,

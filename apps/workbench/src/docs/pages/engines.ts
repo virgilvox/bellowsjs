@@ -55,7 +55,6 @@ Special voices:
 | \`noise\` | filtered noise synth with key tracking, five colors |
 | \`westcoast\` | wavefolder into a vactrol-style low-pass gate |
 | \`formant\` | vowel synthesis with vibrato and breath |
-| \`vocal\` | a singing voice: consonants and vowels for male, female and child bodies, sung from lyrics with \`sing()\` |
 | \`granular\` | 64-grain clouds over a buffer; see [Soundfonts and samples](/docs/soundfonts-and-samples) |
 | \`harmonic\` | harmonic-plus-noise voice with brightness, even/odd balance, and portamento |
 
@@ -63,11 +62,13 @@ Sample-backed engines get ids of the form \`sampler:<bankId>\` and \`granular:<b
 
 ## Singing
 
-The \`vocal\` engine plays a note like any other engine, and sings "ah". Give it words with \`sing()\`:
+The singing voice is its own package, \`bellows-voice\`, a plugin: it loads into the worklet beside the kernel, so a page that never sings never carries it. With it loaded, \`vocal\` is an engine like the others, and \`singer()\` gives it words:
 
 \`\`\`js
-const singer = b.voice('vocal', { body: 1 });   // 0 male, 1 female, 2 child
-singer.sing('twinkle twinkle', [
+import { voice, singer } from 'bellows-voice';
+const b = await Bellows.boot({ plugins: [voice] });
+const alto = singer(b, { body: 1 });   // 0 male, 1 female, 2 child
+alto.sing('twinkle twinkle', [
   { note: 'C4', dur: '4n' }, { note: 'C4', dur: '4n' },
   { note: 'G4', dur: '4n' }, { note: 'G4', dur: '4n' },
 ], { at: b.now() + 0.5 });

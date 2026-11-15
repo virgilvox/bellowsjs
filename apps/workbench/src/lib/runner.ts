@@ -8,6 +8,10 @@
 
 import { reactive } from 'vue';
 import * as lib from 'bellowsjs';
+import * as voiceLib from 'bellows-voice';
+
+/* What example code sees as `lib`: bellowsjs and bellows-voice in one namespace. */
+const libNs = { ...lib, ...voiceLib };
 import { bellows, ensureBellows, disposeBellows } from './audio';
 import type { Example } from '../examples/types';
 
@@ -167,7 +171,7 @@ async function doRun(example: Example, code: string): Promise<void> {
   };
 
   try {
-    await fn(b, lib, log, onCleanup);
+    await fn(b, libNs, log, onCleanup);
   } catch (err) {
     if (token === runToken) {
       pushLine('error', 'RUN ERROR: ' + errorMessage(err) + lineHint(err));

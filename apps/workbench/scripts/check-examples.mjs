@@ -8,7 +8,7 @@
  * are strings, so nothing type-checks them, and the app has no test suite.
  *
  * What this proves, per example: it parses the way the runner compiles it,
- * every `lib.x` it names is exported, every `b.x()` it calls is a method on
+ * every `lib.x` it names is exported (by bellowsjs or bellows-voice), every `b.x()` it calls is a method on
  * Bellows, and every engine, effect and preset id it passes as a literal is
  * registered. Ids an example registers itself, in the extend pages, are
  * collected first and allowed.
@@ -34,8 +34,10 @@ if (!existsSync(BUNDLE)) {
 const lib = await import(BUNDLE);
 lib.registerBuiltins();
 
-const libNames = new Set(Object.keys(lib));
-const engineIds = new Set(lib.listEngines().map((e) => e.id));
+/* the runner hands examples bellowsjs and bellows-voice as one `lib` (src/lib/runner.ts) */
+const voiceLib = await import('bellows-voice');
+const libNames = new Set([...Object.keys(lib), ...Object.keys(voiceLib)]);
+const engineIds = new Set([...lib.listEngines().map((e) => e.id), ...voiceLib.voice.engines.map((e) => e.id)]);
 const effectIds = new Set(lib.listEffects().map((e) => e.id));
 const presetIds = new Set(lib.INSTRUMENT_PRESETS.map((p) => p.id));
 const bellowsMethods = new Set(Object.getOwnPropertyNames(lib.Bellows.prototype));

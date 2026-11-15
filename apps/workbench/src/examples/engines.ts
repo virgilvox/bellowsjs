@@ -272,9 +272,9 @@ b.start();`,
     title: 'VOCAL: SING A LYRIC',
     category: 'ENGINES',
     description:
-      'The vocal engine sings words on notes. inst.sing(lyrics, notes) times every consonant around its note so each vowel lands on the beat, and carries the pitch inside a phrase as bend. The site loads no pronouncing dictionary, so English goes through letter-to-sound rules; the second line is IPA between slashes, which sets the sounds directly. The line ends on a rest, so the next repeat has room for its "tw" before the beat.',
+      'The singing voice (the bellows-voice package, loaded here as a plugin) sings words on notes. lib.singer(b, params) makes a singer; singer.sing(lyrics, notes) times every consonant around its note so each vowel lands on the beat, and carries the pitch inside a phrase as bend. The site loads no pronouncing dictionary, so English goes through letter-to-sound rules; the second line is IPA between slashes, which sets the sounds directly. The line ends on a rest, so the next repeat has room for its "tw" before the beat.',
     seed: 'vocal-sing',
-    code: `var singer = b.voice('vocal', {
+    code: `var singer = lib.singer(b, {
   body: 1,            // 0 male, 1 female, 2 child
   breath: 0.2,
   vibratoDepth: 0.25, // semitones, blooming in over vibratoDelay
@@ -311,7 +311,7 @@ b.start();`,
     description:
       'One voice goes round the eight built-in accents, speaking a line with speak() and then singing it. An accent re-voices each word by its lexical set (BATH, GOAT, NURSE...) and sets its r, t, l and th, so "water" and "bath" change most. speak() times the line stress by stress and gives it the accent\'s melody: Australian and New Zealand statements end rising. lib.toIPA shows what each accent says.',
     seed: 'vocal-accents',
-    code: `var singer = b.voice('vocal', { body: 0, vibratoDepth: 0.15 });
+    code: `var singer = lib.singer(b, { body: 0, vibratoDepth: 0.15 });
 var room = b.bus(['plate'], { level: 0.25 });
 singer.send(room, 0.3);
 b.bpm(100);
@@ -351,7 +351,7 @@ var parts = [
 ];
 parts.forEach(function (p) {
   // little drift and vibrato, so the tuning is what you hear change
-  p.singer = b.voice('vocal', { body: p.body, drift: 2, vibratoDepth: 0.12 });
+  p.singer = lib.singer(b, { body: p.body, drift: 2, vibratoDepth: 0.12 });
   p.singer.gain(0.55);
   p.singer.pan(p.pan);
   p.singer.send(room, 0.45);
@@ -388,7 +388,7 @@ b.start();`,
     description:
       'One female voice sings the same high line twice: first plain, then with the singer\'s formant (ring) and first-resonance tuning on. Ring narrows the tube above the folds, which lifts the band near 3 kHz that lets a trained voice carry, here by about 1 dB, so listen for a slight edge. Tuning opens the jaw on high notes so the vowel\'s first resonance stays above the pitch, as sopranos do, which keeps the top notes from going thin. The pitch prepares and overshoots at each note change.',
     seed: 'vocal-soprano',
-    code: `var singer = b.voice('vocal', { body: 1, vibratoDepth: 0.35, overshoot: 0.12 });
+    code: `var singer = lib.singer(b, { body: 1, vibratoDepth: 0.35, overshoot: 0.12 });
 var room = b.bus(['plate'], { level: 0.3 });
 singer.send(room, 0.4);
 b.bpm(66);
