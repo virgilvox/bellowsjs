@@ -102,9 +102,11 @@ export function lyricsToSyllables(
     allophones?: boolean;
     /** An accent id ('southern-british', 'australian', ...; see ACCENTS) or an Accent. Default General American. */
     accent?: Accent | string;
+    /** Weak forms of function words ("the" ðə, "and" ənd), as speech has them; off for singing. */
+    reduce?: boolean;
   } = {},
 ): Syllable[] {
-  const english = englishFrontEnd({ dictionary: opts.dictionary });
+  const english = englishFrontEnd({ dictionary: opts.dictionary, reduce: opts.reduce });
   const read = new WeakSet<Syllable>();
   const tagged: FrontEnd = {
     starts: english.starts,

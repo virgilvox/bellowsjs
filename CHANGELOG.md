@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 Accents. Every voice used to speak one accent, General American, and listeners heard it as an old
 Irish man; a voice can now be given any accent, as data. See docs/ACCENTS.md.
@@ -16,6 +16,8 @@ Irish man; a voice can now be given any accent, as data. See docs/ACCENTS.md.
 - **`speak(text, opts)`** on a vocal instrument: clauses spoken with stress-timed rhythm, final
   lengthening, declination, pitch accents and a final fall or rise from the accent's `prosody`; a
   clause ending in "?" rises. `speechPlan()` is the same without the facade.
+- `lyricsToSyllables(text, { reduce: true })` gives function words their weak forms, as speech
+  does; `speak()` uses it.
 - **`pronounce(text, opts)` and `toIPA(text, opts)`**: what will be said, word by word, with stress
   marks, syllables and lexical sets.
 - **Twelve vowels**: ɒ ɐ ɜ ʉ ɨ ɘ ɵ y ø œ ɯ ɤ, solved from formant targets into articulator targets

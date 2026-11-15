@@ -7,7 +7,7 @@ const page: DocPage = {
   prev: 'engines',
   next: 'presets',
   body: `
-By the end of this page you can make an instrument sing a lyric on a melody, fix a word it reads wrongly, and stack singers into harmony in any tuning.
+By the end of this page you can make an instrument sing a lyric on a melody, give it an accent, make it speak, fix a word it reads wrongly, and stack singers into harmony in any tuning.
 
 ## A first line
 
@@ -42,7 +42,7 @@ A line that opens on consonants starts early. \`plan.leadIn\` says by how much (
 | \`{ note: null, dur: '4n' }\` | a rest, which also ends a phrase |
 | \`/ˈlɪt.əl/\` | IPA between slashes: a dot splits syllables, a space splits words |
 
-English words also get the American flap (the t in "little" becomes ɾ) and dark l at the end of a word; pass \`{ allophones: false }\` for classical diction, which sings every t and l as written. IPA is always sung as written.
+English words also get their accent's t and l: in the default General American, the flap (the t in "little" becomes ɾ) and dark l at the end of a word. Pass \`{ allophones: false }\` for classical diction, which sings every t and l as written. IPA is always sung as written, in any accent.
 
 Words go through English letter-to-sound rules, with the common short words, the irregular common words and the contractions built in. Measured against the CMU dictionary they read about three common lyric words in four exactly, and most of the rest differ only in an unstressed vowel. Write a word they misread as IPA. A word with no vowel ("hmm", "shh") keeps its note on its most sonorous sound. A symbol the engine has no sound for is listed in \`plan.unknown\` rather than thrown, and its span keeps the sound before it.
 
@@ -55,20 +55,59 @@ b.dictionary = parseCmudict(text);                         // every line from no
 
 \`opts.dictionary\` does the same for one line, in place of \`b.dictionary\`. Words the dictionary in use lacks go through the rules.
 
+## Accents
+
+\`b.accent\` sets the accent every line is read in, and \`opts.accent\` sets it for one line. The default is \`'general-american'\`; the others built in are \`'southern-british'\`, \`'london'\`, \`'australian'\`, \`'new-zealand'\`, \`'irish'\`, \`'scottish'\` and \`'southern-us'\`.
+
+\`\`\`js
+b.accent = 'southern-british';
+singer.sing('the water in the bath was far too hot', melody, { at });
+singer.sing('the water in the bath was far too hot', melody, { at: later, accent: 'scottish' });
+\`\`\`
+
+An accent is mostly its vowels. The reader names the vowel of every English word by its lexical set, J. C. Wells's names for "the vowel in": KIT, DRESS, TRAP, LOT, STRUT, FOOT, BATH, CLOTH, NURSE, FLEECE, FACE, PALM, THOUGHT, GOAT, GOOSE, PRICE, CHOICE, MOUTH, NEAR, SQUARE, START, NORTH, FORCE, CURE, and the weak happY, lettER and commA. An accent says how it voices each set: Southern British sings BATH with PALM's vowel and GOAT as əʊ, Australian fronts GOOSE to ʉ, Irish keeps FACE and GOAT as long single vowels. Two vowels make a diphthong, and the accent sets how long the first is held before the glide.
+
+It also sets the consonants: whether r after a vowel is said (a non-rhotic accent still links it before a vowel, "far away"), t (flapped, released, or a glottal stop), l (dark after a vowel, clear, dark everywhere, or vocalized to a w), th (fricative, stopped to t and d, or fronted to f and v), r (approximant or tap), and whether h is dropped.
+
+An accent is plain data, so a new one starts from a built-in:
+
+\`\`\`js
+const mine = { ...ACCENTS.irish, id: 'mine', name: 'Mine',
+  sets: { ...ACCENTS.irish.sets, FACE: 'eɪ', GOAT: 'oʊ' }, th: 'fricative' };
+singer.sing('they think it goes', melody, { accent: mine });
+\`\`\`
+
+## Speaking
+
+\`speak(text, opts?)\` says text instead of singing it. Each clause is a phrase. Stressed syllables take about twice as long as unstressed ones, the last syllable of a phrase lengthens, function words take their weak forms ("the" ðə), the pitch sinks across the phrase, each stressed syllable gets a rise, and the phrase ends falling, or rising for a question. The accent sets that melody: Australian and New Zealand statements end rising, Southern British has the widest range, Southern US speaks slowest.
+
+\`\`\`js
+singer.speak('Good morning. Where are you from?', { accent: 'australian', hz: 120, rate: 1 });
+\`\`\`
+
+## Checking a pronunciation
+
+\`toIPA(text, opts?)\` shows what will be said, and \`pronounce(text, opts?)\` gives it word by word, with each syllable and the lexical set of each vowel. Its \`syllables\` can be edited and passed to \`sing()\` in place of the text.
+
+\`\`\`js
+toIPA('far away', { accent: 'southern-british' });   // 'fɑɹ ə.ˈweɪ'
+pronounce('hello').words[0].sets;                     // [undefined, 'GOAT']
+\`\`\`
+
 ## The sounds
 
-The engine knows 41 sounds plus silence, as IPA. \`VOCAL_PHONEMES\` is the list in order, and \`vocalPhonemeIndex(ipa)\` turns a symbol into the number the \`phoneme\` parameter takes.
+The engine knows 53 sounds plus silence, as IPA. \`VOCAL_PHONEMES\` is the list in order, and \`vocalPhonemeIndex(ipa)\` turns a symbol into the number the \`phoneme\` parameter takes.
 
 | Kind | IPA |
 |---|---|
-| Vowels | ɑ æ ʌ ɔ ɛ ɝ ɪ i ʊ u e o a ə |
+| Vowels | ɑ æ ʌ ɔ ɛ ɝ ɪ i ʊ u e o a ə, and for other accents ɒ ɐ ɜ ʉ ɨ ɘ ɵ y ø œ ɯ ɤ |
 | Stops | p b t d k g ʔ, and the tap ɾ |
 | Fricatives | f v θ ð s z ʃ ʒ h |
 | Affricates | tʃ dʒ |
 | Nasals | m n ŋ |
 | Approximants | l ɹ w j, and the dark ɫ that ends a word like "little" |
 
-Diphthongs such as aɪ, aʊ, oʊ and eɪ are sung as their two vowels: the first holds for four fifths of the vowel and the move to the second comes at the end. Common spellings of the same sound are accepted: ɚ and ɜ for ɝ, r for ɹ, ɡ for g, ʧ and ʤ for tʃ and dʒ, ɒ for ɑ, ɐ for ʌ, ɨ for ɪ, ʉ for u and y for i.
+Diphthongs such as aɪ, aʊ, oʊ and eɪ are sung as their two vowels: in General American the first holds for four fifths of the vowel and the move to the second comes at the end, and an accent sets its own timing. Common spellings of the same sound are accepted: ɚ for ɝ, r for ɹ, ɡ for g, ʧ and ʤ for tʃ and dʒ. The vowels other accents need were found by fitting the mouth's shape to each vowel's measured resonances and checking the result through the voice itself; they are added after the first 42 sounds, so a saved \`phoneme\` number keeps its sound.
 
 To hold one sound without a lyric, set it and play notes:
 
@@ -110,7 +149,7 @@ A line that would start while the same instrument is still singing starts where 
 
 ## What it is and is not
 
-The voice is an articulatory synthesizer: a physical model of a singer. The lyric moves 17 articulators (jaw, tongue body and tip, lips, velum and the rest) between targets, overlapping them as speech does. Their positions become the shape of the throat and mouth, and the air from the lungs flows through that shape in a waveguide airway. Pressure building behind closed lips, the burst when they open, voicing that fades through a closure, the hiss of a narrow gap and the hum through the nose all come out of the flowing air, not out of rules. One voice costs about a microsecond a sample at 48 kHz (1.07 to 1.12 in the worst case measured on an M1). It sings English and IPA. It is not a text-to-speech system.
+The voice is an articulatory synthesizer: a physical model of a singer. The lyric moves 17 articulators (jaw, tongue body and tip, lips, velum and the rest) between targets, overlapping them as speech does. Their positions become the shape of the throat and mouth, and the air from the lungs flows through that shape in a waveguide airway. Pressure building behind closed lips, the burst when they open, voicing that fades through a closure, the hiss of a narrow gap and the hum through the nose all come out of the flowing air, not out of rules. One voice costs about a microsecond a sample at 48 kHz (1.07 to 1.12 in the worst case measured on an M1). It sings and speaks English, in eight accents, and IPA. It is not a full text-to-speech system: its speech melody is a simple model, and words it does not know go through spelling rules.
 
 The singing voice in bellows owes a large debt to [CHIMERA](https://github.com/jamesondh/chimera-vocal-synth), Jameson Hodge's physical-model voice synthesizer (MIT). The articulators and their speeds, the gesture planner, the mouth geometry, the airway's physical elements, the glottal source and the lyric front end are ported from it or learned from its code. What bellows adds: the airway is a waveguide that carries the air at the output rate, so it runs at about a quarter of CHIMERA's cost; the pitch prepares, overshoots and follows breath pressure as a singer's does; the singer's formant and high-note tuning are parameters; and the voice is calibrated against measurements of human speech as well as against CHIMERA.
 `,

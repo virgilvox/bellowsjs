@@ -305,6 +305,38 @@ onCleanup(off);
 b.start();`,
   },
   {
+    id: 'vocal-accents',
+    title: 'VOCAL: ACCENTS',
+    category: 'ENGINES',
+    description:
+      'One voice goes round the eight built-in accents, speaking a line with speak() and then singing it. An accent re-voices each word by its lexical set (BATH, GOAT, NURSE...) and sets its r, t, l and th, so "water" and "bath" change most. speak() times the line stress by stress and gives it the accent\'s melody: Australian and New Zealand statements end rising. lib.toIPA shows what each accent says.',
+    seed: 'vocal-accents',
+    code: `var singer = b.voice('vocal', { body: 0, vibratoDepth: 0.15 });
+var room = b.bus(['plate'], { level: 0.25 });
+singer.send(room, 0.3);
+b.bpm(100);
+
+var line = 'I thought the water in the bath was far too hot';
+var tune = ['C3', 'D3', 'E3', 'F3', 'G3', 'F3', 'E3', 'D3', 'E3', 'D3', 'C3', 'C3'];
+var melody = tune.map(function (n, i) {
+  return { note: n, dur: i === tune.length - 1 ? '2n' : '8n' };
+});
+melody.push({ note: null, dur: '4n' });
+
+var ids = Object.keys(lib.ACCENTS);
+var turn = 0;
+// six bars a turn: the spoken line, then the sung one two bars in
+var off = b.clock.at('6m', function (t) {
+  var accent = ids[turn++ % ids.length];
+  log(lib.ACCENTS[accent].name + ': ' + lib.toIPA(line, { accent: accent }));
+  // spoken first, then sung two bars later
+  singer.speak(line + '.', { at: t + 0.25, accent: accent, hz: 115 });
+  singer.sing(line, melody, { at: t + 0.25 + 2 * 2.4, accent: accent });
+});
+onCleanup(off);
+b.start();`,
+  },
+  {
     id: 'vocal-harmony',
     title: 'VOCAL: THREE PARTS, JUST TUNED',
     category: 'ENGINES',

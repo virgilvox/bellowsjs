@@ -34,7 +34,7 @@ import type { PronouncingDictionary, SungNote, SungPlan, Syllable } from './lyri
 import { lyricsToSyllables } from './lyrics/read';
 import { resolveAccent, type Accent } from './lyrics/accents';
 import { speechPlan } from './lyrics/speech';
-import { planSung } from './lyrics/sing';
+import { planSung, type PlanSungOptions } from './lyrics/sing';
 import { sungEvents, type SungWindow } from './sing';
 import { VOCAL_PLAN_LEAD, vocalGlideLead } from './engines/vocal-lead';
 
@@ -653,6 +653,7 @@ export class Bellows {
     lyrics: string | readonly Syllable[],
     notes: readonly SingNote[],
     opts: SingOptions = {},
+    planOpts: PlanSungOptions = {},
   ): SingResult {
     const syllables =
       typeof lyrics === 'string'
@@ -667,7 +668,7 @@ export class Bellows {
     // live, a phrase that has ended can no longer meet a new one: its events are spent
     if (!this.renderCtx) state.windows = state.windows.filter((w) => w.end >= now);
     const post = (at: number) => {
-      const plan = planSung(this.sungNotes(notes, at, opts.scale), syllables);
+      const plan = planSung(this.sungNotes(notes, at, opts.scale), syllables, planOpts);
       const posted = sungEvents(plan, {
         channel,
         phonemeParam: this.paramIndex('phoneme'),
@@ -711,6 +712,8 @@ export class Bellows {
         dictionary: opts.dictionary ?? this.dictionary ?? undefined,
         allophones: opts.allophones,
         accent,
+        // running speech: weak function words
+        reduce: true,
       });
       if (part.length === 0) continue;
       part[part.length - 1].phraseEnd = true;
@@ -719,7 +722,8 @@ export class Bellows {
     }
     const plan = speechPlan(syllables, { hz: opts.hz, rate: opts.rate, prosody: accent.prosody }, questions);
     const notes: SingNote[] = plan.notes.map((n) => (n.rest ? { note: null, dur: { seconds: n.dur } } : { note: { hz: n.hz }, dur: { seconds: n.dur } }));
-    return this.singEvents(channel, plan.syllables, notes, { at: opts.at });
+    // spoken consonants at their full spoken length, where sung ones are shortened (durations.ts)
+    return this.singEvents(channel, plan.syllables, notes, { at: opts.at }, { consonantScale: 1 });
   }
 
   /**

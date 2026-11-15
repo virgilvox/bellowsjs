@@ -46,8 +46,8 @@ LLM reference was out of sync, because the adapter added a header and the gate
 that would have caught it only exists in CI because the OTHER branch added it.
 That is the argument for verifying the merged tree and not the two halves.
 
-Downstream of git, as of 2026-11-14: npm serves `bellowsjs@0.3.0` (engines ship once; 0.2.0 added
-the singing voice under MIT), tagged `v0.3.0`, and bellows.live was deployed from the same commit. Both embedded registries
+Downstream of git, as of 2026-11-14: npm serves `bellowsjs@0.4.0` (accents and speech; 0.3.0 shipped
+engines once, 0.2.0 added the singing voice under MIT), tagged `v0.4.0`, and bellows.live was deployed from the same commit. Both embedded registries
 still serve `Bellows@0.1.2`; the next embedded release is 0.1.3 and would carry the MIT license.
 There is no deploy on push. Merging is not
 shipping, and this file has confused the two before.
@@ -111,10 +111,10 @@ WHAT IS TRUE TODAY, and each of these is checkable in one command:
   MicroMod or a Daisy, and **nothing has been compared to the browser by ear**.
   41 parity rows, 428 value rows and 1054 preset values stand in for that and
   are not the same thing.
-- `bellowsjs@0.3.0` is on npm and tagged (2026-11-14), and `Bellows@0.1.2` is on both embedded registries.
+- `bellowsjs@0.4.0` is on npm and tagged (2026-11-14), and `Bellows@0.1.2` is on both embedded registries.
   Publishing to npm needs a token that bypasses 2FA or an `--otp=<code>`: a plain `npm publish`
   packs the tarball and then returns E403, which reads like a permissions problem. The token in
-  `~/.npmrc` on the owner's machine bypasses it (0.1.9, 0.2.0 and 0.3.0 went out with it).
+  `~/.npmrc` on the owner's machine bypasses it (0.1.9 through 0.4.0 went out with it).
 - `main` carries everything: there are no unmerged branches, and PR #2 is
   closed by the merge rather than open. bellows.live was deployed on 2026-08-21
   and was byte-identical to `main` when compared by content on 2026-09-04, but

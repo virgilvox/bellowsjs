@@ -1,4 +1,4 @@
-# bellowsjs 0.3.0 LLM reference
+# bellowsjs 0.4.0 LLM reference
 
 bellowsjs is a browser-native audio engine for synthesis, samples, sequencing,
 analysis, and I/O. One AudioWorklet kernel hosts every voice and effect; musical
@@ -8,7 +8,7 @@ in Node. Every stochastic decision flows from named, seeded PRNG streams.
 License MIT. Site: https://bellows.live  Repo: https://github.com/virgilvox/bellowsjs
 
 This file is generated from the library source and its type declarations.
-Everything in it is exact for version 0.3.0.
+Everything in it is exact for version 0.4.0.
 
 ## Install and import
 
@@ -91,6 +91,7 @@ import type { RenderedAudio } from './render/offline';
 import { SoundFont } from './io/sf2';
 import type { PronouncingDictionary, SungPlan, Syllable } from './lyrics/types';
 import { type Accent } from './lyrics/accents';
+import { type PlanSungOptions } from './lyrics/sing';
 export interface BootOptions {
     seed?: string;
     context?: AudioContext;
@@ -355,7 +356,7 @@ export declare class Bellows {
      *
      * @internal
      */
-    singEvents(channel: number, lyrics: string | readonly Syllable[], notes: readonly SingNote[], opts?: SingOptions): SingResult;
+    singEvents(channel: number, lyrics: string | readonly Syllable[], notes: readonly SingNote[], opts?: SingOptions, planOpts?: PlanSungOptions): SingResult;
     /**
      * Speak text: sentences read in the accent, timed and pitched by its prosody (lyrics/speech.ts),
      * then sung as notes. A sentence ending in "?" ends rising.
