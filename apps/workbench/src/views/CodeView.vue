@@ -6,7 +6,7 @@
  */
 
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
-import { defaultExample, exampleById, type Example } from '../examples';
+import { categories as jsCategories, defaultExample, exampleById, type Example } from '../examples';
 import {
   EMBEDDED_CATEGORIES,
   defaultEmbeddedExample,
@@ -154,17 +154,28 @@ onActivated(() => {
         <button :class="{ lit: lang === 'js' }" @click="setLang('js')">JAVASCRIPT</button>
         <button :class="{ lit: lang === 'embedded' }" @click="setLang('embedded')">EMBEDDED</button>
       </nav>
-      <ExampleRail
-        v-if="lang === 'js'"
-        :active-id="current.id"
-        @select="select"
-      />
-      <ExampleRail
-        v-else
-        :active-id="current.id"
-        :categories="EMBEDDED_CATEGORIES"
-        @select="select"
-      />
+      <!-- on a narrow screen the full list would stack above the example, so a picker stands in -->
+      <label class="rail-compact">
+        EXAMPLE
+        <select :value="current.id" @change="select(($event.target as HTMLSelectElement).value)">
+          <optgroup v-for="cat in lang === 'js' ? jsCategories : EMBEDDED_CATEGORIES" :key="cat.name" :label="cat.name">
+            <option v-for="ex in cat.examples" :key="ex.id" :value="ex.id">{{ ex.title }}</option>
+          </optgroup>
+        </select>
+      </label>
+      <div class="rail-full">
+        <ExampleRail
+          v-if="lang === 'js'"
+          :active-id="current.id"
+          @select="select"
+        />
+        <ExampleRail
+          v-else
+          :active-id="current.id"
+          :categories="EMBEDDED_CATEGORIES"
+          @select="select"
+        />
+      </div>
     </aside>
 
     <section>
@@ -262,6 +273,31 @@ onActivated(() => {
 @media (max-width: 900px) {
   .code-deck {
     grid-template-columns: 1fr;
+  }
+}
+
+.rail-compact {
+  display: none;
+}
+@media (max-width: 900px) {
+  .rail-full {
+    display: none;
+  }
+  .rail-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--faded);
+  }
+  .rail-compact select {
+    background: var(--iron);
+    border: 1px solid var(--seam);
+    color: var(--bone);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 8px;
   }
 }
 

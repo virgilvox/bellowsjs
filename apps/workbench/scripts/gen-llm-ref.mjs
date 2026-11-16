@@ -254,7 +254,9 @@ const plan = alto.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   vowel, diphthong, or vowel plus r, as IPA), rhotic (r after a vowel; linked
   before a vowel when false), t ('flap' | 'released' | 'glottal-coda' |
   'glottal'), l ('dark-coda' | 'clear' | 'dark' | 'vocalized'), th
-  ('fricative' | 'stop' | 'front'), r ('approximant' | 'tap'), hDrop, raised
+  ('fricative' | 'stop' | 'front' | 'sibilant'), r ('approximant' | 'tap'),
+  hDrop, replace ({ w: 'v' }: consonants swapped everywhere), devoiceFinal
+  (a word's last voiced stop or fricative devoiced), raised
   (realizations before a voiceless consonant: Canadian raising), hold/holds
   (diphthong timing) and prosody { tune: 'fall' | 'rise', range (semitones),
   declination, rate, stressRatio (2 stress-timed, near 1 syllable-timed) }.

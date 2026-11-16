@@ -140,9 +140,12 @@ function draw(): void {
   g.fillStyle = faded;
   g.font = '10px ' + css('--mono', 'monospace');
   g.fillText('glottis', X(s.upper[0]) + 6, Y(Math.min(s.lower[1], s.upper[1])) + 4);
-  g.fillText('lips ' + s.lipArea.toFixed(2) + ' cm²', lipX + 8, Y(s.lower[2 * n - 1]) + 4);
+  const lipText = 'lips ' + s.lipArea.toFixed(2) + ' cm²';
+  // inside the picture on a narrow canvas
+  g.fillText(lipText, Math.min(lipX + 8, w - g.measureText(lipText).width - 6), Y(s.lower[2 * n - 1]) + 4);
   g.fillStyle = hot;
-  g.font = 'bold 34px ' + css('--disp', 'sans-serif');
+  // an IPA-capable face: the site's own draw some IPA letters alike (u and ʊ)
+  g.font = "bold 34px 'Charis SIL', 'Doulos SIL', 'Noto Sans', 'Lucida Grande', 'Segoe UI', sans-serif";
   g.fillText(props.phoneme === '_' ? '' : props.phoneme, 14, 40);
 }
 
@@ -166,7 +169,7 @@ onBeforeUnmount(() => ro?.disconnect());
 .mouth {
   display: block;
   width: 100%;
-  height: 380px;
+  height: 280px;
   border: 1px solid var(--seam);
   background: var(--char);
 }

@@ -13,7 +13,7 @@ export const voiceExamples: Example[] = [
     category: 'VOCALS',
     lab: 'voice',
     description:
-      'Everything the voice does, from controls: type a line, pick one of twenty accents, sing it on a melody or speak it, and move every parameter of the vocal engine. The IPA shows what the accent will say before it says it, and the mouth follows the line through the voice\'s own geometry as it plays. Hold any sound to hear it alone and see its shape. SHOW CODE writes your settings out as a Code mode example.',
+      'Choose a voice, type a line, pick an accent, and press SPEAK IT or SING IT. The mouth on the right follows the line as it plays.',
     seed: 'voice-lab',
     code: `var singer = lib.singer(b, {}, { accent: 'general-american' });
 var plan = singer.sing('The water in the bath was far too hot.', [

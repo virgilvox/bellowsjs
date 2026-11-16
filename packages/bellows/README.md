@@ -43,7 +43,7 @@ With the singing voice, map the name `bellowsjs` with an import map: [bellows-vo
 </script>
 <script type="module">
   import { Bellows } from 'bellowsjs';
-  import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.3/dist/index.js';
+  import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.4/dist/index.js';
   document.querySelector('#go').onclick = async () => {
     const b = await Bellows.boot({ plugins: [voice] });
     singer(b, { body: 1 }).speak('Hello from a single file.');

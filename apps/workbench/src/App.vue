@@ -157,6 +157,19 @@ h1 b {
 .modes {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* on a phone the eight modes wrap rather than push the page sideways */
+@media (max-width: 600px) {
+  .modes {
+    gap: 5px;
+  }
+  .modes button,
+  .modes a {
+    padding: 7px 10px;
+    font-size: 11px;
+  }
 }
 
 .modes button {

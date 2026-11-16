@@ -7,7 +7,7 @@ const page: DocPage = {
   prev: 'engines',
   next: 'presets',
   body: `
-By the end of this page you can make a singer sing a lyric on a melody, make it speak, choose one of thirteen starter voices or make your own, give it any of thirty accents or one of your own, check what it will say before it says it, draw its mouth, fix a word it reads wrongly, and stack singers into harmony in any tuning.
+By the end of this page you can make a singer sing a lyric on a melody, make it speak, choose one of thirteen starter voices or make your own, give it any of thirty-one accents or one of your own, check what it will say before it says it, draw its mouth, fix a word it reads wrongly, and stack singers into harmony in any tuning.
 
 **Try it first.** The [Voice Lab](/#code/voice-lab) in Code mode has all of this behind controls: pick male, female or child and a starter voice, type a line, pick an accent, sing or speak it, fine-tune every parameter, hold any sound, and watch the mouth follow along. Its SHOW CODE button writes your settings out as code. The other VOCALS examples there each take one idea further.
 
@@ -31,7 +31,7 @@ In a single HTML file with no bundler, load both from a CDN and map the name \`b
 </script>
 <script type="module">
   import { Bellows } from 'bellowsjs';
-  import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.3/dist/index.js';
+  import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.4/dist/index.js';
   document.querySelector('#go').onclick = async () => {
     const b = await Bellows.boot({ plugins: [voice] });
     singer(b, { body: 1 }).speak('Hello from a single file.');
@@ -138,7 +138,7 @@ It is a model of read speech, not of a person: one melody per clause, no emphasi
 
 ## Accents
 
-\`singer.accent\` (or \`singer(b, params, { accent })\`) sets the accent every line is read in, and \`opts.accent\` sets it for one line. Thirty are built in, each with a \`region\` (\`ACCENT_REGIONS\` lists them in order) and each a broad transcription of the accent's mainstream form from the published lexical-set tables (Wells, and the Handbook of Varieties of English), not a recording of any one speaker. The last column is what each says for "The water in the bath was far too hot." straight from \`toIPA()\`.
+\`singer.accent\` (or \`singer(b, params, { accent })\`) sets the accent every line is read in, and \`opts.accent\` sets it for one line. Thirty-one are built in, each with a \`region\` (\`ACCENT_REGIONS\` lists them in order) and each a broad transcription of the accent's mainstream form from the published lexical-set tables (Wells, and the Handbook of Varieties of English), not a recording of any one speaker. The last column is what each says for "The water in the bath was far too hot." straight from \`toIPA()\`.
 
 | Accent | Region | What you hear | "The water in the bath was far too hot." |
 |---|---|---|---|
@@ -172,6 +172,7 @@ It is a model of read speech, not of a person: one melody per clause, no emphasi
 | \`indian\` | Asia | FACE and GOAT single vowels; TH-stopping; tapped r; syllable-timed | də ˈwɔ.təɾ ɪn də bɑt wɒz fɑɾ tu hɒt |
 | \`singaporean\` | Asia | long and short pairs merge (KIT with FLEECE); glottal final t; syllable-timed | də ˈwɔ.təɹ in də bɑt wɔz fɑ tu hɔt |
 | \`filipino\` | Asia | five vowels; rhotic with a tap; TH-stopping; syllable-timed | də ˈwɔ.tɛɾ in də bat wɔz faɾ tu hɔt |
+| \`russian\` | Europe | th as s and z (zis, sink); w as v; final voiced consonants devoiced (dok); KIT with FLEECE; tapped r | zə ˈvɔ.tɛɾ in zə bas vɔs faɾ tu hɔt |
 
 \`\`\`js
 alto.accent = 'scottish';
@@ -203,9 +204,11 @@ General American merges some of these (LOT with PALM in "bother" and "father", T
 | \`rhotic\` | whether r after a vowel is said ("car"). A non-rhotic accent still says it before a vowel ("far away") |
 | \`t\` | 'flap' (water with a tap), 'released', 'glottal-coda' (a glottal stop before a consonant), 'glottal' (also between vowels and before a pause) |
 | \`l\` | 'dark-coda' (dark after a vowel), 'clear', 'dark' (everywhere), 'vocalized' (milk as mɪwk) |
-| \`th\` | 'fricative', 'stop' (think as tɪŋk), 'front' (think as fɪŋk, brother as bɹɐvə) |
+| \`th\` | 'fricative', 'stop' (think as tɪŋk), 'front' (think as fɪŋk, brother as bɹɐvə), 'sibilant' (think as sɪŋk, this as zɪs) |
 | \`r\` | 'approximant' or 'tap' |
 | \`hDrop\` | drops h at the start of a word |
+| \`replace\` | consonants said as others everywhere: \`{ w: 'v' }\` for west as vest |
+| \`devoiceFinal\` | devoices a voiced stop or fricative that ends a word: bed as bet, dog as dok |
 | \`raised\` | vowels used before a voiceless consonant in the same word: Canadian "price" and "house" against "prize" and "how" |
 | \`hold\`, \`holds\` | how long a diphthong holds its first vowel before gliding, overall and per set |
 | \`prosody\` | the speech melody: tune, range, declination, rate, stressRatio (Speaking, above) |

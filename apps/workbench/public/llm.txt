@@ -27,7 +27,7 @@ mapped name:
   </script>
   <script type="module">
     import { Bellows } from 'bellowsjs';
-    import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.3/dist/index.js';
+    import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.4/dist/index.js';
     // from a click: const b = await Bellows.boot({ plugins: [voice] });
     //               singer(b, { body: 1 }).speak('Hello.');
   </script>
@@ -823,7 +823,7 @@ Sampler engines expose SAMPLER_PARAMS:
 
 Granular over your own buffer: b.granular(float32Data, sampleRate, params?).
 
-## Singing and lyrics (bellows-voice 0.3.0)
+## Singing and lyrics (bellows-voice 0.4.0)
 
 npm install bellows-voice. It peer-depends on bellowsjs.
 
@@ -867,13 +867,15 @@ const plan = alto.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   dark l unless opts.allophones is false (classical diction); IPA is sung
   as written.
 - Accents: singer.accent (default 'general-american') or opts.accent picks how
-  English is said. Built in (ACCENTS): general-american, canadian, californian, new-york, boston, inland-north, southern-us, received-pronunciation, southern-british, london, west-country, brummie, scouse, northern-english, geordie, scottish, welsh, irish, northern-irish, australian, new-zealand, south-african, nigerian, ghanaian, kenyan, jamaican, trinidadian, indian, singaporean, filipino.
+  English is said. Built in (ACCENTS): general-american, canadian, californian, new-york, boston, inland-north, southern-us, received-pronunciation, southern-british, london, west-country, brummie, scouse, northern-english, geordie, scottish, welsh, irish, northern-irish, australian, new-zealand, south-african, nigerian, ghanaian, kenyan, jamaican, trinidadian, indian, singaporean, filipino, russian.
   Or an Accent object. The reader tags every vowel with its Wells lexical set
   (KIT, BATH, GOAT, NURSE, ...); an Accent is plain data: sets (each set's
   vowel, diphthong, or vowel plus r, as IPA), rhotic (r after a vowel; linked
   before a vowel when false), t ('flap' | 'released' | 'glottal-coda' |
   'glottal'), l ('dark-coda' | 'clear' | 'dark' | 'vocalized'), th
-  ('fricative' | 'stop' | 'front'), r ('approximant' | 'tap'), hDrop, raised
+  ('fricative' | 'stop' | 'front' | 'sibilant'), r ('approximant' | 'tap'),
+  hDrop, replace ({ w: 'v' }: consonants swapped everywhere), devoiceFinal
+  (a word's last voiced stop or fricative devoiced), raised
   (realizations before a voiceless consonant: Canadian raising), hold/holds
   (diphthong timing) and prosody { tune: 'fall' | 'rise', range (semitones),
   declination, rate, stressRatio (2 stress-timed, near 1 syllable-timed) }.
