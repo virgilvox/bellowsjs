@@ -56,3 +56,25 @@ above the lab, so on a phone the lab starts about 2800 px down.
   app import, with the install line.
 - **Keyboard:** toggles carry aria-pressed, every slider an aria-label and description, the pads
   answer Space and Enter as well as a press.
+
+## Second round (2026-11-16)
+
+The owner found the first rework worse: the Speak and Sing switch looked like buttons beside a
+SPEAK IT button, the accent selector (region tabs over accent chips) was clumsy, and the whole thing
+was busy. The cause was one thing in several places: the site styles every button as a raised box,
+and the lab used buttons for every kind of control, so a switch, a choice, a filter and the action
+all looked the same.
+
+The lab now follows how working voice demos are built: one text box, one primary action, two
+pickers.
+
+- **Each control looks like what it is.** Speak and Sing are tabs on the text box (underlined text,
+  no box). Voice and Accent are fields with a chevron. The only filled button is Play, which becomes
+  Stop while it plays. Examples and copy are text links. The rest are plain expandable rows.
+- **Searchable pickers** (the WAI-ARIA combobox pattern) for the thirteen voices and thirty-one
+  accents: grouped by male, female and child or by region when browsing, searched by the start of
+  words and ranked when typing ("ir" gives Irish, then Northern Irish, not Birmingham), each option
+  with a line saying what it is. Arrow keys, Enter and Escape work, and focus comes back to the field.
+- **One column**, the composer and then the output: the mouth beside the IPA and General American's,
+  the sounds lighting as they play. Fewer boxes, sentence-case labels, no numbered steps.
+- **Phone**: the same single column, pickers stacked, no sideways scroll, no keyboard hint.

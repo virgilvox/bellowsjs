@@ -29,4 +29,15 @@ export default defineConfig({
   server: {
     port: 5173,
   },
+  /*
+   * bellows-voice imports 'bellowsjs' by name. Pre-bundled, esbuild would fold a second copy of
+   * bellowsjs into it, and that copy's engine catalog never hears of the voice plugin the site's
+   * copy loaded, so singer() throws (MEASURED: the voice lab failed this way in dev once
+   * bellows-voice came from npm instead of a symlink). Left out of the pre-bundle, its import goes
+   * through the alias above to the one copy the site uses. The production build resolves the same
+   * way and was not affected.
+   */
+  optimizeDeps: {
+    exclude: ['bellows-voice'],
+  },
 });

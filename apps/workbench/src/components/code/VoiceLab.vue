@@ -1,11 +1,15 @@
 <script setup lang="ts">
 /*
- * The voice lab: everything bellows-voice does, from controls instead of code. docs/VOICE-LAB-UX.md
- * has the walkthrough this layout answers: a stage that stays in view (play, the mouth, the line as
- * it plays, the IPA) beside the controls, taken in the order a line is made (the voice, the words,
- * the accent, the tune or delivery), every term in plain words, and the code for both Code mode and
- * an app. The engine's params are generated from VOCAL_ENGINE_INFO, so a param added to the voice
- * appears here; the mouth runs the voice's own geometry (bellows-voice/view).
+ * The voice lab, built the way voice demos that work are built: one text box, one primary action,
+ * and two pickers. The composer holds what a line needs (speak or sing as tabs on the text box, the
+ * text, a voice and an accent as searchable pickers, the two or three settings that matter for the
+ * mode, and Play, which becomes Stop). The output shows what it is doing (the mouth, the IPA beside
+ * General American's, the sounds as they play). Everything else (every engine param, holding one
+ * sound, the code) is folded below. docs/VOICE-LAB-UX.md has the walkthroughs behind it.
+ *
+ * Each kind of control looks like what it is: tabs are underlined text, pickers are fields with a
+ * chevron, the one filled button is Play, the expanders are plain rows. The site styles every button
+ * as a raised box; the lab overrides that for everything that is not an action.
  */
 
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
@@ -13,7 +17,6 @@ import { parseNote, type Bellows, type ParamSpec } from 'bellowsjs';
 import {
   ACCENTS,
   ACCENT_REGIONS,
-  SPEECH_HZ_BY_BODY,
   VOCAL_ENGINE_INFO,
   VOCAL_PHONEMES,
   VOICE_PRESETS,
@@ -23,54 +26,44 @@ import {
   type Accent,
   type SingNote,
   type Singer,
-  type VoiceGroup,
-  type VoicePreset,
 } from 'bellows-voice';
 import { TractModel, type TractShape } from 'bellows-voice/view';
 import { ensureBellows } from '../../lib/audio';
 import { formatValue, fromSlider, toSlider } from '../../lib/instrument-store';
 import MouthView from './MouthView.vue';
+import Picker, { type PickerOption } from './Picker.vue';
 
-/* ---- the voice ---- */
+/* ---- params, named for people ---- */
 
-const GROUPS: Array<[VoiceGroup, string, number]> = [
-  ['male', 'Male', 0],
-  ['female', 'Female', 1],
-  ['child', 'Child', 2],
-];
-
-/* the params a line drives itself; the lab does not offer them */
 const DRIVEN = new Set(['phoneme', 'bend', 'nextPhoneme', 'nextIn']);
-/* a name and a line for every param, so nobody has to know "vibratoDepth" */
 const PARAM_TEXT: Record<string, [string, string]> = {
-  body: ['Size', 'the tract and folds: 0 a man, 1 a woman, 2 a child, blends between'],
-  glottis: ['Vocal folds', 'pulse is the default; geometric and self-oscillating are physical models'],
+  body: ['Size', '0 a man, 1 a woman, 2 a child; blends between'],
+  glottis: ['Vocal folds', 'pulse is the default; the others are physical models'],
   tension: ['Pressed', 'soft and dark at 0, pressed and bright at 1'],
-  breath: ['Breathiness', 'how far the folds rest apart, and the hiss of air through them'],
-  roughness: ['Roughness', 'cycle-to-cycle unevenness; 0.02 measures as a healthy voice'],
-  fry: ['Creak', 'the low rattle at the bottom of a voice'],
-  drift: ['Pitch wander', 'slow drift in pitch, in cents'],
+  breath: ['Breathiness', 'air through the folds'],
+  roughness: ['Roughness', 'unevenness; 0.02 measures as a healthy voice'],
+  fry: ['Creak', 'the rattle at the bottom of a voice'],
+  drift: ['Pitch wander', 'slow drift, in cents'],
   vibratoRate: ['Vibrato speed', 'classical singers sit at 5 to 7 Hz'],
-  vibratoDepth: ['Vibrato width', 'semitones either side; classical about half to one'],
-  vibratoDelay: ['Vibrato delay', 'how long a note holds before the vibrato blooms'],
-  glide: ['Note glide', 'how long the pitch takes to move to a new note'],
-  overshoot: ['Overshoot', 'how far the pitch passes a new note before it settles'],
-  preparation: ['Preparation', 'how far the pitch first dips the wrong way before a change'],
-  articulation: ['Mouth speed', 'how fast the tongue, jaw and lips move; 2 is twice as quick'],
-  ring: ["Singer's ring", 'the band near 3 kHz a trained voice carries with'],
-  tuning: ['High-note jaw', 'opens the jaw on high notes, as sopranos do'],
+  vibratoDepth: ['Vibrato width', 'semitones either side'],
+  vibratoDelay: ['Vibrato delay', 'before the vibrato blooms'],
+  glide: ['Note glide', 'time to move to a new note'],
+  overshoot: ['Overshoot', 'how far past a new note before settling'],
+  preparation: ['Preparation', 'a dip the wrong way before a change'],
+  articulation: ['Mouth speed', '2 is twice as quick'],
+  ring: ["Singer's ring", 'the band near 3 kHz that carries'],
+  tuning: ['High-note jaw', 'opens on high notes, as sopranos do'],
   attack: ['Attack', 'how a phrase starts'],
   release: ['Release', 'how a phrase dies away'],
   level: ['Level', 'output level'],
 };
 const PARAM_GROUPS: Array<[string, string[]]> = [
-  ['The source', ['body', 'glottis', 'tension', 'breath', 'roughness', 'fry']],
+  ['Source', ['body', 'glottis', 'tension', 'breath', 'roughness', 'fry']],
   ['Pitch and vibrato', ['drift', 'vibratoRate', 'vibratoDepth', 'vibratoDelay', 'glide', 'overshoot', 'preparation']],
-  ['The mouth', ['articulation', 'ring', 'tuning']],
+  ['Mouth', ['articulation', 'ring', 'tuning']],
   ['Envelope', ['attack', 'release', 'level']],
 ];
 const STEP_NAMES: Record<string, readonly string[]> = { glottis: ['geometric', 'self-oscillating', 'pulse'] };
-
 const specs: ParamSpec[] = VOCAL_ENGINE_INFO.params.filter((p) => !DRIVEN.has(p.name));
 const specByName = new Map(specs.map((p) => [p.name, p]));
 const defaults = (): Record<string, number> => Object.fromEntries(specs.map((p) => [p.name, p.default]));
@@ -86,17 +79,14 @@ const grouped = computed(() => {
   return out.filter(([, list]) => list.length > 0);
 });
 
-/* ---- the words and the tune ---- */
+/* ---- words and tunes ---- */
 
-const TEXTS = [
+const EXAMPLES = [
   'Good morning. Where are you from?',
   'The water in the bath was far too hot.',
-  'Twinkle twinkle little star, how I wonder what you are.',
-  'Hello, my name is Bellows. I can sing, and I can speak.',
   'I think this is the best day of the year.',
+  'Twinkle twinkle little star, how I wonder what you are.',
 ];
-const KEYWORDS = 'kit dress trap lot strut foot bath cloth nurse fleece face palm thought goat goose price choice mouth near square start north';
-
 const MELODIES: Array<[string, string]> = [
   ['Up and down', 'C4 D4 E4 F4 G4 F4 E4 D4 C4:2'],
   ['Twinkle', 'C4 C4 G4 G4 A4 A4 G4:2 F4 F4 E4 E4 D4 D4 C4:2'],
@@ -104,12 +94,13 @@ const MELODIES: Array<[string, string]> = [
   ['One note', 'A4'],
 ];
 
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const noteName = (m: number) => NOTE_NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
+
 const state = reactive({
-  group: 'female' as VoiceGroup,
-  presetId: 'narrator-female' as string | null,
-  mode: 'speak' as 'sing' | 'speak',
-  text: TEXTS[0],
-  region: 'North America',
+  mode: 'speak' as 'speak' | 'sing',
+  text: EXAMPLES[0],
+  voiceId: 'narrator-female',
   accent: 'general-american',
   melody: MELODIES[0][1],
   bpm: 120,
@@ -117,11 +108,10 @@ const state = reactive({
   hz: 199,
   rate: 1,
   params: { ...defaults(), ...VOICE_PRESETS.find((v) => v.id === 'narrator-female')!.params } as Record<string, number>,
-  status: 'Press SPEAK IT to hear it.',
+  status: '',
 });
 
-const presetsInGroup = computed(() => VOICE_PRESETS.filter((v) => v.group === state.group));
-const preset = computed(() => (state.presetId ? VOICE_PRESETS.find((v) => v.id === state.presetId) ?? null : null));
+const preset = computed(() => VOICE_PRESETS.find((v) => v.id === state.voiceId) ?? null);
 const edited = computed(() => {
   const p = preset.value;
   if (!p) return true;
@@ -129,70 +119,67 @@ const edited = computed(() => {
   return specs.some((s) => Math.abs((state.params[s.name] ?? s.default) - (want[s.name] ?? s.default)) > 1e-9);
 });
 
-function choosePreset(p: VoicePreset): void {
-  state.presetId = p.id;
-  state.group = p.group;
-  const next = { ...defaults(), ...p.params };
-  for (const s of specs) setParam(s.name, next[s.name] ?? s.default);
-  state.hz = p.speechHz;
-}
+/* ---- the pickers ---- */
 
-function chooseGroup(g: VoiceGroup): void {
-  state.group = g;
-  const first = VOICE_PRESETS.find((v) => v.group === g);
-  if (first) choosePreset(first);
-  else {
-    state.presetId = null;
-    const body = GROUPS.find(([id]) => id === g)![2];
-    setParam('body', body);
-    state.hz = SPEECH_HZ_BY_BODY[body];
-  }
-}
-
-/* ---- the accent ---- */
-
-const accentsInRegion = computed(() => Object.values(ACCENTS).filter((a) => a.region === state.region));
-const accent = computed<Accent | undefined>(() => ACCENTS[state.accent]);
-
-function chooseRegion(r: string): void {
-  state.region = r;
-  const first = Object.values(ACCENTS).find((a) => a.region === r);
-  if (first) state.accent = first.id;
-}
+const GROUP_HEAD: Record<string, string> = { male: 'Male voices', female: 'Female voices', child: 'Child' };
+const GROUP_ORDER = ['female', 'male', 'child'];
+const voiceOptions = computed<PickerOption[]>(() =>
+  [...VOICE_PRESETS]
+    .sort((a, c) => GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(c.group))
+    .map((v) => ({
+      id: v.id,
+      label: v.name,
+      detail: `${v.description}. Sings ${noteName(v.range[0])} to ${noteName(v.range[1])}, speaks at ${v.speechHz} Hz.`,
+      group: GROUP_HEAD[v.group],
+      keywords: v.group,
+    })),
+);
 
 /** What an accent does, as what you hear. */
-const traits = computed(() => {
-  const a = accent.value;
-  if (!a) return [];
+function traitsOf(a: Accent): string[] {
   const out: string[] = [];
   out.push(a.rhotic ? 'says the r in "car"' : 'drops the r in "car"');
-  out.push(
-    { flap: '"water" with a quick d', released: 'every t said clearly', 'glottal-coda': 'a catch for t before consonants', glottal: '"water" as wa\'er' }[a.t],
-  );
-  if (a.l === 'clear') out.push('a clear, bright l');
-  if (a.l === 'dark') out.push('a dark l everywhere');
+  if (a.t === 'flap') out.push('"water" with a quick d');
+  if (a.t === 'glottal') out.push('"water" as wa\'er');
+  if (a.l === 'clear') out.push('a clear l');
   if (a.l === 'vocalized') out.push('"milk" as miwk');
   if (a.th === 'stop') out.push('"think" as tink');
   if (a.th === 'front') out.push('"think" as fink');
-  if (a.th === 'sibilant') out.push('"think" as sink, "this" as zis');
+  if (a.th === 'sibilant') out.push('"this" as zis');
   if (a.r === 'tap') out.push('a tapped r');
-  if (a.hDrop) out.push('drops h: "house" as ouse');
-  if (a.raised) out.push('"price" and "house" start high');
+  if (a.hDrop) out.push('drops h');
+  if (a.raised) out.push('"price" starts high');
   if (a.replace?.w === 'v') out.push('"west" as vest');
   if (a.devoiceFinal) out.push('"bed" as bet');
-  const p = a.prosody;
-  if (p) {
-    out.push(p.tune === 'rise' ? 'statements end rising' : 'statements end falling');
-    if ((p.stressRatio ?? 2) < 1.6) out.push('even, syllable-timed rhythm');
-  }
+  if (a.prosody?.tune === 'rise') out.push('statements rise');
+  if ((a.prosody?.stressRatio ?? 2) < 1.6) out.push('syllable-timed');
   return out;
-});
+}
+const accentOptions = computed<PickerOption[]>(() =>
+  ACCENT_REGIONS.flatMap((region) =>
+    Object.values(ACCENTS)
+      .filter((a) => a.region === region)
+      .map((a) => ({ id: a.id, label: a.name, detail: traitsOf(a).join(', '), group: region, keywords: a.id })),
+  ),
+);
+const accent = computed<Accent | undefined>(() => ACCENTS[state.accent]);
+
+watch(
+  () => state.voiceId,
+  (id) => {
+    const p = VOICE_PRESETS.find((v) => v.id === id);
+    if (!p) return;
+    const next = { ...defaults(), ...p.params };
+    for (const s of specs) setParam(s.name, next[s.name] ?? s.default);
+    state.hz = p.speechHz;
+  },
+);
 
 /* ---- what the text becomes ---- */
 
-const safeIpa = (accentId: string) => {
+const safeIpa = (id: string) => {
   try {
-    return toIPA(state.text, { accent: accentId });
+    return toIPA(state.text, { accent: id });
   } catch (e) {
     return String(e);
   }
@@ -207,10 +194,6 @@ const syllableCount = computed(() => {
   }
 });
 
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const noteName = (m: number) => NOTE_NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
-
-/** The melody over the syllables: tokens "C4" or "C4:2" (beats), repeated to fit, moved by octaves into the voice's range. */
 function melodyNotes(): SingNote[] {
   const beat = 60 / state.bpm;
   const tokens = state.melody.trim().split(/\s+/).filter(Boolean);
@@ -220,7 +203,7 @@ function melodyNotes(): SingNote[] {
     try {
       midi = parseNote(name);
     } catch {
-      // an unreadable token sings A4
+      // an unreadable note sings A4
     }
     return { midi, beats: Number(mul) > 0 ? Number(mul) : 1 };
   });
@@ -228,8 +211,7 @@ function melodyNotes(): SingNote[] {
   const p = preset.value;
   if (state.fitRange && p) {
     const sorted = list.map((x) => x.midi).sort((a, c) => a - c);
-    const median = sorted[Math.floor(sorted.length / 2)];
-    shift = 12 * Math.round(((p.range[0] + p.range[1]) / 2 - median) / 12);
+    shift = 12 * Math.round(((p.range[0] + p.range[1]) / 2 - sorted[Math.floor(sorted.length / 2)]) / 12);
   }
   const n = Math.max(1, syllableCount.value);
   const notes: SingNote[] = [];
@@ -240,10 +222,14 @@ function melodyNotes(): SingNote[] {
   notes.push({ note: null, dur: { seconds: 0.4 } });
   return notes;
 }
-
 const melodyRange = computed(() => {
   const ms = melodyNotes().filter((n) => n.note !== null).map((n) => n.note as number);
   return ms.length ? `${noteName(Math.min(...ms))} to ${noteName(Math.max(...ms))}` : '';
+});
+/* the Tune select: a preset's notes, or '' for your own */
+const tuneChoice = ref(MELODIES[0][1]);
+watch(tuneChoice, (m) => {
+  if (m) state.melody = m;
 });
 
 /* ---- sound ---- */
@@ -252,8 +238,8 @@ let b: Bellows | null = null;
 let voiceSinger: Singer | null = null;
 const line = shallowRef<Array<{ ipa: string; start: number; end: number }>>([]);
 const nowIndex = ref(-1);
-let held: { id: number; ipa: string } | null = null;
 const playing = ref(false);
+let held: { id: number; ipa: string } | null = null;
 
 async function ready(): Promise<Singer> {
   const next = await ensureBellows();
@@ -271,18 +257,18 @@ async function ready(): Promise<Singer> {
 }
 
 async function play(): Promise<void> {
+  if (playing.value) {
+    stop();
+    return;
+  }
   const s = await ready();
   const result =
     state.mode === 'sing'
       ? s.sing(state.text, melodyNotes())
       : s.speak(state.text, { accent: state.accent, hz: state.hz, rate: state.rate });
   line.value = result.phrases.flatMap((p) => p.spans.map((sp) => ({ ipa: sp.ipa, start: sp.start, end: sp.end })));
-  const spans = line.value;
-  const len = spans.length ? spans[spans.length - 1].end - spans[0].start : 0;
-  playing.value = spans.length > 0;
-  state.status =
-    `${state.mode === 'sing' ? 'Singing' : 'Speaking'}, ${len.toFixed(1)} s` +
-    (result.unknown.length ? `. No sound for ${result.unknown.join(' ')}.` : '');
+  playing.value = line.value.length > 0;
+  state.status = result.unknown.length ? `No sound for ${result.unknown.join(' ')}; those keep the sound before them.` : '';
 }
 
 function stop(): void {
@@ -303,25 +289,21 @@ function setParam(name: string, value: number): void {
   voiceSinger?.param(name, value);
   if (name === 'body') tract.setBody(value);
 }
-
 function onSlide(spec: ParamSpec, e: Event): void {
   const v = fromSlider(spec, (e.target as HTMLInputElement).valueAsNumber);
   setParam(spec.name, STEP_NAMES[spec.name] ? Math.round(v) : v);
 }
-
 function resetParams(): void {
-  if (preset.value) choosePreset(preset.value);
-  else for (const p of specs) setParam(p.name, p.default);
+  const next = { ...defaults(), ...(preset.value?.params ?? {}) };
+  for (const s of specs) setParam(s.name, next[s.name] ?? s.default);
 }
 
-/** Hold one sound: the voice sustains it and the mouth takes its shape. */
 async function holdPhoneme(p: string): Promise<void> {
   const s = await ready();
   release();
   s.param('phoneme', VOCAL_PHONEMES.indexOf(p as (typeof VOCAL_PHONEMES)[number]));
   held = { id: s.on({ hz: state.hz }, 0.8), ipa: p };
 }
-
 function release(): void {
   if (held && voiceSinger) voiceSinger.off(held.id);
   held = null;
@@ -370,7 +352,6 @@ function frame(now: number): void {
     else if (spans.length && t > spans[spans.length - 1].end) {
       playing.value = false;
       nowIndex.value = -1;
-      state.status = 'Done. Change anything and press again.';
     }
   }
   if (want !== tract.current) tract.target(want);
@@ -379,12 +360,10 @@ function frame(now: number): void {
   shape.value = tract.shape();
   raf = requestAnimationFrame(frame);
 }
-
 watch(
   () => Math.round(state.params.body ?? 0),
   () => measureBounds(),
 );
-
 onMounted(() => {
   measureBounds();
   tract.settle();
@@ -396,7 +375,7 @@ onBeforeUnmount(() => {
   stop();
 });
 
-/* ---- the same thing as code ---- */
+/* ---- code ---- */
 
 function voiceArg(): string {
   const p = preset.value;
@@ -406,582 +385,576 @@ function voiceArg(): string {
     .map((s) => `${s.name}: ${Number(state.params[s.name].toFixed(3))}`);
   return changed.length ? `{ ${changed.join(', ')} }` : '{}';
 }
-
-function lineCall(prefix: string): string {
+function lineCall(v: string): string {
   const text = "'" + state.text.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
-  if (state.mode === 'speak') return `${prefix}.speak(${text}, { hz: ${state.hz}, rate: ${state.rate} });`;
+  if (state.mode === 'speak') return `${v}.speak(${text}, { hz: ${state.hz}, rate: ${state.rate} });`;
   const notes = melodyNotes()
     .map((n) => {
       const sec = Number((n.dur as { seconds: number }).seconds.toFixed(3));
       return n.note === null ? `{ note: null, dur: { seconds: ${sec} } }` : `{ note: '${noteName(n.note as number)}', dur: { seconds: ${sec} } }`;
     })
     .join(',\n  ');
-  return `${prefix}.sing(${text}, [\n  ${notes},\n]);`;
+  return `${v}.sing(${text}, [\n  ${notes},\n]);`;
 }
-
-const codeMode = computed(() =>
-  [`var singer = lib.singer(b, ${voiceArg()}, { accent: '${state.accent}' });`, lineCall('singer')].join('\n'),
-);
-const codeApp = computed(() =>
-  [
-    `// npm install bellowsjs bellows-voice`,
-    `import { Bellows } from 'bellowsjs';`,
-    `import { voice, singer } from 'bellows-voice';`,
-    ``,
-    `// from a click or key press: browsers start audio only after one`,
-    `const b = await Bellows.boot({ plugins: [voice] });`,
-    `const s = singer(b, ${voiceArg()}, { accent: '${state.accent}' });`,
-    lineCall('s'),
-  ].join('\n'),
-);
 const codeTab = ref<'app' | 'code'>('app');
-
-async function copy(text: string): Promise<void> {
+const code = computed(() =>
+  codeTab.value === 'app'
+    ? [
+        `// npm install bellowsjs bellows-voice`,
+        `import { Bellows } from 'bellowsjs';`,
+        `import { voice, singer } from 'bellows-voice';`,
+        ``,
+        `// from a click or key press: browsers start audio only after one`,
+        `const b = await Bellows.boot({ plugins: [voice] });`,
+        `const s = singer(b, ${voiceArg()}, { accent: '${state.accent}' });`,
+        lineCall('s'),
+      ].join('\n')
+    : [`var s = lib.singer(b, ${voiceArg()}, { accent: '${state.accent}' });`, lineCall('s')].join('\n'),
+);
+const copied = ref(false);
+async function copyCode(): Promise<void> {
   try {
-    await navigator.clipboard.writeText(text);
-    state.status = 'Code copied.';
+    await navigator.clipboard.writeText(code.value);
+    copied.value = true;
+    setTimeout(() => (copied.value = false), 1500);
   } catch {
-    state.status = 'Select the code to copy it.';
+    // the code is selectable
   }
 }
 </script>
 
 <template>
   <div class="lab">
-    <!-- the stage: stays in view while the controls scroll -->
-    <section class="stage panel" aria-label="playback">
-      <div class="playbar">
-        <div class="seg" role="group" aria-label="speak or sing">
-          <button :class="{ lit: state.mode === 'speak' }" :aria-pressed="state.mode === 'speak'" @click="state.mode = 'speak'">Speak</button>
-          <button :class="{ lit: state.mode === 'sing' }" :aria-pressed="state.mode === 'sing'" @click="state.mode = 'sing'">Sing</button>
-        </div>
-        <button class="go" :class="{ lit: playing }" @click="play">{{ state.mode === 'sing' ? 'SING IT' : 'SPEAK IT' }}</button>
-        <button class="stopb" :disabled="!playing" @click="stop">STOP</button>
+    <!-- the composer: everything a line needs, and the one action -->
+    <section class="composer">
+      <div class="tabs" role="tablist" aria-label="speak or sing">
+        <button role="tab" class="tab" :aria-selected="state.mode === 'speak'" @click="state.mode = 'speak'">Speak</button>
+        <button role="tab" class="tab" :aria-selected="state.mode === 'sing'" @click="state.mode = 'sing'">Sing</button>
       </div>
-      <p class="status" role="status">{{ state.status }}</p>
 
+      <div class="sheet">
+        <textarea
+          v-model="state.text"
+          class="text"
+          rows="2"
+          spellcheck="false"
+          :placeholder="state.mode === 'sing' ? 'Type a lyric to sing' : 'Type something to say'"
+          aria-label="text"
+          @keydown="onKey"
+        ></textarea>
+        <div class="examples">
+          <span>Try</span>
+          <button v-for="t in EXAMPLES" :key="t" class="link" @click="state.text = t">{{ t }}</button>
+        </div>
+
+        <div class="pickers">
+          <Picker v-model="state.voiceId" label="Voice" :options="voiceOptions" :hint="edited ? 'Customized in Voice settings below.' : undefined" />
+          <Picker v-model="state.accent" label="Accent" :options="accentOptions" />
+        </div>
+
+        <div v-if="state.mode === 'speak'" class="settings">
+          <label class="set">
+            <span class="set-label">Pitch <output>{{ state.hz }} Hz</output></span>
+            <input v-model.number="state.hz" type="range" min="70" max="320" step="1" />
+          </label>
+          <label class="set">
+            <span class="set-label">Speed <output>{{ state.rate.toFixed(2) }}x</output></span>
+            <input v-model.number="state.rate" type="range" min="0.5" max="1.8" step="0.01" />
+          </label>
+        </div>
+        <div v-else class="settings">
+          <label class="set">
+            <span class="set-label">Tune</span>
+            <select v-model="tuneChoice" class="select">
+              <option v-for="[name, m] in MELODIES" :key="name" :value="m">{{ name }}</option>
+              <option value="">Your own</option>
+            </select>
+          </label>
+          <label class="set">
+            <span class="set-label">Tempo <output>{{ state.bpm }} bpm</output></span>
+            <input v-model.number="state.bpm" type="range" min="50" max="220" step="1" />
+          </label>
+          <label v-if="tuneChoice === ''" class="set wide">
+            <span class="set-label">Your tune <em>note names, one a syllable; :2 holds for two beats</em></span>
+            <input v-model="state.melody" class="tune" spellcheck="false" placeholder="C4 E4 G4:2 E4 C4:2" />
+          </label>
+          <label class="check">
+            <input v-model="state.fitRange" type="checkbox" />
+            Fit to the voice's range (sings {{ melodyRange }})
+          </label>
+        </div>
+
+        <div class="actions">
+          <button class="play" :class="{ stopping: playing }" @click="play">
+            <span class="glyph" aria-hidden="true"></span>{{ playing ? 'Stop' : state.mode === 'sing' ? 'Sing' : 'Speak' }}
+          </button>
+          <span class="shortcut">or Ctrl + Enter in the text box</span>
+        </div>
+        <p v-if="state.status" class="status" role="status">{{ state.status }}</p>
+      </div>
+    </section>
+
+    <!-- the output: what it is doing -->
+    <section class="output" aria-label="what the voice is doing">
       <MouthView :shape="shape" :phoneme="phoneme" :bounds="bounds" />
-
-      <div class="now" aria-hidden="true">
-        <span v-for="(sp, i) in line" :key="i" class="sound" :class="{ on: i === nowIndex }">{{ sp.ipa }}</span>
-        <span v-if="!line.length" class="hint">The sounds of the line light up here as they play.</span>
-      </div>
-
-      <div class="ipa">
-        <div class="ipa-row">
-          <span class="lbl">{{ accent?.name ?? state.accent }}</span>
-          <span class="val">{{ ipa }}</span>
+      <div class="reading">
+        <div class="ipa">
+          <span class="ipa-label">{{ accent?.name ?? state.accent }}</span>
+          <span class="ipa-text">{{ ipa }}</span>
         </div>
-        <div v-if="state.accent !== 'general-american'" class="ipa-row ga">
-          <span class="lbl">General American</span>
-          <span class="val">{{ ipaGA }}</span>
+        <div v-if="state.accent !== 'general-american'" class="ipa compare">
+          <span class="ipa-label">General American</span>
+          <span class="ipa-text">{{ ipaGA }}</span>
+        </div>
+        <div v-if="line.length" class="now" aria-hidden="true">
+          <span v-for="(sp, i) in line" :key="i" class="sound" :class="{ on: i === nowIndex }">{{ sp.ipa }}</span>
         </div>
       </div>
     </section>
 
-    <!-- the controls, in the order a line is made -->
-    <div class="controls">
-      <section class="panel">
-        <h3 class="step"><span class="n">1</span> The voice</h3>
-        <div class="seg wide" role="group" aria-label="male, female or child">
-          <button v-for="[g, label] in GROUPS" :key="g" :class="{ lit: state.group === g }" :aria-pressed="state.group === g" @click="chooseGroup(g)">{{ label }}</button>
+    <!-- everything else, folded -->
+    <div class="folds">
+      <details class="more">
+        <summary>Voice settings<span>every parameter of the vocal engine</span></summary>
+        <div class="more-body">
+          <button class="link reset" @click="resetParams">Reset to {{ preset?.name ?? 'defaults' }}</button>
+          <div v-for="[title, list] in grouped" :key="title" class="pgroup">
+            <h4>{{ title }}</h4>
+            <div class="pgrid">
+              <label v-for="spec in list" :key="spec.name" class="set">
+                <span class="set-label">{{ PARAM_TEXT[spec.name]?.[0] ?? spec.name }} <output>{{ formatValue(spec, state.params[spec.name] ?? spec.default, STEP_NAMES[spec.name] ?? null) }}</output></span>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.001"
+                  :value="toSlider(spec, state.params[spec.name] ?? spec.default)"
+                  :aria-description="PARAM_TEXT[spec.name]?.[1]"
+                  @input="onSlide(spec, $event)"
+                />
+                <em>{{ PARAM_TEXT[spec.name]?.[1] ?? '' }}</em>
+              </label>
+            </div>
+          </div>
         </div>
-        <div class="cards">
-          <button
-            v-for="p in presetsInGroup"
-            :key="p.id"
-            class="card"
-            :class="{ lit: state.presetId === p.id }"
-            :aria-pressed="state.presetId === p.id"
-            @click="choosePreset(p)"
-          >
-            <span class="card-name">{{ p.name }}</span>
-            <span class="card-meta">sings {{ noteName(p.range[0]) }} to {{ noteName(p.range[1]) }}, speaks at {{ p.speechHz }} Hz</span>
-          </button>
-        </div>
-        <p v-if="preset" class="hint">{{ preset.description }}<template v-if="edited">, fine-tuned</template>.</p>
-      </section>
+      </details>
 
-      <section class="panel">
-        <h3 class="step"><span class="n">2</span> The words</h3>
-        <textarea v-model="state.text" rows="2" spellcheck="false" aria-label="what to say or sing" @keydown="onKey"></textarea>
-        <div class="chips">
-          <span class="hint">Try:</span>
-          <button v-for="t in TEXTS" :key="t" class="chip" @click="state.text = t">{{ t.length > 30 ? t.slice(0, 28) + '...' : t }}</button>
-          <button class="chip" @click="state.text = KEYWORDS">the vowels that accents change</button>
-        </div>
-        <p class="hint">Ctrl or Cmd + Enter in the box plays it. Write IPA between slashes, /ˈhɛ.loʊ/, to set the sounds yourself.</p>
-      </section>
-
-      <section class="panel">
-        <h3 class="step"><span class="n">3</span> The accent</h3>
-        <div class="tabs" role="group" aria-label="region">
-          <button v-for="r in ACCENT_REGIONS" :key="r" :class="{ lit: state.region === r }" :aria-pressed="state.region === r" @click="chooseRegion(r)">{{ r }}</button>
-        </div>
-        <div class="accents" role="group" aria-label="accent">
-          <button v-for="a in accentsInRegion" :key="a.id" :class="{ lit: state.accent === a.id }" :aria-pressed="state.accent === a.id" @click="state.accent = a.id">{{ a.name }}</button>
-        </div>
-        <ul class="traits">
-          <li v-for="t in traits" :key="t">{{ t }}</li>
-        </ul>
-      </section>
-
-      <section class="panel">
-        <h3 class="step"><span class="n">4</span> {{ state.mode === 'sing' ? 'The tune' : 'The delivery' }}</h3>
-        <template v-if="state.mode === 'speak'">
-          <label class="slider">
-            <span>Pitch <b>{{ state.hz }} Hz</b><em>{{ preset ? preset.name + ' speaks at ' + preset.speechHz : '' }}</em></span>
-            <input v-model.number="state.hz" type="range" min="70" max="320" step="1" aria-label="speaking pitch in hertz" />
-          </label>
-          <label class="slider">
-            <span>Speed <b>{{ state.rate.toFixed(2) }}x</b></span>
-            <input v-model.number="state.rate" type="range" min="0.5" max="1.8" step="0.01" aria-label="speaking speed" />
-          </label>
-        </template>
-        <template v-else>
-          <div class="chips">
+      <details class="more">
+        <summary>Hold a sound<span>hear one sound alone and see its shape</span></summary>
+        <div class="more-body">
+          <p class="note">Press and hold, or focus one and hold Space.</p>
+          <div class="pads">
             <button
-              v-for="[name, m] in MELODIES"
-              :key="name"
-              class="chip"
-              :class="{ lit: state.melody === m }"
-              :aria-pressed="state.melody === m"
-              @click="state.melody = m"
+              v-for="p in VOCAL_PHONEMES.filter((x) => x !== '_')"
+              :key="p"
+              class="pad"
+              :aria-label="'hold ' + p"
+              @pointerdown="holdPhoneme(p)"
+              @pointerup="release"
+              @pointerleave="release"
+              @keydown.space.prevent="!held && holdPhoneme(p)"
+              @keyup.space="release"
             >
-              {{ name }}
+              {{ p }}
             </button>
           </div>
-          <label class="slider">
-            <span>Tempo <b>{{ state.bpm }} bpm</b></span>
-            <input v-model.number="state.bpm" type="range" min="50" max="220" step="1" aria-label="tempo in beats per minute" />
-          </label>
-          <label class="check"><input v-model="state.fitRange" type="checkbox" /> move the tune into the voice's range (sings {{ melodyRange }})</label>
-          <details class="more">
-            <summary>Write your own tune</summary>
-            <p class="hint">Notes with octave numbers, one a syllable, repeated to fit the {{ syllableCount }} syllables. Add :2 to hold one for two beats. For example: C4 E4 G4:2 E4 C4:2</p>
-            <input v-model="state.melody" spellcheck="false" aria-label="your tune as note names" />
-          </details>
-        </template>
-      </section>
-
-      <details class="panel more">
-        <summary class="step-sum">Fine-tune the voice</summary>
-        <div class="fine-head">
-          <span class="hint">Every parameter of the vocal engine.</span>
-          <button class="reset" @click="resetParams">{{ preset ? 'back to ' + preset.name : 'reset' }}</button>
         </div>
-        <div v-for="[title, list] in grouped" :key="title" class="group">
-          <div class="group-title">{{ title }}</div>
-          <div class="grid">
-            <label v-for="spec in list" :key="spec.name" class="slider">
-              <span>{{ PARAM_TEXT[spec.name]?.[0] ?? spec.name }} <b>{{ formatValue(spec, state.params[spec.name] ?? spec.default, STEP_NAMES[spec.name] ?? null) }}</b></span>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.001"
-                :value="toSlider(spec, state.params[spec.name] ?? spec.default)"
-                :aria-label="PARAM_TEXT[spec.name]?.[0] ?? spec.name"
-                :aria-description="PARAM_TEXT[spec.name]?.[1]"
-                @input="onSlide(spec, $event)"
-              />
-              <em>{{ PARAM_TEXT[spec.name]?.[1] ?? '' }}</em>
-            </label>
+      </details>
+
+      <details class="more">
+        <summary>Code<span>these settings, ready to paste</span></summary>
+        <div class="more-body">
+          <div class="tabs small" role="tablist" aria-label="where the code goes">
+            <button role="tab" class="tab" :aria-selected="codeTab === 'app'" @click="codeTab = 'app'">Your app</button>
+            <button role="tab" class="tab" :aria-selected="codeTab === 'code'" @click="codeTab = 'code'">Code mode here</button>
           </div>
+          <pre class="code">{{ code }}</pre>
+          <button class="link" @click="copyCode">{{ copied ? 'Copied' : 'Copy' }}</button>
+          <p class="note">No bundler? The <a href="/docs/singing">singing page</a> has a single-file version from a CDN.</p>
         </div>
-      </details>
-
-      <details class="panel more">
-        <summary class="step-sum">Hold any sound</summary>
-        <p class="hint">Press and hold (or focus and hold Space) to hear one sound alone and see the mouth make it.</p>
-        <div class="pads">
-          <button
-            v-for="p in VOCAL_PHONEMES.filter((x) => x !== '_')"
-            :key="p"
-            class="pad"
-            :aria-label="'hold the sound ' + p"
-            @pointerdown="holdPhoneme(p)"
-            @pointerup="release"
-            @pointerleave="release"
-            @keydown.space.prevent="!held && holdPhoneme(p)"
-            @keydown.enter.prevent="!held && holdPhoneme(p)"
-            @keyup.space="release"
-            @keyup.enter="release"
-          >
-            {{ p }}
-          </button>
-        </div>
-      </details>
-
-      <details class="panel more">
-        <summary class="step-sum">Get the code</summary>
-        <div class="seg" role="group" aria-label="where the code goes">
-          <button :class="{ lit: codeTab === 'app' }" :aria-pressed="codeTab === 'app'" @click="codeTab = 'app'">In your app</button>
-          <button :class="{ lit: codeTab === 'code' }" :aria-pressed="codeTab === 'code'" @click="codeTab = 'code'">In Code mode here</button>
-        </div>
-        <pre class="code">{{ codeTab === 'app' ? codeApp : codeMode }}</pre>
-        <button @click="copy(codeTab === 'app' ? codeApp : codeMode)">COPY</button>
-        <p class="hint">
-          No bundler? The <a href="/docs/singing">singing page</a> shows the single-file version with an import map, from a CDN.
-        </p>
       </details>
     </div>
   </div>
 </template>
 
 <style scoped>
-/*
- * IPA in a font that draws it: the site's monospace face draws u like ʊ, which are different sounds.
- * These faces carry the IPA block with distinct letters on every platform the site targets.
- */
-.ipa .val,
+/* IPA in a face that draws it: the site's monospace draws u like ʊ */
+.ipa-text,
 .sound,
 .pad,
-.accents button,
-textarea {
+.text {
   font-family: 'Charis SIL', 'Doulos SIL', 'Gentium Plus', 'Noto Sans', 'Lucida Grande', 'Segoe UI', 'DejaVu Sans', sans-serif;
 }
+
 .lab {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 18px;
+}
+
+/* ---- tabs: underlined text on the sheet's edge, not boxes ---- */
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+.tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  box-shadow: none;
+  padding: 10px 18px 7px;
+  font-family: var(--disp);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--faded);
+}
+.tab:hover {
+  transform: none;
+  color: var(--bone);
+  border-color: transparent;
+  border-bottom-color: var(--seam);
+}
+.tab:active {
+  transform: none;
+  box-shadow: none;
+}
+.tab:focus-visible {
+  outline: 2px solid var(--phosphor);
+  outline-offset: -2px;
+}
+.tab[aria-selected='true'] {
+  color: var(--bone);
+  border-bottom-color: var(--phosphor);
+}
+.tabs.small .tab {
+  font-size: 13px;
+  padding: 6px 12px 5px;
+}
+
+/* ---- the composer ---- */
+.sheet {
+  background: var(--soot);
+  border: 2px solid var(--seam);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  display: grid;
+  gap: 16px;
+}
+.text {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  background: var(--iron);
+  border: 2px solid var(--seam);
+  color: var(--bone);
+  font-size: 20px;
+  line-height: 1.45;
+  padding: 12px 14px;
+}
+.text:focus-visible {
+  outline: 2px solid var(--phosphor);
+  outline-offset: 2px;
+}
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12px;
+  color: var(--faded);
+  margin-top: -8px;
+}
+/* a text button: underlined, no box */
+.link {
+  text-align: left;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--tick);
+  text-decoration: underline;
+  text-decoration-color: var(--seam);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.link:hover {
+  transform: none;
+  color: var(--phosphor-hot);
+  text-decoration-color: var(--phosphor);
+}
+.link:active {
+  transform: none;
+  box-shadow: none;
+}
+.pickers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
   align-items: start;
 }
-.stage {
-  grid-column: 2;
-  grid-row: 1;
-  position: sticky;
-  top: 12px;
-}
-.controls {
-  grid-column: 1;
-  grid-row: 1;
-  display: grid;
-  gap: 12px;
-}
-@media (max-width: 1100px) {
-  .lab {
+@media (max-width: 700px) {
+  .pickers {
     grid-template-columns: 1fr;
   }
-  .stage,
-  .controls {
-    grid-column: 1;
-  }
-  .stage {
-    grid-row: 1;
-    position: static;
-  }
-  .controls {
-    grid-row: 2;
-  }
-  /* on a narrow screen the play bar stays pinned to the bottom */
-  .playbar {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 20;
-    padding: 10px 12px;
-    background: var(--char);
-    border-top: 1px solid var(--seam);
-    margin: 0;
-  }
-  .lab {
-    padding-bottom: 72px;
-  }
 }
-
-.playbar {
+.settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px 20px;
+  align-items: end;
+}
+.set {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.set.wide {
+  grid-column: 1 / -1;
+}
+.set-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tick);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.set-label output {
+  font-weight: 400;
+  color: var(--bone);
+}
+.set-label em,
+.set > em {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--faded);
+}
+.select,
+.tune {
+  text-transform: none;
+  width: 100%;
+  background: var(--iron);
+  border: 2px solid var(--seam);
+  color: var(--bone);
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0;
+  padding: 8px 10px;
+}
+.check {
+  grid-column: 1 / -1;
   display: flex;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
-  margin-bottom: 6px;
-}
-.go {
-  flex: 1;
-  min-width: 140px;
-  font-family: var(--disp);
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.12em;
-  padding: 12px 18px;
-}
-.stopb {
-  font-family: var(--disp);
-  font-weight: 700;
-  padding: 12px 16px;
-}
-.status {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--tick);
-  margin: 4px 0 10px;
-  min-height: 1.4em;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+/* the one action: filled, large, sentence case */
+.play {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 150px;
+  justify-content: center;
+  padding: 12px 26px;
+  background: var(--phosphor);
+  border-color: var(--phosphor);
+  color: var(--lit-text);
+  font-family: var(--disp);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+.play:hover {
+  color: var(--lit-text);
+  border-color: var(--phosphor-hot);
+}
+.glyph {
+  width: 0;
+  height: 0;
+  border-left: 11px solid currentColor;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+}
+.play.stopping .glyph {
+  width: 11px;
+  height: 11px;
+  border: 0;
+  background: currentColor;
+}
+/* no keyboard shortcut to offer on a touch screen */
+@media (max-width: 700px) {
+  .shortcut {
+    display: none;
+  }
+}
+.shortcut,
+.status,
+.note {
+  font-size: 11px;
+  color: var(--faded);
+  margin: 0;
+}
+
+/* ---- the output ---- */
+.output {
+  background: var(--soot);
+  border: 2px solid var(--seam);
+  box-shadow: var(--shadow);
+  padding: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 800px) {
+  .output {
+    grid-template-columns: 1fr;
+  }
+}
+.reading {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+.ipa {
+  display: grid;
+  gap: 3px;
+}
+.ipa-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tick);
+}
+.ipa-text {
+  font-size: 21px;
+  line-height: 1.45;
+  color: var(--phosphor-hot);
+  word-break: break-word;
+}
+.compare .ipa-text {
+  font-size: 15px;
+  color: var(--tick);
 }
 .now {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
-  margin-top: 10px;
-  min-height: 28px;
+  gap: 2px 3px;
 }
 .sound {
-  text-transform: none;
-  font-size: 13px;
-  padding: 2px 5px;
-  border: 1px solid var(--seam);
+  font-size: 14px;
+  padding: 1px 4px;
+  border-bottom: 2px solid transparent;
   color: var(--faded);
 }
 .sound.on {
-  background: var(--phosphor);
-  border-color: var(--phosphor);
-  color: var(--char);
-}
-.ipa {
-  margin-top: 10px;
-  padding: 10px 12px;
-  background: var(--char);
-  border: 1px solid var(--seam);
-  display: grid;
-  gap: 6px;
-}
-.ipa-row {
-  display: grid;
-  gap: 2px;
-}
-.ipa .lbl {
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  color: var(--faded);
-  text-transform: uppercase;
-}
-.ipa .val {
-  text-transform: none;
-  font-size: 18px;
   color: var(--phosphor-hot);
-  line-height: 1.45;
-  word-break: break-word;
-}
-.ipa .ga .val {
-  font-size: 14px;
-  color: var(--tick);
+  border-bottom-color: var(--phosphor);
 }
 
-.step,
-.step-sum {
-  font-family: var(--disp);
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--phosphor);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 10px;
+/* ---- folded sections: plain rows ---- */
+.folds {
+  border-top: 1px solid var(--seam);
 }
-.step-sum {
-  cursor: pointer;
-  margin: 0;
-}
-.step .n {
-  display: inline-grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid var(--phosphor);
-  font-size: 11px;
-}
-.seg {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.seg button {
-  font-family: var(--disp);
-  font-weight: 700;
-  padding: 7px 14px;
-}
-.seg.wide button {
-  flex: 1;
-}
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 6px;
-  margin-top: 8px;
-}
-.card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  text-align: left;
-  padding: 8px 10px;
-  text-transform: none;
-}
-.card-name {
-  font-family: var(--disp);
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.card-meta {
-  font-size: 10px;
-  opacity: 0.8;
-  letter-spacing: 0;
-}
-.tabs,
-.accents {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.tabs button {
-  font-size: 10px;
-  padding: 5px 8px;
-}
-.accents {
-  margin-top: 8px;
-}
-.accents button {
-  text-transform: none;
-  font-size: 12px;
-  padding: 6px 10px;
-}
-.traits {
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.traits li {
-  font-size: 11px;
-  border: 1px solid var(--seam);
-  padding: 3px 7px;
-  color: var(--bone);
-}
-textarea,
-input:not([type='range']):not([type='checkbox']) {
-  text-transform: none;
-  width: 100%;
-  background: var(--iron);
-  border: 1px solid var(--seam);
-  color: var(--bone);
-  font-size: 15px;
-  padding: 8px 10px;
-  resize: vertical;
-}
-.chips,
-.pads {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  align-items: center;
-  margin-top: 8px;
-}
-.chip {
-  font-size: 10.5px;
-  padding: 4px 8px;
-  box-shadow: none;
-  text-transform: none;
-}
-.hint {
-  font-size: 11px;
-  color: var(--tick);
-  line-height: 1.5;
-  margin: 6px 0 0;
-}
-.hint a {
-  color: var(--phosphor-hot);
-}
-.slider {
-  display: grid;
-  gap: 3px;
-  margin: 10px 0;
-  font-size: 11px;
-  color: var(--faded);
-}
-.slider b {
-  color: var(--bone);
-  font-weight: 600;
-  margin-left: 4px;
-}
-.slider em {
-  font-style: normal;
-  font-size: 10.5px;
-  color: var(--tick);
-  margin-left: 6px;
-}
-.check {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  font-size: 11px;
-  color: var(--faded);
+.more {
+  border-bottom: 1px solid var(--seam);
 }
 .more summary {
   list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 13px 2px;
+  font-family: var(--disp);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--bone);
+}
+.more summary::-webkit-details-marker {
+  display: none;
 }
 .more summary::before {
-  content: '+';
-  display: inline-block;
-  width: 14px;
-  color: var(--phosphor);
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--tick);
+  border-bottom: 2px solid var(--tick);
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+  align-self: center;
 }
 .more[open] summary::before {
-  content: '-';
+  transform: rotate(45deg);
 }
-.more > summary + * {
-  margin-top: 10px;
+.more summary span {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--faded);
 }
-.fine-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.more summary:focus-visible {
+  outline: 2px solid var(--phosphor);
 }
-.group-title {
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--phosphor);
-  margin: 12px 0 0;
-}
-.grid {
+.more-body {
+  padding: 0 2px 18px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  column-gap: 16px;
-}
-.grid .slider em {
-  margin-left: 0;
+  gap: 10px;
 }
 .reset {
-  font-size: 10px;
-  padding: 4px 8px;
-  box-shadow: none;
-  text-transform: none;
+  justify-self: start;
+}
+.pgroup h4 {
+  font-family: var(--disp);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--phosphor);
+  margin: 6px 0;
+}
+.pgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px 20px;
+}
+.pads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 .pad {
-  /* IPA is case-sensitive: an uppercased ɑ or ð is a different letter */
+  min-width: 36px;
+  font-size: 15px;
+  letter-spacing: 0;
   text-transform: none;
-  min-width: 34px;
-  font-size: 14px;
-  padding: 5px 6px;
+  padding: 6px;
+  box-shadow: none;
   touch-action: none;
 }
 .code {
-  text-transform: none;
   background: var(--iron);
-  border: 1px solid var(--seam);
+  border: 2px solid var(--seam);
   padding: 12px 14px;
   overflow: auto;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--bone);
   max-height: 40vh;
-  margin: 10px 0 6px;
+  margin: 0;
+  text-transform: none;
+}
+.note a {
+  color: var(--phosphor-hot);
 }
 </style>

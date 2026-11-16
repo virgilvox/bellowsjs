@@ -9,7 +9,7 @@ const page: DocPage = {
   body: `
 By the end of this page you can make a singer sing a lyric on a melody, make it speak, choose one of thirteen starter voices or make your own, give it any of thirty-one accents or one of your own, check what it will say before it says it, draw its mouth, fix a word it reads wrongly, and stack singers into harmony in any tuning.
 
-**Try it first.** The [Voice Lab](/#code/voice-lab) in Code mode has all of this behind controls: pick male, female or child and a starter voice, type a line, pick an accent, sing or speak it, fine-tune every parameter, hold any sound, and watch the mouth follow along. Its SHOW CODE button writes your settings out as code. The other VOCALS examples there each take one idea further.
+**Try it first.** The [Voice Lab](/#code/voice-lab) in Code mode has all of this behind controls: type a line, choose a voice and an accent (both searchable), speak or sing it, and watch the mouth follow along. Every parameter, holding a single sound, and the code for your settings are folded underneath. Its SHOW CODE button writes your settings out as code. The other VOCALS examples there each take one idea further.
 
 ## Installing the voice
 
