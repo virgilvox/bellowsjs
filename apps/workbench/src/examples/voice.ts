@@ -27,6 +27,31 @@ var plan = singer.sing('The water in the bath was far too hot.', [
 log(lib.toIPA('The water in the bath was far too hot.'));`,
   },
   {
+    id: 'vocal-starter-voices',
+    title: 'VOCAL: STARTER VOICES',
+    category: 'VOCALS',
+    description:
+      'Every starter voice in VOICE_PRESETS introduces itself, then sings a short phrase in the middle of its own range. lib.singer(b, id) makes a singer from a preset: its engine params, a speaking pitch inside the published range for its group (men 85 to 155 Hz, women 165 to 255, a child of ten 208 to 259), and the range it sings in, the classical voice types\' for bass to soprano. speak() uses the voice\'s own pitch when none is given.',
+    seed: 'vocal-starter-voices',
+    code: `var room = b.bus(['plate'], { level: 0.25 });
+var at = b.now() + 0.4;
+
+lib.VOICE_PRESETS.forEach(function (p) {
+  var s = lib.singer(b, p.id);
+  s.send(room, 0.25);
+  var said = s.speak('Hello, this is the ' + p.name.replace(/ \\(.*\\)/, '') + '.', { at: at });
+  var end = said.phrases[said.phrases.length - 1].end;
+  var mid = Math.round((p.range[0] + p.range[1]) / 2);
+  s.sing('/la la laː/', [
+    { note: mid - 5, dur: { seconds: 0.3 } },
+    { note: mid - 2, dur: { seconds: 0.3 } },
+    { note: mid, dur: { seconds: 0.8 } },
+  ], { at: end + 0.35 });
+  log(p.name + ': speaks at ' + p.speechHz + ' Hz, sings ' + lib.noteName(p.range[0]) + ' to ' + lib.noteName(p.range[1]));
+  at = end + 2.2;
+});`,
+  },
+  {
     id: 'vocal-dialogue',
     title: 'VOCAL: A SPOKEN DIALOGUE',
     category: 'VOCALS',

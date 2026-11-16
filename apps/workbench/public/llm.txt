@@ -27,7 +27,7 @@ mapped name:
   </script>
   <script type="module">
     import { Bellows } from 'bellowsjs';
-    import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.2/dist/index.js';
+    import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.3/dist/index.js';
     // from a click: const b = await Bellows.boot({ plugins: [voice] });
     //               singer(b, { body: 1 }).speak('Hello.');
   </script>
@@ -787,7 +787,7 @@ default polyphony: 8
   glide: 0.005 to 0.5 s, default 0.17 curve=exp
   body: 0 to 2, default 0
   tension: 0 to 1, default 0.55
-  roughness: 0 to 1, default 0.1
+  roughness: 0 to 1, default 0.02
   fry: 0 to 1, default 0
   drift: 0 to 20 cents, default 6
   glottis: 0 to 2, default 2
@@ -823,7 +823,7 @@ Sampler engines expose SAMPLER_PARAMS:
 
 Granular over your own buffer: b.granular(float32Data, sampleRate, params?).
 
-## Singing and lyrics (bellows-voice 0.2.1)
+## Singing and lyrics (bellows-voice 0.3.0)
 
 npm install bellows-voice. It peer-depends on bellowsjs.
 
@@ -840,6 +840,13 @@ const plan = alto.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   note()), each dur through the tempo map and each pitch through b.tuning.
   { note: null, dur } is a rest. vel is per note; a phrase plays at its
   first note's velocity.
+- Starter voices: singer(b, id) with an id from VOICE_PRESETS:
+  narrator-male, narrator-female, child, bass, baritone, tenor, contralto, mezzo, soprano, pop-female, pop-male, rock, elder.
+  Each preset is { id, name, group: 'male' | 'female' | 'child', description,
+  params, speechHz, range: [lowMidi, highMidi] }. speak() defaults to the
+  preset's speechHz, or to the norm for the body (SPEECH_HZ_BY_BODY: 115, 199,
+  240 Hz, interpolated; speechHzForBody(body)). singer.speechHz overrides.
+  The default roughness is 0.02 (measured healthy jitter and shimmer).
 - A Singer has sing, speak, note, on, off, param, fx, send, gain, pan,
   dispose, and .instrument, .dictionary, .accent. In code mode on
   bellows.live, lib carries both packages: lib.singer(b, params).
@@ -860,7 +867,7 @@ const plan = alto.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   dark l unless opts.allophones is false (classical diction); IPA is sung
   as written.
 - Accents: singer.accent (default 'general-american') or opts.accent picks how
-  English is said. Built in (ACCENTS): general-american, canadian, californian, new-york, southern-us, southern-british, london, northern-english, geordie, scottish, welsh, irish, northern-irish, australian, new-zealand, south-african, nigerian, jamaican, indian, singaporean.
+  English is said. Built in (ACCENTS): general-american, canadian, californian, new-york, boston, inland-north, southern-us, received-pronunciation, southern-british, london, west-country, brummie, scouse, northern-english, geordie, scottish, welsh, irish, northern-irish, australian, new-zealand, south-african, nigerian, ghanaian, kenyan, jamaican, trinidadian, indian, singaporean, filipino.
   Or an Accent object. The reader tags every vowel with its Wells lexical set
   (KIT, BATH, GOAT, NURSE, ...); an Accent is plain data: sets (each set's
   vowel, diphthong, or vowel plus r, as IPA), rhotic (r after a vowel; linked

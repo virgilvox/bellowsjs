@@ -221,6 +221,13 @@ const plan = alto.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   note()), each dur through the tempo map and each pitch through b.tuning.
   { note: null, dur } is a rest. vel is per note; a phrase plays at its
   first note's velocity.
+- Starter voices: singer(b, id) with an id from VOICE_PRESETS:
+  ${voiceLib.VOICE_PRESETS.map((v) => v.id).join(', ')}.
+  Each preset is { id, name, group: 'male' | 'female' | 'child', description,
+  params, speechHz, range: [lowMidi, highMidi] }. speak() defaults to the
+  preset's speechHz, or to the norm for the body (SPEECH_HZ_BY_BODY: 115, 199,
+  240 Hz, interpolated; speechHzForBody(body)). singer.speechHz overrides.
+  The default roughness is 0.02 (measured healthy jitter and shimmer).
 - A Singer has sing, speak, note, on, off, param, fx, send, gain, pan,
   dispose, and .instrument, .dictionary, .accent. In code mode on
   bellows.live, lib carries both packages: lib.singer(b, params).

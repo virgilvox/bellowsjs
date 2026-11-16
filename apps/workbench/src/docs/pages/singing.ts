@@ -7,9 +7,9 @@ const page: DocPage = {
   prev: 'engines',
   next: 'presets',
   body: `
-By the end of this page you can make a singer sing a lyric on a melody, make it speak, give it any of twenty accents or one of your own, check what it will say before it says it, draw its mouth, fix a word it reads wrongly, and stack singers into harmony in any tuning.
+By the end of this page you can make a singer sing a lyric on a melody, make it speak, choose one of thirteen starter voices or make your own, give it any of thirty accents or one of your own, check what it will say before it says it, draw its mouth, fix a word it reads wrongly, and stack singers into harmony in any tuning.
 
-**Try it first.** The [Voice Lab](/#code/voice-lab) in Code mode has all of this behind controls: type a line, pick an accent, sing or speak it, move every parameter, hold any sound, and watch the mouth follow along. Its SHOW CODE button writes your settings out as code. The other VOCALS examples there each take one idea further.
+**Try it first.** The [Voice Lab](/#code/voice-lab) in Code mode has all of this behind controls: pick male, female or child and a starter voice, type a line, pick an accent, sing or speak it, fine-tune every parameter, hold any sound, and watch the mouth follow along. Its SHOW CODE button writes your settings out as code. The other VOCALS examples there each take one idea further.
 
 ## Installing the voice
 
@@ -31,7 +31,7 @@ In a single HTML file with no bundler, load both from a CDN and map the name \`b
 </script>
 <script type="module">
   import { Bellows } from 'bellowsjs';
-  import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.2/dist/index.js';
+  import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.3/dist/index.js';
   document.querySelector('#go').onclick = async () => {
     const b = await Bellows.boot({ plugins: [voice] });
     singer(b, { body: 1 }).speak('Hello from a single file.');
@@ -56,6 +56,33 @@ const plan = alto.sing('twinkle twinkle /ˈlɪt.əl/ star', [
 \`singer(b, params?, opts?)\` makes an instrument on the \`vocal\` engine (\`params\` are the voice's, below; \`opts\` takes \`accent\`, \`dictionary\` and \`polyphony\`) and throws if the voice is not loaded. It has \`sing\`, \`speak\`, \`note\`, \`on\`, \`off\`, \`param\`, \`fx\`, \`send\`, \`gain\`, \`pan\` and \`dispose\`, and the bellows instrument underneath as \`.instrument\`. Each note is \`{ note, dur, vel? }\`: \`note\` takes everything [\`note()\`](/docs/playing-notes) takes (a name, a midi number, \`{ hz }\`, or \`{ degree, octave }\` through \`opts.scale\`), and \`null\` is a rest. \`dur\` is beats, notation like \`'8n'\`, or \`{ seconds }\`, through the tempo map. The notes are laid end to end from \`opts.at\`, the time of the first beat.
 
 Played with \`note()\` or a keyboard, the same singer sings whatever sound it holds, "ah" unless you set its \`phoneme\`.
+
+## Starter voices
+
+\`singer()\` takes a starter voice by id in place of params:
+
+\`\`\`js
+const soprano = singer(b, 'soprano');
+const host = singer(b, 'narrator-female', { accent: 'irish' });
+host.speak('Good evening, and welcome.');   // at her own speaking pitch, 199 Hz
+\`\`\`
+
+| Id | Group | Sings | Speaks at | What it is |
+|---|---|---|---|---|
+| \`narrator-male\` | male | G2 to E4 | 115 Hz | a steady, clear speaking voice at the male conversational mean |
+| \`narrator-female\` | female | G3 to E5 | 199 Hz | the same at the female mean, a little breathier, as women's voices are on average |
+| \`child\` | child | A3 to A5 | 240 Hz | a child of about ten: the smallest tract |
+| \`bass\` | male | E2 to E4 | 98 Hz | the lowest classical voice, dark and slow to move |
+| \`baritone\` | male | A2 to A4 | 110 Hz | the middle male voice |
+| \`tenor\` | male | C3 to C5 | 130 Hz | the high male voice: a slightly shorter tract, brighter and pressed |
+| \`contralto\` | female | F3 to F5 | 180 Hz | the lowest female voice |
+| \`mezzo\` | female | A3 to A5 | 195 Hz | the middle female voice |
+| \`soprano\` | female | C4 to C6 | 215 Hz | the highest, with the jaw opening on high notes as trained sopranos do |
+| \`pop-female\`, \`pop-male\` | female, male | G3 to E5, C3 to A4 | 205, 120 Hz | light and breathy, little vibrato and that only on long notes |
+| \`rock\` | male | A2 to A4 | 115 Hz | pressed and rough, with creak at the bottom |
+| \`elder\` | male | G2 to D4 | 125 Hz | an older man: more shimmer, a wandering pitch, a slow wide wobble |
+
+\`VOICE_PRESETS\` is the list as data (id, name, group, description, params, speechHz, range), for a menu. A preset is a starting point: \`singer(b, 'tenor')\` then \`.param('breath', 0.3)\`, or spread its \`params\` into your own. Without a preset, \`speak()\` defaults to the norm for the body, 115 Hz male, 199 Hz female, 240 Hz child, interpolated between; \`singer.speechHz\` or \`opts.hz\` sets it.
 
 ## How a line is timed
 
@@ -111,30 +138,40 @@ It is a model of read speech, not of a person: one melody per clause, no emphasi
 
 ## Accents
 
-\`singer.accent\` (or \`singer(b, params, { accent })\`) sets the accent every line is read in, and \`opts.accent\` sets it for one line. Twenty are built in, each a broad transcription of the accent's mainstream form from the published lexical-set tables (Wells, and the Handbook of Varieties of English), not a recording of any one speaker. The last column is what each says for "The water in the bath was far too hot." straight from \`toIPA()\`.
+\`singer.accent\` (or \`singer(b, params, { accent })\`) sets the accent every line is read in, and \`opts.accent\` sets it for one line. Thirty are built in, each with a \`region\` (\`ACCENT_REGIONS\` lists them in order) and each a broad transcription of the accent's mainstream form from the published lexical-set tables (Wells, and the Handbook of Varieties of English), not a recording of any one speaker. The last column is what each says for "The water in the bath was far too hot." straight from \`toIPA()\`.
 
-| Accent | What you hear | "The water in the bath was far too hot." |
-|---|---|---|
-| \`general-american\` | rhotic; flapped t (water); dark l after a vowel; diphthongs held long | ðə ˈwɔ.ɾɚ ɪn ðə bæθ wɑz fɑɹ tu hɑt |
-| \`canadian\` | cot and caught merge; Canadian raising: price, house start high before p t k f s | ðə ˈwɒ.ɾɚ ɪn ðə baθ wɒz fɑɹ tu hɒt |
-| \`californian\` | fronted GOOSE and GOAT; TRAP lowered; cot and caught merge | ðə ˈwɑ.ɾɚ ɪn ðə baθ wɑz fɑɹ tʉ hɑt |
-| \`new-york\` | non-rhotic; raised THOUGHT (oə); tensed BATH (eə) | ðə ˈwoə.ɾəɹ ɪn ðə beəθ wɑz fɑ tu hɑt |
-| \`southern-us\` | PRICE a single long vowel (pɹas); GOAT and GOOSE fronted; dark l | ðə ˈwɒɔ.ɾɚ ɪn ðə bæθ wɑz fɑɹ tʉ hɑt |
-| \`southern-british\` | non-rhotic with linking r; BATH with PALM vowel; GOAT əʊ; t glottalled before consonants | ðə ˈwo.təɹ ɪn ðə bɑθ wɒz fɑ tʉ hɒt |
-| \`london\` | TH-fronting (fink, bruvver); h dropped; glottal t; vocalized l (mɪwk) | də ˈwo.ʔəɹ ɪn də bɑf wɒz fɑ tʉ ɒʔ |
-| \`northern-english\` | FOOT and STRUT merge; short BATH; FACE and GOAT single vowels; h dropped | ðə ˈwo.təɹ ɪn ðə baθ wɒz fa tu ɒt |
-| \`geordie\` | FOOT and STRUT merge; FACE eə, GOAT ɵ, NURSE ø, MOUTH u; statements rise | ðə ˈwɒ.tɐɹ ɪn ðə baθ wɒz fɑ tʉ hɒt |
-| \`scottish\` | rhotic with tapped r; FOOT and GOOSE merge as ʉ; NURSE ʌɾ; dark l | ðə ˈwɔ.təɾ ɘn ðə baθ wɔz faɾ tʉ hɔt |
-| \`welsh\` | tapped r, non-rhotic; clear l; PRICE əɪ; a rising, lilting tune | ðə ˈwo.təɾ ɪn ðə baθ wɒz fa tʉ hɒt |
-| \`irish\` | TH-stopping (tink, dis); FACE and GOAT long single vowels; clear l; rhotic | də ˈwɒ.tɚ ɪn də bat wɑz faɹ tu hɑt |
-| \`northern-irish\` | statements rise; FACE eə; MOUTH ɘʉ; fronted GOOSE and FOOT | ðə ˈwɔ.ɾɚ ɘn ðə bɑθ wɔz fɑɹ tʉ hɔt |
-| \`australian\` | non-rhotic; GOAT ɐʉ, PRICE ɒe, FACE æɪ; fronted GOOSE; statements rise | ðə ˈwo.ɾəɹ ɪn ðə bɐθ wɔz fɐ tʉ hɔt |
-| \`new-zealand\` | KIT centralized to ɘ; DRESS raised; NURSE ø; statements rise | ðə ˈwo.ɾɘɹ ɘn ðə bɐθ wɒz fɐ tʉ hɒt |
-| \`south-african\` | non-rhotic; NURSE ø; GOAT œʊ; BATH ɑ; clear l | ðə ˈwo.təɹ ɪn ðə bɑθ wɒz fɑ tʉ hɒt |
-| \`nigerian\` | no central vowels (STRUT ɔ, NURSE ɛ); TH-stopping; tapped r; syllable-timed | də ˈwɔ.taɾ in də bat wɔz fa tu hɔt |
-| \`jamaican\` | FACE ie, GOAT uo; TRAP and LOT merge; TH-stopping; h dropped; syllable-timed | də ˈwa.taɹ ɪn də bat waz fa tu at |
-| \`indian\` | FACE and GOAT single vowels; TH-stopping; tapped r; syllable-timed | də ˈwɔ.təɾ ɪn də bɑt wɒz fɑɾ tu hɒt |
-| \`singaporean\` | long and short pairs merge (KIT with FLEECE); glottal final t; syllable-timed | də ˈwɔ.təɹ in də bɑt wɔz fɑ tu hɔt |
+| Accent | Region | What you hear | "The water in the bath was far too hot." |
+|---|---|---|---|
+| \`general-american\` | North America | rhotic; flapped t (water); dark l after a vowel; diphthongs held long | ðə ˈwɔ.ɾɚ ɪn ðə bæθ wɑz fɑɹ tu hɑt |
+| \`canadian\` | North America | cot and caught merge; Canadian raising: price, house start high before p t k f s | ðə ˈwɒ.ɾɚ ɪn ðə baθ wɒz fɑɹ tu hɒt |
+| \`californian\` | North America | fronted GOOSE and GOAT; TRAP lowered; cot and caught merge | ðə ˈwɑ.ɾɚ ɪn ðə baθ wɑz fɑɹ tʉ hɑt |
+| \`new-york\` | North America | non-rhotic; raised THOUGHT (oə); tensed BATH (eə) | ðə ˈwoə.ɾəɹ ɪn ðə beəθ wɑz fɑ tu hɑt |
+| \`boston\` | North America | non-rhotic; START fronted (pahk the cah); cot and caught merge; PRICE raised | ðə ˈwɒ.ɾəɹ ɪn ðə baθ wɒz fa tu hɒt |
+| \`inland-north\` | North America | the Northern Cities Shift: TRAP raised to eə, LOT fronted to a, STRUT backed | ðə ˈwɑ.ɾɚ ɘn ðə beəθ waz fɑɹ tu hat |
+| \`southern-us\` | North America | PRICE a single long vowel (pɹas); GOAT and GOOSE fronted; dark l | ðə ˈwɒɔ.ɾɚ ɪn ðə bæθ wɑz fɑɹ tʉ hɑt |
+| \`received-pronunciation\` | England | the traditional standard: TRAP æ, STRUT ʌ, SQUARE ɛə, CURE ʊə; wide tune | ðə ˈwɔ.təɹ ɪn ðə bɑθ wɒz fɑ tu hɒt |
+| \`southern-british\` | England | non-rhotic with linking r; BATH with PALM vowel; GOAT əʊ; t glottalled before consonants | ðə ˈwo.təɹ ɪn ðə bɑθ wɒz fɑ tʉ hɒt |
+| \`london\` | England | TH-fronting (fink, bruvver); h dropped; glottal t; vocalized l (mɪwk) | də ˈwo.ʔəɹ ɪn də bɑf wɒz fɑ tʉ ɒʔ |
+| \`west-country\` | England | rhotic, rare in England; PRICE ɐɪ; FACE and GOAT single vowels | ðə ˈwɒ.tɚ ɪn ðə baθ wɒz faɹ tʉ hɒt |
+| \`brummie\` | England | PRICE ɔɪ, FACE ʌɪ, GOAT ʌʊ; a level, narrow tune; h dropped | ðə ˈwɔ.təɹ ɪn ðə baθ wɒz fɑ təʉ ɒt |
+| \`scouse\` | England | NURSE and SQUARE merge (fur and fair); FOOT and STRUT merge; tapped r; statements rise | ðə ˈwɔ.təɾ ɪn ðə baθ wɒz fɑ tʉ hɒt |
+| \`northern-english\` | England | FOOT and STRUT merge; short BATH; FACE and GOAT single vowels; h dropped | ðə ˈwo.təɹ ɪn ðə baθ wɒz fa tu ɒt |
+| \`geordie\` | England | FOOT and STRUT merge; FACE eə, GOAT ɵ, NURSE ø, MOUTH u; statements rise | ðə ˈwɒ.tɐɹ ɪn ðə baθ wɒz fɑ tʉ hɒt |
+| \`scottish\` | Scotland, Wales and Ireland | rhotic with tapped r; FOOT and GOOSE merge as ʉ; NURSE ʌɾ; dark l | ðə ˈwɔ.təɾ ɘn ðə baθ wɔz faɾ tʉ hɔt |
+| \`welsh\` | Scotland, Wales and Ireland | tapped r, non-rhotic; clear l; PRICE əɪ; a rising, lilting tune | ðə ˈwo.təɾ ɪn ðə baθ wɒz fa tʉ hɒt |
+| \`irish\` | Scotland, Wales and Ireland | TH-stopping (tink, dis); FACE and GOAT long single vowels; clear l; rhotic | də ˈwɒ.tɚ ɪn də bat wɑz faɹ tu hɑt |
+| \`northern-irish\` | Scotland, Wales and Ireland | statements rise; FACE eə; MOUTH ɘʉ; fronted GOOSE and FOOT | ðə ˈwɔ.ɾɚ ɘn ðə bɑθ wɔz fɑɹ tʉ hɔt |
+| \`australian\` | Southern hemisphere | non-rhotic; GOAT ɐʉ, PRICE ɒe, FACE æɪ; fronted GOOSE; statements rise | ðə ˈwo.ɾəɹ ɪn ðə bɐθ wɔz fɐ tʉ hɔt |
+| \`new-zealand\` | Southern hemisphere | KIT centralized to ɘ; DRESS raised; NURSE ø; statements rise | ðə ˈwo.ɾɘɹ ɘn ðə bɐθ wɒz fɐ tʉ hɒt |
+| \`south-african\` | Southern hemisphere | non-rhotic; NURSE ø; GOAT œʊ; BATH ɑ; clear l | ðə ˈwo.təɹ ɪn ðə bɑθ wɒz fɑ tʉ hɒt |
+| \`nigerian\` | Africa | no central vowels (STRUT ɔ, NURSE ɛ); TH-stopping; tapped r; syllable-timed | də ˈwɔ.taɾ in də bat wɔz fa tu hɔt |
+| \`ghanaian\` | Africa | five full vowels, schwa as a; TH-stopping; syllable-timed | də ˈwɔ.taɹ in də bat wɔz fa tu hɔt |
+| \`kenyan\` | Africa | five vowels as in Swahili; tapped r; th kept; syllable-timed | ðə ˈwɔ.taɾ in ðə baθ wɔz fa tu hɔt |
+| \`jamaican\` | Caribbean | FACE ie, GOAT uo; TRAP and LOT merge; TH-stopping; h dropped; syllable-timed | də ˈwa.taɹ ɪn də bat waz fa tu at |
+| \`trinidadian\` | Caribbean | STRUT ɔ; TH-stopping; a wide, rising, lively tune | də ˈwɒ.taɹ ɪn də bat wɒz fa tu hɒt |
+| \`indian\` | Asia | FACE and GOAT single vowels; TH-stopping; tapped r; syllable-timed | də ˈwɔ.təɾ ɪn də bɑt wɒz fɑɾ tu hɒt |
+| \`singaporean\` | Asia | long and short pairs merge (KIT with FLEECE); glottal final t; syllable-timed | də ˈwɔ.təɹ in də bɑt wɔz fɑ tu hɔt |
+| \`filipino\` | Asia | five vowels; rhotic with a tap; TH-stopping; syllable-timed | də ˈwɔ.tɛɾ in də bat wɔz faɾ tu hɔt |
 
 \`\`\`js
 alto.accent = 'scottish';
@@ -292,6 +329,14 @@ registerVoice();
 | \`bellows-voice/engine\` | \`vocalEngine\`, \`registerVoice()\`, the glottal source: the DSP on this thread | about 26 KB |
 | \`bellows-voice/view\` | \`TractModel\`: the mouth, for drawing | shares the engine's geometry |
 | \`bellows-voice/worklet.js\` | the plugin script as a file, for a host whose CSP blocks blob: URLs (\`{ ...voice, workletUrl }\`) | |
+
+## Measured against people
+
+The voice is checked against published human data, and tuned where it missed (the [bellows-voice repository](https://github.com/virgilvox/bellows-voice) has the full write-up in docs/VOICE-NORMS.md, and a test gates each result):
+
+- **The source is a healthy one.** Jitter and shimmer (cycle-to-cycle wobble in pitch and loudness) measure 0.7 to 0.8 percent and 2.2 to 3.0 percent at each body's speaking pitch, under the clinical screening limits (1.04 and 3.81 percent) and near the healthy means. The old default roughness, 0.1, measured past both limits, which is what made the default voice sound old; it is now 0.02.
+- **The tract is the right size.** Every body's ten General American vowels sit within about 4.5 percent of Hillenbrand et al.'s 1995 measurements of men, women and children in F1, and 2 to 3.5 percent in F2. Vowels that were up to 12 percent out were re-solved per body against those measurements with the voice's own vowel solver, keeping a new shape only where it measured closer and no rougher; the open /ɑ/ stays as it was, because every shape that fit it better made the voice rougher.
+- **Each voice speaks where people do**: the starter voices' speaking pitches sit inside Baken's published ranges for men, women and children, and their singing ranges are the classical voice types'.
 
 ## What it is and is not
 
