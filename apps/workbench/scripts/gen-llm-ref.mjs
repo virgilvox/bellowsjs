@@ -100,6 +100,25 @@ npm:            npm install bellowsjs
 webpage (CDN):  import { play } from 'https://unpkg.com/bellowsjs/dist/bellows.js'
 Node (offline): import { registerBuiltins, renderOffline, encodeWav } from 'bellowsjs'
 
+With the singing voice (npm install bellows-voice), a single HTML file maps the
+name 'bellowsjs' with an import map, because bellows-voice imports it by name.
+The map also gives the page and the voice ONE copy of bellows; with two copies
+singer() cannot see the plugin and throws. Import bellowsjs only through the
+mapped name:
+
+  <script type="importmap">
+    { "imports": { "bellowsjs": "https://cdn.jsdelivr.net/npm/bellowsjs@${pkgJson.version.split('.').slice(0, 2).join('.')}/dist/bellows.js" } }
+  </script>
+  <script type="module">
+    import { Bellows } from 'bellowsjs';
+    import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@${voicePkg.version.split('.').slice(0, 2).join('.')}/dist/index.js';
+    // from a click: const b = await Bellows.boot({ plugins: [voice] });
+    //               singer(b, { body: 1 }).speak('Hello.');
+  </script>
+
+  Other entries: .../bellows-voice@x/dist/text.js (text to IPA, no audio),
+  .../dist/view.js (TractModel, the mouth), .../dist/engine.js (registerVoice).
+
 In the browser, the AudioContext needs a user gesture: call Bellows.boot() or
 play() from a click handler. In Node there is no audio device: use
 renderOffline(), which registers the built-in engines itself (see Offline

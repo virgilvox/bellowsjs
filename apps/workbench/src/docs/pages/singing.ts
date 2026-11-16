@@ -23,6 +23,22 @@ import { voice, singer } from 'bellows-voice';
 const b = await Bellows.boot({ plugins: [voice] });   // or, after boot: await b.use(voice)
 \`\`\`
 
+In a single HTML file with no bundler, load both from a CDN and map the name \`bellowsjs\` with an import map. bellows-voice imports bellows by that name, and the map is also what gives the page and the voice one copy of bellows; with two copies, \`singer()\` cannot see the plugin and throws.
+
+\`\`\`html
+<script type="importmap">
+  { "imports": { "bellowsjs": "https://cdn.jsdelivr.net/npm/bellowsjs@0.5/dist/bellows.js" } }
+</script>
+<script type="module">
+  import { Bellows } from 'bellowsjs';
+  import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.2/dist/index.js';
+  document.querySelector('#go').onclick = async () => {
+    const b = await Bellows.boot({ plugins: [voice] });
+    singer(b, { body: 1 }).speak('Hello from a single file.');
+  };
+</script>
+\`\`\`
+
 **Changed in bellowsjs 0.5.0.** The voice shipped inside bellowsjs through 0.4.0, as \`b.voice('vocal').sing()\`. It moved, with its history, to [bellows-voice](https://github.com/virgilvox/bellows-voice), and sounds exactly as it did. \`singer(b, params)\` replaces \`b.voice('vocal', params)\`, and the dictionary and accent are the singer's (\`singer.dictionary\`, \`singer.accent\`) where they were \`b.dictionary\` and \`b.accent\`. In Code mode on this site \`lib\` carries both packages, so the examples write \`lib.singer(b, params)\`.
 
 ## A first line

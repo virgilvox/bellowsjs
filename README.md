@@ -37,6 +37,22 @@ Or from a CDN in a plain HTML page, no build step:
 </script>
 ```
 
+With the singing voice, map the name `bellowsjs` with an import map: [bellows-voice](https://github.com/virgilvox/bellows-voice) imports it by name, and the map gives the page and the voice one copy of bellows (with two, `singer()` cannot see the plugin):
+
+```html
+<script type="importmap">
+  { "imports": { "bellowsjs": "https://cdn.jsdelivr.net/npm/bellowsjs@0.5/dist/bellows.js" } }
+</script>
+<script type="module">
+  import { Bellows } from 'bellowsjs';
+  import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.2/dist/index.js';
+  document.querySelector('#go').onclick = async () => {
+    const b = await Bellows.boot({ plugins: [voice] });
+    singer(b, { body: 1 }).speak('Hello from a single file.');
+  };
+</script>
+```
+
 The AudioWorklet kernel ships inlined and loads through a blob URL, so there is no second file to deploy. Hosts whose CSP blocks blob: scripts can point the loader at the packaged `bellowsjs/worklet.js` instead.
 
 ## Three tiers
