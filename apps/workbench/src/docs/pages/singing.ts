@@ -136,6 +136,47 @@ The accent's \`prosody\` sets all of that: \`tune\` ('fall' or 'rise'), \`range\
 
 It is a model of read speech, not of a person: one melody per clause, no emphasis you did not write. For a line that must land exactly, sing it on notes you choose: \`{ hz }\` notes and \`{ seconds }\` durations make \`sing()\` a speech editor.
 
+## Shaping the mouth
+
+Every voice has settings anyone can turn: long-term postures laid over every sound (what phoneticians call articulatory settings, after Laver), and its size. A pop singer's raised voice box, an opera singer's lowered one and open throat, a smile you can hear: each is a setting.
+
+\`\`\`js
+const v = singer(b, 'narrator-female');
+v.shape('operatic');                          // or 'smile', 'pout', 'belt', 'nasal', 'muffled', 'tense', 'giant', 'tiny'
+v.shape({ lipRound: -0.8, larynxSet: 0.2 });  // a smile in the voice
+v.speak('Hello there.');
+\`\`\`
+
+| Setting | From, to | What you hear |
+|---|---|---|
+| \`jawSet\` | held close, hanging open | open sounds loud and open; close sounds tight |
+| \`lipRound\` | smiling, pouting | a smile brightens everything; a pout darkens it |
+| \`lipOpen\` | nearly closed, wide | nearly closed sounds muffled |
+| \`tongueFront\` | pulled back, pushed forward | forward sounds bright, back sounds dark |
+| \`tongueHigh\` | low, high | high sounds tight and close |
+| \`larynxSet\` | lowered, raised | lowered sounds big and dark; raised small and bright |
+| \`throat\` | squeezed, open | open sounds round and full; squeezed sounds strained |
+| \`twang\` | none, brassy | a slight brassy edge |
+| \`nasal\` | clear, through the nose | sound leaks through the nose |
+| \`cheeks\` | firm, slack | slack cheeks keep the hum of "b", "d", "g" longer |
+| \`size\` | 0.8 to 1.25 | a bigger head sounds deeper and larger (formants move as 1 / size) |
+| \`pharynx\` | 0.8 to 1.25 | a longer throat behind the mouth |
+| \`piriform\` | off, on | the two small pockets beside the voice box: a little less hard top edge |
+
+A consonant still closes whatever the setting: a smile does not stop the lips meeting for "b". Each setting moves the voice's resonances the way acoustic theory says it should, and the voice's tests check that. \`VOICE_SETTINGS\` has every one with its name, what its ends sound like, and what it does in plain words and in acoustic terms; \`describeShape(values)\` says a shape in a sentence. In the Voice Lab's Shape tab you can drag the tongue, jaw, lips, soft palate and voice box in the picture and hear the mouth you made.
+
+Speech also breathes in between phrases, a quiet noise drawn through the throat: \`speak(text, { breath: 'none' })\` turns it off, \`'all'\` adds one before the first phrase too.
+
+## The voice explained
+
+\`describeSound(ipa)\` says how the mouth makes any sound in everyday words; \`nearestVowel(f1, f2, body)\` names the American English vowel two resonances sound most like, by the word it was recorded in (Hillenbrand et al. 1995: "heed", "hid", "head", "had", "hod", "hawed", "hood", "who'd", "hud", "heard").
+
+\`\`\`js
+import { describeSound, nearestVowel } from 'bellows-voice/text';
+describeSound('b');          // 'Made with the two lips: they close completely ... The voice buzzes through it. As in "bin".'
+nearestVowel(730, 1090, 0);  // { ipa: 'ɔ', word: 'hawed', distance: 0.68 }
+\`\`\`
+
 ## Beatbox
 
 \`beatbox(pattern, opts?)\` plays drum sounds on the same tract, made the way beatboxers make them. Each is a short score of mouth movements with its own airstream, so the sound comes out of the physics rather than a sample.

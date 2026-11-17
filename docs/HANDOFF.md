@@ -52,6 +52,14 @@ release order and its traps. In this repository:
   cached Playwright Chromium (the Chrome extension was not connected). The voice-side fixes (speech
   dropped phrase-final consonants; General American before r) are in bellows-voice's CHANGELOG, and
   its `docs/HOW-IT-WORKS.md` maps the whole voice and its plan.
+- **bellows-voice 0.6.0 in the lab (2026-11-17, later).** A Shape tab (voice settings and anatomy as
+  plain-language sliders, ten shapes, a vowel to hold, the mouth beside it with six draggable handles
+  that set the settings, the shape's resonances and nearest hVd word); the mouth view is now the
+  whole head in profile from the voice's geometry (CHIMERA's anatomy), with a mouth/head zoom and
+  names; held sounds and timeline segments explain themselves (`describeSound`); breaths show in the
+  timeline. The lab is split by concern: `components/code/voice-lab/` holds `ShapePanel`, `BeatPanel`,
+  `SoundTimeline`, `useMouth`, `mouth-render.ts`, `mouth-air.ts` and the shared, `.lab`-namespaced
+  `lab.css` (child components do not see a parent's scoped styles, so the lab's styles live there).
 - Open, owner-facing: none of the thirty-one accents has been judged by ear; the lab's final version
   was checked locally with real clicks and on the live site only by its bundle (the browser link
   dropped before a live click).

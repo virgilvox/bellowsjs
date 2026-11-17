@@ -215,7 +215,7 @@ onBeforeUnmount(() => cancelAnimationFrame(raf));
 </script>
 
 <template>
-  <canvas ref="canvas" class="spectrum" aria-label="the voice's spectrum, its formants, and where its vowel sits on a vowel chart"></canvas>
+  <canvas ref="canvas" class="spectrum" :class="{ flat: vowels === false }" aria-label="the voice's spectrum, its formants, and where its vowel sits on a vowel chart"></canvas>
 </template>
 
 <style scoped>
@@ -229,6 +229,9 @@ onBeforeUnmount(() => cancelAnimationFrame(raf));
 @media (max-width: 560px) {
   .spectrum {
     height: 300px;
+  }
+  .spectrum.flat {
+    height: 160px;
   }
 }
 </style>

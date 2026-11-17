@@ -235,7 +235,15 @@ const plan = alto.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   BEAT_PRESETS: ${voiceLib.BEAT_PRESETS.map((p) => p.id).join(', ')}. parseBeat,
   formatBeat. The 'mic' param 0..1 adds a close microphone's near-field flow
   term (the 'beatboxer' preset uses 0.8); 0 is the far field.
-- A Singer has sing, speak, beatbox, note, on, off, param, fx, send, gain, pan,
+- Shaping the mouth: singer.shape(values | presetId). Settings (engine params,
+  VOICE_SETTINGS has name, low/high words, plain and acoustic text, min, max,
+  neutral): ${voiceLib.VOICE_SETTINGS.map((s) => s.param + ' ' + s.min + '..' + s.max).join(', ')}.
+  SHAPE_PRESETS: ${voiceLib.SHAPE_PRESETS.map((p) => p.id).join(', ')}. A consonant still
+  closes whatever the setting. speak(text, { breath: 'between' | 'all' | 'none' }).
+  Helpers: describeSound(ipa), nearestVowel(f1, f2, body), describeShape(values).
+  View: shape().drawing, headProfile(drawing), mouthHandles(model),
+  settingsForHandle(model, handle, x, y, ipa), model.formants().
+- A Singer has sing, speak, beatbox, shape, note, on, off, param, fx, send, gain, pan,
   dispose, and .instrument, .dictionary, .accent. In code mode on
   bellows.live, lib carries both packages: lib.singer(b, params).
 - lyrics: English words (letter-to-sound rules, or singer.dictionary /

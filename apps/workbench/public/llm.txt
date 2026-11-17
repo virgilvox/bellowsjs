@@ -27,7 +27,7 @@ mapped name:
   </script>
   <script type="module">
     import { Bellows } from 'bellowsjs';
-    import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.5/dist/index.js';
+    import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.6/dist/index.js';
     // from a click: const b = await Bellows.boot({ plugins: [voice] });
     //               singer(b, { body: 1 }).speak('Hello.');
   </script>
@@ -782,7 +782,7 @@ default polyphony: 8
 
 ### vocal (Vocal)
 default polyphony: 8
-  phoneme: 0 to 79, default 1
+  phoneme: 0 to 81, default 1
   bend: -48 to 48 st, default 0
   glide: 0.005 to 0.5 s, default 0.17 curve=exp
   body: 0 to 2, default 0
@@ -803,9 +803,22 @@ default polyphony: 8
   preparation: 0 to 1, default 0.25
   ring: 0 to 1, default 0
   mic: 0 to 1, default 0
+  cheeks: 0 to 1, default 0
+  piriform: 0 to 1, default 0
+  size: 0.8 to 1.25, default 1
+  pharynx: 0.8 to 1.25, default 1
+  jawSet: -1 to 1, default 0
+  tongueFront: -1 to 1, default 0
+  tongueHigh: -1 to 1, default 0
+  lipRound: -1 to 1, default 0
+  lipOpen: -1 to 1, default 0
+  larynxSet: -1 to 1, default 0
+  nasal: 0 to 1, default 0
+  twang: 0 to 1, default 0
+  throat: -1 to 1, default 0
   tuning: 0 to 1, default 0
   nextIn: 0 to 1 s, default 0
-  nextPhoneme: 0 to 79, default 0
+  nextPhoneme: 0 to 81, default 0
 
 
 Sample-backed engines: register zone data with the kernel, then use the id
@@ -824,7 +837,7 @@ Sampler engines expose SAMPLER_PARAMS:
 
 Granular over your own buffer: b.granular(float32Data, sampleRate, params?).
 
-## Singing and lyrics (bellows-voice 0.5.0)
+## Singing and lyrics (bellows-voice 0.6.0)
 
 npm install bellows-voice. It peer-depends on bellowsjs.
 
@@ -851,11 +864,19 @@ const plan = alto.sing('twinkle twinkle /ˈlɪt.əl/ star', [
 - Beatbox: singer.beatbox(pattern, { bpm = 96, swing = 0..0.6, repeat = 1, at,
   note, vel }). Pattern text: one token a sixteenth, '.' or '-' rests, '|' bar
   lines ignored, trailing '>' accents, 'm:43' hums MIDI 43. Sounds (VOCAL_BEATS):
-  B kick (ejective), t hi-hat (pulmonic), tss open hat (pulmonic), Pf snare (pulmonic), K rimshot (ejective), ^K inward snare (ingressive), ! tongue click (click), P! lip pop (click), kch crash (pulmonic), m hum (voiced), ch closed hat (pulmonic), Psh psh snare (pulmonic).
+  B kick (ejective), t hi-hat (pulmonic), tss open hat (pulmonic), Pf snare (pulmonic), K rimshot (ejective), ^K inward snare (ingressive), ! tongue click (click), P! lip pop (click), kch crash (pulmonic), m hum (voiced), ch closed hat (pulmonic), Psh psh snare (pulmonic), in breath in (ingressive).
   BEAT_PRESETS: boots-and-cats, four-on-the-floor, breakbeat, rimshot-shuffle, inward-snare, clicks-and-pops, hum-bass, psh-groove. parseBeat,
   formatBeat. The 'mic' param 0..1 adds a close microphone's near-field flow
   term (the 'beatboxer' preset uses 0.8); 0 is the far field.
-- A Singer has sing, speak, beatbox, note, on, off, param, fx, send, gain, pan,
+- Shaping the mouth: singer.shape(values | presetId). Settings (engine params,
+  VOICE_SETTINGS has name, low/high words, plain and acoustic text, min, max,
+  neutral): size 0.8..1.25, pharynx 0.8..1.25, piriform 0..1, jawSet -1..1, tongueFront -1..1, tongueHigh -1..1, lipRound -1..1, lipOpen -1..1, larynxSet -1..1, nasal 0..1, twang 0..1, throat -1..1, cheeks 0..1.
+  SHAPE_PRESETS: neutral, smile, pout, operatic, belt, nasal, muffled, tense, giant, tiny. A consonant still
+  closes whatever the setting. speak(text, { breath: 'between' | 'all' | 'none' }).
+  Helpers: describeSound(ipa), nearestVowel(f1, f2, body), describeShape(values).
+  View: shape().drawing, headProfile(drawing), mouthHandles(model),
+  settingsForHandle(model, handle, x, y, ipa), model.formants().
+- A Singer has sing, speak, beatbox, shape, note, on, off, param, fx, send, gain, pan,
   dispose, and .instrument, .dictionary, .accent. In code mode on
   bellows.live, lib carries both packages: lib.singer(b, params).
 - lyrics: English words (letter-to-sound rules, or singer.dictionary /
