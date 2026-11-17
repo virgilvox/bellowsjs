@@ -1,10 +1,49 @@
 # HANDOFF
 
-State of the project as of 2026-11-13 for the singing voice, 2026-09-04 for everything else. Read this first when picking the work back up.
+State of the project as of 2026-11-17 for the singing voice (now its own repository, bellows-voice) and the site's voice lab, 2026-09-04 for everything else. Read this first when picking the work back up.
 
 **Read this before anything else: as of 2026-09-13 this file is on `main`, and the branch warning it used to open with is gone.** Both outstanding branches were merged that day: the nine commits of `audit-backlog-2026-08-23`, which was pull request #2, and `esp32c3-platform`, a new ESP32-C3 adapter for the embedded library. Both went in as merge commits after the full VERIFY block in `docs/KICKOFF.md` was run against the merged tree, which is how the one defect neither branch could see on its own was found: the embedded LLM reference had gone out of sync, because one branch added a header and the other added the gate that catches exactly that. **Merging is not shipping, and the two have been confused here before.** npm still serves `bellowsjs@0.1.9` from 2026-08-21, both embedded registries still serve `Bellows@0.1.2`, and bellows.live is now BEHIND `main` rather than level with it, because the audit work touched `apps/workbench` and there is no deploy on push. The embedded source tree also now carries one header more than the published 0.1.2, so the next embedded release has to be 0.1.3 rather than a re-cut of 0.1.2.
 
 Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` and `docs/AUDIT-2.md` and `docs/AUDIT-3.md` (findings with evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists and where this leads), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session), `docs/prototype-0.html` (the original design probe).
+
+## 2026-11-15 to 17: the voice grows, and the site's voice lab (bellows-voice 0.2.0 to 0.4.1)
+
+Where things stand: npm serves `bellowsjs@0.5.0` and `bellows-voice@0.4.1`; the site depends on
+bellows-voice from npm (`apps/workbench/package.json`) and was deployed on 2026-11-16 from `main`.
+Voice work happens in the bellows-voice repository, whose own `docs/HANDOFF.md` has its state, its
+release order and its traps. In this repository:
+
+- **The voice lab** (`apps/workbench/src/components/code/VoiceLab.vue`, `Picker.vue`, `MouthView.vue`)
+  is the first entry of Code mode's VOCALS category (`Example.lab = 'voice'`, `src/examples/voice.ts`).
+  It was rebuilt twice; `docs/VOICE-LAB-UX.md` records why. Current shape: one text box with Speak
+  and Sing as tabs, Voice and Accent as searchable combobox fields (word-start matching, ranked),
+  Play as the only filled button (it becomes Stop), the mouth beside the IPA and General American's,
+  and Voice settings, Hold a sound and Code folded below. Lesson worth keeping: the site styles every
+  button as a raised box, so any new control needs its own look or it reads as an action. The
+  owner rejected the second version (region tabs, chips, numbered steps); do not bring those back.
+- **The mouth** is drawn from bellows-voice's own geometry (`bellows-voice/view`, `TractModel`).
+  IPA in the lab uses an IPA-capable font stack because the site's JetBrains Mono draws u like ʊ.
+- **Code mode on phones**: under 900 px a compact example picker replaces the rail
+  (`src/views/CodeView.vue`), and the site's top nav wraps (`src/App.vue`); before, the rail put every
+  example about 2800 px down and the nav pushed every page sideways.
+- **Code mode's runner** hands examples bellowsjs and bellows-voice merged as `lib`
+  (`src/lib/runner.ts`); `scripts/check-examples.mjs` checks names against both, and
+  `scripts/check-doc-links.mjs` now validates `/#code/<id>` deep links against the registry.
+- **Vite dev and bellows-voice**: `vite.config.ts` excludes bellows-voice from `optimizeDeps`. Pre-bundled,
+  it carried its own copy of bellowsjs and `singer()` threw "no 'vocal' engine" (dev only; the
+  production build resolves through the alias and was not affected).
+- **The singing page** (`src/docs/pages/singing.ts`, "Singing and speech") covers installing, the
+  single-file CDN version with an import map, starter voices, speech, all thirty-one accents with
+  generated IPA, what an accent is made of, the mouth, rendering, entry points, and how the voice
+  measures against human norms. The LLM reference (`scripts/gen-llm-ref.mjs`) covers the same,
+  including the import-map pattern near the top.
+- **Releasing with the voice**: publish bellows-voice, then wait until its `.tgz` answers 200 before
+  bumping the site's dependency, installing and deploying. Right after `npm publish` the packument can
+  list a version whose tarball still 404s for a minute or two; deploying in that window failed the DO
+  build and CI on 2026-11-16 (the live site kept the previous build).
+- Open, owner-facing: none of the thirty-one accents has been judged by ear; the lab's final version
+  was checked locally with real clicks and on the live site only by its bundle (the browser link
+  dropped before a live click).
 
 ## 2026-11-14: the voice leaves for its own repository (bellowsjs 0.5.0, bellows-voice 0.1.0)
 
