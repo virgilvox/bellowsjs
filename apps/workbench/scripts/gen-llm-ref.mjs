@@ -228,7 +228,14 @@ const plan = alto.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   preset's speechHz, or to the norm for the body (SPEECH_HZ_BY_BODY: 115, 199,
   240 Hz, interpolated; speechHzForBody(body)). singer.speechHz overrides.
   The default roughness is 0.02 (measured healthy jitter and shimmer).
-- A Singer has sing, speak, note, on, off, param, fx, send, gain, pan,
+- Beatbox: singer.beatbox(pattern, { bpm = 96, swing = 0..0.6, repeat = 1, at,
+  note, vel }). Pattern text: one token a sixteenth, '.' or '-' rests, '|' bar
+  lines ignored, trailing '>' accents, 'm:43' hums MIDI 43. Sounds (VOCAL_BEATS):
+  ${voiceLib.VOCAL_BEATS.filter((x) => x.id !== '.').map((x) => x.id + ' ' + x.name.toLowerCase() + ' (' + x.airstream + ')').join(', ')}.
+  BEAT_PRESETS: ${voiceLib.BEAT_PRESETS.map((p) => p.id).join(', ')}. parseBeat,
+  formatBeat. The 'mic' param 0..1 adds a close microphone's near-field flow
+  term (the 'beatboxer' preset uses 0.8); 0 is the far field.
+- A Singer has sing, speak, beatbox, note, on, off, param, fx, send, gain, pan,
   dispose, and .instrument, .dictionary, .accent. In code mode on
   bellows.live, lib carries both packages: lib.singer(b, params).
 - lyrics: English words (letter-to-sound rules, or singer.dictionary /

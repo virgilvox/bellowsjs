@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /*
  * The voice lab, built the way voice demos that work are built: one text box, one primary action,
- * and two pickers. The composer holds what a line needs (speak or sing as tabs on the text box, the
+ * and two pickers. The composer holds what a line needs (speak, sing or beatbox as tabs on the text box, the
  * text, a voice and an accent as searchable pickers, the two or three settings that matter for the
  * mode, and Play, which becomes Stop). The output shows what it is doing (the mouth, the IPA beside
- * General American's, the sounds as they play). Everything else (every engine param, holding one
+ * General American's, the sounds as they play on a timeline, and the spectrum with its formants and
+ * vowel chart). Everything else (every engine param, holding one
  * sound, the code) is folded below. docs/VOICE-LAB-UX.md has the walkthroughs behind it.
  *
  * Each kind of control looks like what it is: tabs are underlined text, pickers are fields with a
@@ -17,6 +18,8 @@ import { parseNote, type Bellows, type ParamSpec } from 'bellowsjs';
 import {
   ACCENTS,
   ACCENT_REGIONS,
+  BEAT_PRESETS,
+  VOCAL_BEATS,
   VOCAL_ENGINE_INFO,
   VOCAL_PHONEMES,
   VOICE_PRESETS,
@@ -31,6 +34,7 @@ import { TractModel, type TractShape } from 'bellows-voice/view';
 import { ensureBellows } from '../../lib/audio';
 import { formatValue, fromSlider, toSlider } from '../../lib/instrument-store';
 import MouthView from './MouthView.vue';
+import SpectrumView from './SpectrumView.vue';
 import Picker, { type PickerOption } from './Picker.vue';
 
 /* ---- params, named for people ---- */
@@ -56,12 +60,13 @@ const PARAM_TEXT: Record<string, [string, string]> = {
   attack: ['Attack', 'how a phrase starts'],
   release: ['Release', 'how a phrase dies away'],
   level: ['Level', 'output level'],
+  mic: ['Close mic', 'a microphone at the lips: it hears the air of kicks and plosives (beatbox uses 0.8)'],
 };
 const PARAM_GROUPS: Array<[string, string[]]> = [
   ['Source', ['body', 'glottis', 'tension', 'breath', 'roughness', 'fry']],
   ['Pitch and vibrato', ['drift', 'vibratoRate', 'vibratoDepth', 'vibratoDelay', 'glide', 'overshoot', 'preparation']],
   ['Mouth', ['articulation', 'ring', 'tuning']],
-  ['Envelope', ['attack', 'release', 'level']],
+  ['Envelope and microphone', ['attack', 'release', 'level', 'mic']],
 ];
 const STEP_NAMES: Record<string, readonly string[]> = { glottis: ['geometric', 'self-oscillating', 'pulse'] };
 const specs: ParamSpec[] = VOCAL_ENGINE_INFO.params.filter((p) => !DRIVEN.has(p.name));
@@ -98,8 +103,12 @@ const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
 const noteName = (m: number) => NOTE_NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
 
 const state = reactive({
-  mode: 'speak' as 'speak' | 'sing',
+  mode: 'speak' as 'speak' | 'sing' | 'beatbox',
   text: EXAMPLES[0],
+  beat: BEAT_PRESETS[0].text,
+  beatBpm: BEAT_PRESETS[0].bpm,
+  swing: BEAT_PRESETS[0].swing,
+  loops: 2,
   voiceId: 'narrator-female',
   accent: 'general-american',
   melody: MELODIES[0][1],
@@ -236,10 +245,51 @@ watch(tuneChoice, (m) => {
 
 let b: Bellows | null = null;
 let voiceSinger: Singer | null = null;
-const line = shallowRef<Array<{ ipa: string; start: number; end: number }>>([]);
+const line = shallowRef<Array<{ ipa: string; start: number; end: number; kind: string }>>([]);
+/** The close microphone a beatbox line plays through (bellows-voice's 'beatboxer' voice uses the same). */
+const BEAT_MIC = 0.8;
+const BEAT_NAMES = new Map(VOCAL_BEATS.map((b) => [b.id, b.name]));
+/** A span's sound as people read it: IPA, or a beat's symbol. */
+function shown(ipa: string): string {
+  if (!ipa.startsWith('beat:')) return ipa;
+  const id = ipa.slice(5).replace(/>$/, '');
+  return id === '.' ? '' : id;
+}
+const textModel = computed({
+  get: () => (state.mode === 'beatbox' ? state.beat : state.text),
+  set: (v: string) => {
+    if (state.mode === 'beatbox') state.beat = v;
+    else state.text = v;
+  },
+});
+function usePreset(id: string): void {
+  const p = BEAT_PRESETS.find((x) => x.id === id);
+  if (!p) return;
+  state.beat = p.text;
+  state.beatBpm = p.bpm;
+  state.swing = p.swing;
+}
+/** Hear one sound, and add it to the pattern. */
+async function tryBeat(id: string): Promise<void> {
+  const s = await ready();
+  s.param('mic', Math.max(BEAT_MIC, state.params.mic ?? 0));
+  const r = s.beatbox(id, { bpm: 90 });
+  line.value = r.phrases.flatMap((p) => p.spans.map((sp) => ({ ipa: sp.ipa, start: sp.start, end: sp.end, kind: sp.kind })));
+  playing.value = true;
+  state.beat = (state.beat.trim() + ' ' + id).trim();
+}
+const timeline = computed(() => {
+  const spans = line.value;
+  if (!spans.length) return [];
+  return spans.map((sp) => ({ text: shown(sp.ipa), grow: Math.max(0.001, sp.end - sp.start), kind: sp.ipa.startsWith('beat:') ? (sp.ipa === 'beat:.' ? 'rest' : 'beat') : sp.kind }));
+});
+const flow = ref(0);
 const nowIndex = ref(-1);
 const playing = ref(false);
 let held: { id: number; ipa: string } | null = null;
+const heldNow = ref(false);
+/** The site's analyser on the whole output, for the spectrum. */
+const analyser = shallowRef<AnalyserNode | null>(null);
 
 async function ready(): Promise<Singer> {
   const next = await ensureBellows();
@@ -253,6 +303,7 @@ async function ready(): Promise<Singer> {
     voiceSinger.send(room, 0.25);
   }
   voiceSinger.accent = state.accent;
+  analyser.value = b.analyser;
   return voiceSinger;
 }
 
@@ -262,11 +313,15 @@ async function play(): Promise<void> {
     return;
   }
   const s = await ready();
+  // a beatboxer is heard on a close microphone; the other modes keep the voice's own setting
+  s.param('mic', state.mode === 'beatbox' ? Math.max(BEAT_MIC, state.params.mic ?? 0) : (state.params.mic ?? 0));
   const result =
-    state.mode === 'sing'
-      ? s.sing(state.text, melodyNotes())
-      : s.speak(state.text, { accent: state.accent, hz: state.hz, rate: state.rate });
-  line.value = result.phrases.flatMap((p) => p.spans.map((sp) => ({ ipa: sp.ipa, start: sp.start, end: sp.end })));
+    state.mode === 'beatbox'
+      ? s.beatbox(state.beat, { bpm: state.beatBpm, swing: state.swing, repeat: state.loops })
+      : state.mode === 'sing'
+        ? s.sing(state.text, melodyNotes())
+        : s.speak(state.text, { accent: state.accent, hz: state.hz, rate: state.rate });
+  line.value = result.phrases.flatMap((p) => p.spans.map((sp) => ({ ipa: sp.ipa, start: sp.start, end: sp.end, kind: sp.kind })));
   playing.value = line.value.length > 0;
   state.status = result.unknown.length ? `No sound for ${result.unknown.join(' ')}; those keep the sound before them.` : '';
 }
@@ -303,10 +358,12 @@ async function holdPhoneme(p: string): Promise<void> {
   release();
   s.param('phoneme', VOCAL_PHONEMES.indexOf(p as (typeof VOCAL_PHONEMES)[number]));
   held = { id: s.on({ hz: state.hz }, 0.8), ipa: p };
+  heldNow.value = true;
 }
 function release(): void {
   if (held && voiceSinger) voiceSinger.off(held.id);
   held = null;
+  heldNow.value = false;
 }
 
 /* ---- the mouth ---- */
@@ -348,15 +405,21 @@ function frame(now: number): void {
     const spans = line.value;
     const i = spans.findIndex((x) => t >= x.start && t < x.end);
     nowIndex.value = i;
-    if (i >= 0) want = spans[i].ipa;
-    else if (spans.length && t > spans[spans.length - 1].end) {
+    // the air: out while a sound is made, in for an inward snare, still in a rest or silence
+    if (i >= 0) {
+      want = spans[i].ipa;
+      flow.value = want === '_' || want === 'beat:.' ? 0 : want.startsWith('beat:^K') ? -1 : want.startsWith('beat:m') ? 0.5 : 1;
+    } else if (spans.length && t > spans[spans.length - 1].end) {
       playing.value = false;
       nowIndex.value = -1;
     }
   }
+  if (!playing.value && !held) flow.value = 0;
+  else if (held) flow.value = 1;
   if (want !== tract.current) tract.target(want);
   tract.step(dt);
-  phoneme.value = want;
+  const beatId = want.startsWith('beat:') ? want.slice(5).replace(/>$/, '') : '';
+  phoneme.value = beatId ? (beatId === '.' ? '' : `${beatId} ${BEAT_NAMES.get(beatId) ?? ''}`) : want;
   shape.value = tract.shape();
   raf = requestAnimationFrame(frame);
 }
@@ -386,6 +449,10 @@ function voiceArg(): string {
   return changed.length ? `{ ${changed.join(', ')} }` : '{}';
 }
 function lineCall(v: string): string {
+  if (state.mode === 'beatbox') {
+    const pat = "'" + state.beat.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+    return `${v}.param('mic', ${BEAT_MIC});\n${v}.beatbox(${pat}, { bpm: ${state.beatBpm}, swing: ${state.swing}, repeat: ${state.loops} });`;
+  }
   const text = "'" + state.text.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
   if (state.mode === 'speak') return `${v}.speak(${text}, { hz: ${state.hz}, rate: ${state.rate} });`;
   const notes = melodyNotes()
@@ -427,29 +494,41 @@ async function copyCode(): Promise<void> {
   <div class="lab">
     <!-- the composer: everything a line needs, and the one action -->
     <section class="composer">
-      <div class="tabs" role="tablist" aria-label="speak or sing">
+      <div class="tabs" role="tablist" aria-label="speak, sing or beatbox">
         <button role="tab" class="tab" :aria-selected="state.mode === 'speak'" @click="state.mode = 'speak'">Speak</button>
         <button role="tab" class="tab" :aria-selected="state.mode === 'sing'" @click="state.mode = 'sing'">Sing</button>
+        <button role="tab" class="tab" :aria-selected="state.mode === 'beatbox'" @click="state.mode = 'beatbox'">Beatbox</button>
       </div>
 
       <div class="sheet">
         <textarea
-          v-model="state.text"
+          v-model="textModel"
           class="text"
+          :class="{ pattern: state.mode === 'beatbox' }"
           rows="2"
           spellcheck="false"
-          :placeholder="state.mode === 'sing' ? 'Type a lyric to sing' : 'Type something to say'"
-          aria-label="text"
+          :placeholder="state.mode === 'beatbox' ? 'B . t . | Pf . t .' : state.mode === 'sing' ? 'Type a lyric to sing' : 'Type something to say'"
+          :aria-label="state.mode === 'beatbox' ? 'beat pattern' : 'text'"
           @keydown="onKey"
         ></textarea>
-        <div class="examples">
+        <div v-if="state.mode === 'beatbox'" class="examples">
+          <span>Beats</span>
+          <button v-for="p in BEAT_PRESETS" :key="p.id" class="link" @click="usePreset(p.id)">{{ p.name }}</button>
+        </div>
+        <div v-else class="examples">
           <span>Try</span>
           <button v-for="t in EXAMPLES" :key="t" class="link" @click="state.text = t">{{ t }}</button>
+        </div>
+        <div v-if="state.mode === 'beatbox'" class="palette" aria-label="the sounds; click one to hear it and add it">
+          <button v-for="bt in VOCAL_BEATS.filter((x) => x.id !== '.')" :key="bt.id" class="chip" :title="bt.hint + ' (' + bt.airstream + ')'" @click="tryBeat(bt.id)">
+            <b>{{ bt.id }}</b><span>{{ bt.name }}</span>
+          </button>
+          <p class="palette-note">One step a sixteenth: <code>.</code> rests, <code>|</code> marks a bar, <code>&gt;</code> accents, <code>m:43</code> hums MIDI note 43. Hover a sound for how the mouth makes it.</p>
         </div>
 
         <div class="pickers">
           <Picker v-model="state.voiceId" label="Voice" :options="voiceOptions" :hint="edited ? 'Customized in Voice settings below.' : undefined" />
-          <Picker v-model="state.accent" label="Accent" :options="accentOptions" />
+          <Picker v-if="state.mode !== 'beatbox'" v-model="state.accent" label="Accent" :options="accentOptions" />
         </div>
 
         <div v-if="state.mode === 'speak'" class="settings">
@@ -460,6 +539,20 @@ async function copyCode(): Promise<void> {
           <label class="set">
             <span class="set-label">Speed <output>{{ state.rate.toFixed(2) }}x</output></span>
             <input v-model.number="state.rate" type="range" min="0.5" max="1.8" step="0.01" />
+          </label>
+        </div>
+        <div v-else-if="state.mode === 'beatbox'" class="settings">
+          <label class="set">
+            <span class="set-label">Tempo <output>{{ state.beatBpm }} bpm</output></span>
+            <input v-model.number="state.beatBpm" type="range" min="60" max="180" step="1" />
+          </label>
+          <label class="set">
+            <span class="set-label">Swing <output>{{ Math.round(state.swing * 100) }}%</output></span>
+            <input v-model.number="state.swing" type="range" min="0" max="0.6" step="0.01" />
+          </label>
+          <label class="set">
+            <span class="set-label">Times through <output>{{ state.loops }}</output></span>
+            <input v-model.number="state.loops" type="range" min="1" max="8" step="1" />
           </label>
         </div>
         <div v-else class="settings">
@@ -486,7 +579,7 @@ async function copyCode(): Promise<void> {
 
         <div class="actions">
           <button class="play" :class="{ stopping: playing }" @click="play">
-            <span class="glyph" aria-hidden="true"></span>{{ playing ? 'Stop' : state.mode === 'sing' ? 'Sing' : 'Speak' }}
+            <span class="glyph" aria-hidden="true"></span>{{ playing ? 'Stop' : state.mode === 'sing' ? 'Sing' : state.mode === 'beatbox' ? 'Play beat' : 'Speak' }}
           </button>
           <span class="shortcut">or Ctrl + Enter in the text box</span>
         </div>
@@ -496,18 +589,26 @@ async function copyCode(): Promise<void> {
 
     <!-- the output: what it is doing -->
     <section class="output" aria-label="what the voice is doing">
-      <MouthView :shape="shape" :phoneme="phoneme" :bounds="bounds" />
+      <MouthView :shape="shape" :phoneme="phoneme" :bounds="bounds" :flow="flow" />
       <div class="reading">
-        <div class="ipa">
+        <div v-if="state.mode !== 'beatbox'" class="ipa">
           <span class="ipa-label">{{ accent?.name ?? state.accent }}</span>
           <span class="ipa-text">{{ ipa }}</span>
         </div>
-        <div v-if="state.accent !== 'general-american'" class="ipa compare">
+        <div v-if="state.mode !== 'beatbox' && state.accent !== 'general-american'" class="ipa compare">
           <span class="ipa-label">General American</span>
           <span class="ipa-text">{{ ipaGA }}</span>
         </div>
-        <div v-if="line.length" class="now" aria-hidden="true">
-          <span v-for="(sp, i) in line" :key="i" class="sound" :class="{ on: i === nowIndex }">{{ sp.ipa }}</span>
+        <div v-if="timeline.length" class="timeline-wrap">
+          <span class="ipa-label">As it plays, each sound as long as it lasts</span>
+          <div class="timeline" aria-hidden="true">
+            <span v-for="(sp, i) in timeline" :key="i" class="seg" :class="[sp.kind, { on: i === nowIndex }]" :style="{ flexGrow: sp.grow }">{{ sp.text }}</span>
+          </div>
+          <div class="legend"><i class="nucleus"></i>vowel <i class="onset"></i>consonant <i class="beat"></i>beat</div>
+        </div>
+        <div class="ipa">
+          <span class="ipa-label">{{ state.mode === 'beatbox' ? 'What it sounds like: the spectrum' : 'What it sounds like: the spectrum, its formants, and the vowel on a chart' }}</span>
+          <SpectrumView :analyser="analyser" :active="playing || !!heldNow" :body="state.params.body ?? 0" :vowels="state.mode !== 'beatbox'" />
         </div>
       </div>
     </section>
@@ -848,20 +949,112 @@ async function copyCode(): Promise<void> {
   font-size: 15px;
   color: var(--tick);
 }
-.now {
+.views {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.timeline-wrap {
+  display: grid;
+  gap: 6px;
+}
+.timeline {
+  display: flex;
+  height: 34px;
+  border: 1px solid var(--seam);
+  background: var(--char);
+  overflow: hidden;
+}
+.seg {
+  flex-basis: 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-align: center;
+  font-family: 'Charis SIL', 'Doulos SIL', 'Noto Sans', 'Lucida Grande', 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 32px;
+  color: var(--faded);
+  border-right: 1px solid var(--seam);
+  transition: background 60ms linear;
+}
+.seg.nucleus {
+  background: color-mix(in srgb, var(--phosphor) 22%, transparent);
+}
+.seg.onset,
+.seg.coda {
+  background: color-mix(in srgb, var(--tick) 18%, transparent);
+}
+.seg.beat {
+  background: color-mix(in srgb, #ff8a5c 26%, transparent);
+  font-family: var(--mono);
+}
+.seg.on {
+  background: var(--phosphor);
+  color: var(--char);
+}
+.legend {
+  font-size: 11px;
+  color: var(--tick);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 3px;
+  vertical-align: -1px;
+}
+.legend i.nucleus {
+  background: color-mix(in srgb, var(--phosphor) 45%, transparent);
+}
+.legend i.onset {
+  background: color-mix(in srgb, var(--tick) 40%, transparent);
+}
+.legend i.beat {
+  background: color-mix(in srgb, #ff8a5c 50%, transparent);
+}
+.text.pattern {
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+.palette {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 3px;
+  gap: 6px;
 }
-.sound {
-  font-size: 14px;
-  padding: 1px 4px;
-  border-bottom: 2px solid transparent;
-  color: var(--faded);
+.chip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 4px 8px;
+  border: 1px solid var(--seam);
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink, inherit);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  border-radius: 2px;
 }
-.sound.on {
+.chip b {
+  font-family: var(--mono);
   color: var(--phosphor-hot);
-  border-bottom-color: var(--phosphor);
+}
+.chip span {
+  color: var(--tick);
+}
+.chip:hover {
+  border-color: var(--phosphor);
+}
+.palette-note {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--tick);
 }
 
 /* ---- folded sections: plain rows ---- */

@@ -41,6 +41,17 @@ release order and its traps. In this repository:
   bumping the site's dependency, installing and deploying. Right after `npm publish` the packument can
   list a version whose tarball still 404s for a minute or two; deploying in that window failed the DO
   build and CI on 2026-11-16 (the live site kept the previous build).
+- **2026-11-17, bellows-voice 0.5.0 in the lab.** A Beatbox tab (pattern box, preset links, tempo,
+  swing, times through, a palette of the twelve sounds to audition), the `mic` param in Voice
+  settings (the lab sets 0.8 while a beat plays), and new views: the mouth labels its parts, marks
+  the narrowest place (closure or area) and moves air particles through the tract (faster where it
+  narrows, crowding behind a closure, out the nose with the velum down, backwards for an inward
+  snare); `SpectrumView.vue` reads `b.analyser` for a live spectrum, LPC formants (bellowsjs
+  `estimateFormants`) and a vowel chart against Hillenbrand (1995) means; the sounds play on a
+  timeline whose segments are as long as the sounds. Checked headless at 1280 and 390 px with the
+  cached Playwright Chromium (the Chrome extension was not connected). The voice-side fixes (speech
+  dropped phrase-final consonants; General American before r) are in bellows-voice's CHANGELOG, and
+  its `docs/HOW-IT-WORKS.md` maps the whole voice and its plan.
 - Open, owner-facing: none of the thirty-one accents has been judged by ear; the lab's final version
   was checked locally with real clicks and on the live site only by its bundle (the browser link
   dropped before a live click).

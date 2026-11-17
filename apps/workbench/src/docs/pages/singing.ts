@@ -136,6 +136,30 @@ The accent's \`prosody\` sets all of that: \`tune\` ('fall' or 'rise'), \`range\
 
 It is a model of read speech, not of a person: one melody per clause, no emphasis you did not write. For a line that must land exactly, sing it on notes you choose: \`{ hz }\` notes and \`{ seconds }\` durations make \`sing()\` a speech editor.
 
+## Beatbox
+
+\`beatbox(pattern, opts?)\` plays drum sounds on the same tract, made the way beatboxers make them. Each is a short score of mouth movements with its own airstream, so the sound comes out of the physics rather than a sample.
+
+\`\`\`js
+const bb = singer(b, 'beatboxer');   // a close microphone, which hears the air of each kick
+bb.beatbox('B . t . | Pf . t . | B B t . | ^K . t tss', { bpm: 96, swing: 0.1, repeat: 4 });
+\`\`\`
+
+| Symbol | Sound | Airstream: how the mouth makes it |
+|---|---|---|
+| \`B\` | kick | ejective: the glottis shuts, the tongue rises to shrink the mouth, and the larynx pushes up like a piston until the lips burst |
+| \`K\` | rimshot | ejective, behind the back of the tongue |
+| \`t\`, \`tss\`, \`ch\` | hi-hat, open hat, closed hat | breath from the lungs: a tongue-tip release into a hiss or hush |
+| \`Pf\`, \`Psh\` | snares | breath: the lips burst into a hiss against the teeth, or a rounded hush |
+| \`^K\` | inward snare | the breath drawn in past the back of the tongue |
+| \`!\`, \`P!\` | tongue click, lip pop | velaric: two closures, and the tongue or jaw hollows the pocket between them |
+| \`kch\` | crash | a velar release into a long rounded hush |
+| \`m\` | hum | voiced through the nose, at the step's note (\`m:43\` is MIDI 43) |
+
+One step is a sixteenth. \`.\` or \`-\` rests, \`|\` marks a bar and is ignored, a trailing \`>\` accents a step (more breath, a higher larynx). Options: \`bpm\` (96), \`swing\` (0 to 0.6, delaying each off-beat sixteenth), \`repeat\` (times through), \`at\` (the first hit), \`note\` (the hum's default pitch), \`vel\`. \`BEAT_PRESETS\` holds eight patterns and \`VOCAL_BEATS\` every sound with its airstream and a line on how it is made; \`parseBeat\` and \`formatBeat\` read and write the text. A pattern is one throat, so it is monophonic, as a beatboxer is.
+
+The \`mic\` param (0 to 1) is how close a directional microphone sits. At 0 the voice is heard from across a room, the far field, where the sound is the rate of change of the air leaving the mouth. Close to the lips a directional microphone also hears the air itself, a term in the flow that rises below a few kilohertz (the proximity effect), and that is what makes a beatboxed kick thump. Any voice can beatbox; \`beatboxer\` is a male voice with \`mic\` at 0.8, and the Voice Lab turns the microphone up while a beat plays.
+
 ## Accents
 
 \`singer.accent\` (or \`singer(b, params, { accent })\`) sets the accent every line is read in, and \`opts.accent\` sets it for one line. Thirty-one are built in, each with a \`region\` (\`ACCENT_REGIONS\` lists them in order) and each a broad transcription of the accent's mainstream form from the published lexical-set tables (Wells, and the Handbook of Varieties of English), not a recording of any one speaker. The last column is what each says for "The water in the bath was far too hot." straight from \`toIPA()\`.
@@ -306,7 +330,7 @@ function frame() {
 }
 \`\`\`
 
-\`shape()\` gives the upper wall (the back of the throat, the palate, the upper lip) and the lower wall (the tongue, the floor of the mouth, the lower lip) as point pairs, the cross-sectional area at each, the opening into the nose and between the lips, the tongue tip, and where the throat turns into the mouth. The Voice Lab's mouth is drawn from exactly this. It follows the plan, not the audio, so it shows the targets the voice is moving toward on the timing the line was planned with.
+\`shape()\` gives the upper wall (the back of the throat, the palate, the upper lip) and the lower wall (the tongue, the floor of the mouth, the lower lip) as point pairs, the cross-sectional area at each, the opening into the nose and between the lips, the tongue tip, where the throat turns into the mouth, and \`constriction\`, the narrowest point, where the sound is made. \`target()\` takes a beatbox line's spans too (\`'beat:B'\`), with the larynx raised for an ejective. The Voice Lab's mouth is drawn from exactly this, with the air moving through it and a live spectrum, formants and vowel chart beside it. It follows the plan, not the audio, so it shows the targets the voice is moving toward on the timing the line was planned with.
 
 ## Harmony, and lines that meet
 
