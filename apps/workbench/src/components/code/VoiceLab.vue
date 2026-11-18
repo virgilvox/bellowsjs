@@ -93,6 +93,7 @@ const grouped = computed(() => {
 /* ---- words and tunes ---- */
 
 const EXAMPLES = [
+  'I parked my car in Harvard Yard.',
   'Good morning. Where are you from?',
   'The water in the bath was far too hot.',
   'I think this is the best day of the year.',
