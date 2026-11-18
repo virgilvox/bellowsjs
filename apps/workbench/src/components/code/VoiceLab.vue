@@ -13,7 +13,7 @@
  * as a raised box; the lab overrides that for everything that is not an action.
  */
 
-import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { parseNote, type Bellows, type ParamSpec } from 'bellowsjs';
 import {
   ACCENTS,
@@ -30,6 +30,7 @@ import {
   type Accent,
   type SingNote,
   type SingResult,
+  type PronouncingDictionary,
   type Singer,
 } from 'bellows-voice';
 import { ensureBellows } from '../../lib/audio';
@@ -196,9 +197,21 @@ watch(
 
 /* ---- what the text becomes ---- */
 
+/*
+ * The pronouncing dictionary (bellows-voice/dict, about 590 KB gzipped) loads in the background when the lab
+ * opens: until it arrives the English reader's rules read the text, after it every word CMU has is right.
+ */
+const dictionary = shallowRef<PronouncingDictionary | undefined>(undefined);
+onMounted(() => {
+  void import('bellows-voice/dict').then((m) => {
+    dictionary.value = m.cmudict();
+    if (voiceSinger) voiceSinger.dictionary = dictionary.value;
+  });
+});
+
 const safeIpa = (id: string) => {
   try {
-    return toIPA(state.text, { accent: id });
+    return toIPA(state.text, { accent: id, dictionary: dictionary.value });
   } catch (e) {
     return String(e);
   }
@@ -207,7 +220,7 @@ const ipa = computed(() => safeIpa(state.accent));
 const ipaGA = computed(() => safeIpa('general-american'));
 const syllableCount = computed(() => {
   try {
-    return pronounce(state.text, { accent: state.accent }).syllables.filter((s) => !s.melisma).length;
+    return pronounce(state.text, { accent: state.accent, dictionary: dictionary.value }).syllables.filter((s) => !s.melisma).length;
   } catch {
     return 0;
   }
@@ -286,6 +299,7 @@ async function ready(): Promise<Singer> {
     voiceSinger.send(room, 0.25);
   }
   voiceSinger.accent = state.accent;
+  if (dictionary.value) voiceSinger.dictionary = dictionary.value;
   voiceSinger.shape(state.shape);
   analyser.value = b.analyser;
   return voiceSinger;

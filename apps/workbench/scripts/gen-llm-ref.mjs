@@ -248,7 +248,9 @@ const plan = alto.sing('twinkle twinkle /ˈlɪt.əl/ star', [
   bellows.live, lib carries both packages: lib.singer(b, params).
 - lyrics: English words (letter-to-sound rules, or singer.dictionary /
   opts.dictionary, a ReadonlyMap from lowercase word to CMUdict ARPAbet such
-  as parseCmudict(text) returns; none ships), and IPA
+  as parseCmudict(text) returns, or cmudict() from 'bellows-voice/dict': the CMU
+  dictionary, every word right, about 590 KB gzipped, loaded only when imported),
+  numbers and initialisms spelled out ('21st', '$5', 'TV'; numbers: false off), and IPA
   between slashes, which sets the sounds directly. A hyphen inside a word splits
   syllables, a free-standing '-' or '~' holds the vowel onto the next note,
   and . , ; : ! ? or a line break ends a phrase with a breath. A Syllable[]

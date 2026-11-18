@@ -105,12 +105,14 @@ English words also get their accent's t and l: in the default General American, 
 
 Words go through English letter-to-sound rules, with the common short words, the irregular common words and the contractions built in. Measured against the CMU dictionary they read about three common lyric words in four exactly, and most of the rest differ only in an unstressed vowel. Write a word they misread as IPA. A word with no vowel ("hmm", "shh") keeps its note on its most sonorous sound. A symbol the engine has no sound for is listed in \`plan.unknown\` rather than thrown, and its span keeps the sound before it.
 
-For dictionary pronunciations, load a CMUdict file (the Carnegie Mellon Pronouncing Dictionary, BSD licensed) and hand it to bellows. None ships, and this site loads none, so the examples here use IPA where the rules fail.
+For every word right, import the pronouncing dictionary. It ships as its own entry, so a page that does not import it never loads it (about 590 KB gzipped): the CMU Pronouncing Dictionary (BSD licensed), stored as just the words the rules get wrong, so with it the reader says each of CMU's 124,101 words as CMU does. The Voice Lab loads it in the background.
 
 \`\`\`js
-const text = await (await fetch('/cmudict.dict')).text();  // your own copy
-alto.dictionary = parseCmudict(text);                      // every line from now on
+import { cmudict } from 'bellows-voice/dict';
+const alto = singer(b, 'mezzo', { dictionary: cmudict() });   // or alto.dictionary = cmudict()
 \`\`\`
+
+Your own CMUdict file works too: \`alto.dictionary = parseCmudict(text)\`. Numbers, symbols and initialisms are said as words ("21st", "$5.50", "10:05", "50%", "1984", "TV" as tee vee); pass \`{ numbers: false }\` to leave them out. In speech a vowel is longer before a voiced consonant than a voiceless one ("bead" against "beat"), as English marks final voicing.
 
 \`opts.dictionary\` does the same for one line, in place of the singer's. Words the dictionary in use lacks go through the rules.
 
