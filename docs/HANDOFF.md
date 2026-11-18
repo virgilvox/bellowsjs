@@ -6,10 +6,14 @@ State of the project as of 2026-11-17 for the singing voice (now its own reposit
 
 Companions: `docs/PRD.md` (what and why), `docs/ENGINEERING.md` (platform facts, DSP formulas, packaging research), `docs/AUDIT.md` and `docs/AUDIT-2.md` and `docs/AUDIT-3.md` (findings with evidence), `docs/HARDWARE.md` (the embedded port, with the flash and RAM measurements behind it), `docs/LANDSCAPE.md` (what else exists and where this leads), `CLAUDE.md` (house rules), `docs/KICKOFF.md` (a prompt for starting a fresh session), `docs/prototype-0.html` (the original design probe).
 
-## 2026-11-15 to 17: the voice grows, and the site's voice lab (bellows-voice 0.2.0 to 0.4.1)
+## 2026-11-15 to 17: the voice grows, and the site's voice lab (bellows-voice 0.2.0 to 0.7.x)
 
-Where things stand: npm serves `bellowsjs@0.5.0` and `bellows-voice@0.4.1`; the site depends on
-bellows-voice from npm (`apps/workbench/package.json`) and was deployed on 2026-11-16 from `main`.
+Where things stand: npm serves `bellowsjs@0.5.0` and `bellows-voice@0.7.2`; the site depends on
+bellows-voice from npm (`apps/workbench/package.json`) and is deployed from `main` with each
+bellows-voice release (`doctl apps create-deployment`). Since 0.5.0 the lab has Beatbox and Shape tabs
+(draggable handles over the voice's own geometry, `voice-lab/`), a head drawn from the geometry, a live
+spectrum with formants, and it lazy-loads the pronouncing dictionary (`bellows-voice/dict`) after the
+singer boots. It opens on "I parked my car in Harvard Yard."
 Voice work happens in the bellows-voice repository, whose own `docs/HANDOFF.md` has its state, its
 release order and its traps. In this repository:
 

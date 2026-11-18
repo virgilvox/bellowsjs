@@ -15,8 +15,10 @@ export interface MouthDrawInput {
   labels: boolean;
   zoom: 'mouth' | 'head';
   handles: Record<MouthHandle, [number, number]> | null;
-  caption: string;
 }
+
+/* The head around a shape, worked out once per shape (the air redraws a still shape every frame). */
+const heads = new WeakMap<TractShape, ReturnType<typeof headProfile>>();
 
 /** Body cm to canvas px: x' = ox + s x, y' = h - (oy + s y). */
 export interface ViewTransform {
@@ -66,7 +68,11 @@ export function drawMouth(c: HTMLCanvasElement, input: MouthDrawInput, air: AirS
   g.fillRect(0, 0, w, h);
   const d = s.drawing;
   const k = d.k;
-  const head = headProfile(d);
+  let head = heads.get(s);
+  if (!head) {
+    head = headProfile(d);
+    heads.set(s, head);
+  }
   const bb = input.zoom === 'head' ? head.view : { x0: -3.6 * k, x1: 10.4 * k, y0: -3.0, y1: 14.4 * k };
   const pad = 10;
   const scale = Math.min((w - 2 * pad) / (bb.x1 - bb.x0), (h - 2 * pad) / (bb.y1 - bb.y0));
@@ -239,10 +245,5 @@ export function drawMouth(c: HTMLCanvasElement, input: MouthDrawInput, air: AirS
   g.fillStyle = COL.hot;
   g.font = "bold 30px 'Charis SIL', 'Doulos SIL', 'Noto Sans', 'Lucida Grande', 'Segoe UI', sans-serif";
   g.fillText(input.phoneme === '_' ? '' : input.phoneme, 12, 36);
-  if (input.caption) {
-    g.font = '11px ' + mono;
-    g.fillStyle = COL.label;
-    g.fillText(input.caption, 12, 54);
-  }
   return tf;
 }

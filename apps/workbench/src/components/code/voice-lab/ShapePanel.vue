@@ -28,6 +28,7 @@ const use = (id: string) => {
 };
 const words = computed(() => describeShape(shape.value));
 const focus = ref('jawSet');
+const hover = ref('');
 </script>
 
 <template>
@@ -44,10 +45,22 @@ const focus = ref('jawSet');
       <p class="shape-now">{{ words }}</p>
       <div class="vowels" role="group" aria-label="the vowel to hold">
         <span>Hold</span>
-        <button v-for="v in VOWELS" :key="v" class="chip" :class="{ on: ipa === v }" @click="ipa = v">
+        <button v-for="v in VOWELS" :key="v" class="chip" :class="{ on: ipa === v }" :aria-pressed="ipa === v" @click="ipa = v">
           <b class="ipa-font">{{ v }}</b>
         </button>
-        <button class="chip hear" @pointerdown="emit('hear')" @pointerup="emit('release')" @pointerleave="emit('release')">Press to hear</button>
+        <button
+          class="chip hear"
+          @pointerdown="emit('hear')"
+          @pointerup="emit('release')"
+          @pointerleave="emit('release')"
+          @keydown.space.prevent="!$event.repeat && emit('hear')"
+          @keydown.enter.prevent="!$event.repeat && emit('hear')"
+          @keyup.space="emit('release')"
+          @keyup.enter="emit('release')"
+          @blur="emit('release')"
+        >
+          Press to hear
+        </button>
       </div>
       <div v-for="[title, params] in GROUPS" :key="title" class="set-group">
         <h4>{{ title }}</h4>
@@ -56,7 +69,8 @@ const focus = ref('jawSet');
           :key="param"
           class="set slider"
           :title="byParam.get(param)?.acoustics"
-          @pointerenter="focus = param"
+          @pointerenter="hover = param"
+          @pointerleave="hover = ''"
           @focusin="focus = param"
         >
           <span class="set-label">{{ byParam.get(param)?.name }}</span>
@@ -74,10 +88,12 @@ const focus = ref('jawSet');
           </span>
         </label>
       </div>
-      <p class="explain-setting" aria-live="polite">
-        <b>{{ byParam.get(focus)?.name }}:</b> {{ byParam.get(focus)?.plain }}
-        <span>{{ byParam.get(focus)?.acoustics }}</span>
+      <!-- shown for the slider hovered or focused; read aloud only when a slider takes focus -->
+      <p class="explain-setting">
+        <b>{{ byParam.get(hover || focus)?.name }}:</b> {{ byParam.get(hover || focus)?.plain }}
+        <span>{{ byParam.get(hover || focus)?.acoustics }}</span>
       </p>
+      <p class="sr-only" aria-live="polite">{{ byParam.get(focus)?.plain }}</p>
       <button class="link reset" @click="shape = {}">Back to a neutral mouth</button>
     </div>
     <div class="shape-stage"><slot name="stage" /></div>

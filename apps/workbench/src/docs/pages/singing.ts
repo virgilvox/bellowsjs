@@ -7,7 +7,7 @@ const page: DocPage = {
   prev: 'engines',
   next: 'presets',
   body: `
-By the end of this page you can make a singer sing a lyric on a melody, make it speak, choose one of thirteen starter voices or make your own, give it any of thirty-one accents or one of your own, check what it will say before it says it, draw its mouth, fix a word it reads wrongly, and stack singers into harmony in any tuning.
+By the end of this page you can make a singer sing a lyric on a melody, make it speak, choose one of fourteen starter voices or make your own, give it any of thirty-one accents or one of your own, check what it will say before it says it, draw its mouth, fix a word it reads wrongly, and stack singers into harmony in any tuning.
 
 **Try it first.** The [Voice Lab](/#code/voice-lab) in Code mode has all of this behind controls: type a line, choose a voice and an accent (both searchable), speak or sing it, and watch the mouth follow along. Every parameter, holding a single sound, and the code for your settings are folded underneath. Its SHOW CODE button writes your settings out as code. The other VOCALS examples there each take one idea further.
 
@@ -31,7 +31,7 @@ In a single HTML file with no bundler, load both from a CDN and map the name \`b
 </script>
 <script type="module">
   import { Bellows } from 'bellowsjs';
-  import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.4/dist/index.js';
+  import { voice, singer } from 'https://cdn.jsdelivr.net/npm/bellows-voice@0.7/dist/index.js';
   document.querySelector('#go').onclick = async () => {
     const b = await Bellows.boot({ plugins: [voice] });
     singer(b, { body: 1 }).speak('Hello from a single file.');
@@ -105,7 +105,7 @@ English words also get their accent's t and l: in the default General American, 
 
 Words go through English letter-to-sound rules, with the common short words, the irregular common words and the contractions built in. Measured against the CMU dictionary they read about three common lyric words in four exactly, and most of the rest differ only in an unstressed vowel. Write a word they misread as IPA. A word with no vowel ("hmm", "shh") keeps its note on its most sonorous sound. A symbol the engine has no sound for is listed in \`plan.unknown\` rather than thrown, and its span keeps the sound before it.
 
-For every word right, import the pronouncing dictionary. It ships as its own entry, so a page that does not import it never loads it (about 590 KB gzipped): the CMU Pronouncing Dictionary (BSD licensed), stored as just the words the rules get wrong, so with it the reader says each of CMU's 124,101 words as CMU does. The Voice Lab loads it in the background.
+For every word right, import the pronouncing dictionary. It ships as its own entry, so a page that does not import it never loads it (about 570 KB gzipped): the CMU Pronouncing Dictionary (BSD licensed), stored as just the words the rules get wrong, so with it the reader says each of CMU's 124,101 words as CMU does. The Voice Lab loads it in the background.
 
 \`\`\`js
 import { cmudict } from 'bellows-voice/dict';
@@ -198,8 +198,9 @@ bb.beatbox('B . t . | Pf . t . | B B t . | ^K . t tss', { bpm: 96, swing: 0.1, r
 | \`!\`, \`P!\` | tongue click, lip pop | velaric: two closures, and the tongue or jaw hollows the pocket between them |
 | \`kch\` | crash | a velar release into a long rounded hush |
 | \`m\` | hum | voiced through the nose, at the step's note (\`m:43\` is MIDI 43) |
+| \`in\` | breath in | ingressive: the glottis open and the lungs below the mouth's pressure, as speech uses between phrases |
 
-One step is a sixteenth. \`.\` or \`-\` rests, \`|\` marks a bar and is ignored, a trailing \`>\` accents a step (more breath, a higher larynx). Options: \`bpm\` (96), \`swing\` (0 to 0.6, delaying each off-beat sixteenth), \`repeat\` (times through), \`at\` (the first hit), \`note\` (the hum's default pitch), \`vel\`. \`BEAT_PRESETS\` holds eight patterns and \`VOCAL_BEATS\` every sound with its airstream and a line on how it is made; \`parseBeat\` and \`formatBeat\` read and write the text. A pattern is one throat, so it is monophonic, as a beatboxer is.
+One step is a sixteenth. \`.\` or \`-\` rests, \`|\` marks a bar and is ignored, a trailing \`>\` accents a step (more breath; on the ejectives a deeper larynx stroke). Options: \`bpm\` (96), \`swing\` (0 to 0.6, delaying each off-beat sixteenth), \`repeat\` (times through), \`at\` (the first hit), \`note\` (the hum's default pitch), \`vel\`. \`BEAT_PRESETS\` holds eight patterns and \`VOCAL_BEATS\` every sound with its airstream and a line on how it is made; \`parseBeat\` and \`formatBeat\` read and write the text. A pattern is one throat, so it is monophonic, as a beatboxer is.
 
 The \`mic\` param (0 to 1) is how close a directional microphone sits. At 0 the voice is heard from across a room, the far field, where the sound is the rate of change of the air leaving the mouth. Close to the lips a directional microphone also hears the air itself, a term in the flow that rises below a few kilohertz (the proximity effect), and that is what makes a beatboxed kick thump. Any voice can beatbox; \`beatboxer\` is a male voice with \`mic\` at 0.8, and the Voice Lab turns the microphone up while a beat plays.
 

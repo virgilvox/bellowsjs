@@ -7,6 +7,7 @@
  */
 
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from 'vue';
+
 import { VOCAL_BEATS, nearestVowel } from 'bellows-voice';
 import { TractModel, mouthHandles, settingsForHandle, type MouthHandle, type TractShape } from 'bellows-voice/view';
 
@@ -39,7 +40,15 @@ function airFor(ipa: string): number {
 
 export function useMouth(i: MouthInputs) {
   const tract = new TractModel(i.body());
-  const shape = shallowRef<TractShape | null>(null);
+  /*
+   * The shape is not Vue state: it changes every frame while the mouth moves, and as a ref it made the
+   * whole lab re-render 60 times a second. The view reads it through shape(); a new object means a
+   * new frame to draw. It is recomputed only while the posture moves (or the settings change).
+   */
+  let current: TractShape | null = null;
+  const seen = new Float64Array(tract.posture.length).fill(NaN);
+  let dirty = true;
+  const shape = (): TractShape | null => current;
   const phoneme = ref('_');
   const flow = ref(0);
   const handles = shallowRef<Record<MouthHandle, [number, number]> | null>(null);
@@ -68,15 +77,24 @@ export function useMouth(i: MouthInputs) {
     return keep;
   }
 
+  // settings is replaced, never mutated, so a shallow watch sees every change
   watch(
     () => [i.settings(), i.shapeIpa(), i.shaping(), i.body()],
     () => {
       tract.setBody(i.body());
       tract.setSettings(i.settings());
+      dirty = true;
       readShape();
     },
-    { deep: true },
   );
+  // a line ending or starting changes what the Shape tab may offer
+  watch(i.playing, () => readShape());
+
+  /* Drags arrive faster than frames: keep the last one and solve it once a frame. */
+  let pending: { h: MouthHandle; x: number; y: number; apply: (v: Record<string, number>) => void } | null = null;
+  function queueDrag(h: MouthHandle, x: number, y: number, apply: (v: Record<string, number>) => void): void {
+    pending = { h, x, y, apply };
+  }
 
   let raf = 0;
   let last = 0;
@@ -103,11 +121,24 @@ export function useMouth(i: MouthInputs) {
     if (held) flow.value = 1;
     else if (!i.playing.value) flow.value = 0;
     if (!held && !i.playing.value && i.shaping()) want = i.shapeIpa();
+    if (pending) {
+      const p = pending;
+      pending = null;
+      p.apply(drag(p.h, p.x, p.y));
+    }
     if (want !== tract.current) tract.target(want);
     tract.step(dt);
     const beat = want.startsWith('beat:') ? want.slice(5).replace(/>$/, '') : '';
     phoneme.value = beat ? (beat === '.' ? '' : beat === 'in' ? 'breath in' : `${beat} ${BEAT_NAMES.get(beat) ?? ''}`) : want;
-    shape.value = tract.shape();
+    // a new shape only when the posture has moved
+    const pose = tract.posture;
+    let moved = dirty;
+    for (let q = 0; q < pose.length && !moved; q++) if (!(Math.abs(pose[q] - seen[q]) < 1e-5)) moved = true;
+    if (moved) {
+      seen.set(pose);
+      dirty = false;
+      current = tract.shape();
+    }
     raf = requestAnimationFrame(frame);
   }
   onMounted(() => {
@@ -116,5 +147,5 @@ export function useMouth(i: MouthInputs) {
   });
   onBeforeUnmount(() => cancelAnimationFrame(raf));
 
-  return { shape, phoneme, flow, handles, caption, readShape, drag };
+  return { shape, phoneme, flow, handles, caption, readShape, queueDrag };
 }

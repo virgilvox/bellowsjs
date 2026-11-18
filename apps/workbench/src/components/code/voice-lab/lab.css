@@ -4,7 +4,6 @@
  */
 /* IPA in a face that draws it: the site's monospace draws u like ʊ */
 .lab .ipa-text,
-.lab .sound,
 .lab .pad,
 .lab .text {
   font-family: 'Charis SIL', 'Doulos SIL', 'Gentium Plus', 'Noto Sans', 'Lucida Grande', 'Segoe UI', 'DejaVu Sans', sans-serif;
@@ -300,7 +299,7 @@
   font-family: 'Charis SIL', 'Doulos SIL', 'Noto Sans', 'Lucida Grande', 'Segoe UI', sans-serif;
   font-size: 13px;
   line-height: 32px;
-  color: var(--faded);
+  color: var(--bone);
   border-right: 1px solid var(--seam);
   transition: background 60ms linear;
 }
@@ -316,8 +315,8 @@
   font-family: var(--mono);
 }
 .lab .seg.on {
-  background: var(--phosphor);
-  color: var(--char);
+  background: var(--phosphor-hot);
+  color: var(--lit-text);
 }
 .lab .legend {
   font-size: 11px;
@@ -450,11 +449,6 @@
   font-size: 11px;
   color: var(--tick);
 }
-.lab .slider small {
-  font-size: 11px;
-  color: var(--tick);
-  line-height: 1.35;
-}
 .lab .text.pattern {
   font-family: var(--mono);
   letter-spacing: 0.04em;
@@ -472,7 +466,7 @@
   border: 1px solid var(--seam);
   background: transparent;
   box-shadow: none;
-  color: var(--ink, inherit);
+  color: var(--bone);
   font-size: 12px;
   text-transform: none;
   letter-spacing: 0;
@@ -591,4 +585,14 @@
 }
 .lab .legend i.breath {
   background: color-mix(in srgb, #7fc8ff 45%, transparent);
+}
+
+/* text for screen readers alone */
+.lab .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }

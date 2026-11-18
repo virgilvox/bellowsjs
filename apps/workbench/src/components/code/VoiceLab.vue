@@ -198,15 +198,19 @@ watch(
 /* ---- what the text becomes ---- */
 
 /*
- * The pronouncing dictionary (bellows-voice/dict, about 590 KB gzipped) loads in the background when the lab
+ * The pronouncing dictionary (bellows-voice/dict, about 570 KB gzipped) loads in the background when the lab
  * opens: until it arrives the English reader's rules read the text, after it every word CMU has is right.
  */
 const dictionary = shallowRef<PronouncingDictionary | undefined>(undefined);
 onMounted(() => {
-  void import('bellows-voice/dict').then((m) => {
-    dictionary.value = m.cmudict();
-    if (voiceSinger) voiceSinger.dictionary = dictionary.value;
-  });
+  void import('bellows-voice/dict')
+    .then((m) => {
+      dictionary.value = m.cmudict();
+      if (voiceSinger) voiceSinger.dictionary = dictionary.value;
+    })
+    .catch(() => {
+      // offline or blocked: the reader's rules read every word, nearly all of them right
+    });
 });
 
 const safeIpa = (id: string) => {
@@ -359,10 +363,16 @@ function resetParams(): void {
   for (const s of specs) setParam(s.name, next[s.name] ?? s.default);
 }
 
-/** Hold one sound: a pad's phoneme, or the Shape tab's vowel. */
+/*
+ * Hold one sound: a pad's phoneme, or the Shape tab's vowel. The first hold waits for the engine to
+ * boot; a release in that wait (a tap, a quick key) cancels it, or the sound would stick on.
+ */
+let holdToken = 0;
 async function hold(p: string): Promise<void> {
+  const token = ++holdToken;
   const s = await ready();
-  release();
+  if (token !== holdToken) return;
+  silence();
   s.param('phoneme', VOCAL_PHONEMES.indexOf(p as (typeof VOCAL_PHONEMES)[number]));
   held = { id: s.on({ hz: state.hz }, 0.8), ipa: p };
   heldNow.value = true;
@@ -370,6 +380,10 @@ async function hold(p: string): Promise<void> {
   mouth.readShape();
 }
 function release(): void {
+  holdToken++;
+  silence();
+}
+function silence(): void {
   if (held && voiceSinger) voiceSinger.off(held.id);
   held = null;
   heldNow.value = false;
@@ -392,10 +406,13 @@ const mouth = useMouth({
 const { shape, phoneme, flow, handles, caption } = mouth;
 watch(
   () => state.shape,
+  // replaced, never mutated (ShapePanel and the drags both set a new object)
   (v) => voiceSinger?.shape(v),
-  { deep: true },
 );
+// a key held on a pad whose keyup lands elsewhere (a Tab, a window switch) must not hold forever
+onMounted(() => window.addEventListener('blur', release));
 onBeforeUnmount(() => {
+  window.removeEventListener('blur', release);
   release();
   stop();
 });
@@ -411,21 +428,22 @@ function voiceArg(): string {
   return changed.length ? `{ ${changed.join(', ')} }` : '{}';
 }
 function lineCall(v: string): string {
+  // the shape carries into every tab, so the code sets it wherever it is set
   const shaped = Object.keys(state.shape).length ? `${v}.shape(${JSON.stringify(state.shape).replace(/"/g, '')});\n` : '';
-  if (state.mode === 'shape') return `${shaped}${v}.speak('${state.text.replace(/'/g, "\\'")}', { hz: ${state.hz}, rate: ${state.rate} });`;
+  const text = "'" + state.text.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+  if (state.mode === 'shape') return `${shaped}${v}.speak(${text}, { hz: ${state.hz}, rate: ${state.rate} });`;
   if (state.mode === 'beatbox') {
     const pat = "'" + state.beat.pattern.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
     return `${v}.param('mic', ${BEAT_MIC});\n${v}.beatbox(${pat}, { bpm: ${state.beat.bpm}, swing: ${state.beat.swing}, repeat: ${state.beat.loops} });`;
   }
-  const text = "'" + state.text.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
-  if (state.mode === 'speak') return `${v}.speak(${text}, { hz: ${state.hz}, rate: ${state.rate} });`;
+  if (state.mode === 'speak') return `${shaped}${v}.speak(${text}, { hz: ${state.hz}, rate: ${state.rate} });`;
   const notes = melodyNotes()
     .map((n) => {
       const sec = Number((n.dur as { seconds: number }).seconds.toFixed(3));
       return n.note === null ? `{ note: null, dur: { seconds: ${sec} } }` : `{ note: '${noteName(n.note as number)}', dur: { seconds: ${sec} } }`;
     })
     .join(',\n  ');
-  return `${v}.sing(${text}, [\n  ${notes},\n]);`;
+  return `${shaped}${v}.sing(${text}, [\n  ${notes},\n]);`;
 }
 const codeTab = ref<'app' | 'code'>('app');
 const code = computed(() =>
@@ -493,13 +511,13 @@ async function copyCode(): Promise<void> {
               :labels="state.labels"
               :handles="handles"
               :caption="caption"
-              @drag="(h, x, y) => (state.shape = mouth.drag(h, x, y))"
+              @drag="(h, x, y) => mouth.queueDrag(h, x, y, (v) => (state.shape = v))"
             />
             <div class="view-tools">
-              <p class="explain">Drag a circle: the tongue, its tip, the jaw, the lips, the soft palate, the voice box.</p>
-              <div class="tabs small" role="tablist" aria-label="how much of the head">
-                <button role="tab" class="tab" :aria-selected="state.zoom === 'mouth'" @click="state.zoom = 'mouth'">Mouth</button>
-                <button role="tab" class="tab" :aria-selected="state.zoom === 'head'" @click="state.zoom = 'head'">Whole head</button>
+              <p class="explain">Drag a circle: the tongue, its tip, the jaw, the lips, the soft palate, the voice box. The sliders do the same from the keyboard.</p>
+              <div class="tabs small" role="radiogroup" aria-label="how much of the head">
+                <button role="radio" class="tab" :aria-checked="state.zoom === 'mouth'" :aria-selected="state.zoom === 'mouth'" @click="state.zoom = 'mouth'">Mouth</button>
+                <button role="radio" class="tab" :aria-checked="state.zoom === 'head'" :aria-selected="state.zoom === 'head'" @click="state.zoom = 'head'">Whole head</button>
               </div>
             </div>
           </template>
@@ -564,9 +582,9 @@ async function copyCode(): Promise<void> {
           :labels="state.labels"
         />
         <div class="view-tools">
-          <div class="tabs small" role="tablist" aria-label="how much of the head">
-            <button role="tab" class="tab" :aria-selected="state.zoom === 'mouth'" @click="state.zoom = 'mouth'">Mouth</button>
-            <button role="tab" class="tab" :aria-selected="state.zoom === 'head'" @click="state.zoom = 'head'">Whole head</button>
+          <div class="tabs small" role="radiogroup" aria-label="how much of the head">
+            <button role="radio" class="tab" :aria-checked="state.zoom === 'mouth'" :aria-selected="state.zoom === 'mouth'" @click="state.zoom = 'mouth'">Mouth</button>
+            <button role="radio" class="tab" :aria-checked="state.zoom === 'head'" :aria-selected="state.zoom === 'head'" @click="state.zoom = 'head'">Whole head</button>
           </div>
           <label class="check"><input v-model="state.labels" type="checkbox" /> Names</label>
         </div>
@@ -632,6 +650,7 @@ async function copyCode(): Promise<void> {
               @pointerleave="release"
               @keydown.space.prevent="!heldNow && hold(p)"
               @keyup.space="release"
+              @blur="release"
             >
               {{ p }}
             </button>
