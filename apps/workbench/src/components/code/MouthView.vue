@@ -110,17 +110,31 @@ function loop(): void {
   draw();
   raf = requestAnimationFrame(loop);
 }
-watch(() => [props.zoom, props.labels, props.handles, props.phoneme], restale);
+watch(() => [props.zoom, props.labels, props.handles, props.phoneme, props.flow], restale);
+/* Redraws the CSS size cannot announce: a new pixel ratio (a zoom, another screen) and fonts arriving. */
+let dprQuery: MediaQueryList | null = null;
+function watchRatio(): void {
+  dprQuery?.removeEventListener('change', onRatio);
+  dprQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+  dprQuery.addEventListener('change', onRatio);
+}
+function onRatio(): void {
+  restale();
+  watchRatio();
+}
 onMounted(() => {
   raf = requestAnimationFrame(loop);
   if (canvas.value && 'ResizeObserver' in window) {
     ro = new ResizeObserver(restale);
     ro.observe(canvas.value);
   }
+  watchRatio();
+  void document.fonts?.ready.then(restale);
 });
 onBeforeUnmount(() => {
   cancelAnimationFrame(raf);
   ro?.disconnect();
+  dprQuery?.removeEventListener('change', onRatio);
 });
 </script>
 

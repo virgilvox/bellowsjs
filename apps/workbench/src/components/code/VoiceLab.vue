@@ -309,12 +309,16 @@ async function ready(): Promise<Singer> {
   return voiceSinger;
 }
 
+/* A second click while the engine boots must not post the line twice: the last click wins. */
+let playToken = 0;
 async function play(): Promise<void> {
   if (playing.value) {
     stop();
     return;
   }
+  const token = ++playToken;
   const s = await ready();
+  if (token !== playToken) return;
   // a beatboxer is heard on a close microphone; the other modes keep the voice's own setting
   s.param('mic', state.mode === 'beatbox' ? Math.max(BEAT_MIC, state.params.mic ?? 0) : (state.params.mic ?? 0));
   const result =
@@ -338,6 +342,7 @@ async function tryBeat(id: string): Promise<void> {
 }
 
 function stop(): void {
+  playToken++;
   voiceSinger?.instrument.allOff();
   playing.value = false;
   nowIndex.value = -1;
@@ -373,6 +378,8 @@ async function hold(p: string): Promise<void> {
   const s = await ready();
   if (token !== holdToken) return;
   silence();
+  // a beat line leaves the microphone close; a held sound is heard at the voice's own setting
+  s.param('mic', state.params.mic ?? 0);
   s.param('phoneme', VOCAL_PHONEMES.indexOf(p as (typeof VOCAL_PHONEMES)[number]));
   held = { id: s.on({ hz: state.hz }, 0.8), ipa: p };
   heldNow.value = true;

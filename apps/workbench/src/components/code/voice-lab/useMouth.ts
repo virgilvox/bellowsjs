@@ -112,7 +112,9 @@ export function useMouth(i: MouthInputs) {
       if (k >= 0) {
         want = spans[k].ipa;
         flow.value = airFor(want);
-      } else if (spans.length && t > spans[spans.length - 1].end) {
+      } else flow.value = 0;
+      // in a gap or the lead-in the air is still; past the last span the line is over
+      if (k < 0 && spans.length && t > spans[spans.length - 1].end) {
         i.playing.value = false;
         i.nowIndex.value = -1;
         readShape();
