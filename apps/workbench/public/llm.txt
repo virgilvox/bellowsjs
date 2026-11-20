@@ -837,7 +837,7 @@ Sampler engines expose SAMPLER_PARAMS:
 
 Granular over your own buffer: b.granular(float32Data, sampleRate, params?).
 
-## Singing and lyrics (bellows-voice 0.7.2)
+## Singing and lyrics (bellows-voice 0.7.3)
 
 npm install bellows-voice. It peer-depends on bellowsjs.
 
