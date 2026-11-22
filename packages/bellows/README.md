@@ -189,7 +189,7 @@ This DSP core is also a header-only C++17 library for 32-bit microcontrollers:
 [packages/bellows-embedded](https://github.com/virgilvox/bellowsjs/tree/main/packages/bellows-embedded).
 It is not on npm and is not meant to be. It ships through the two registries that microcontroller people actually use: `lib_deps = virgilvox/Bellows` in PlatformIO, or `Bellows` in the Arduino Library Manager (`arduino-cli lib install Bellows`).
 
-It is not a rewrite and not a subset that drifted. The C++ is diffed against this package on every commit: 41 engine and effect rows rendered from both sides and compared sample by sample, 428 exactly-compared value rows for the parts that make no sound, and all 50 instrument presets compared value by value, 1054 of them, with the PRNG bit exact. Nothing allocates, nothing self-registers, and every buffer is sized from a template parameter, so you include one header and you link one engine. A kick drum is 3760 bytes of flash.
+It is not a rewrite and not a subset that drifted. The C++ is diffed against this package on every commit: 42 engine and effect rows rendered from both sides and compared sample by sample, 428 exactly-compared value rows for the parts that make no sound, and all 50 instrument presets compared value by value, 1054 of them, with the PRNG bit exact. Nothing allocates, nothing self-registers, and every buffer is sized from a template parameter, so you include one header and you link one engine. A kick drum is 3760 bytes of flash.
 
 Board support, measured by building all 17 examples for each part rather than read off a data sheet:
 

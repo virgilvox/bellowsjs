@@ -18,6 +18,8 @@
  *
  *   node test/parity/parity.mjs            report only
  *   node test/parity/parity.mjs --check    exit non-zero if a gate fails
+ *   node test/parity/parity.mjs --wasm     the C++ built as WebAssembly instead (tools/wasm)
+ *   node test/parity/parity.mjs --bench    time each row instead of gating it (with or without --wasm)
  *
  * Gates are per voice because the acceptable drift is not uniform: a
  * recursive loop like the pluck accumulates float error over its whole
@@ -28,6 +30,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildWasm, loadProgram } from '../../tools/wasm/host.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PKG = join(HERE, '..', '..');
@@ -340,6 +343,13 @@ const GATES = {
   // measured 1.9e-5 / 8.0e-6. The carrier is a sine evaluated per sample,
   // so this row is mostly fm::Sin against Math.sin.
   ringmod: { rel: 2e-4, abs: 8e-5, note: 'sine carrier multiplied in' },
+  // The kernel and VoicePool, which no row reached before: kernel.h and voicepool.h against
+  // KernelEngine on one channel, scored by KERNEL_SCRIPT. measured 4.35e-5 / 4.59e-5, the kick
+  // row's own float drift, so the gates are ten times each. What it catches: one event a frame
+  // late, 8.1e-3; the steal order without its released-first step, 1.6e-1; the newest held voice
+  // stolen instead of the oldest, 3.3e-1. What it cannot see is which free slot a note takes,
+  // because slots are interchangeable: the sum is the same and stealing goes by start frame.
+  kernel: { rel: 4.4e-4, abs: 4.6e-4, note: 'Kernel<Kick, 4> against KernelEngine: splits, steals, all off' },
 };
 
 /* Effects that take an EffectDef rather than an EngineDef, with the params
@@ -460,8 +470,12 @@ function fillFxInput(mulberry32, l, r, frames, kind) {
   }
 }
 
+/* --wasm runs the same render.cpp compiled to WebAssembly (tools/wasm), against the same gates. */
+const WASM = process.argv.includes('--wasm');
+
 function buildRenderer() {
   mkdirSync(BUILD, { recursive: true });
+  if (WASM) return loadProgram(buildWasm([join(HERE, 'render.cpp')], join(BUILD, 'render.wasm')));
   const out = join(BUILD, 'render');
   execFileSync(
     'c++',
@@ -471,20 +485,57 @@ function buildRenderer() {
     ],
     { stdio: ['ignore', 'inherit', 'inherit'] },
   );
+  return (args, env) => execFileSync(out, args, { env: { ...process.env, ...env }, maxBuffer: 1 << 28 });
+}
+
+/* The kernel row's score, mirrored from render.cpp's kScript: frame, kind (EventKind wire value:
+ * 0 note on, 1 note off, 4 all notes off), note id, Hz, velocity. */
+const KERNEL_SCRIPT = [
+  [0, 0, 1, 55, 0.875], [37, 0, 2, 61.5, 0.75], [300, 0, 3, 49, 0.5],
+  [301, 0, 4, 73.25, 1], [1000, 1, 3, 0, 0], [2000, 0, 5, 82, 0.625],
+  [2050, 0, 6, 46.5, 0.9375], [2100, 1, 4, 0, 0], [5003, 0, 7, 58, 0.8125],
+  [9000, 4, 0, 0, 0], [9001, 0, 8, 65, 0.6875],
+];
+
+/* The same score through the TypeScript KernelEngine: one channel of four kicks. Channel and
+ * master gain are snapped to 1 before the first block (setLevel snaps until then), and a centred
+ * equal-power pan is cos(pi/4) * sqrt(2), 1 to within 2.2e-16, so what reaches the output is the
+ * voice pool's own sum, which is all the C++ Kernel produces. */
+/* The last TypeScript render loop's own time, ms, for --bench. */
+let tsLoopMs = 0;
+
+async function renderKernelTs(src, frames) {
+  const { KernelEngine } = await import(join(src, 'kernel/engine.ts'));
+  const { registerEngine } = await import(join(src, 'core/registry.ts'));
+  const { kickEngine } = await import(join(src, 'engines/drums.ts'));
+  registerEngine(kickEngine);
+  const k = new KernelEngine(SR, { blockSize: 128 });
+  k.apply({ type: 'createChannel', id: 1, engineId: kickEngine.id, params: {}, seed: 'parity', polyphony: 4 });
+  k.apply({ type: 'channelGain', id: 1, gain: 1 });
+  k.apply({ type: 'masterGain', gain: 1 });
+  k.apply({
+    type: 'events',
+    events: KERNEL_SCRIPT.map(([frame, kind, a, b, c]) => ({ time: frame / SR, kind, target: 1, a, b, c })),
+  });
+  const out = new Float32Array(frames);
+  const bl = new Float32Array(128);
+  const br = new Float32Array(128);
+  const t0 = performance.now();
+  for (let i = 0; i < frames; i += 128) {
+    k.process(bl, br);
+    out.set(bl.subarray(0, Math.min(128, frames - i)), i);
+  }
+  tsLoopMs = performance.now() - t0;
   return out;
 }
 
 function renderCpp(bin, voice, frames, freq, vel) {
   /* The three fxin rows are the same C++ path under three drive shapes. */
   const arg = voice.startsWith('fxin') ? 'fxin' : voice;
-  const buf = execFileSync(bin, [arg, String(frames), String(freq), String(vel), String(SR)], {
-    env: {
-      ...process.env,
-      BELLOWS_SEED: String(SEED),
-      BELLOWS_RNG_LABEL: RNG_LABEL[voice] || '',
-      BELLOWS_FX_DRIVE: DRIVE[voice] || '',
-    },
-    maxBuffer: 1 << 28,
+  const buf = bin([arg, String(frames), String(freq), String(vel), String(SR)], {
+    BELLOWS_SEED: String(SEED),
+    BELLOWS_RNG_LABEL: RNG_LABEL[voice] || '',
+    BELLOWS_FX_DRIVE: DRIVE[voice] || '',
   });
   const f = new Float32Array(buf.buffer, buf.byteOffset, Math.floor(buf.byteLength / 4));
   const l = new Float32Array(frames);
@@ -518,6 +569,7 @@ async function renderTs(voice, frames, freq, vel) {
     fillFxInput(mulberry32, l, r, frames, DRIVE[voice]);
     return l;
   }
+  if (voice === 'kernel') return renderKernelTs(src, frames);
   if (FX[voice]) {
     const [path, name, params] = FX[voice];
     const def = (await import(join(src, path)))[name];
@@ -525,7 +577,9 @@ async function renderTs(voice, frames, freq, vel) {
     const l = new Float32Array(frames);
     const r = new Float32Array(frames);
     fillFxInput(mulberry32, l, r, frames, DRIVE[voice]);
+    const t0 = performance.now();
     for (let i = 0; i < frames; i += 128) fx.process(l, r, i, Math.min(i + 128, frames));
+    tsLoopMs = performance.now() - t0;
     return l;
   }
 
@@ -572,9 +626,11 @@ async function renderTs(voice, frames, freq, vel) {
   const l = new Float32Array(frames);
   const r = new Float32Array(frames);
   v.noteOn(freq, vel);
+  const t0 = performance.now();
   for (let i = 0; i < frames; i += 128) {
     v.process(l, r, i, Math.min(i + 128, frames));
   }
+  tsLoopMs = performance.now() - t0;
   return l;
 }
 
@@ -789,8 +845,47 @@ const RNG_LABEL = {
 const check = process.argv.includes('--check');
 const bin = buildRenderer();
 
+/*
+ * --bench: time each audio row instead of gating it, five seconds of audio a render, best of
+ * three after a warm-up. Only the render loop is timed, on both sides (BELLOWS_BENCH in
+ * render.cpp, tsLoopMs here), so process start, module instantiation, building the voice and
+ * moving the samples are all outside the figure.
+ */
+if (process.argv.includes('--bench')) {
+  const frames = 5 * SR;
+  const best = async (fn) => {
+    await fn();
+    let b = Infinity;
+    for (let i = 0; i < 3; i++) b = Math.min(b, await fn());
+    return b / 5;
+  };
+  const label = WASM ? 'wasm' : 'native';
+  console.log(`bench: ms of compute per second of audio, ${SR} Hz, render loop only`);
+  console.log(`${'module'.padEnd(18)}${label.padStart(9)}${'ts'.padStart(9)}${('ts / ' + label).padStart(14)}`);
+  for (const voice of Object.keys(GATES)) {
+    if (voice === 'prng' || voice === 'theory' || voice.startsWith('fxin')) continue;
+    const freq = FREQ_BY_VOICE[voice] ?? 220;
+    const arg = voice.startsWith('fxin') ? 'fxin' : voice;
+    const c = await best(async () => {
+      const buf = bin([arg, String(frames), String(freq), '0.9', String(SR)], {
+        BELLOWS_SEED: String(SEED),
+        BELLOWS_RNG_LABEL: RNG_LABEL[voice] || '',
+        BELLOWS_FX_DRIVE: DRIVE[voice] || '',
+        BELLOWS_BENCH: '1',
+      });
+      return buf.readDoubleLE(0) / 1e6;
+    });
+    const t = await best(async () => {
+      await renderTs(voice, frames, freq, 0.9);
+      return tsLoopMs;
+    });
+    console.log(`${voice.padEnd(18)}${c.toFixed(3).padStart(9)}${t.toFixed(3).padStart(9)}${(t / c).toFixed(2).padStart(13)}x`);
+  }
+  process.exit(0);
+}
+
 console.log(
-  `parity: C++ (float) versus TypeScript (double), ${SR} Hz, ${FRAMES} frames` +
+  `parity: C++ (float${WASM ? ', compiled to WebAssembly' : ''}) versus TypeScript (double), ${SR} Hz, ${FRAMES} frames` +
     ` (${Object.keys(FRAMES_BY_VOICE).join(', ')} differ), seed ${SEED}`,
 );
 console.log(`${'module'.padEnd(11)}${'rel rms'.padStart(10)}${'max abs'.padStart(10)}${'gate'.padStart(9)}  result`);

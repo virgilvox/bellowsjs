@@ -726,7 +726,7 @@ is what `bellows/bank.h` is.
 
 `test/parity/parity.mjs` renders the same note from both implementations and diffs them. It runs
 in CI. The gates sit at roughly ten times the drift actually measured, so they catch a regression
-rather than rubber stamping anything that runs. The harness prints 41 rows in all; the block
+rather than rubber stamping anything that runs. The harness prints 42 rows in all; the block
 below is the engine and effect subset, without the four bit-exact `fxin` input rows or the
 per-curve and per-shape variants.
 
@@ -837,6 +837,12 @@ visible.
 **B. Invert: make C++ the source of truth and compile it to WASM for the browser.** Kills parity
 drift permanently and gives one DSP codebase. Costs the tier 3 JavaScript story and a large part
 of the current test suite's ergonomics. That is a rewrite, not a port.
+
+The C++ already compiles to WebAssembly as it stands: `packages/bellows-embedded/tools/wasm`
+builds the parity harnesses for wasm32 and runs them against the TypeScript under the same
+gates, and every audio, table and preset row passes. On one Apple arm64 machine the WebAssembly
+render loops ran 1.1 to 8.5 times faster than the TypeScript. What B would still cost is the
+rest of the sentence above; what it would not cost is a port.
 
 **C. The hybrid, which is probably the good version.** Keep bellows.live as the composition brain
 and put only the audio kernel on the board. `KernelEvent` is already flat and numeric, so it

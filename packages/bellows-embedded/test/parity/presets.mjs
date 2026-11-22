@@ -33,12 +33,14 @@
  *
  *   node test/parity/presets.mjs            report
  *   node test/parity/presets.mjs --check    exit non-zero on any mismatch
+ *   node test/parity/presets.mjs --wasm     the dumper built as WebAssembly instead
  */
 
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildWasm, loadProgram } from '../../tools/wasm/host.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PKG = join(HERE, '..', '..');
@@ -95,17 +97,22 @@ function fieldOf(spec) {
 function buildDumper() {
   const bin = join(HERE, 'build', 'presets');
   mkdirSync(join(HERE, 'build'), { recursive: true });
+  /* --wasm: the same dumper compiled to WebAssembly (tools/wasm), compared the same way. */
+  if (process.argv.includes('--wasm')) {
+    const run = loadProgram(buildWasm([join(HERE, 'presets.cpp')], bin + '.wasm'));
+    return () => run();
+  }
   execFileSync(
     'c++',
     ['-std=c++17', '-O2', '-Wall', '-Wextra', '-I', join(PKG, 'src'), join(HERE, 'presets.cpp'),
      '-o', bin],
     { stdio: ['ignore', 'inherit', 'inherit'] },
   );
-  return bin;
+  return () => execFileSync(bin);
 }
 
 const specs = readSpecs();
-const cpp = JSON.parse(execFileSync(buildDumper()).toString());
+const cpp = JSON.parse(buildDumper()().toString());
 const byId = new Map(cpp.map((p) => [p.id, p]));
 
 /* Relative, because cutoff is 3800 and level is 0.15 and a fixed epsilon

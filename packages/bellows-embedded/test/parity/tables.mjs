@@ -11,12 +11,14 @@
  *
  *   node test/parity/tables.mjs            report
  *   node test/parity/tables.mjs --check    exit non-zero on any mismatch
+ *   node test/parity/tables.mjs --wasm     the dumper built as WebAssembly instead
  */
 
 import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildWasm, loadProgram } from '../../tools/wasm/host.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PKG = join(HERE, '..', '..');
@@ -338,16 +340,21 @@ for (const c of LSYS_CASES) {
 function buildDumper() {
   const bin = join(HERE, 'build', 'tables');
   mkdirSync(join(HERE, 'build'), { recursive: true });
+  /* --wasm: the same dumper compiled to WebAssembly (tools/wasm), compared the same way. */
+  if (process.argv.includes('--wasm')) {
+    const run = loadProgram(buildWasm([join(HERE, 'tables.cpp')], bin + '.wasm'));
+    return () => run();
+  }
   execFileSync(
     'c++',
     ['-std=c++17', '-O2', '-I', join(PKG, 'src'), join(HERE, 'tables.cpp'), '-o', bin],
     { stdio: ['ignore', 'inherit', 'inherit'] },
   );
-  return bin;
+  return () => execFileSync(bin);
 }
 
 /* Compare. */
-const cpp = execFileSync(buildDumper()).toString().trimEnd().split('\n');
+const cpp = buildDumper()().toString().trimEnd().split('\n');
 const js = out;
 
 let mismatches = 0;

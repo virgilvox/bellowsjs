@@ -109,7 +109,7 @@ WHAT IS TRUE TODAY, and each of these is checkable in one command:
   moved by three rather than five.
 - One board, one program, run twice. Nothing has run on a 3.x, an LC, a
   MicroMod or a Daisy, and **nothing has been compared to the browser by ear**.
-  41 parity rows, 428 value rows and 1054 preset values stand in for that and
+  42 parity rows, 428 value rows and 1054 preset values stand in for that and
   are not the same thing.
 - `bellowsjs@0.5.0` and `bellows-voice@0.1.0` are on npm and tagged (2026-11-14), and `Bellows@0.1.2` is on both embedded registries.
   Publishing to npm needs a token that bypasses 2FA or an `--otp=<code>`: a plain `npm publish`
@@ -224,7 +224,7 @@ npm run gen:worklet -w packages/bellows    && git diff --exit-code -- packages/b
 # all. Measured, not guessed.
 npm run build -w packages/bellows
 
-cd packages/bellows-embedded && npm run parity:check     41 rows, prng exactly 0
+cd packages/bellows-embedded && npm run parity:check     42 rows, prng exactly 0
 cd packages/bellows-embedded && npm run tables:check     428 value rows
 cd packages/bellows-embedded && npm run presets:check    50 presets, 1054 values
 cd packages/bellows-embedded && npm run params:check     158 defaults, 26 units
@@ -309,7 +309,7 @@ WHERE THINGS STAND
   declines with an #error because a 4.x has no DAC, and examples/daisy_onekick links against real
   libDaisy. This line said 43 headers and five examples until 2026-08-20, thirteen lines away
   from another that said 51.
-- Parity passes on 41 rows with the PRNG bit exact, plus 428 exactly-compared value
+- Parity passes on 42 rows with the PRNG bit exact, plus 428 exactly-compared value
   rows for the parts that make no sound.
 - BOTH OF THE THINGS THIS SECTION USED TO SAY HAD NOT HAPPENED HAVE NOW HAPPENED, and the
   correction is worth reading rather than skipping, because both were stated here as hard
@@ -348,7 +348,7 @@ VERIFY EVERYTHING WITH THESE. Run them before you claim anything works.
   packages/bellows:            npm test                     all green, no count quoted here
                                npx tsc --noEmit
                                npm run gen:worklet          then confirm no git diff
-  packages/bellows-embedded:   npm run parity               41 rows against the TypeScript
+  packages/bellows-embedded:   npm run parity               42 rows against the TypeScript
                                npm run tables               428 value rows, compared exactly
                                npm run fastmath             polynomial accuracy against libm
                                npm run memsafety            ASan and UBSan, 0.5x to 4x rate

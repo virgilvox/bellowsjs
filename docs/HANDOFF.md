@@ -317,7 +317,7 @@ the single highest-value thing left on this list: it is a checklist sketch with 
 written pass condition per stage, and its last two stages measure the pitch
 dependence of the BLEP oscillator cost, which no test in this repository covers
 and no amount of building will tell you. The other half is that nothing has been compared to the browser
-BY EAR: 41 parity rows and 1054 preset values are a strong position and they are
+BY EAR: 42 parity rows and 1054 preset values are a strong position and they are
 not the same as having listened to both.
 
 **2. The audit backlog. 33 open, down from 51.** `docs/AUDIT-2.md` has 25 open
@@ -1133,7 +1133,7 @@ the same as anyone being able to use it.
 - `tsc --noEmit` clean. Build: `npm run build -w packages/bellows` runs worklet generation, vite (ESM + standalone IIFE), declaration emit, and writes `dist/worklet.js`.
 - The Vue workbench builds clean (`vite build`) and type-checks clean (`npm run typecheck -w apps/workbench`, which CI runs as its own step; deliberately not inside the build script, because `.do/app.yaml` deploys the site by running that script and the site's deploy should not hang on a type check). Verified live in Chrome: bench plays and evolves seeded pieces, engine hot-swap works mid-phrase, 8-bar WAV export rendered in about 1.4 s while playing, code mode runs its examples. Its 60 examples are checked against the built library by `npm run check:examples -w apps/workbench`, in CI.
 - Embedded: 52 headers, every one compiling standalone and all of them together in one translation unit, for Cortex-M7 and Cortex-M4. The whole ported engine set is about 34 KB of flash. All seventeen examples build and link as real Teensy 4.1 firmware against the actual Arduino core and Audio Library, except `12_DacOut`, which declines with an `#error` because a 4.x has no DAC. This line said 43 and five until 2026-08-20, while the state section fourteen lines up said 51 and 17.
-- Parity against the TypeScript passes on 41 rows with the PRNG bit exact and the effect input bit exact, plus 428 exactly-compared value rows for the parts that make no sound.
+- Parity against the TypeScript passes on 42 rows with the PRNG bit exact and the effect input bit exact, plus 428 exactly-compared value rows for the parts that make no sound.
 - The embedded package went through a size pass whose findings are in `docs/HARDWARE.md` under "Making it smaller". Delay buffers are sized exactly rather than rounded to a power of two, which took 25 percent off RAM library-wide with bit-identical output; the oscillator gained per-shape entry points so the linker can drop the residual table a program never reads; and every transcendental now routes through `fm::`, which is what the docs had claimed for months and was not true, so `BELLOWS_FAST_MATH` went from saving nothing on any sketch with an oscillator to saving 23 to 75 percent. Read that section before optimising anything: it also records what was measured and deliberately NOT taken, and why attributing firmware bytes to a header-only library by symbol name does not work.
 
 **Two things that have not happened, and both are load bearing.**
@@ -1151,7 +1151,7 @@ the same as anyone being able to use it.
    point: no other board has run anything (a 3.2 and an LC have no FPU and emulate every
    float operation, and a Daisy Seed has been linked to an image but never run), no other
    program has been measured, and neither implementation has been compared to the other
-   by ear. The numerical comparison, 41 engine and effect rows plus 428 exactly-compared
+   by ear. The numerical comparison, 42 engine and effect rows plus 428 exactly-compared
    value rows, is what stands in for that and is not the same thing.
    
    These CPU figures are hand-recorded from a serial console. No harness prints them, so
@@ -1421,7 +1421,7 @@ before the list was renumbered and a dangling one after.
 | Command | What it proves | What it caught |
 | --- | --- | --- |
 | `npm test` (in `packages/bellows`) | the TypeScript, including the golden render and the oscillator band sweep | the regression fixture is the only whole-piece guard; `test/dsp-osc/blep-frequency.test.ts` is the only thing that can see alias rejection collapse above 2637 Hz |
-| `npm run parity` | 41 rows match the TypeScript numerically, four of them exactly | the `eq.h` three-band-mislabelled-as-port, the `StereoDelay` clamp bug, and three rows of its own that measured nothing until their input was fixed |
+| `npm run parity` | 42 rows match the TypeScript numerically, four of them exactly | the `eq.h` three-band-mislabelled-as-port, the `StereoDelay` clamp bug, and three rows of its own that measured nothing until their input was fixed |
 | `npm run tables` | euclid, scales, chords, notes, CA, arp, tempo map, MIDI compared EXACTLY | nothing yet, but it is the only thing that can see a wrong scale table |
 | `npm run fastmath` | every polynomial in `core/fastmath.h` against libm | `fm::Log2` wrong by 213 cents, inherited by every `Pow` |
 | `npm run memsafety` (and `memsafety:fastmath`) | ASan and UBSan over the buffer-owning classes at 0.5x to 4x their template rate, and at NaN, zero and negative rates | the `Pluck::NoteOn` overflow, then four undefined float-to-int casts reached through a NaN. Nothing else could: parity compares numbers at one rate, and `check-header.sh` instantiates nothing. Build it for x86-64 as well as arm64: the NaN cast saturates harmlessly on arm64 and only faults on x86-64 |
@@ -1580,7 +1580,7 @@ can disagree with the reasoning rather than reopen the question from nothing.
    needs nothing.
 2. **The TypeScript stays the source of truth.** Compiling the C++ to WASM would end parity drift
    permanently, and it costs the tier 3 JavaScript story, most of the suite's ergonomics, and it
-   is a rewrite. The harnesses work: 41 parity rows, four of them exact, plus 428 value rows.
+   is a rewrite. The harnesses work: 42 parity rows, four of them exact, plus 428 value rows.
    Revisit only if parity maintenance starts costing more than the harnesses save, which it does
    not.
 3. **`SetupLog` and `VoicePool` come out of the public index at 0.2.0, with the barrel.** Both are

@@ -37,6 +37,7 @@
 #include "bellows/fx/dynamics.h"
 #include "bellows/fx/modfx.h"
 #include "bellows/fx/plate.h"
+#include "bellows/kernel.h"
 
 namespace {
 
@@ -55,7 +56,27 @@ const char* LabelFromEnv(const char* dflt) {
   return (s && *s) ? s : dflt;
 }
 
+/* --bench in parity.mjs sets BELLOWS_BENCH: each render loop is timed on its own, and Emit writes
+ * that time in ns as one double instead of the samples, so the figure is the DSP and not the
+ * process, the module or the pipe. */
+#if defined(__wasm__)
+extern "C" __attribute__((import_module("host"), import_name("now_ns"))) double HostNowNs();
+double NowNs() { return HostNowNs(); }
+#else
+#include <time.h>
+double NowNs() {
+  timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  return t.tv_sec * 1e9 + t.tv_nsec;
+}
+#endif
+double g_loop_ns = 0;
+
 void Emit(const float* l, const float* r, int n) {
+  if (getenv("BELLOWS_BENCH")) {
+    fwrite(&g_loop_ns, sizeof g_loop_ns, 1, stdout);
+    return;
+  }
   /* interleaved stereo float32, little endian, straight to stdout */
   for (int i = 0; i < n; ++i) {
     fwrite(&l[i], sizeof(float), 1, stdout);
@@ -68,10 +89,12 @@ void RenderVoice(V& v, int frames, float freq, float vel) {
   float* l = static_cast<float*>(calloc(frames, sizeof(float)));
   float* r = static_cast<float*>(calloc(frames, sizeof(float)));
   v.NoteOn(freq, vel);
+  const double t0 = NowNs();
   for (int i = 0; i < frames; i += kBlock) {
     int to = i + kBlock > frames ? frames : i + kBlock;
     v.Process(l, r, i, to);
   }
+  g_loop_ns = NowNs() - t0;
   Emit(l, r, frames);
   free(l);
   free(r);
@@ -201,10 +224,12 @@ void RenderFx(Fx& fx, int frames, uint32_t seed) {
     l[i] = DriveSample(drive, i, r.Bipolar());
     rr[i] = DriveSample(drive, i, r.Bipolar());
   }
+  const double t0 = NowNs();
   for (int i = 0; i < frames; i += kBlock) {
     int to = i + kBlock > frames ? frames : i + kBlock;
     fx.Process(l, rr, i, to);
   }
+  g_loop_ns = NowNs() - t0;
   Emit(l, rr, frames);
   free(l);
   free(rr);
@@ -225,7 +250,35 @@ int main(int argc, char** argv) {
 
   bellows::Rng rng;
 
-  if (strcmp(which, "kick") == 0) {
+  /* The kernel and its VoicePool: notes scheduled at frames that are not block aligned, more of
+   * them overlapping than there are voices, two released early and an all-notes-off, so the row
+   * sees block splitting, the steal order (free, oldest released, oldest held) and the hold set.
+   * The same script is in parity.mjs (KERNEL_SCRIPT); every value is exact in float. */
+  if (strcmp(which, "kernel") == 0) {
+    struct Step { uint32_t frame; int kind; uint16_t id; float hz; float vel; };
+    static const Step kScript[] = {
+        {0, 0, 1, 55.0f, 0.875f},    {37, 0, 2, 61.5f, 0.75f},   {300, 0, 3, 49.0f, 0.5f},
+        {301, 0, 4, 73.25f, 1.0f},   {1000, 1, 3, 0, 0},         {2000, 0, 5, 82.0f, 0.625f},
+        {2050, 0, 6, 46.5f, 0.9375f}, {2100, 1, 4, 0, 0},         {5003, 0, 7, 58.0f, 0.8125f},
+        {9000, 4, 0, 0, 0},          {9001, 0, 8, 65.0f, 0.6875f},
+    };
+    static bellows::Kernel<bellows::Kick, 4, 32> k;
+    k.Init(sr);
+    k.InitVoices(sr);
+    for (const Step& s : kScript) {
+      if (s.kind == 0) k.PushNoteOn(s.frame, s.id, s.hz, s.vel);
+      else if (s.kind == 1) k.PushNoteOff(s.frame, s.id);
+      else k.PushAllNotesOff(s.frame);
+    }
+    float* l = static_cast<float*>(calloc(frames, sizeof(float)));
+    float* r = static_cast<float*>(calloc(frames, sizeof(float)));
+    const double t0 = NowNs();
+    for (int i = 0; i < frames; i += kBlock) k.Process(l + i, r + i, frames - i < kBlock ? frames - i : kBlock);
+    g_loop_ns = NowNs() - t0;
+    Emit(l, r, frames);
+    free(l);
+    free(r);
+  } else if (strcmp(which, "kick") == 0) {
     bellows::Kick v;
     v.Init(sr);
     RenderVoice(v, frames, freq, vel);

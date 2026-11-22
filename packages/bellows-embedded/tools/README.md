@@ -152,3 +152,9 @@ under `~/.platformio/packages` whose `-dumpversion` matches the version
 warning on stderr. The second line of the report says which one it used, and
 `check-docs.mjs` reads that line back and refuses to compare figures against a
 report from a different compiler.
+
+## wasm/
+
+The library compiled to WebAssembly and run against the TypeScript under the parity gates:
+`npm run parity:wasm`, `tables:wasm`, `presets:wasm`, and `bench:wasm` for speed. See
+`tools/wasm/README.md`.

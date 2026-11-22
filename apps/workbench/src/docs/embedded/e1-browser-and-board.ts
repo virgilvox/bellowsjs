@@ -30,7 +30,7 @@ So this page is about what actually stops it, which is measurement rather than d
 
 Three harnesses run on every commit.
 
-**41 parity rows.** Each one renders the same note from the TypeScript and from the C++ and diffs the two sample by sample. Same seed, same sample rate, same note, same length. The comparison is a relative RMS of the difference, and each row has its own gate set at roughly ten times the drift actually measured, rather than at a round number somebody liked.
+**42 parity rows.** Each one renders the same note from the TypeScript and from the C++ and diffs the two sample by sample. Same seed, same sample rate, same note, same length. The comparison is a relative RMS of the difference, and each row has its own gate set at roughly ten times the drift actually measured, rather than at a round number somebody liked.
 
 **428 value rows.** The parts that make no sound: scales, chords, note parsing, euclidean patterns, arpeggios, cellular automata, L-systems, tempo maps. These are compared exactly rather than by tolerance, because integers and note names have no excuse for drifting.
 

@@ -267,7 +267,7 @@ delay         9.54e-8   4.66e-8 0.000001  pass
 plate         1.34e-5   1.00e-5  0.00015  pass
 ```
 
-41 rows in all, plus `npm run tables`, which compares the parts that make no sound
+42 rows in all, plus `npm run tables`, which compares the parts that make no sound
 (scales, chords, euclid, arp, cellular automata, the tempo map, MIDI parsing) exactly rather
 than by tolerance: 428 rows, 0 mismatched.
 
