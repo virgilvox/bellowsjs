@@ -98,6 +98,9 @@ class Snare {
     Apply();
   }
 
+  /* Live change, as setParam does in the JS: both decay times follow at once. */
+  void SetParams(const Params& p) { p_ = p; Apply(); }
+
   void NoteOn(float freq, float vel) {
     vel_ = vel;
     osc1_.SetFreq(freq);
@@ -165,6 +168,9 @@ class Hat {
     amp_.Init(sample_rate);
     Apply();
   }
+
+  /* Live change, as setParam does in the JS: decay and the highpass follow at once. */
+  void SetParams(const Params& p) { p_ = p; Apply(); }
 
   void NoteOn(float freq, float vel) {
     vel_ = vel;

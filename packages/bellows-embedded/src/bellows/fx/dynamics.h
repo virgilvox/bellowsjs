@@ -227,6 +227,9 @@ namespace detail {
 template <bool kOn, int kBlock>
 struct LimiterTruePeak {
   Oversampler<4, kBlock> os_l, os_r;
+  /* The runtime switch the JS truePeak param is. Off, the oversamplers are not fed and keep the
+   * state they had, as the JS leaves its own. */
+  bool on = true;
   void Init() {
     os_l.Init();
     os_r.Init();
@@ -254,10 +257,11 @@ struct LimiterTruePeak<false, kBlock> {
  * sample needs: the output never exceeds the ceiling, and the attack is a
  * smooth ramp instead of a step.
  *
- * The lookahead is fixed at 5 ms, so the window sizes are compile-time
- * constants derived from kSampleRate. Run the unit at a different rate
- * and the buffers still work, the lookahead is just no longer exactly
- * 5 ms; kLatency is always the truth in samples.
+ * The lookahead is 5 ms, rounded up to whole samples at the rate Init was
+ * given, which is what the JS computes. The buffers are compile-time
+ * constants sized for kSampleRate, so kLatency is the most it can be: at
+ * a rate above kSampleRate the lookahead stays at kLatency samples and is
+ * shorter than 5 ms. Latency() is the figure in use.
  *
  * kTruePeak raises the detector with a 4x oversampled peak estimate. The
  * raw sample peak is always included as well, so the sample-domain
@@ -273,7 +277,7 @@ template <int kSampleRate = BELLOWS_SAMPLE_RATE, bool kTruePeak = false,
           int kMaxBlock = BELLOWS_BLOCK_SIZE>
 class Limiter {
  public:
-  /* Fixed 5 ms lookahead, rounded up, in samples at kSampleRate. */
+  /* 5 ms rounded up, in samples at kSampleRate: the most the buffers hold. */
   static constexpr int32_t kLatency = (5 * kSampleRate + 999) / 1000;
   static constexpr int32_t kWin = kLatency + 1;
   static constexpr int32_t kDqCap = kWin + 1;
@@ -290,6 +294,10 @@ class Limiter {
 
   void Init(float sample_rate, const Params& p) {
     sr_ = SafeRate(sample_rate, static_cast<float>(kSampleRate));
+    const uint32_t rate = static_cast<uint32_t>(sr_ + 0.5f);
+    const int32_t lat = static_cast<int32_t>((5u * rate + 999u) / 1000u);
+    lat_ = lat < kLatency ? lat : kLatency;
+    win_ = lat_ + 1;
     dl_l_.Init();
     dl_r_.Init();
     tp_.Init();
@@ -302,6 +310,16 @@ class Limiter {
     p_.ceiling_db = Clamp(p_.ceiling_db, -24.0f, 0.0f);
     ceil_lin_ = fm::DbToGain(p_.ceiling_db);
     rel_mul_ = fm::Exp(-1.0f / (Clamp(p_.release, 0.001f, 1.0f) * sr_));
+  }
+
+  /* The lookahead delay in samples at the rate Init was given. */
+  int32_t Latency() const { return lat_; }
+
+  /* The JS truePeak param, for an instance built with kTruePeak: whether the oversampled
+   * detector runs. Without kTruePeak there is no detector to switch and this does nothing. */
+  void SetTruePeak(bool on) {
+    if constexpr (kTruePeak) tp_.on = on;
+    else (void)on;
   }
 
   void Process(float* l, float* r, int from, int to) {
@@ -336,8 +354,10 @@ class Limiter {
     const float* up_l = nullptr;
     const float* up_r = nullptr;
     if constexpr (kTruePeak) {
-      up_l = tp_.os_l.Up(l, from, to);
-      up_r = tp_.os_r.Up(r, from, to);
+      if (tp_.on) {
+        up_l = tp_.os_l.Up(l, from, to);
+        up_r = tp_.os_r.Up(r, from, to);
+      }
     }
     for (int i = from; i < to; ++i) {
       const float xl = l[i];
@@ -346,12 +366,14 @@ class Limiter {
       const float ar = xr < 0.0f ? -xr : xr;
       float det = al > ar ? al : ar;
       if constexpr (kTruePeak) {
-        const int b = (i - from) * 4;
-        for (int k = 0; k < 4; ++k) {
-          const float ul = up_l[b + k] < 0.0f ? -up_l[b + k] : up_l[b + k];
-          if (ul > det) det = ul;
-          const float ur = up_r[b + k] < 0.0f ? -up_r[b + k] : up_r[b + k];
-          if (ur > det) det = ur;
+        if (up_l != nullptr) {
+          const int b = (i - from) * 4;
+          for (int k = 0; k < 4; ++k) {
+            const float ul = up_l[b + k] < 0.0f ? -up_l[b + k] : up_l[b + k];
+            if (ul > det) det = ul;
+            const float ur = up_r[b + k] < 0.0f ? -up_r[b + k] : up_r[b + k];
+            if (ur > det) det = ur;
+          }
         }
       }
       dl_l_.Write(xl);
@@ -372,7 +394,7 @@ class Limiter {
       dq_idx_[tail_] = n_;
       tail_ = Next(tail_);
       ++size_;
-      if (static_cast<uint32_t>(n_ - dq_idx_[head_]) >= static_cast<uint32_t>(kWin)) {
+      if (static_cast<uint32_t>(n_ - dq_idx_[head_]) >= static_cast<uint32_t>(win_)) {
         head_ = Next(head_);
         --size_;
       }
@@ -382,22 +404,22 @@ class Limiter {
       avg_sum_ += m - avg_ring_[avg_pos_];
       avg_ring_[avg_pos_] = m;
       ++avg_pos_;
-      if (avg_pos_ == kWin) {
+      if (avg_pos_ == win_) {
         avg_pos_ = 0;
         /* The incremental add-and-subtract is exact in the JS double but
          * drifts in float32 over minutes of audio. Rebuilding the sum
          * once per window costs one extra add per sample amortized and
          * pins the error at zero. */
         float s = 0.0f;
-        for (int32_t k = 0; k < kWin; ++k) s += avg_ring_[k];
+        for (int32_t k = 0; k < win_; ++k) s += avg_ring_[k];
         avg_sum_ = s;
       }
-      float red = avg_sum_ / static_cast<float>(kWin);
+      float red = avg_sum_ / static_cast<float>(win_);
       if (red < 0.0f) red = 0.0f;
 
       const float g = fm::DbToGain(-red);
-      l[i] = dl_l_.ReadInt(kLatency) * g;
-      r[i] = dl_r_.ReadInt(kLatency) * g;
+      l[i] = dl_l_.ReadInt(lat_) * g;
+      r[i] = dl_r_.ReadInt(lat_) * g;
       ++n_;
     }
   }
@@ -414,6 +436,7 @@ class Limiter {
   int32_t head_ = 0, tail_ = 0, size_ = 0, avg_pos_ = 0;
   float avg_sum_ = 0.0f;
   uint32_t n_ = 0;
+  int32_t lat_ = kLatency, win_ = kWin;
   float sr_ = 48000.0f, ceil_lin_ = 1.0f, rel_mul_ = 0.0f, renv_ = 0.0f;
 };
 

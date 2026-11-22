@@ -40,7 +40,7 @@ Cortex-M7 at \`-Os\` with \`--gc-sections\`, library only: no Arduino core and n
 | \`03_PolySynth\` | a voice pool, a swept filter | 30280 B | 3876 B |
 | \`04_ScalesAndTuning\` | the theory layer, 12-EDO against 19-EDO | 8096 B | 30176 B |
 | \`05_MidiInstrument\` | MIDI byte parsing into a voice pool | 30728 B | 3888 B |
-| \`07_Workstation\` | five engines, a Markov melody, a send bus | 42040 B | 225508 B |
+| \`07_Workstation\` | five engines, a Markov melody, a send bus | 42016 B | 225508 B |
 | \`20_Instruments\` | eleven patches over eight engines | 47912 B | 49904 B |
 
 A bare \`Kick\` with stock parameters is the floor of that table at 3760 B of flash and 1100 B of RAM. \`01_OneKick\` is 16 bytes over it, which is its wrapper class and two changed parameters.

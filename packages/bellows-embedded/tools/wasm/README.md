@@ -76,8 +76,10 @@ build was faster again on the heavy engines (the VA by about 3.6 times, the addi
 about 2), while on the effects the two were level, with the WebAssembly ahead on several. These are one machine's figures; run the
 bench rather than quote them.
 
-## Not yet
+## The browser build
 
-This builds the test harnesses, not a module an app can load. A browser build needs a C ABI over
-the engines and effects (create, note on, process into a shared Float32Array) and instantiation
-inside the worklet, which `docs/ENGINEERING.md` already describes.
+`packages/bellows-wasm` is the loadable module: a C ABI over every engine and effect this
+library ports, registered into the kernel worklet as a bellowsjs plugin, and tested against the
+TypeScript through the kernel in Node and in headless Chrome. `buildWasm` takes a `runtime`
+option for it, a C file of its own in place of `libc.c`, because a library wants an allocator
+and nothing else.

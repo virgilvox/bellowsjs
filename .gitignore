@@ -14,3 +14,6 @@ packages/bellows-embedded/examples/daisy_onekick/build/
 # folder through PLATFORMIO_SRC_DIR, which examples/build-matrix.sh does 77
 # times. They are generated and identical to the .ino they sit beside.
 packages/bellows-embedded/examples/**/*.ino.cpp
+
+# bellows-wasm: the module, the generated 2048-point table, the browser check bundle and its Chrome profile
+packages/bellows-wasm/build/

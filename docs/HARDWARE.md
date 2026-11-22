@@ -841,8 +841,10 @@ of the current test suite's ergonomics. That is a rewrite, not a port.
 The C++ already compiles to WebAssembly as it stands: `packages/bellows-embedded/tools/wasm`
 builds the parity harnesses for wasm32 and runs them against the TypeScript under the same
 gates, and every audio, table and preset row passes. On one Apple arm64 machine the WebAssembly
-render loops ran 1.1 to 8.5 times faster than the TypeScript. What B would still cost is the
-rest of the sentence above; what it would not cost is a port.
+render loops ran 1.1 to 8.5 times faster than the TypeScript. `packages/bellows-wasm` goes the
+rest of the way to the browser: every ported engine and effect behind a C ABI, loaded into the
+kernel worklet as a plugin beside the TypeScript units, and compared to them through the kernel.
+What B would still cost is the rest of the sentence above; what it would not cost is a port.
 
 **C. The hybrid, which is probably the good version.** Keep bellows.live as the composition brain
 and put only the audio kernel on the board. `KernelEvent` is already flat and numeric, so it

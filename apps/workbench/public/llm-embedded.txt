@@ -626,6 +626,7 @@ class Snare
   public:
     void Init(float sample_rate, Rng* rng)
     void Init(float sample_rate, Rng* rng, const Params& p)
+    void SetParams(const Params& p)
     void NoteOn(float freq, float vel)
     void NoteOff()
     void Process(float* l, float* r, int from, int to)
@@ -638,6 +639,7 @@ class Hat
   public:
     void Init(float sample_rate)
     void Init(float sample_rate, const Params& p)
+    void SetParams(const Params& p)
     void NoteOn(float freq, float vel)
     void NoteOff()
     void Process(float* l, float* r, int from, int to)
@@ -770,6 +772,7 @@ class Pluck
     void Init(float sample_rate, Rng* rng)
     void Init(float sample_rate, Rng* rng, const Params& p)
     float MinFreq() const
+    void SetParams(const Params& p)
     float Freq() const
     void NoteOn(float freq, float vel)
     void NoteOff()
@@ -995,6 +998,8 @@ class Limiter
     void Init(float sample_rate)
     void Init(float sample_rate, const Params& p)
     void SetParams(const Params& p)
+    int32_t Latency() const
+    void SetTruePeak(bool on)
     void Process(float* l, float* r, int from, int to)
     void Reset()
 

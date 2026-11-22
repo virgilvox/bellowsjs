@@ -2,6 +2,7 @@
  * Build and run the embedded library's C++ programs as WebAssembly, in process.
  *
  *   buildWasm(sources, out, { defines })  compile C++ sources plus tools/wasm/libc.c to one module
+ *                                         (or plus `runtime`, a C file of your own, for a library)
  *   loadProgram(path)                     a run(args, env) that returns stdout as a Buffer
  *
  * The toolchain is Homebrew's LLVM (clang with the wasm32 target) and Rust's rust-lld, linking
@@ -52,7 +53,7 @@ export function toolchain() {
  * single-threaded statics because there is one thread. */
 const CFLAGS = ['--target=wasm32', '-O2', '-nostdlibinc', '-isystem', join(HERE, 'include'), '-fno-exceptions', '-fno-rtti', '-fno-threadsafe-statics'];
 
-export function buildWasm(sources, out, { defines = [], include = [join(PKG, 'src')] } = {}) {
+export function buildWasm(sources, out, { defines = [], include = [join(PKG, 'src')], runtime = join(HERE, 'libc.c'), opt = '-O2' } = {}) {
   const { clang, lld, builtins } = toolchain();
   const dir = join(dirname(out), 'obj-' + basename(out, '.wasm'));
   mkdirSync(dir, { recursive: true });
@@ -62,11 +63,11 @@ export function buildWasm(sources, out, { defines = [], include = [join(PKG, 'sr
   const compile = (src, lang) => {
     const obj = join(dir, basename(src).replace(/\.\w+$/, '.o'));
     const std = lang === 'c' ? ['-std=c11', '-xc'] : ['-std=c++17', '-xc++'];
-    execFileSync(clang, [...CFLAGS, ...std, ...defines.map((d) => '-D' + d), ...include.flatMap((i) => ['-I', i]), '-c', src, '-o', obj], { stdio: ['ignore', 'inherit', 'inherit'] });
+    execFileSync(clang, [...CFLAGS.map((f) => (f === '-O2' ? opt : f)), ...std, ...defines.map((d) => '-D' + d), ...include.flatMap((i) => ['-I', i]), '-c', src, '-o', obj], { stdio: ['ignore', 'inherit', 'inherit'] });
     objs.push(obj);
   };
   for (const s of sources) compile(s, 'c++');
-  compile(join(HERE, 'libc.c'), 'c');
+  compile(runtime, 'c');
   execFileSync(lld, ['-flavor', 'wasm', '--no-entry', '--gc-sections', '-z', 'stack-size=1048576', '--initial-memory=16777216', ...objs, builtins, '-o', out], {
     stdio: ['ignore', 'inherit', 'inherit'],
   });

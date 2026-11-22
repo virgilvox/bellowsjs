@@ -1,0 +1,35 @@
+{
+  "name": "bellows-wasm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The bellows-embedded C++ engines and effects compiled to WebAssembly, as a bellowsjs plugin.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./bellows.wasm": "./dist/bellows.wasm"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "peerDependencies": {
+    "bellowsjs": ">=0.5.0 <0.6.0"
+  },
+  "scripts": {
+    "gen": "node tools/gen-units.mjs",
+    "gen:check": "node tools/gen-units.mjs --check",
+    "build": "node tools/build.mjs",
+    "test": "node tools/build.mjs && cd ../bellows && npx vite-node ../bellows-wasm/test/parity.mjs",
+    "test:browser": "node tools/build.mjs && node tools/browser-test.mjs",
+    "bench": "node test/bench.mjs"
+  }
+}

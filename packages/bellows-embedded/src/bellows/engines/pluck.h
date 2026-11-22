@@ -102,6 +102,13 @@ class Pluck {
     return cap > lo ? cap : lo;
   }
 
+  /* Live change, as setParam does in the JS: damp and decay retune the loop of a sounding note,
+   * the pick position and excitation wait for the next one, level is read every sample. */
+  void SetParams(const Params& p) {
+    p_ = p;
+    if (live_) UpdateLoop();
+  }
+
   /* The pitch the voice actually settled on after NoteOn clamped it, which
    * is not the pitch that was asked for whenever the request fell outside
    * [MinFreq(), sr_ / 8]. A caller has no other way to read it back, and it

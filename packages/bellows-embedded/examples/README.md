@@ -49,11 +49,11 @@ against a fixed voice budget. See `00_BringUp/README.md`.
 | 03_PolySynth | VoicePool, a swept filter | 30280 B | 3876 B |
 | 04_ScalesAndTuning | the theory layer, 12-EDO against 19-EDO | 8096 B | 30176 B |
 | 05_MidiInstrument | MIDI byte parsing into a voice pool | 30728 B | 3888 B |
-| 07_Workstation | five engines, a Markov melody, a send bus | 42040 B | 225508 B |
-| 16_WorkstationPiezo | 07 through the piezo voicing chain | 42712 B | 230804 B |
-| 17_WorkstationI2S | 07 summed to mono, and a composed arrangement | 42488 B | 225508 B |
+| 07_Workstation | five engines, a Markov melody, a send bus | 42016 B | 225508 B |
+| 16_WorkstationPiezo | 07 through the piezo voicing chain | 42784 B | 230804 B |
+| 17_WorkstationI2S | 07 summed to mono, and a composed arrangement | 42544 B | 225508 B |
 | 20_Instruments | eleven patches over eight engines, one note source | 47912 B | 49904 B |
-| 21_Presets | all 50 presets, eleven engines in one image | 137240 B | 257036 B |
+| 21_Presets | all 50 presets, eleven engines in one image | 137296 B | 257036 B |
 
 The output examples share one patch, `10_AudioShield/audioshield.h`, so
 that comparing them compares converters rather than programs. Its cost and
@@ -102,7 +102,7 @@ bytes and would alias audibly on every note above the middle of the keyboard.
 It is paid once, which is why 20_Instruments reaches eight engines for
 47912 B and not eight times this.
 
-07 is the outlier in both columns and for two different reasons. Its 42040 B
+07 is the outlier in both columns and for two different reasons. Its 42016 B
 of flash is what reaching almost everything costs: the drums, a VA, a
 plucked string, a delay, an EQ, a limiter and the theory and sequencing
 layers, in one program. Its 225508 B of RAM is one object, the 500 ms stereo
