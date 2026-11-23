@@ -46,7 +46,7 @@ import Picker, { type PickerOption } from './Picker.vue';
 
 /* ---- params, named for people ---- */
 
-const DRIVEN = new Set(['phoneme', 'bend', 'nextPhoneme', 'nextIn', ...VOICE_SETTINGS.map((x) => x.param)]);
+const DRIVEN = new Set(['phoneme', 'bend', 'nextPhoneme', 'nextIn', 'probe', ...VOICE_SETTINGS.map((x) => x.param)]);
 const PARAM_TEXT: Record<string, [string, string]> = {
   body: ['Size', '0 a man, 1 a woman, 2 a child; blends between'],
   glottis: ['Vocal folds', 'pulse is the default; the others are physical models'],
