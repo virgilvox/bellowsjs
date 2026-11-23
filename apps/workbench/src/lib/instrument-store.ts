@@ -20,6 +20,7 @@ import {
 import { VOCAL_PHONEMES } from 'bellows-voice';
 import { bellows as bellowsRef, ensureBellows } from './audio';
 import { ensureRegistered, sfState } from './soundfonts';
+import { baseUnitId } from './wasm-engines';
 
 
 export const MELODIC_ENGINE_IDS = [
@@ -161,7 +162,7 @@ export function engineLabel(engineId: string): string {
   return listEngines().find((e) => e.id === engineId)?.label ?? engineId;
 }
 
-export const isPercussion = computed(() => PERCUSSION_ENGINE_IDS.includes(instState.engineId));
+export const isPercussion = computed(() => PERCUSSION_ENGINE_IDS.includes(baseUnitId(instState.engineId)));
 
 function defaultsFor(specs: ParamSpec[]): Record<string, number> {
   const out: Record<string, number> = {};

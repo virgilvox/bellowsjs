@@ -35,9 +35,10 @@ export default defineConfig({
    * copy loaded, so singer() throws (MEASURED: the voice lab failed this way in dev once
    * bellows-voice came from npm instead of a symlink). Left out of the pre-bundle, its import goes
    * through the alias above to the one copy the site uses. The production build resolves the same
-   * way and was not affected.
+   * way and was not affected. bellows-wasm, which the site takes from npm under the alias
+   * bellows-wasm-npm (the workspace copy is unbuilt where the site builds), imports it the same way.
    */
   optimizeDeps: {
-    exclude: ['bellows-voice'],
+    exclude: ['bellows-voice', 'bellows-wasm-npm'],
   },
 });

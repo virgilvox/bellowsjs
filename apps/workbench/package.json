@@ -26,6 +26,7 @@
     "@codemirror/state": "^6.4.1",
     "@codemirror/view": "^6.34.0",
     "bellows-voice": "^0.7.3",
+    "bellows-wasm-npm": "npm:bellows-wasm@^0.1.0",
     "bellowsjs": "*",
     "codemirror": "^6.0.1",
     "marked": "^18.0.5",

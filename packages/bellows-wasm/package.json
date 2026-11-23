@@ -1,9 +1,23 @@
 {
   "name": "bellows-wasm",
   "version": "0.1.0",
-  "private": true,
   "description": "The bellows-embedded C++ engines and effects compiled to WebAssembly, as a bellowsjs plugin.",
   "license": "MIT",
+  "keywords": [
+    "audio",
+    "synthesis",
+    "webassembly",
+    "wasm",
+    "audioworklet",
+    "bellowsjs",
+    "dsp"
+  ],
+  "homepage": "https://bellows.live",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/virgilvox/bellowsjs.git",
+    "directory": "packages/bellows-wasm"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -18,7 +32,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "sideEffects": false,
   "peerDependencies": {
@@ -30,6 +45,7 @@
     "build": "node tools/build.mjs",
     "test": "node tools/build.mjs && cd ../bellows && npx vite-node ../bellows-wasm/test/parity.mjs",
     "test:browser": "node tools/build.mjs && node tools/browser-test.mjs",
-    "bench": "node test/bench.mjs"
+    "bench": "node test/bench.mjs",
+    "prepack": "node tools/build.mjs"
   }
 }

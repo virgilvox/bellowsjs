@@ -16,7 +16,9 @@ const b = await Bellows.boot({ plugins: [bellowsWasm()] });
 names `va` or `plate` runs the module without being edited. On the calling thread (Node,
 `renderOffline`) call `plugin.register()` first, as with any plugin.
 
-Not published to npm yet: the package is `private` until a release is decided.
+```
+npm install bellowsjs bellows-wasm
+```
 
 ## What it carries
 

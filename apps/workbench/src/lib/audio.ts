@@ -4,7 +4,7 @@
  * instance so the workbench can reforge cleanly.
  */
 
-import { Bellows } from 'bellowsjs';
+import { Bellows, type BellowsPlugin } from 'bellowsjs';
 import { voice } from 'bellows-voice';
 import { ref, shallowRef } from 'vue';
 
@@ -26,6 +26,17 @@ let bootPromise: Promise<Bellows> | null = null;
  */
 let keptContext: AudioContext | null = null;
 
+/* The plugins every boot loads: the singing voice, which ships in its own package, and any added
+ * later with addPlugin() (the WebAssembly engines), so a reforge keeps them. */
+const plugins: BellowsPlugin[] = [voice];
+
+/** Load a plugin into the running instance and every later one. */
+export async function addPlugin(plugin: BellowsPlugin): Promise<void> {
+  if (!plugins.some((p) => p.id === plugin.id)) plugins.push(plugin);
+  const b = await ensureBellows();
+  await b.use(plugin);
+}
+
 export async function ensureBellows(seed?: string): Promise<Bellows> {
   if (bellows.value && !seed) return bellows.value;
   if (bootPromise && !seed) return bootPromise;
@@ -39,8 +50,7 @@ export async function ensureBellows(seed?: string): Promise<Bellows> {
     seed: seed ?? 'workbench',
     context: keptContext ?? undefined,
     closeContextOnDispose: false,
-    // the singing voice, which ships in its own package and loads into the worklet beside the kernel
-    plugins: [voice],
+    plugins: [...plugins],
   }).then((b) => {
     keptContext = b.ctx;
     bellows.value = b;

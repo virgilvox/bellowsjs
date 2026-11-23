@@ -6,6 +6,10 @@
  * soundfont panel follow. Preset options carry 'preset:<id>' values that
  * the store resolves to the underlying engine. Selecting posts through
  * the store, which swaps the channel.
+ *
+ * Below the select, a button loads the WebAssembly build of the embedded
+ * engines on request; its engines then get their own group, each beside
+ * the TypeScript engine it mirrors by name, for listening side by side.
  */
 
 import { computed } from 'vue';
@@ -21,6 +25,7 @@ import {
   setEngine,
 } from '../../lib/instrument-store';
 import { sampleEngineOptions, sfState } from '../../lib/soundfonts';
+import { loadWasmEngines, wasmState } from '../../lib/wasm-engines';
 
 const instrumentGroups = [...presetsByFamily()].map(([family, list]) => ({
   family: family.toUpperCase(),
@@ -35,6 +40,10 @@ const samples = computed(() => {
   void sfState.active.length;
   return sampleEngineOptions();
 });
+
+const wasmEngines = computed(() =>
+  wasmState.engineIds.map((id) => ({ id, label: engineLabel(id) })),
+);
 
 const isSampler = computed(() => instState.engineId.startsWith('sampler:'));
 const activePreset = computed(() => presetFor(instState.engineId));
@@ -57,10 +66,21 @@ function onPick(e: Event): void {
       <optgroup label="RAW ENGINES">
         <option v-for="o in rawEngines" :key="o.id" :value="o.id">{{ o.label }}</option>
       </optgroup>
+      <optgroup v-if="wasmEngines.length" label="WEBASSEMBLY">
+        <option v-for="o in wasmEngines" :key="o.id" :value="o.id">{{ o.label }}</option>
+      </optgroup>
       <optgroup v-if="samples.length" label="SAMPLES">
         <option v-for="o in samples" :key="o.id" :value="o.id">{{ o.label }}</option>
       </optgroup>
     </select>
+    <p v-if="!wasmState.loaded" class="hint">
+      <button class="wasm" :disabled="wasmState.loading" @click="loadWasmEngines()">
+        {{ wasmState.loading ? 'loading...' : 'load the webassembly engines' }}
+      </button>
+      the embedded C++ engines and effects, compiled to WebAssembly, beside the TypeScript ones
+      (about 670 KB).
+    </p>
+    <p v-if="wasmState.error" class="hint err">could not load the webassembly engines: {{ wasmState.error }}</p>
     <p v-if="isPercussion" class="hint">
       drum engine: every key fires the hit, pitched by the key you play.
     </p>
@@ -88,6 +108,27 @@ function onPick(e: Event): void {
 
 .hint.dim {
   color: var(--faded);
+}
+
+.hint.err {
+  color: var(--slag);
+}
+
+.wasm {
+  margin-right: 6px;
+  padding: 2px 8px;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: uppercase;
+  color: var(--phosphor);
+  background: transparent;
+  border: 1px solid var(--seam);
+  cursor: pointer;
+}
+
+.wasm:disabled {
+  color: var(--faded);
+  cursor: default;
 }
 
 .hint a {

@@ -76,6 +76,20 @@ alto.sing('twinkle twinkle', [
 
 [Singing](/docs/singing) covers lyrics, timing, pronunciation, the sounds the voice knows, and harmony.
 
+## WebAssembly
+
+The \`bellows-wasm\` package carries the C++ engines and effects from bellows-embedded, the library that runs on microcontrollers, compiled to WebAssembly as a plugin. It covers 14 engines (va, fm, additive, wavetable, kick, snare, hat, pluck, string, tube, modal, westcoast, formant, harmonic) and 12 effects (delay, plate, compressor, limiter, gate, chorus, flanger, tremolo, autopan, ringmod, eq, saturator). Each takes the same params as its TypeScript twin and is tested against it through the kernel.
+
+\`\`\`js
+// npm install bellows-wasm
+import { bellowsWasm } from 'bellows-wasm';
+const b = await Bellows.boot({ plugins: [bellowsWasm()] });
+const lead = b.voice('wasm-va', { cutoff: 1200 });   // beside 'va'
+lead.fx('wasm-plate');
+\`\`\`
+
+\`bellowsWasm({ replace: true })\` registers under the TypeScript ids instead, so an existing piece plays on the module without edits. The plugin is about 700 KB because it carries the module inline. On the [instrument page](/#play), the engine panel loads it on request, so you can switch between \`va\` and \`wasm-va\` and hear both.
+
 ## Parameters
 
 \`\`\`js

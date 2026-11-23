@@ -17,18 +17,24 @@ import {
   toSlider,
 } from '../../lib/instrument-store';
 
-const effectDefs = listEffects();
+import { wasmState } from '../../lib/wasm-engines';
+
+// the catalog grows when the WebAssembly effects load, so re-read it then
+const defs = computed(() => {
+  void wasmState.loaded;
+  return listEffects();
+});
 
 const options = computed(() =>
-  effectDefs.map((e) => ({ id: e.id, label: e.label })).sort((a, b) => a.label.localeCompare(b.label)),
+  defs.value.map((e) => ({ id: e.id, label: e.label })).sort((a, b) => a.label.localeCompare(b.label)),
 );
 
 function specsFor(effectId: string): ParamSpec[] {
-  return effectDefs.find((e) => e.id === effectId)?.params ?? [];
+  return defs.value.find((e) => e.id === effectId)?.params ?? [];
 }
 
 function labelFor(effectId: string): string {
-  return effectDefs.find((e) => e.id === effectId)?.label ?? effectId;
+  return defs.value.find((e) => e.id === effectId)?.label ?? effectId;
 }
 
 function onAdd(e: Event): void {
