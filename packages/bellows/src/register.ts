@@ -40,6 +40,7 @@ import { chorusDef, flangerDef, phaserDef, tremoloDef, autopanDef, ringmodDef } 
 import { freqshiftDef } from './fx/freqshift';
 import { eqDef } from './fx/eq';
 import { saturatorDef } from './fx/saturator';
+import { filterDef } from './fx/filter';
 import { spectralEffects } from './fx/spectral';
 
 let done = false;
@@ -107,6 +108,8 @@ export function registerBuiltins(): void {
     eqDef,
     saturatorDef,
     ...spectralEffects,
+    // after the 0.5 set, so every existing effect keeps its catalog position
+    filterDef,
   ]) {
     registerEffect(f);
     builtinEffects.set(f.id, f);
