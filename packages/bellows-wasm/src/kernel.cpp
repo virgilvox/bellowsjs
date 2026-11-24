@@ -160,10 +160,31 @@ struct Send {
   Ramp level;
 };
 
+/*
+ * A registered sample bank, shared by every channel made on it: the sampler's round-robin counter
+ * lives in the bank, as it lives in the TypeScript def. A bank registered again under the same id
+ * is a new bank; channels made on the old one keep it, so it is freed when it is no longer
+ * registered and its last channel is gone.
+ */
+struct BankRef {
+  Bank* bank;
+  int refs;
+  bool registered;
+};
+
+void Unref(BankRef* b) {
+  if (!b) return;
+  if (--b->refs <= 0 && !b->registered) {
+    FreeBank(b->bank);
+    delete b;
+  }
+}
+
 struct Channel {
   int id = 0;
   int unit = -1;
   int foreign = -1;
+  BankRef* bank = nullptr;
   Vec<Slot> slots;
   Vec<double> rec;
   Vec<FxSlot> fx;
@@ -220,6 +241,7 @@ void FreeChannel(Channel* c) {
   c->sends.Release();
   free(c->sl);
   free(c->sr);
+  Unref(c->bank);
   delete c;
 }
 
@@ -700,12 +722,16 @@ BW_EXPORT(bw_k_name_unit) int bw_k_name_unit(int name, int unit, int index) {
  */
 BW_EXPORT(bw_k_channel)
 int bw_k_channel(Kernel* k, int id, int unit, int foreign, const char* seed, const float* vals, int variant, int poly,
-                 const int* rec_ids, const double* rec_vals, int rec_n) {
+                 const int* rec_ids, const double* rec_vals, int rec_n, bwasm::BankRef* bank) {
   using namespace bwasm;
   Channel* c = new Channel;
   c->id = id;
   c->unit = unit;
   c->foreign = foreign;
+  if (bank) {
+    c->bank = bank;
+    ++bank->refs;
+  }
   c->gain.Init(k->rate, 0.8);
   c->pan.Init(k->rate, 0);
   c->sl = Buffer(k->n);
@@ -717,7 +743,8 @@ int bw_k_channel(Kernel* k, int id, int unit, int foreign, const char* seed, con
     ok = c->slots.Reserve(poly > 0 ? poly : 1);
     for (int i = 0; ok && i < poly; ++i) {
       VoiceLabel(label, sizeof(label), seed, i);
-      Voice* v = NewVoice(unit, static_cast<float>(k->rate), label, vals, variant);
+      Voice* v = bank ? NewBankVoice(unit, static_cast<float>(k->rate), label, vals, bank->bank)
+                      : NewVoice(unit, static_cast<float>(k->rate), label, vals, variant);
       if (!v) {
         ok = false;
         break;
@@ -737,6 +764,17 @@ int bw_k_channel(Kernel* k, int id, int unit, int foreign, const char* seed, con
     k->channels.Push(c);
   }
   return 1;
+}
+
+/* registerBank / registerGrain: the kernel takes the bank (from bw_bank_sampler_new or
+ * bw_bank_grain_new) and hands back the reference channels are made on. */
+BW_EXPORT(bw_k_bank_add) bwasm::BankRef* bw_k_bank_add(Kernel*, bwasm::Bank* bank) { return new bwasm::BankRef{bank, 0, true}; }
+
+/* The id was registered again: the old bank lives on for the channels made on it. */
+BW_EXPORT(bw_k_bank_drop) void bw_k_bank_drop(Kernel*, bwasm::BankRef* b) {
+  b->registered = false;
+  ++b->refs;
+  bwasm::Unref(b);
 }
 
 BW_EXPORT(bw_k_channel_remove) void bw_k_channel_remove(Kernel* k, int id) {

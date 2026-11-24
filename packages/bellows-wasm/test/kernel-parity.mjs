@@ -294,9 +294,28 @@ function exactRows() {
     timed: [[0.2, { type: 'fxParam', channelId: 0, fxIndex: 0, name: 'steps', value: 3 }]],
   };
 
+  /* more than 256 events, so the drained queue is compacted mid-render */
+  const many = [];
+  for (let i = 0; i < 600; i++) {
+    const t = i * 0.0011;
+    many.push(N(t, 0, i + 1, 200 + (i % 12) * 20, 0.3), O(t + 0.004, 0, i + 1));
+  }
+  rows.queue = {
+    seconds: 0.8,
+    score: [{ type: 'createChannel', id: 0, engineId: kick, params: {}, seed: 'q0' }, { type: 'events', events: many }],
+  };
+  return rows;
+}
+
+/* ---------------- native rows ---------------- */
+
+function nativeRows() {
+  const rows = {};
   const sr = 44100;
   rows.banks = {
     seconds: 1.0,
+    gate: 2e-5,
+    why: 'the bank voices run in the module now; test/banks.mjs gates them one voice at a time',
     kernel: { resolveBankEngine: bankEngineResolver },
     score: [
       {
@@ -326,23 +345,26 @@ function exactRows() {
     ],
   };
 
-  /* more than 256 events, so the drained queue is compacted mid-render */
-  const many = [];
-  for (let i = 0; i < 600; i++) {
-    const t = i * 0.0011;
-    many.push(N(t, 0, i + 1, 200 + (i % 12) * 20, 0.3), O(t + 0.004, 0, i + 1));
-  }
-  rows.queue = {
-    seconds: 0.8,
-    score: [{ type: 'createChannel', id: 0, engineId: kick, params: {}, seed: 'q0' }, { type: 'events', events: many }],
+
+  /* two channels on one bank share its round-robin counter; the bank registered again mid-render
+   * gives a new bank to channels made after, and the old channel keeps the old one */
+  const rr = (hz) => ({ data: sine(6000, hz, sr), sampleRate: sr, rootKey: 60, keyLo: 0, keyHi: 127, velLo: 0, velHi: 127, loopMode: 'none', roundRobinGroup: 1 });
+  rows.roundrobin = {
+    seconds: 1.0,
+    gate: 6e-7,
+    kernel: { resolveBankEngine: bankEngineResolver },
+    score: [
+      { type: 'registerBank', bankId: 'rr', zones: [{ ...rr(220), seqPosition: 1 }, { ...rr(330), seqPosition: 2 }, { ...rr(440), seqPosition: 3 }] },
+      { type: 'createChannel', id: 0, engineId: 'sampler:rr', params: {}, seed: 'rr0' },
+      { type: 'createChannel', id: 1, engineId: 'sampler:rr', params: {}, seed: 'rr1' },
+      { type: 'events', events: [N(0, 0, 1, 262), N(0.1, 1, 2, 262), N(0.2, 0, 3, 262), N(0.3, 1, 4, 262)] },
+    ],
+    timed: [
+      [0.4, { type: 'registerBank', bankId: 'rr', zones: [rr(550)] }],
+      [0.4, { type: 'createChannel', id: 2, engineId: 'sampler:rr', params: {}, seed: 'rr2' }],
+      [0.4, { type: 'events', events: [N(0.45, 0, 5, 262), N(0.5, 2, 6, 262), N(0.55, 1, 7, 262)] }],
+    ],
   };
-  return rows;
-}
-
-/* ---------------- native rows ---------------- */
-
-function nativeRows() {
-  const rows = {};
   rows.golden = {
     seconds: 1.6,
     gate: 5e-3,

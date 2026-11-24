@@ -246,16 +246,10 @@ class WasmKernel {
         this.env.internParamAt(msg.index, msg.name);
         break;
       case 'registerBank':
-        if (this.opts.resolveBankEngine) {
-          this.banks.set('sampler:' + msg.bankId, { def: this.opts.resolveBankEngine('sampler', msg.bankId, msg.zones) });
-        }
+        this.setBank('sampler:' + msg.bankId, 'sampler', this.samplerBank(msg.zones));
         break;
       case 'registerGrain':
-        if (this.opts.resolveBankEngine) {
-          this.banks.set('granular:' + msg.bankId, {
-            def: this.opts.resolveBankEngine('grain', msg.bankId, { data: msg.data, sampleRate: msg.sampleRate }),
-          });
-        }
+        this.setBank('granular:' + msg.bankId, 'granular', this.grainBank(msg.data, msg.sampleRate));
         break;
       case 'defOp': {
         // Tier 3 user DSP, evaluated as the TypeScript kernel evaluates it (kernel/engine.ts).
@@ -270,6 +264,60 @@ class WasmKernel {
       default:
         break;
     }
+  }
+
+  /* ---------------- banks ---------------- */
+
+  /** Copies audio into module memory; the module frees it (bank or zone takes ownership). */
+  copyIn(data, frames) {
+    const ptr = this.ex.bw_alloc(4 * Math.max(1, frames));
+    if (!ptr) throw new Error('bellows-wasm: out of memory for a sample bank');
+    new Float32Array(this.ex.memory.buffer, ptr, frames).set(frames === data.length ? data : data.subarray(0, frames));
+    return ptr;
+  }
+
+  samplerBank(zones) {
+    const ex = this.ex;
+    const bank = ex.bw_bank_sampler_new(zones.length);
+    if (!bank) throw new Error('bellows-wasm: out of memory for a sample bank');
+    const NF = ex.bw_bank_zone_fields();
+    const opt = (x) => (typeof x === 'number' ? x : NaN);
+    zones.forEach((z, i) => {
+      const frames = z.dataR ? Math.min(z.data.length, z.dataR.length) : z.data.length;
+      const l = this.copyIn(z.data, frames);
+      const r = z.dataR ? this.copyIn(z.dataR, frames) : 0;
+      const env = z.env;
+      const fieldsPtr = this.scratch(4 * NF);
+      new Float32Array(ex.memory.buffer, fieldsPtr, NF).set([
+        z.sampleRate, z.rootKey, opt(z.fineTune), z.keyLo, z.keyHi, z.velLo, z.velHi, opt(z.loopStart), opt(z.loopEnd),
+        z.loopMode === 'loop' ? 1 : z.loopMode === 'loopRelease' ? 2 : 0, opt(z.gainDb), opt(z.pan),
+        env ? env.attack : NaN, env ? env.hold : NaN, env ? env.decay : NaN, env ? env.sustain : NaN, env ? env.release : NaN,
+        opt(z.roundRobinGroup), opt(z.seqPosition),
+      ]);
+      if (!ex.bw_bank_sampler_zone(bank, i, fieldsPtr, NF, l, r, frames)) {
+        ex.bw_free(l);
+        if (r) ex.bw_free(r);
+      }
+    });
+    return bank;
+  }
+
+  grainBank(data, sampleRate) {
+    const ptr = this.copyIn(data, data.length);
+    const bank = this.ex.bw_bank_grain_new(ptr, data.length, sampleRate);
+    if (!bank) {
+      this.ex.bw_free(ptr);
+      throw new Error('bellows-wasm: out of memory for a grain bank');
+    }
+    return bank;
+  }
+
+  /** An id registered again keeps its old bank alive for the channels already made on it. */
+  setBank(id, unitId, bank) {
+    const old = this.banks.get(id);
+    if (old && old.ref) this.ex.bw_k_bank_drop(this.k, old.ref);
+    const ref = this.ex.bw_k_bank_add(this.k, bank);
+    this.banks.set(id, { native: this.units.get('engine:' + unitId), ref });
   }
 
   /* ---------------- channels ---------------- */
@@ -333,7 +381,7 @@ class WasmKernel {
       });
       writeUtf8(new Uint8Array(mem, base + offSeed, seedBytes), msg.seed);
     }
-    const ok = ex.bw_k_channel(this.k, msg.id, unit, handle, base + offSeed, base + offVals, variant, poly, base + offIds, base, rec.length);
+    const ok = ex.bw_k_channel(this.k, msg.id, unit, handle, base + offSeed, base + offVals, variant, poly, base + offIds, base, rec.length, r.ref ?? 0);
     if (!ok) {
       this.release(handle);
       throw new Error(`bellows-wasm: could not create a ${msg.engineId} channel`);
