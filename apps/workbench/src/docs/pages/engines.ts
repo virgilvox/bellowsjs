@@ -78,17 +78,17 @@ alto.sing('twinkle twinkle', [
 
 ## WebAssembly
 
-The \`bellows-wasm\` package carries the C++ engines and effects from bellows-embedded, the library that runs on microcontrollers, compiled to WebAssembly as a plugin. It covers 14 engines (va, fm, additive, wavetable, kick, snare, hat, pluck, string, tube, modal, westcoast, formant, harmonic) and 12 effects (delay, plate, compressor, limiter, gate, chorus, flanger, tremolo, autopan, ringmod, eq, saturator). Each takes the same params as its TypeScript twin and is tested against it through the kernel.
+The \`bellows-wasm\` package carries every engine and effect above, and the kernel that plays them, compiled to WebAssembly from bellows-embedded, the C++ library that runs on microcontrollers. Each unit takes the same params as its TypeScript twin and is tested against it through the kernel.
 
 \`\`\`js
 // npm install bellows-wasm
 import { bellowsWasm } from 'bellows-wasm';
-const b = await Bellows.boot({ plugins: [bellowsWasm()] });
-const lead = b.voice('wasm-va', { cutoff: 1200 });   // beside 'va'
-lead.fx('wasm-plate');
+const b = await Bellows.boot({ plugins: [bellowsWasm({ kernel: true })] });
+const lead = b.voice('va', { cutoff: 1200 });   // the same score, rendered in WebAssembly
+lead.fx('plate');
 \`\`\`
 
-\`bellowsWasm({ replace: true })\` registers under the TypeScript ids instead, so an existing piece plays on the module without edits. The plugin is about 700 KB because it carries the module inline. On the [instrument page](/#play), the engine panel loads it on request, so you can switch between \`va\` and \`wasm-va\` and hear both.
+With \`{ kernel: true }\` the whole render runs in the module, one call per block, and a score needs no changes. Anything the module does not carry, such as the singing voice or a def of your own, still plays, in JavaScript, inside the same render. The kernel is chosen at boot, so the plugin goes to \`Bellows.boot\`, and \`b.render()\` uses it too. Without the option, \`bellowsWasm()\` adds each unit as \`wasm-va\`, \`wasm-plate\` and so on beside the TypeScript ones. The plugin is about 900 KB because it carries the module inline. On the [instrument page](/#play), the engine panel can load either: switch between \`va\` and \`wasm-va\`, or run the whole kernel in WebAssembly.
 
 ## Parameters
 

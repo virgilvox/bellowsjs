@@ -201,6 +201,8 @@ export declare class Bellows {
     private paramListeners;
     /** plugins loaded into this instance's worklet, in order */
     private plugins;
+    /** the kernel a boot plugin brought (BellowsPlugin.kernel), or undefined for KernelEngine */
+    private kernelName;
     private localDefs;
     private lastMeter;
     private gone;

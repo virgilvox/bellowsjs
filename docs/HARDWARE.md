@@ -711,9 +711,12 @@ Medium: the waveguide string (24 body-mode biquads and two delay lines per voice
 engine (320 KB of generated mipmap, which must move to flash via a build step), additive and
 harmonic (double-precision phase accumulators).
 
-Hard, and deliberately deferred: FFT, STFT, the spectral effects and the analysis suite. Swap
-`RealFft` for CMSIS-DSP `arm_rfft_fast_f32` on Cortex-M, ESP-DSP on Xtensa. Each spectral effect
-is 84 to 204 KB of state.
+Hard: FFT, STFT, the spectral effects and the analysis suite. The FFT, the STFT and the six
+spectral effects are now ported (`dsp/fft.h`, `dsp/stft.h`, `fx/spectral.h`) as a plain float
+radix-2 transform with caller storage, checked against the TypeScript from `packages/bellows-wasm`;
+swapping in CMSIS-DSP `arm_rfft_fast_f32` on Cortex-M or ESP-DSP on Xtensa is still the fast path.
+Each spectral effect is about 48 KB (robot, whisper) to 133 KB of state, which rules out the
+small parts. The analysis suite is not ported.
 
 Host side, do not port: SF2 and SFZ parsing, MIDI file parsing, WebCodecs encoding. Parse on a
 host and ship a flat binary bank to SD. Generator resolution on an MCU is wasted flash.
@@ -842,8 +845,9 @@ The C++ already compiles to WebAssembly as it stands: `packages/bellows-embedded
 builds the parity harnesses for wasm32 and runs them against the TypeScript under the same
 gates, and every audio, table and preset row passes. On one Apple arm64 machine the WebAssembly
 render loops ran 1.1 to 8.5 times faster than the TypeScript. `packages/bellows-wasm` goes the
-rest of the way to the browser: every ported engine and effect behind a C ABI, loaded into the
-kernel worklet as a plugin beside the TypeScript units, and compared to them through the kernel.
+rest of the way to the browser: every engine and effect behind a C ABI, loaded into the kernel
+worklet as a plugin beside the TypeScript units or as the whole kernel (KernelEngine ported too),
+and compared to them through the kernel.
 What B would still cost is the rest of the sentence above; what it would not cost is a port.
 
 **C. The hybrid, which is probably the good version.** Keep bellows.live as the composition brain

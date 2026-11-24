@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.5.1
+
+A plugin can bring its own kernel. bellows-wasm 0.2 uses this to run the whole render in
+WebAssembly: the event queue, voice pools, ramps, chains, buses and the master, with every unit it
+does not carry still played in JavaScript at the point KernelEngine would play it. Nothing changes
+for a page that loads no such plugin: KernelEngine renders exactly as in 0.5.0.
+
+### Added
+
+- **Kernels by name.** `registerKernel(name, factory)` makes a kernel available on the calling
+  thread, and the worklet hook's version 2 adds `registerKernel` there. A `BellowsPlugin` that
+  declares `kernel: name` and is passed to `Bellows.boot({ plugins })` has the processor build that
+  kernel instead of KernelEngine, live and in `b.render()`; `renderOffline(setup, { kernelName })`
+  does the same on the calling thread. A name that is not registered throws in `renderOffline`; in
+  the worklet the processor falls back to KernelEngine and posts an error saying so.
+- **`KernelEnv`** (`kernelEnv`): what a kernel needs from the realm to play units it does not carry
+  as KernelEngine plays them, namely the registry, `builtinEngine(id)` and `builtinEffect(id)` (the
+  defs `registerBuiltins()` registered, to tell a builtin from a replacement under the same id),
+  `rng`, `VoicePool` and the interned param names. Types `KernelLike`, `KernelEnv` and
+  `KernelFactory`, and `hasKernel(name)`.
+
+### Changed
+
+- `renderOffline`'s `onBlock` receives a `KernelLike`, the surface KernelEngine and any other kernel
+  share.
+- `b.use(plugin)` throws for a plugin that brings a kernel, since the kernel is chosen when the
+  processor is built: pass it to `Bellows.boot({ plugins })`.
+
 ## 0.5.0
 
 The singing voice leaves bellowsjs for its own package, [bellows-voice](https://github.com/virgilvox/bellows-voice),

@@ -278,6 +278,14 @@ its C++ field with the `c++ field` column of the generated `params.gen.h` rather
 copy of the mapping. A mistranscribed preset is otherwise inaudible as wrong: the instrument
 plays, in a voice nobody chose.
 
+Every engine and effect the TypeScript registers now has a C++ counterpart here. The rows above
+are the original set; the later ports (clap, tom, the noise synth, the sampler and granular, the
+tape delay, multitap, the FDN reverb, transient, phaser, frequency shifter and the six spectral
+effects) are checked from `packages/bellows-wasm`, which plays each one through the real kernel
+against the TypeScript at 44.1, 48 and 96 kHz with a live param change, compiled to WebAssembly
+from these headers. The sampler and granular read audio from memory the caller owns, as a board
+would hand them a flash array.
+
 The theory row covers pitch rather than audio, because a wrong tuning table is silent and no
 test that listens to a buffer can catch it.
 
@@ -291,9 +299,11 @@ src/bellows/
   voicepool.h              VoicePool<Voice, kPoly>
   kernel.h                 sample-accurate event queue and block splitting
   core/    prng.h fastmath.h
-  dsp/     delayline filters envelopes noise oscillators waveshaper lfo oversample
-  engines/ drums pluck va fm modal westcoast formant tube
-  fx/      delay eq saturator dynamics modfx plate
+  dsp/     delayline filters envelopes noise oscillators waveshaper lfo oversample wavetable
+           hilbert fft stft
+  engines/ drums pluck va fm additive wavetable waveguide tube modal westcoast formant
+           harmonic noisesynth sampler granular
+  fx/      delay eq saturator dynamics modfx plate reverb freqshift spectral
   theory/  notes scales chords tuning
   seq/     euclid arp automata lsystem tempomap
   io/      midi_parse.h
