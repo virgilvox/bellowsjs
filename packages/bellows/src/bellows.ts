@@ -148,6 +148,8 @@ export class Bellows {
   private paramListeners = new Map<number, Array<(name: string, value: number) => void>>();
   /** plugins loaded into this instance's worklet, in order */
   private plugins: BellowsPlugin[] = [];
+  /** the kernel a boot plugin brought (BellowsPlugin.kernel), or undefined for KernelEngine */
+  private kernelName: string | undefined;
   private localDefs: Array<{ kind: 'engine' | 'effect'; code: string }> = [];
   private lastMeter: MeterFrame | null = null;
   private gone = false;
@@ -219,9 +221,16 @@ export class Bellows {
       notePlugin(p);
       plugins.push(p);
     }
-    const kernel = await createKernelNode(ctx, { workletUrl: opts.workletUrl, plugins });
+    // a plugin that brings its own kernel names it here; the first one wins
+    const kernelName = plugins.find((p) => p.kernel)?.kernel;
+    const kernel = await createKernelNode(ctx, {
+      workletUrl: opts.workletUrl,
+      plugins,
+      ...(kernelName ? { processorOptions: { kernel: kernelName } } : {}),
+    });
     const b = new Bellows(ctx, kernel, opts, ownsContext);
     b.plugins = plugins;
+    b.kernelName = kernelName;
     return b;
   }
 
@@ -312,6 +321,12 @@ export class Bellows {
    */
   async use(plugin: BellowsPlugin): Promise<void> {
     if (this.plugins.some((p) => p.id === plugin.id)) return;
+    // the kernel is built with the processor, so one cannot be swapped in under a running instance
+    if (plugin.kernel && plugin.kernel !== this.kernelName) {
+      throw new Error(
+        `bellows: the plugin "${plugin.id}" brings its own kernel, which is chosen when the kernel starts: pass it to Bellows.boot({ plugins })`,
+      );
+    }
     notePlugin(plugin);
     await addPluginModule(this.ctx, plugin);
     this.plugins.push(plugin);
@@ -827,9 +842,15 @@ export class Bellows {
         sampleRate,
         workletUrl: this.workletUrl,
         plugins: this.plugins,
+        kernel: this.kernelName,
       });
     } else {
-      rendered = renderWorkletInProcess(messages, { frames: Math.ceil(seconds * sampleRate), sampleRate, plugins: this.plugins });
+      rendered = renderWorkletInProcess(messages, {
+        frames: Math.ceil(seconds * sampleRate),
+        sampleRate,
+        plugins: this.plugins,
+        kernel: this.kernelName,
+      });
     }
     return {
       ...rendered,

@@ -35,13 +35,13 @@ export function canRenderInWorklet(): boolean {
  */
 export async function renderInWorklet(
   messages: KernelMessage[],
-  opts: { frames: number; sampleRate: number; workletUrl?: string; plugins?: readonly BellowsPlugin[] },
+  opts: { frames: number; sampleRate: number; workletUrl?: string; plugins?: readonly BellowsPlugin[]; kernel?: string },
 ): Promise<{ left: Float32Array; right: Float32Array; sampleRate: number }> {
   const ctx = new OfflineAudioContext({ numberOfChannels: 2, length: Math.max(1, opts.frames), sampleRate: opts.sampleRate });
   const kernel = await createKernelNode(ctx, {
     workletUrl: opts.workletUrl,
     plugins: opts.plugins,
-    processorOptions: { setup: messages, meters: false },
+    processorOptions: { setup: messages, meters: false, ...(opts.kernel ? { kernel: opts.kernel } : {}) },
   });
   const errors: string[] = [];
   kernel.onReply((reply: KernelReply) => {
@@ -98,7 +98,7 @@ class ScopeProcessorBase {
  */
 export function renderWorkletInProcess(
   messages: KernelMessage[],
-  opts: { frames: number; sampleRate: number; plugins?: readonly BellowsPlugin[] },
+  opts: { frames: number; sampleRate: number; plugins?: readonly BellowsPlugin[]; kernel?: string },
 ): { left: Float32Array; right: Float32Array; sampleRate: number } {
   const g = globalThis as Record<string, unknown>;
   const saved = SCOPE_NAMES.map((n) => [n, Object.getOwnPropertyDescriptor(g, n)] as const);
@@ -129,7 +129,7 @@ export function renderWorkletInProcess(
       const m = msg as { type?: string; message?: unknown };
       if (m && m.type === 'error') errors.push(String(m.message));
     };
-    const proc = new processorCtor({ processorOptions: { setup: messages, meters: false } });
+    const proc = new processorCtor({ processorOptions: { setup: messages, meters: false, ...(opts.kernel ? { kernel: opts.kernel } : {}) } });
     if (errors.length) throw new Error('bellows: offline render failed: ' + errors.join('; '));
     const blocks = Math.ceil(opts.frames / BLOCK);
     const left = new Float32Array(blocks * BLOCK);

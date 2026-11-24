@@ -43,9 +43,10 @@
     "gen": "node tools/gen-units.mjs",
     "gen:check": "node tools/gen-units.mjs --check",
     "build": "node tools/build.mjs",
-    "test": "node tools/build.mjs && cd ../bellows && npx vite-node ../bellows-wasm/test/parity.mjs",
+    "test": "node tools/build.mjs && cd ../bellows && npx vite-node ../bellows-wasm/test/parity.mjs && npx vite-node ../bellows-wasm/test/kernel-parity.mjs",
     "test:browser": "node tools/build.mjs && node tools/browser-test.mjs",
     "bench": "node test/bench.mjs",
-    "prepack": "node tools/build.mjs"
+    "prepack": "node tools/build.mjs",
+    "test:kernel": "node tools/build.mjs && cd ../bellows && npx vite-node ../bellows-wasm/test/kernel-parity.mjs"
   }
 }

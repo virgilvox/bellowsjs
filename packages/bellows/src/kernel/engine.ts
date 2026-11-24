@@ -315,8 +315,7 @@ export class KernelEngine {
       case 'internParam':
         // Param names are interned main-thread side; the kernel mirrors the
         // table so numeric Param events resolve to names in this realm too.
-        paramNames[msg.index] = msg.name;
-        paramIndex.set(msg.name, msg.index);
+        internParamAt(msg.index, msg.name);
         break;
       case 'registerBank': {
         if (this.opts.resolveBankEngine) {
@@ -726,6 +725,17 @@ export function internParam(name: string): number {
     paramIndex.set(name, i);
   }
   return i;
+}
+
+/** The name interned at this index in this realm, if any. */
+export function paramNameAt(index: number): string | undefined {
+  return paramNames[index];
+}
+
+/** Mirrors an internParam message: the name at this index, as the main thread interned it. */
+export function internParamAt(index: number, name: string): void {
+  paramNames[index] = name;
+  paramIndex.set(name, index);
 }
 
 function paramNameOf(e: KernelEvent): string {

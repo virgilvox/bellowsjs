@@ -16,6 +16,7 @@
  */
 
 import { registerEngine, registerEffect } from './core/registry';
+import type { EffectDef, EngineDef } from './types';
 
 import { vaEngine } from './engines/va';
 import { fmEngine } from './engines/fm';
@@ -43,6 +44,21 @@ import { spectralEffects } from './fx/spectral';
 
 let done = false;
 
+/* The defs registerBuiltins() registered, so a kernel can tell a builtin from a replacement that a
+ * plugin or a caller registered under the same id later (kernel/kernels.ts). */
+const builtinEngines = new Map<string, EngineDef>();
+const builtinEffects = new Map<string, EffectDef>();
+
+/** The engine registerBuiltins() registered under this id, whatever the registry holds now. */
+export function builtinEngine(id: string): EngineDef | undefined {
+  return builtinEngines.get(id);
+}
+
+/** The effect registerBuiltins() registered under this id, whatever the registry holds now. */
+export function builtinEffect(id: string): EffectDef | undefined {
+  return builtinEffects.get(id);
+}
+
 export function registerBuiltins(): void {
   if (done) return;
   done = true;
@@ -68,6 +84,7 @@ export function registerBuiltins(): void {
     harmonicEngine,
   ]) {
     registerEngine(e);
+    builtinEngines.set(e.id, e);
   }
 
   for (const f of [
@@ -92,5 +109,6 @@ export function registerBuiltins(): void {
     ...spectralEffects,
   ]) {
     registerEffect(f);
+    builtinEffects.set(f.id, f);
   }
 }

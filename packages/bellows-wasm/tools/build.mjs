@@ -33,23 +33,32 @@ const tables = join(PKG, 'build', 'include', 'bellows', 'dsp', 'wavetable_tables
 mkdirSync(dirname(tables), { recursive: true });
 writeFileSync(tables, await generateWavetableHeader(false, 2048));
 
-buildWasm(['abi.cpp', 'voices.cpp', 'effects.cpp'].map((f) => join(PKG, 'src', f)), wasm, {
+buildWasm(['abi.cpp', 'voices.cpp', 'effects.cpp', 'kernel.cpp'].map((f) => join(PKG, 'src', f)), wasm, {
   include: [join(PKG, 'build', 'include'), join(EMB, 'src'), join(PKG, 'src')],
   runtime: join(PKG, 'src', 'rt.c'),
 });
 
 const bytes = readFileSync(wasm);
 const manifest = JSON.parse(readFileSync(join(PKG, 'src', 'manifest.gen.json'), 'utf8'));
-const installSrc = readFileSync(join(PKG, 'src', 'install.js'), 'utf8').replace(/^export \{[^}]*\};?\s*$/m, '');
+const stripExports = (src) => src.replace(/^export \{[^}]*\};?\s*$/m, '');
+const installSrc = stripExports(readFileSync(join(PKG, 'src', 'install.js'), 'utf8'));
+const kernelSrc = stripExports(readFileSync(join(PKG, 'src', 'kernel.js'), 'utf8'));
 const version = JSON.parse(readFileSync(join(PKG, 'package.json'), 'utf8')).version;
 
 const js = `/*! bellows-wasm ${version} | MIT | the bellows-embedded C++ engines and effects as WebAssembly */
-import { registerEngine, registerEffect } from 'bellowsjs';
+import * as bellows from 'bellowsjs';
 
 const WASM = ${JSON.stringify(bytes.toString('base64'))};
 const MANIFEST = ${JSON.stringify(manifest)};
 const INSTALL = ${JSON.stringify(installSrc)};
+const KERNEL = ${JSON.stringify(kernelSrc)};
 ${installSrc}
+${kernelSrc}
+/** The name the module's kernel registers under (BellowsPlugin.kernel). */
+export const KERNEL_NAME = 'bellows-wasm';
+let compiled = null;
+const compile = () => compiled ?? (compiled = new WebAssembly.Module(decodeBase64(WASM)));
+
 /** The units the module carries, as the TypeScript ids. */
 export const engineIds = MANIFEST.filter((u) => u.kind === 'engine').map((u) => u.id);
 export const effectIds = MANIFEST.filter((u) => u.kind === 'effect').map((u) => u.id);
@@ -67,6 +76,7 @@ const registered = new Set();
  * instead, so every channel and fx chain that names 'va' or 'plate' runs the WebAssembly.
  */
 export function bellowsWasm(opts = {}) {
+  if (opts.kernel) return kernelPlugin();
   const prefix = opts.replace ? '' : (opts.prefix ?? 'wasm-');
   const cfg = { prefix, label: opts.replace ? '' : ' (WebAssembly)' };
   const id = 'bellows-wasm:' + prefix;
@@ -89,7 +99,34 @@ export function bellowsWasm(opts = {}) {
     register() {
       if (registered.has(id)) return;
       registered.add(id);
-      install({ registerEngine, registerEffect }, new WebAssembly.Module(decodeBase64(WASM)), MANIFEST, cfg);
+      install({ registerEngine: bellows.registerEngine, registerEffect: bellows.registerEffect }, compile(), MANIFEST, cfg);
+    },
+  };
+}
+
+/*
+ * The whole kernel in the module (src/kernel.cpp): channels, voice pools, ramps, fx chains, buses
+ * and the master render in WebAssembly, one call per block, and the units the module carries play
+ * under their TypeScript ids with no prefix. A unit it does not carry, or a builtin that was
+ * replaced, plays in JavaScript at the same point in the render. Needs a bellowsjs whose kernel
+ * hook is version 2, and goes to Bellows.boot({ plugins }), since the kernel is chosen when the
+ * processor is built.
+ */
+function kernelPlugin() {
+  const worklet =
+    '"use strict";(function(){' + INSTALL + '\\n' + KERNEL +
+    '\\nvar hook=globalThis.bellowsKernel;if(!hook||!(hook.version>=2)||!hook.registerKernel)throw new Error("bellows-wasm: the kernel needs a bellowsjs kernel hook of version 2 or later");' +
+    'var mod=new WebAssembly.Module(decodeBase64(' + JSON.stringify(WASM) + '));var man=' + JSON.stringify(MANIFEST) + ';' +
+    'hook.registerKernel(' + JSON.stringify(KERNEL_NAME) + ',function(sr,o,env){return createKernel(mod,man,sr,o,env);});})();';
+  return {
+    id: 'bellows-wasm:kernel',
+    kernel: KERNEL_NAME,
+    worklet,
+    register() {
+      if (registered.has('kernel')) return;
+      if (typeof bellows.registerKernel !== 'function') throw new Error('bellows-wasm: the kernel needs bellowsjs with registerKernel (0.5.1 or later)');
+      registered.add('kernel');
+      bellows.registerKernel(KERNEL_NAME, (sr, o, env) => createKernel(compile(), MANIFEST, sr, o, env));
     },
   };
 }
@@ -100,6 +137,13 @@ writeFileSync(
   `import type { BellowsPlugin } from 'bellowsjs';
 
 export interface BellowsWasmOptions {
+  /**
+   * Run the whole kernel in the module: every builtin unit the module carries plays from it under
+   * its own id, and the rest play in JavaScript inside the same render. Pass the plugin to
+   * Bellows.boot({ plugins }); on the calling thread, register() it and give renderOffline
+   * { kernelName: KERNEL_NAME }. Needs bellowsjs 0.5.1 or later.
+   */
+  kernel?: boolean;
   /** Register under the TypeScript ids ('va', 'plate'), replacing the TypeScript units. */
   replace?: boolean;
   /** The id prefix when not replacing. Default 'wasm-'. */
@@ -114,6 +158,8 @@ export const engineIds: readonly string[];
 export const effectIds: readonly string[];
 /** The module's bytes. */
 export function wasmBytes(): Uint8Array;
+/** The name the module's kernel registers under. */
+export const KERNEL_NAME: 'bellows-wasm';
 `,
 );
 copyFileSync(wasm, join(PKG, 'dist', 'bellows.wasm'));

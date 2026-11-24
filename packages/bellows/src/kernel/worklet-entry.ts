@@ -4,7 +4,7 @@
  * kernel can host (engines, effects, sampler factories) is bundled in.
  */
 
-import { KernelEngine } from './engine';
+import { createKernel, registerKernel, type KernelFactory, type KernelLike } from './kernels';
 import { registerBuiltins } from '../register';
 import { registerEngine, registerEffect } from '../core/registry';
 import { KERNEL_HOOK, type KernelHook } from './hook';
@@ -28,25 +28,39 @@ registerBuiltins();
 
 /* The hook plugins register through (kernel/plugin.ts): their scripts run after this module, in this scope. */
 const hook: KernelHook = {
-  version: 1,
+  version: 2,
   registerEngine: (def) => registerEngine(def as EngineDef),
   registerEffect: (def) => registerEffect(def as EffectDef),
+  registerKernel: (name, factory) => registerKernel(name, factory as KernelFactory),
 };
 (globalThis as Record<string, unknown>)[KERNEL_HOOK] = hook;
 
 const METER_EVERY_BLOCKS = 8;
 
 class BellowsKernelProcessor extends AudioWorkletProcessor {
-  private engine = new KernelEngine(sampleRate, { resolveBankEngine: bankEngineResolver });
+  private engine: KernelLike;
   private blockCount = 0;
   private meters = true;
 
   constructor(options?: { processorOptions?: KernelProcessorOptions }) {
     super();
+    const o = options?.processorOptions;
+    /*
+     * The kernel a plugin registered under processorOptions.kernel, or KernelEngine. A name that
+     * is not registered (its plugin's script failed, say) falls back to KernelEngine and says so,
+     * because a processor that throws here leaves the page with no audio and no message at all.
+     */
+    let engine: KernelLike;
+    try {
+      engine = createKernel(o?.kernel, sampleRate, { resolveBankEngine: bankEngineResolver });
+    } catch (err) {
+      engine = createKernel(undefined, sampleRate, { resolveBankEngine: bankEngineResolver });
+      this.port.postMessage({ type: 'error', message: String(err) + '; rendering with the TypeScript kernel' });
+    }
+    this.engine = engine;
     this.port.onmessage = (e: MessageEvent) => this.apply(e.data as KernelMessage);
     // a setup handed to the constructor is in place before the first process(): an offline render
     // posted as messages instead races startRendering() and can render silence
-    const o = options?.processorOptions;
     if (o) {
       if (o.meters === false) this.meters = false;
       if (o.setup) for (const msg of o.setup) this.apply(msg);

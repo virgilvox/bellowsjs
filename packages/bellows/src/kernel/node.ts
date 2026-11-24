@@ -14,6 +14,8 @@ export const KERNEL_PROCESSOR_NAME = 'bellows-kernel';
 
 /** What the kernel processor takes at construction (AudioWorkletNodeOptions.processorOptions). */
 export interface KernelProcessorOptions {
+  /** A kernel registered in the worklet by a plugin (kernel/kernels.ts), in place of KernelEngine. */
+  kernel?: string;
   /** Messages applied in the processor's constructor, before its first block (an offline render's whole score). */
   setup?: KernelMessage[];
   /** false: post no meter replies (an offline render has nobody to read them). */

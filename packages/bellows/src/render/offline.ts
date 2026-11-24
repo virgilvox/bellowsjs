@@ -4,7 +4,8 @@
  * why it runs in Node and renders identically to realtime.
  */
 
-import { KernelEngine, type KernelOptions } from '../kernel/engine';
+import type { KernelOptions } from '../kernel/engine';
+import { createKernel, type KernelLike } from '../kernel/kernels';
 import type { KernelMessage } from '../kernel/messages';
 import { registerBuiltins } from '../register';
 
@@ -13,7 +14,9 @@ export interface OfflineRenderOptions {
   sampleRate?: number;
   kernel?: KernelOptions;
   /** Called once per block with the engine, before the block renders. Lets a scheduler feed events just in time. */
-  onBlock?: (engine: KernelEngine, blockStartSec: number) => void;
+  /** A kernel registered by name (registerKernel, or a plugin's register()), in place of KernelEngine. */
+  kernelName?: string;
+  onBlock?: (engine: KernelLike, blockStartSec: number) => void;
 }
 
 export interface RenderedAudio {
@@ -28,7 +31,7 @@ export function renderOffline(setup: KernelMessage[], opts: OfflineRenderOptions
   // used to register them on every page, and code that rendered after a boot relied on it.
   // Idempotent, and engines registered by the caller stay registered.
   registerBuiltins();
-  const engine = new KernelEngine(sampleRate, opts.kernel);
+  const engine = createKernel(opts.kernelName, sampleRate, opts.kernel);
   for (const msg of setup) engine.apply(msg);
 
   const totalFrames = Math.ceil(opts.seconds * sampleRate);

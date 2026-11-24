@@ -32,8 +32,24 @@ function decodeBase64(s) {
   return out;
 }
 
+/* The create-time option an effect takes besides its params, passed to bw_fx_new as aux: the
+ * delay's longest time in seconds (its maxSeconds option). 0 means the unit's default. */
+function fxAux(id, params) {
+  if (id === 'delay' && params && typeof params.maxSeconds === 'number') return params.maxSeconds;
+  return 0;
+}
+
+/* The kernel's callbacks into JavaScript (src/kernel.cpp). A plain instance runs no kernel, so
+ * nothing calls them. */
+function noKernelImports() {
+  const none = () => {
+    throw new Error('bellows-wasm: kernel callback without a kernel');
+  };
+  return { env: { host_ch_on: none, host_ch_off: none, host_ch_alloff: none, host_ch_param: none, host_ch_process: none, host_fx_process: none } };
+}
+
 function install(hook, module, manifest, cfg) {
-  const ex = new WebAssembly.Instance(module, {}).exports;
+  const ex = new WebAssembly.Instance(module, noKernelImports()).exports;
   ex.bw_init();
   const N = ex.bw_io_frames();
   const ioPtr = ex.bw_io();
@@ -176,8 +192,7 @@ function install(hook, module, manifest, cfg) {
         params: u.params,
         create(sampleRate, params) {
           putVals(u, params);
-          const aux = u.id === 'delay' && params && typeof params.maxSeconds === 'number' ? params.maxSeconds : 0;
-          const h = ex.bw_fx_new(unit, sampleRate, valsPtr, aux);
+          const h = ex.bw_fx_new(unit, sampleRate, valsPtr, fxAux(u.id, params));
           if (!h) throw new Error(`bellows-wasm: could not create ${id} at ${sampleRate} Hz`);
           const fx = new WasmEffect(h, index);
           if (effects) effects.register(fx, h);
@@ -188,4 +203,4 @@ function install(hook, module, manifest, cfg) {
   });
 }
 
-export { decodeBase64, install };
+export { decodeBase64, fxAux, install };

@@ -33,6 +33,11 @@ export interface BellowsPlugin {
   effects?: readonly EffectInfo[];
   /** Registers the plugin's defs on the calling thread (renderOffline, Node). */
   register?: () => void;
+  /**
+   * The name of a kernel this plugin's worklet script registers (hook version 2). Passed to
+   * Bellows.boot({ plugins }), the instance renders with that kernel, live and in render().
+   */
+  kernel?: string;
 }
 
 const pluginUrls = new Map<string, string>();
