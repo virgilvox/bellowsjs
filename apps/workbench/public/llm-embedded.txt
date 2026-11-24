@@ -1456,6 +1456,7 @@ class Phaser
     void Init(float sample_rate)
     void Init(float sample_rate, const Params& p)
     void SetParams(const Params& p)
+    void Resync()
     void Process(float* l, float* r, int from, int to)
     void Reset()
 

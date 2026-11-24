@@ -24,6 +24,11 @@ export default defineConfig({
   resolve: {
     alias: {
       bellowsjs: fileURLToPath(new URL('../../packages/bellows/src/index.ts', import.meta.url)),
+      // BELLOWS_WASM_LOCAL=1 plays the workspace's own build of bellows-wasm (npm run build -w
+      // packages/bellows-wasm first) instead of the published one, to try a change before release
+      ...(process.env.BELLOWS_WASM_LOCAL
+        ? { 'bellows-wasm-npm': fileURLToPath(new URL('../../packages/bellows-wasm/dist/index.js', import.meta.url)) }
+        : {}),
     },
   },
   server: {

@@ -25,7 +25,7 @@ import {
   setEngine,
 } from '../../lib/instrument-store';
 import { sampleEngineOptions, sfState } from '../../lib/soundfonts';
-import { loadWasmEngines, wasmState } from '../../lib/wasm-engines';
+import { loadWasmEngines, setWasmKernel, wasmState } from '../../lib/wasm-engines';
 
 const instrumentGroups = [...presetsByFamily()].map(([family, list]) => ({
   family: family.toUpperCase(),
@@ -47,6 +47,10 @@ const wasmEngines = computed(() =>
 
 const isSampler = computed(() => instState.engineId.startsWith('sampler:'));
 const activePreset = computed(() => presetFor(instState.engineId));
+
+function onKernel(e: Event): void {
+  void setWasmKernel((e.target as HTMLInputElement).checked);
+}
 
 function onPick(e: Event): void {
   setEngine((e.target as HTMLSelectElement).value);
@@ -79,6 +83,14 @@ function onPick(e: Event): void {
       </button>
       the embedded C++ engines and effects, compiled to WebAssembly, beside the TypeScript ones
       (about 670 KB).
+    </p>
+    <p class="hint">
+      <label class="kernel">
+        <input type="checkbox" :checked="wasmState.kernel" :disabled="wasmState.kernelBusy" @change="onKernel" />
+        {{ wasmState.kernelBusy ? 'restarting...' : 'run the whole kernel in webassembly' }}
+      </label>
+      every engine and effect the module carries plays from it under its own name, and the rest stay
+      in javascript. restarts the audio.
     </p>
     <p v-if="wasmState.error" class="hint err">could not load the webassembly engines: {{ wasmState.error }}</p>
     <p v-if="isPercussion" class="hint">
@@ -123,6 +135,16 @@ function onPick(e: Event): void {
   color: var(--phosphor);
   background: transparent;
   border: 1px solid var(--seam);
+  cursor: pointer;
+}
+
+.kernel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+  color: var(--phosphor);
+  text-transform: uppercase;
   cursor: pointer;
 }
 

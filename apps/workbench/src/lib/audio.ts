@@ -30,6 +30,19 @@ let keptContext: AudioContext | null = null;
  * later with addPlugin() (the WebAssembly engines), so a reforge keeps them. */
 const plugins: BellowsPlugin[] = [voice];
 
+/* the seed of the instance now playing, so a reboot for a new kernel keeps the piece's streams */
+let lastSeed = 'workbench';
+
+/**
+ * Boot again with the kernel a plugin brings, or with none (the TypeScript kernel). A kernel is
+ * chosen when the worklet processor is built, so this reforges the instance, with the seed it had.
+ */
+export async function setKernelPlugin(plugin: BellowsPlugin | null): Promise<Bellows> {
+  for (let i = plugins.length - 1; i >= 0; i--) if (plugins[i].kernel) plugins.splice(i, 1);
+  if (plugin) plugins.unshift(plugin);
+  return ensureBellows(lastSeed);
+}
+
 /** Load a plugin into the running instance and every later one. */
 export async function addPlugin(plugin: BellowsPlugin): Promise<void> {
   if (!plugins.some((p) => p.id === plugin.id)) plugins.push(plugin);
@@ -46,8 +59,9 @@ export async function ensureBellows(seed?: string): Promise<Bellows> {
     bootPromise = null;
   }
   booting.value = true;
+  lastSeed = seed ?? 'workbench';
   bootPromise = Bellows.boot({
-    seed: seed ?? 'workbench',
+    seed: lastSeed,
     context: keptContext ?? undefined,
     closeContextOnDispose: false,
     plugins: [...plugins],

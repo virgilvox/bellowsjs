@@ -11,13 +11,16 @@
  */
 
 import { reactive } from 'vue';
-import { addPlugin } from './audio';
+import { addPlugin, setKernelPlugin } from './audio';
 
 export const WASM_PREFIX = 'wasm-';
 
 export const wasmState = reactive({
   loaded: false,
   loading: false,
+  /** the whole kernel runs in the module (a reboot with its kernel plugin) */
+  kernel: false,
+  kernelBusy: false,
   error: '',
   engineIds: [] as string[],
   effectIds: [] as string[],
@@ -44,6 +47,28 @@ export function loadWasmEngines(): Promise<void> {
       wasmState.loading = false;
     });
   return loading;
+}
+
+/**
+ * Run the whole kernel in the module, or go back to the TypeScript kernel. The module's kernel
+ * plays every builtin it carries under the builtin's own id ('va', 'plate'), and anything else
+ * (the singing voice, sample banks it lacks) in JavaScript inside the same render. A kernel is
+ * fixed when the audio engine starts, so this restarts it.
+ */
+export async function setWasmKernel(on: boolean): Promise<void> {
+  if (wasmState.kernelBusy) return;
+  wasmState.kernelBusy = true;
+  wasmState.error = '';
+  try {
+    const mod = await import('bellows-wasm-npm');
+    if (on && !('KERNEL_NAME' in mod)) throw new Error('this build of bellows-wasm has no kernel');
+    await setKernelPlugin(on ? mod.bellowsWasm({ kernel: true }) : null);
+    wasmState.kernel = on;
+  } catch (e: unknown) {
+    wasmState.error = e instanceof Error ? e.message : String(e);
+  } finally {
+    wasmState.kernelBusy = false;
+  }
 }
 
 /** The TypeScript id a wasm- id mirrors, or the id itself. */
