@@ -1,4 +1,4 @@
-# bellowsjs 0.5.1 LLM reference
+# bellowsjs 0.5.2 LLM reference
 
 bellowsjs is a browser-native audio engine for synthesis, samples, sequencing,
 analysis, and I/O. One AudioWorklet kernel hosts every voice and effect; musical
@@ -8,7 +8,7 @@ in Node. Every stochastic decision flows from named, seeded PRNG streams.
 License MIT. Site: https://bellows.live  Repo: https://github.com/virgilvox/bellowsjs
 
 This file is generated from the library source and its type declarations.
-Everything in it is exact for version 0.5.1.
+Everything in it is exact for version 0.5.2.
 
 ## Install and import
 
@@ -133,7 +133,21 @@ export interface BootOptions {
      * package, such as the singing voice in bellows-voice. b.use() adds one later.
      */
     plugins?: readonly BellowsPlugin[];
+    /**
+     * Direct outputs beside the master, 0 to 16 (default 0). An instrument routed to one with
+     * route(k) leaves the master mix and plays out of outputNode(k) instead, after its inserts, gain
+     * and pan, so the host can take it through its own Web Audio graph. Sends still reach their
+     * buses, whose returns stay in the master.
+     */
+    outputs?: number;
+    /**
+     * Direct inputs, 0 to 16 (default 0). Audio connected to inputNode(k) plays through the channel
+     * inputChannel(k) makes, so any Web Audio source can go through bellows effects.
+     */
+    inputs?: number;
 }
+/** Most direct inputs or outputs a boot may ask for. */
+export declare const MAX_DIRECT_IO = 16;
 export interface NoteOptions {
     /** Absolute context time in seconds. Defaults to a few ms from now. */
     at?: number;
@@ -217,6 +231,10 @@ export declare class Bellows {
     tuning: Tuning;
     /** boot() made the context, so dispose() is the one allowed to close it */
     private ownsContext;
+    private directOutputs;
+    private directInputs;
+    private outputNodes;
+    private inputNodes;
     /** The worklet source boot() loaded, for the offline renders that run it again. */
     private readonly workletUrl;
     private constructor();
@@ -314,6 +332,26 @@ export declare class Bellows {
      */
     rng(label: string): NamedRng;
     /** Create an instrument channel running the given engine. */
+    /**
+     * Direct outputs this instance has (boot({ outputs })). 0 when a plugin's kernel renders, since
+     * only KernelEngine routes to them; route() then throws and everything stays in the master.
+     */
+    get outputs(): number;
+    /** Direct inputs this instance has (boot({ inputs })), 0 when a plugin's kernel renders. */
+    get inputs(): number;
+    /**
+     * Direct output k (1 based) as a node to connect onward: what the instruments routed to it play.
+     * It is not connected anywhere until the caller connects it. The same node every call.
+     */
+    outputNode(k: number): AudioNode;
+    /** Direct input k (1 based) as a node to connect sources into. The same node every call. */
+    inputNode(k: number): AudioNode;
+    /**
+     * A channel whose sound is direct input k instead of an engine. Everything a channel has works on
+     * it (fx, fxParam, gain, pan, send, route, dispose); notes and engine params do nothing. In an
+     * offline render it is silent, since nothing feeds the input there.
+     */
+    inputChannel(k: number): Instrument;
     voice(engineId: string, params?: Record<string, number>, opts?: {
         polyphony?: number;
     }): Instrument;
@@ -439,6 +477,11 @@ export declare class Instrument {
     send(bus: BusHandle, level: number): this;
     gain(value: number): this;
     pan(value: number): this;
+    /**
+     * Where this channel plays: 0 the master mix (the default), k direct output k, which
+     * b.outputNode(k) hands to the host. In an offline render every channel is in the master.
+     */
+    route(output: number): this;
     allOff(): this;
     /**
      * Free the channel: the kernel drops its voice pool, and the setup stream
@@ -1221,6 +1264,15 @@ an effect id string, [id, { param: value }], or { effectId, params }.
 
 ### denoise (Spectral Denoise)
   amount: 0 to 4, default 1
+  mix: 0 to 1, default 1
+
+### filter (Filter)
+  type: 0 to 9, default 0
+  cutoff: 20 to 20000 Hz, default 1000 curve=exp
+  resonance: 0 to 1, default 0.1
+  gain: -24 to 24 dB, default 0
+  slope: 0 to 1, default 0
+  drive: 1 to 10, default 1 curve=exp
   mix: 0 to 1, default 1
 
 

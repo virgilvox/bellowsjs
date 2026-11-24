@@ -1,10 +1,11 @@
 # Changelog
 
-## 0.6.0 (unreleased)
+## 0.5.2
 
 Bellows can share its sound with the rest of a Web Audio graph, both ways, and gains a filter
 effect. Nothing changes for a page that asks for neither: a boot without `outputs` or `inputs`
-builds the same node and renders the same samples as 0.5.1.
+builds the same node and renders the same samples as 0.5.1. Every addition is opt in, so this
+is a patch release: bellows-voice and bellows-wasm keep working against it unchanged.
 
 ### Added
 
