@@ -41,6 +41,9 @@ class BellowsKernelProcessor extends AudioWorkletProcessor {
   private engine: KernelLike;
   private blockCount = 0;
   private meters = true;
+  /** Reused every block: the processor's own arrays, passed through (see KernelIO). */
+  private readonly io: { outputs?: Float32Array[][]; inputs?: Float32Array[][] } = {};
+  private direct = false;
 
   constructor(options?: { processorOptions?: KernelProcessorOptions }) {
     super();
@@ -63,6 +66,7 @@ class BellowsKernelProcessor extends AudioWorkletProcessor {
     // posted as messages instead races startRendering() and can render silence
     if (o) {
       if (o.meters === false) this.meters = false;
+      this.direct = (o.outputs ?? 0) > 0 || (o.inputs ?? 0) > 0;
       if (o.setup) for (const msg of o.setup) this.apply(msg);
     }
   }
@@ -76,7 +80,7 @@ class BellowsKernelProcessor extends AudioWorkletProcessor {
     }
   }
 
-  process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+  process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
     const out = outputs[0];
     if (!out || out.length === 0) return true;
     const l = out[0];
@@ -84,7 +88,13 @@ class BellowsKernelProcessor extends AudioWorkletProcessor {
     // lock engine time to context time so event timestamps mean what the
     // facade thinks they mean, even on an old or reused AudioContext
     this.engine.setFrame(currentFrame);
-    this.engine.process(l, r);
+    if (this.direct) {
+      this.io.outputs = outputs;
+      this.io.inputs = inputs;
+      this.engine.process(l, r, this.io);
+    } else {
+      this.engine.process(l, r);
+    }
     if (this.meters && ++this.blockCount % METER_EVERY_BLOCKS === 0) {
       this.port.postMessage({
         type: 'meter',

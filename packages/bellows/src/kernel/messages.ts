@@ -39,6 +39,10 @@ export type KernelMessage =
   | { type: 'channelParam'; id: number; name: string; value: number }
   | { type: 'channelGain'; id: number; gain: number }
   | { type: 'channelPan'; id: number; pan: number }
+  /** Where a channel's signal goes after its inserts, gain and pan: 0 the master mix, k direct output k. */
+  | { type: 'channelOutput'; id: number; output: number }
+  /** A channel whose sound is direct input `input` (1 based) instead of an engine's voices. */
+  | { type: 'createInputChannel'; id: number; input: number }
   | { type: 'createBus'; id: number; chain: FxSpec[]; returnLevel: number }
   | { type: 'busFxParam'; busId: number; fxIndex: number; name: string; value: number }
   | { type: 'send'; channelId: number; busId: number; level: number }

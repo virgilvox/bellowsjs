@@ -21,7 +21,7 @@ import { getEffect, getEngine } from '../core/registry';
 import { rng } from '../core/prng';
 import { VoicePool } from '../core/voicepool';
 import { builtinEffect, builtinEngine } from '../register';
-import { KernelEngine, internParamAt, paramNameAt, type KernelOptions } from './engine';
+import { KernelEngine, internParamAt, paramNameAt, type KernelIO, type KernelOptions } from './engine';
 import type { KernelMessage } from './messages';
 
 /** What a processor or a render needs from a kernel: KernelEngine's public surface. */
@@ -37,8 +37,12 @@ export interface KernelLike {
   readonly rmsR: number;
   setFrame(frame: number): void;
   apply(msg: KernelMessage): void;
-  /** Render exactly blockSize frames into outL and outR (overwrites). */
-  process(outL: Float32Array, outR: Float32Array): void;
+  /**
+   * Render exactly blockSize frames into outL and outR (overwrites). `io` carries the direct
+   * inputs and outputs when the host has any; a kernel that does not support them ignores it and
+   * keeps every channel in the master mix.
+   */
+  process(outL: Float32Array, outR: Float32Array, io?: KernelIO): void;
 }
 
 /** The realm a kernel runs in, as KernelEngine sees it. */

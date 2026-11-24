@@ -169,7 +169,7 @@ export { renderOffline, type OfflineRenderOptions, type RenderedAudio } from './
 export { bankEngineResolver } from './render/banks';
 
 /* kernel */
-export { KernelEngine, internParam } from './kernel/engine';
+export { KernelEngine, internParam, type KernelIO } from './kernel/engine';
 export { registerKernel, hasKernel, kernelEnv, type KernelLike, type KernelEnv, type KernelFactory } from './kernel/kernels';
 export { SetupLog } from './kernel/setuplog';
 export { createKernelNode, KERNEL_PROCESSOR_NAME } from './kernel/node';

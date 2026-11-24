@@ -51,6 +51,26 @@ export interface BootOptions {
    * package, such as the singing voice in bellows-voice. b.use() adds one later.
    */
   plugins?: readonly BellowsPlugin[];
+  /**
+   * Direct outputs beside the master, 0 to 16 (default 0). An instrument routed to one with
+   * route(k) leaves the master mix and plays out of outputNode(k) instead, after its inserts, gain
+   * and pan, so the host can take it through its own Web Audio graph. Sends still reach their
+   * buses, whose returns stay in the master.
+   */
+  outputs?: number;
+  /**
+   * Direct inputs, 0 to 16 (default 0). Audio connected to inputNode(k) plays through the channel
+   * inputChannel(k) makes, so any Web Audio source can go through bellows effects.
+   */
+  inputs?: number;
+}
+
+/** Most direct inputs or outputs a boot may ask for. */
+export const MAX_DIRECT_IO = 16;
+
+function directCount(n: number | undefined): number {
+  if (n === undefined || !Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(MAX_DIRECT_IO, Math.floor(n)));
 }
 
 export interface NoteOptions {
@@ -166,6 +186,10 @@ export class Bellows {
 
   /** boot() made the context, so dispose() is the one allowed to close it */
   private ownsContext: boolean;
+  private directOutputs = 0;
+  private directInputs = 0;
+  private outputNodes = new Map<number, GainNode>();
+  private inputNodes = new Map<number, GainNode>();
   /** The worklet source boot() loaded, for the offline renders that run it again. */
   private readonly workletUrl: string | undefined;
 
@@ -225,14 +249,23 @@ export class Bellows {
     }
     // a plugin that brings its own kernel names it here; the first one wins
     const kernelName = plugins.find((p) => p.kernel)?.kernel;
+    const outputs = directCount(opts.outputs);
+    const inputs = directCount(opts.inputs);
+    const processorOptions = {
+      ...(kernelName ? { kernel: kernelName } : {}),
+      ...(outputs ? { outputs } : {}),
+      ...(inputs ? { inputs } : {}),
+    };
     const kernel = await createKernelNode(ctx, {
       workletUrl: opts.workletUrl,
       plugins,
-      ...(kernelName ? { processorOptions: { kernel: kernelName } } : {}),
+      ...(kernelName || outputs || inputs ? { processorOptions } : {}),
     });
     const b = new Bellows(ctx, kernel, opts, ownsContext);
     b.plugins = plugins;
     b.kernelName = kernelName;
+    b.directOutputs = outputs;
+    b.directInputs = inputs;
     return b;
   }
 
@@ -488,6 +521,58 @@ export class Bellows {
   /* ------------------------------------------------------------ */
 
   /** Create an instrument channel running the given engine. */
+  /**
+   * Direct outputs this instance has (boot({ outputs })). 0 when a plugin's kernel renders, since
+   * only KernelEngine routes to them; route() then throws and everything stays in the master.
+   */
+  get outputs(): number {
+    return this.kernelName ? 0 : this.directOutputs;
+  }
+
+  /** Direct inputs this instance has (boot({ inputs })), 0 when a plugin's kernel renders. */
+  get inputs(): number {
+    return this.kernelName ? 0 : this.directInputs;
+  }
+
+  /**
+   * Direct output k (1 based) as a node to connect onward: what the instruments routed to it play.
+   * It is not connected anywhere until the caller connects it. The same node every call.
+   */
+  outputNode(k: number): AudioNode {
+    checkDirect('output', k, this.outputs);
+    let g = this.outputNodes.get(k);
+    if (!g) {
+      g = this.ctx.createGain();
+      this.kernel.node.connect(g, k, 0);
+      this.outputNodes.set(k, g);
+    }
+    return g;
+  }
+
+  /** Direct input k (1 based) as a node to connect sources into. The same node every call. */
+  inputNode(k: number): AudioNode {
+    checkDirect('input', k, this.inputs);
+    let g = this.inputNodes.get(k);
+    if (!g) {
+      g = this.ctx.createGain();
+      g.connect(this.kernel.node, 0, k - 1);
+      this.inputNodes.set(k, g);
+    }
+    return g;
+  }
+
+  /**
+   * A channel whose sound is direct input k instead of an engine. Everything a channel has works on
+   * it (fx, fxParam, gain, pan, send, route, dispose); notes and engine params do nothing. In an
+   * offline render it is silent, since nothing feeds the input there.
+   */
+  inputChannel(k: number): Instrument {
+    checkDirect('input', k, this.inputs);
+    const id = this.nextChannel++;
+    this.post({ type: 'createInputChannel', id, input: k });
+    return new Instrument(this, id);
+  }
+
   voice(engineId: string, params: Record<string, number> = {}, opts?: { polyphony?: number }): Instrument {
     const id = this.nextChannel++;
     this.post({
@@ -875,6 +960,10 @@ export class Bellows {
     this.transport.stop();
     this.kernel.dispose();
     this.analyser.disconnect();
+    for (const g of this.outputNodes.values()) g.disconnect();
+    for (const g of this.inputNodes.values()) g.disconnect();
+    this.outputNodes.clear();
+    this.inputNodes.clear();
     // browsers cap live AudioContexts per page (around six), so a boot that
     // made its own context has to give it back. A caller supplied context is
     // theirs: leave it running.
@@ -886,6 +975,14 @@ export class Bellows {
         // some hosts throw on closing an already closed context
       }
     }
+  }
+}
+
+function checkDirect(kind: 'input' | 'output', k: number, have: number): void {
+  if (!Number.isInteger(k) || k < 1 || k > have) {
+    throw new RangeError(
+      `bellows: no direct ${kind} ${k}; this instance has ${have} (Bellows.boot({ ${kind}s: n }))`,
+    );
   }
 }
 
@@ -983,6 +1080,17 @@ export class Instrument {
   pan(value: number): this {
     if (this.gone) return this;
     this.b.structural({ type: 'channelPan', id: this.channel, pan: value });
+    return this;
+  }
+
+  /**
+   * Where this channel plays: 0 the master mix (the default), k direct output k, which
+   * b.outputNode(k) hands to the host. In an offline render every channel is in the master.
+   */
+  route(output: number): this {
+    if (this.gone) return this;
+    if (output !== 0) checkDirect('output', output, this.b.outputs);
+    this.b.structural({ type: 'channelOutput', id: this.channel, output });
     return this;
   }
 

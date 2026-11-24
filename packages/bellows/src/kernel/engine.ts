@@ -78,13 +78,66 @@ class Ramp {
   }
 }
 
+/**
+ * The direct inputs and outputs a host gives the kernel beside the master pair
+ * (Bellows.boot({ inputs, outputs })), laid out as an AudioWorkletProcessor receives them so the
+ * processor passes its arrays through untouched: outputs[0] is the master pair (written from
+ * process()'s outL and outR, never read here) and outputs[k] direct output k; inputs[k - 1] is
+ * direct input k. An input with no channels (nothing connected) is silence, a mono one feeds both
+ * sides. A host that passes none (an offline render, an older processor) gets the 0.5 behaviour:
+ * every channel in the master mix.
+ */
+export interface KernelIO {
+  outputs?: readonly (readonly Float32Array[])[];
+  inputs?: readonly (readonly Float32Array[])[];
+}
+
+/** What a channel's sound comes from: an engine's voice pool, or a direct input. */
+interface ChannelSource {
+  readonly activeCount: number;
+  noteOn(id: number, hz: number, vel: number, frame: number): void;
+  noteOff(id: number): void;
+  setParam(name: string, value: number): void;
+  getParam(name: string): number | undefined;
+  allNotesOff(): void;
+  process(l: Float32Array, r: Float32Array, from: number, to: number): void;
+}
+
+/** A direct input as a channel source: notes and params mean nothing to it. */
+class InputSource implements ChannelSource {
+  readonly activeCount = 0;
+  /** The input's channels for the block being rendered; empty when nothing is connected. */
+  bound: readonly Float32Array[] = [];
+  constructor(readonly input: number) {}
+  noteOn(): void {}
+  noteOff(): void {}
+  setParam(): void {}
+  getParam(): number | undefined {
+    return undefined;
+  }
+  allNotesOff(): void {}
+  process(l: Float32Array, r: Float32Array, from: number, to: number): void {
+    const inL = this.bound[0];
+    if (!inL) return;
+    const inR = this.bound[1] ?? inL;
+    for (let i = from; i < to; i++) {
+      l[i] += inL[i];
+      r[i] += inR[i];
+    }
+  }
+}
+
+const NO_CHANNELS: readonly Float32Array[] = [];
+
 interface FxSlot {
   effect: Effect;
   spec: FxSpec;
 }
 
 class Channel {
-  pool: VoicePool;
+  pool: ChannelSource;
+  /** 0: the master mix. k: direct output k, when the host provides it. */
+  output = 0;
   fx: FxSlot[] = [];
   gain: Ramp;
   pan: Ramp;
@@ -94,14 +147,14 @@ class Channel {
   scratchR: Float32Array;
 
   constructor(
-    def: EngineDef,
+    def: EngineDef | InputSource,
     sampleRate: number,
     params: Record<string, number>,
     seed: string,
     blockSize: number,
     polyphony?: number,
   ) {
-    this.pool = new VoicePool(def, sampleRate, params, rng(seed), polyphony);
+    this.pool = def instanceof InputSource ? def : new VoicePool(def, sampleRate, params, rng(seed), polyphony);
     this.gain = new Ramp(sampleRate, 0.8);
     this.pan = new Ramp(sampleRate, 0);
     this.scratchL = new Float32Array(blockSize);
@@ -233,6 +286,21 @@ export class KernelEngine {
           msg.id,
           new Channel(def, this.sampleRate, msg.params, msg.seed, this.blockSize, msg.polyphony),
         );
+        break;
+      }
+      case 'createInputChannel': {
+        const input = Math.floor(msg.input);
+        if (!(input >= 1)) break;
+        this.channels.set(
+          msg.id,
+          new Channel(new InputSource(input), this.sampleRate, {}, '', this.blockSize),
+        );
+        break;
+      }
+      case 'channelOutput': {
+        const c = this.channels.get(msg.id);
+        const out = Math.floor(msg.output);
+        if (c) c.output = out >= 0 ? out : 0;
         break;
       }
       case 'removeChannel':
@@ -586,8 +654,14 @@ export class KernelEngine {
   /**
    * Render exactly blockSize frames into outL/outR (overwrites).
    */
-  process(outL: Float32Array, outR: Float32Array): void {
+  process(outL: Float32Array, outR: Float32Array, io?: KernelIO): void {
     this.hasProcessed = true;
+    const directOuts = io?.outputs;
+    if (directOuts) for (let k = 1; k < directOuts.length; k++) for (const ch of directOuts[k]) ch.fill(0);
+    const directIns = io?.inputs;
+    for (const c of this.channels.values()) {
+      if (c.pool instanceof InputSource) c.pool.bound = directIns?.[c.pool.input - 1] ?? NO_CHANNELS;
+    }
     const N = this.blockSize;
     const blockStart = this.frame;
     const blockEndTime = (blockStart + N) / this.sampleRate;
@@ -647,6 +721,12 @@ export class KernelEngine {
     }
     for (const c of this.channels.values()) {
       for (const slot of c.fx) slot.effect.process(c.scratchL, c.scratchR, 0, N);
+      // a channel routed to a direct output the host provided goes there instead of the master
+      const direct = c.output > 0 ? directOuts?.[c.output] : undefined;
+      const dL = direct?.[0];
+      const dR = direct?.[1] ?? dL;
+      const toL = dL ?? this.mixL;
+      const toR = dR ?? this.mixR;
       for (let i = 0; i < N; i++) {
         const g = c.gain.next();
         const p = c.pan.next();
@@ -658,8 +738,8 @@ export class KernelEngine {
         const r = c.scratchR[i] * gr;
         c.scratchL[i] = l;
         c.scratchR[i] = r;
-        this.mixL[i] += l;
-        this.mixR[i] += r;
+        toL[i] += l;
+        toR[i] += r;
       }
       for (const [busId, level] of c.sends) {
         const bus = this.buses.get(busId);

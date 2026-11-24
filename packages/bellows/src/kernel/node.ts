@@ -20,6 +20,10 @@ export interface KernelProcessorOptions {
   setup?: KernelMessage[];
   /** false: post no meter replies (an offline render has nobody to read them). */
   meters?: boolean;
+  /** Direct outputs beside the master (node outputs 1..outputs). Default 0. */
+  outputs?: number;
+  /** Direct inputs (node inputs 0..inputs - 1). Default 0: the node keeps its one unused input. */
+  inputs?: number;
 }
 
 let blobUrl: string | null = null;
@@ -67,10 +71,12 @@ export async function createKernelNode(
   // after the kernel's module, whose hook they register through, and before the node, so the
   // processor's constructor can already create their engines
   for (const plugin of opts?.plugins ?? []) await addPluginModule(ctx, plugin);
+  const outs = opts?.processorOptions?.outputs ?? 0;
+  const ins = opts?.processorOptions?.inputs ?? 0;
   const node = new AudioWorkletNode(ctx, KERNEL_PROCESSOR_NAME, {
-    numberOfInputs: 1,
-    numberOfOutputs: 1,
-    outputChannelCount: [2],
+    numberOfInputs: Math.max(1, ins),
+    numberOfOutputs: 1 + outs,
+    outputChannelCount: new Array(1 + outs).fill(2),
     ...(opts?.processorOptions ? { processorOptions: opts.processorOptions } : {}),
   });
   const listeners = new Set<(reply: KernelReply) => void>();

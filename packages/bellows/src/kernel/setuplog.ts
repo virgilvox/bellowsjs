@@ -32,6 +32,8 @@ function collapseKey(msg: KernelMessage): string | null {
       return 'channelGain:' + msg.id;
     case 'channelPan':
       return 'channelPan:' + msg.id;
+    case 'channelOutput':
+      return 'channelOutput:' + msg.id;
     case 'channelFx':
       return 'channelFx:' + msg.id;
     case 'send':
@@ -55,6 +57,8 @@ function collapseKey(msg: KernelMessage): string | null {
 function channelOf(msg: KernelMessage): number | null {
   switch (msg.type) {
     case 'createChannel':
+    case 'createInputChannel':
+    case 'channelOutput':
     case 'removeChannel':
     case 'channelFx':
     case 'channelParam':
@@ -103,7 +107,9 @@ export class SetupLog {
    * A disposed instrument must not come back to life in an offline render.
    */
   forgetChannel(id: number): void {
-    const created = this.msgs.findIndex((m) => m.type === 'createChannel' && m.id === id);
+    const created = this.msgs.findIndex(
+      (m) => (m.type === 'createChannel' || m.type === 'createInputChannel') && m.id === id,
+    );
     if (created < 0) return;
     const kept: KernelMessage[] = [];
     for (let i = 0; i < this.msgs.length; i++) {
