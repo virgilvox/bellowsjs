@@ -465,6 +465,58 @@ inline constexpr float kEffectDelayDefaults[kEffectDelayParamCount] = {
   0.35f, 0.5f, 0.4f, 0.0f, 8000.0f, 0.35f
 };
 
+/* tapeDelay: Tape Delay
+ * bellows/fx/delay.h class TapeDelayExt, 8 params.
+ *   name        min    max    default  c++ field   unit
+ *   time        0.005  2      0.35     time        s
+ *   feedback    0      1.1    0.45     feedback
+ *   wow         0      1      0.3      wow
+ *   flutter     0      1      0.15     flutter
+ *   saturation  0      1      0.4      saturation
+ *   tone        500    15000  4500     tone        Hz
+ *   hiss        0      1      0        hiss
+ *   mix         0      1      0.35     mix
+ */
+inline constexpr int kEffectTapeDelayParamCount = 8;
+inline constexpr float kEffectTapeDelayDefaults[kEffectTapeDelayParamCount] = {
+  0.35f, 0.45f, 0.3f, 0.15f, 0.4f, 4500.0f, 0.0f, 0.35f
+};
+
+/* multitap: Multitap Delay
+ * bellows/fx/delay.h class MultitapExt, 10 params.
+ *   name       min    max  default  c++ field  unit
+ *   time1      0.001  2    0.125    time[]     s
+ *   time2      0.001  2    0.25     time[]     s
+ *   time3      0.001  2    0.375    time[]     s
+ *   time4      0.001  2    0.5      time[]     s
+ *   level1     0      1    1        level[]
+ *   level2     0      1    0.8      level[]
+ *   level3     0      1    0.6      level[]
+ *   level4     0      1    0.45     level[]
+ *   diffusion  0      1    0.4      diffusion
+ *   mix        0      1    0.5      mix
+ */
+inline constexpr int kEffectMultitapParamCount = 10;
+inline constexpr float kEffectMultitapDefaults[kEffectMultitapParamCount] = {
+  0.125f, 0.25f, 0.375f, 0.5f, 1.0f, 0.8f, 0.6f, 0.45f,
+  0.4f, 0.5f
+};
+
+/* fdn: FDN Reverb
+ * bellows/fx/reverb.h class FdnExt, 6 params.
+ *   name      min   max    default  c++ field  unit
+ *   size      0.25  3      1        size
+ *   decay     0.1   20     2        decay      s
+ *   damp      500   20000  6000     damp       Hz
+ *   chorus    0     1      0.3      chorus
+ *   predelay  0     0.25   0.01     predelay   s
+ *   mix       0     1      0.35     mix
+ */
+inline constexpr int kEffectFdnParamCount = 6;
+inline constexpr float kEffectFdnDefaults[kEffectFdnParamCount] = {
+  1.0f, 2.0f, 6000.0f, 0.3f, 0.01f, 0.35f
+};
+
 /* plate: Plate Reverb
  * bellows/fx/plate.h class PlateExt, 6 params.
  *   name       min  max   default  c++ field  unit
@@ -691,7 +743,7 @@ inline constexpr float kEffectSaturatorDefaults[kEffectSaturatorParamCount] = {
 
 /* Not ported to C++ yet, listed so the gap stays visible:
  *   engines: granular
- *   effects: tapeDelay, multitap, fdn, pitchshift, freeze, blur, robot, whisper, denoise
+ *   effects: pitchshift, freeze, blur, robot, whisper, denoise
  */
 
 }  // namespace params

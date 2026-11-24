@@ -32,13 +32,6 @@ function decodeBase64(s) {
   return out;
 }
 
-/* The create-time option an effect takes besides its params, passed to bw_fx_new as aux: the
- * delay's longest time in seconds (its maxSeconds option). 0 means the unit's default. */
-function fxAux(id, params) {
-  if (id === 'delay' && params && typeof params.maxSeconds === 'number') return params.maxSeconds;
-  return 0;
-}
-
 /* The kernel's callbacks into JavaScript (src/kernel.cpp). A plain instance runs no kernel, so
  * nothing calls them. */
 function noKernelImports() {
@@ -46,6 +39,20 @@ function noKernelImports() {
     throw new Error('bellows-wasm: kernel callback without a kernel');
   };
   return { env: { host_ch_on: none, host_ch_off: none, host_ch_alloff: none, host_ch_param: none, host_ch_process: none, host_fx_process: none } };
+}
+/* The create-time capacity option each effect's TypeScript constructor reads from its params
+ * record, passed to bw_fx_new as aux (0 when the record has none). */
+const AUX_OPTION = {
+  delay: 'maxSeconds',
+  tapeDelay: 'maxSeconds',
+  multitap: 'maxSeconds',
+  fdn: 'maxSize',
+};
+
+/* aux for bw_fx_new: that option's value, or 0 (the unit's default) */
+function fxAux(id, params) {
+  const opt = AUX_OPTION[id];
+  return opt && params && typeof params[opt] === 'number' ? params[opt] : 0;
 }
 
 function install(hook, module, manifest, cfg) {

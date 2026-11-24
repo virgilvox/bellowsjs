@@ -30,12 +30,13 @@ const TS_DIST = join(REPO, 'packages', 'bellows', 'dist', 'bellows.js');
 
 /* The ported units, in the order the Unit enum numbers them. */
 export const ENGINES = ['va', 'fm', 'additive', 'wavetable', 'kick', 'snare', 'hat', 'pluck', 'string', 'tube', 'modal', 'westcoast', 'formant', 'harmonic', 'clap', 'tom', 'noise'];
-export const EFFECTS = ['delay', 'plate', 'compressor', 'limiter', 'gate', 'chorus', 'flanger', 'tremolo', 'autopan', 'ringmod', 'eq', 'saturator', 'transient', 'phaser', 'freqshift'];
+export const EFFECTS = ['delay', 'plate', 'compressor', 'limiter', 'gate', 'chorus', 'flanger', 'tremolo', 'autopan', 'ringmod', 'eq', 'saturator', 'transient', 'phaser', 'freqshift', 'tapeDelay', 'multitap', 'fdn'];
 
 /* Indexed TypeScript params (ratio1..ratio6) that fold into a C++ array, per unit. */
 const ARRAYS = {
   fm: { ratio: 'ratio', level: 'level', fixed: 'fixed_hz' },
   additive: { partial: 'partial', target: 'target', detune: 'detune' },
+  multitap: { time: 'time', level: 'level' },
 };
 
 /* Names whose C++ field is not their snake_case. */

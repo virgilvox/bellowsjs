@@ -110,6 +110,20 @@ const EFFECTS = {
   transient: { params: { attack: 0.6, sustain: -0.4 }, change: ['sustain', 0.5], gate: 7e-5 },
   phaser: { params: { rate: 0.8, freqlo: 200, freqhi: 4000, feedback: 0.5, stages: 8, spread: 0.4, mix: 0.6 }, change: ['stages', 5], gate: 3e-4 },
   freqshift: { params: { shift: 150, mix: 0.7 }, change: ['shift', -250], gate: 3.5e-5 },
+  /* The capacity options (maxSeconds, maxSize) sit below a param they clamp, so the aux path is
+   * in the row. The live changes leave the delay times alone: a time change glides in the float
+   * Smoother, which drifts from the double one and stops short of the target (see the delay row). */
+  tapeDelay: {
+    params: { time: 0.15, feedback: 0.8, wow: 0.6, flutter: 0.5, saturation: 0.7, tone: 3000, hiss: 1, mix: 0.5, maxSeconds: 0.12 },
+    change: ['tone', 6000],
+    gate: 2e-4,
+  },
+  multitap: {
+    params: { time1: 0.03, time2: 0.07, time3: 0.13, time4: 0.3, level1: 0.9, level3: 0.7, level4: 0.6, diffusion: 0.8, mix: 0.6, maxSeconds: 0.2 },
+    change: ['diffusion', 0.3],
+    gate: 2.5e-7,
+  },
+  fdn: { params: { size: 0.9, decay: 3, damp: 4000, chorus: 0.6, predelay: 0.02, mix: 0.5, maxSize: 0.7 }, change: ['size', 0.5], gate: 1.5e-5 },
 };
 
 function notes() {
