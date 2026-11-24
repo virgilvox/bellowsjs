@@ -40,6 +40,10 @@ for (const u of effects) {
   const a = time(fx(u)) - base;
   const b = time(fx('wasm-' + u)) - base;
   const c = time(fx(u), KERNEL_NAME) - baseK;
+  if (a < 1) {
+    console.log(`  ${u.padEnd(11)} under 1 ms a second either way, inside the noise of subtracting the source`);
+    continue;
+  }
   console.log(`  ${u.padEnd(11)} ${a.toFixed(1).padStart(7)} ${b.toFixed(1).padStart(8)} ${c.toFixed(1).padStart(8)}   ${ratio(a, b).padStart(6)}  ${ratio(a, c).padStart(6)}   the effect alone, the kick source subtracted`);
 }
 
