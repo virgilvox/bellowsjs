@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.6.0 (unreleased)
+
+Bellows can share its sound with the rest of a Web Audio graph, both ways, and gains a filter
+effect. Nothing changes for a page that asks for neither: a boot without `outputs` or `inputs`
+builds the same node and renders the same samples as 0.5.1.
+
+### Added
+
+- **Direct outputs.** `Bellows.boot({ outputs: n })` (0 to 16) gives the kernel node n stereo
+  outputs beside the master. `inst.route(k)` sends a channel, after its inserts, gain and pan, to
+  direct output k instead of the master mix, and `b.outputNode(k)` is that output as an AudioNode
+  to connect onward; `route(0)` brings it back. Sends from a routed channel still reach their
+  buses, whose returns stay in the master. `b.outputs` says how many there are (0 while a plugin's
+  kernel renders, since only KernelEngine routes).
+- **Direct inputs.** `Bellows.boot({ inputs: n })` gives the node n inputs. `b.inputNode(k)` is
+  input k as an AudioNode to connect a source into, and `b.inputChannel(k)` makes a channel whose
+  sound is that input instead of an engine, so a microphone or any Web Audio source can go through
+  bellows inserts, sends and routing. Notes and engine params do nothing on it.
+- **`filter` effect.** The Svf modes (lowpass, highpass, bandpass, notch, peak, allpass, bell, low
+  and high shelf) at 12 or 24 dB per octave, and the four stage ladder lowpass with its drive, as
+  an insert. The cutoff glides in the log domain so a swept control does not zipper, and the
+  bandpass peaks at 0 dB whatever its resonance. Registered after the 0.5 effects, so every
+  existing effect keeps its position in `listEffects()`.
+- `KernelEngine.process(outL, outR, io?)` takes the direct buffers as `KernelIO`, laid out as an
+  AudioWorkletProcessor receives them; `KernelLike` declares the optional argument, and a kernel
+  that ignores it keeps every channel in the master.
+
+### Notes
+
+- An offline render has no direct inputs or outputs: routed channels render in the master and
+  input channels are silent.
+- New kernel messages `channelOutput` and `createInputChannel`. A plugin kernel that does not
+  know them ignores them (bellows-wasm 0.2 does), which leaves routing off.
+
 ## 0.5.1
 
 A plugin can bring its own kernel. bellows-wasm 0.2 uses this to run the whole render in

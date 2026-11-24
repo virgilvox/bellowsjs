@@ -145,6 +145,23 @@ const audio = await b.render({ bars: 16 });
 const wav = audio.wav(24); // ArrayBuffer, ready to download
 ```
 
+## Into and out of a Web Audio graph
+
+By default everything bellows plays meets in one master and leaves through `b.analyser`. Ask for direct outputs and inputs at boot and channels can leave or enter the kernel on their own:
+
+```js
+const b = await Bellows.boot({ outputs: 2, inputs: 1 });
+
+const lead = b.voice('va').route(1);           // out of the master, into output 1
+b.outputNode(1).connect(myConvolver);          // your own Web Audio graph from here
+
+const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+b.ctx.createMediaStreamSource(mic).connect(b.inputNode(1));
+b.inputChannel(1).fx(['filter', { type: 9, cutoff: 800, resonance: 0.6 }], 'plate');
+```
+
+`route(0)` puts a channel back in the master. An offline render has neither: every channel renders in the master and input channels are silent.
+
 ## Upgrading to 0.5.0
 
 The singing voice moved to its own package, [bellows-voice](https://github.com/virgilvox/bellows-voice), with its history, and sounds exactly as it did. `npm install bellows-voice`, boot with `Bellows.boot({ plugins: [voice] })`, and replace `b.voice('vocal', params)` with `singer(b, params)`; `sing()` and `speak()` are the singer's, and so are `dictionary` and `accent` (they were `b.dictionary` and `b.accent`). The lyric layer, `VOCAL_PHONEMES`, `vocalEngine`, `GlottalSource` and the `CritDamp` units are exported from bellows-voice now. A page that does not sing is about half the size it was: the standalone bundle went from 211957 to 116924 gzipped bytes.
@@ -169,7 +186,7 @@ Theory and tuning: thirty plus scales, chord parsing and detection, roman numera
 
 Sequencing: a transport with exact tempo-curve integration, meter changes, and swing; Euclidean patterns (true Bjorklund), Markov chains of any order with chord-tone gravity, L-systems, elementary cellular automata, arpeggiators, and a small step-indexed pattern combinator layer.
 
-Effects: clean/tape/multitap delays, an 8-line FDN reverb (Householder feedback, modulated coprime lines), the Dattorro plate with the 1997 constants, compressor with lookahead and program-dependent release, true-peak limiter, gate, transient shaper, 6-band parametric EQ, saturator with 4x oversampling, chorus, flanger, phaser, tremolo, autopan, ring mod, Hilbert-pair frequency shifter, and a spectral suite (phase-vocoder pitch shift with identity phase locking, freeze, blur, robot, whisper, denoise, offline time stretch).
+Effects: clean/tape/multitap delays, an 8-line FDN reverb (Householder feedback, modulated coprime lines), the Dattorro plate with the 1997 constants, compressor with lookahead and program-dependent release, true-peak limiter, gate, transient shaper, 6-band parametric EQ, saturator with 4x oversampling, chorus, flanger, phaser, tremolo, autopan, ring mod, Hilbert-pair frequency shifter, a filter (the SVF modes at 12 or 24 dB, and the ladder), and a spectral suite (phase-vocoder pitch shift with identity phase locking, freeze, blur, robot, whisper, denoise, offline time stretch).
 
 Analysis: YIN and MPM pitch detection, spectral-flux onset detection, tempo estimation, chroma and key estimation, spectral descriptors, MFCC, and an EBU R128 loudness meter (momentary, short-term, gated integrated, LRA, 4x oversampled true peak) with K-weighting derived per sample rate.
 
