@@ -25,33 +25,35 @@ enum Unit : int {
   kUnitClap = 14,
   kUnitTom = 15,
   kUnitNoise = 16,
-  kUnitDelay = 17,
-  kUnitPlate = 18,
-  kUnitCompressor = 19,
-  kUnitLimiter = 20,
-  kUnitGate = 21,
-  kUnitChorus = 22,
-  kUnitFlanger = 23,
-  kUnitTremolo = 24,
-  kUnitAutopan = 25,
-  kUnitRingmod = 26,
-  kUnitEq = 27,
-  kUnitSaturator = 28,
-  kUnitTransient = 29,
-  kUnitPhaser = 30,
-  kUnitFreqshift = 31,
-  kUnitTapeDelay = 32,
-  kUnitMultitap = 33,
-  kUnitFdn = 34,
-  kUnitPitchshift = 35,
-  kUnitFreeze = 36,
-  kUnitBlur = 37,
-  kUnitRobot = 38,
-  kUnitWhisper = 39,
-  kUnitDenoise = 40,
-  kUnitCount = 41,
+  kUnitSampler = 17,
+  kUnitGranular = 18,
+  kUnitDelay = 19,
+  kUnitPlate = 20,
+  kUnitCompressor = 21,
+  kUnitLimiter = 22,
+  kUnitGate = 23,
+  kUnitChorus = 24,
+  kUnitFlanger = 25,
+  kUnitTremolo = 26,
+  kUnitAutopan = 27,
+  kUnitRingmod = 28,
+  kUnitEq = 29,
+  kUnitSaturator = 30,
+  kUnitTransient = 31,
+  kUnitPhaser = 32,
+  kUnitFreqshift = 33,
+  kUnitTapeDelay = 34,
+  kUnitMultitap = 35,
+  kUnitFdn = 36,
+  kUnitPitchshift = 37,
+  kUnitFreeze = 38,
+  kUnitBlur = 39,
+  kUnitRobot = 40,
+  kUnitWhisper = 41,
+  kUnitDenoise = 42,
+  kUnitCount = 43,
 };
-inline constexpr int kFirstEffect = 17;
+inline constexpr int kFirstEffect = 19;
 
 /* va: Virtual Analog, 19 params */
 struct ParamsVa {
@@ -484,6 +486,46 @@ struct ParamsNoise {
       case 12: Put(p.f_sustain, v); break;  // fSustain
       case 13: Put(p.f_release, v); break;  // fRelease
       case 14: Put(p.pan, v); break;  // pan
+      default: break;
+    }
+  }
+};
+
+/* sampler: Sampler, 8 params */
+struct ParamsSampler {
+  static constexpr int kCount = 8;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.attack, v); break;  // attack
+      case 1: Put(p.decay, v); break;  // decay
+      case 2: Put(p.sustain, v); break;  // sustain
+      case 3: Put(p.release, v); break;  // release
+      case 4: Put(p.loop_xfade, v); break;  // loopXfade
+      case 5: Put(p.veltrack, v); break;  // veltrack
+      case 6: Put(p.gain, v); break;  // gain
+      case 7: Put(p.pan, v); break;  // pan
+      default: break;
+    }
+  }
+};
+
+/* granular: Granular, 10 params */
+struct ParamsGranular {
+  static constexpr int kCount = 10;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.grain_size, v); break;  // grainSize
+      case 1: Put(p.density, v); break;  // density
+      case 2: Put(p.position, v); break;  // position
+      case 3: Put(p.spray, v); break;  // spray
+      case 4: Put(p.pitch, v); break;  // pitch
+      case 5: Put(p.pitch_jitter, v); break;  // pitchJitter
+      case 6: Put(p.spread, v); break;  // spread
+      case 7: Put(p.reverse, v); break;  // reverse
+      case 8: Put(p.base_note, v); break;  // baseNote
+      case 9: Put(p.level, v); break;  // level
       default: break;
     }
   }

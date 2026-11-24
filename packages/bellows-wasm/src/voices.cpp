@@ -128,6 +128,9 @@ Voice* NewVoice(int unit, float sr, const char* label, const float* vals, int va
       w->v.Init(sr, &w->rng, w->p);
       return w;
     }
+    case kUnitGranular:
+      /* the plain engine over its test tone; the sampler has no plain form */
+      return NewBankVoice(unit, sr, label, vals, nullptr);
     default:
       return nullptr;
   }

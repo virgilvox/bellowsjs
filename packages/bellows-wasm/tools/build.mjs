@@ -33,7 +33,7 @@ const tables = join(PKG, 'build', 'include', 'bellows', 'dsp', 'wavetable_tables
 mkdirSync(dirname(tables), { recursive: true });
 writeFileSync(tables, await generateWavetableHeader(false, 2048));
 
-buildWasm(['abi.cpp', 'voices.cpp', 'effects.cpp', 'kernel.cpp'].map((f) => join(PKG, 'src', f)), wasm, {
+buildWasm(['abi.cpp', 'voices.cpp', 'effects.cpp', 'kernel.cpp', 'banks.cpp'].map((f) => join(PKG, 'src', f)), wasm, {
   include: [join(PKG, 'build', 'include'), join(EMB, 'src'), join(PKG, 'src')],
   runtime: join(PKG, 'src', 'rt.c'),
 });
@@ -60,7 +60,7 @@ let compiled = null;
 const compile = () => compiled ?? (compiled = new WebAssembly.Module(decodeBase64(WASM)));
 
 /** The units the module carries, as the TypeScript ids. */
-export const engineIds = MANIFEST.filter((u) => u.kind === 'engine').map((u) => u.id);
+export const engineIds = MANIFEST.filter((u) => u.kind === 'engine' && !u.bankOnly).map((u) => u.id);
 export const effectIds = MANIFEST.filter((u) => u.kind === 'effect').map((u) => u.id);
 
 /** The module's bytes. */
@@ -85,7 +85,7 @@ export function bellowsWasm(opts = {}) {
     '\\nvar hook=globalThis.bellowsKernel;if(!hook||!(hook.version>=1))throw new Error("bellows-wasm: load the bellows kernel before this plugin");' +
     'install(hook,new WebAssembly.Module(decodeBase64(' + JSON.stringify(WASM) + ')),' + JSON.stringify(MANIFEST) + ',' + JSON.stringify(cfg) + ');})();';
   const info = (kind) =>
-    MANIFEST.filter((u) => u.kind === kind).map((u) => ({
+    MANIFEST.filter((u) => u.kind === kind && !u.bankOnly).map((u) => ({
       id: prefix + u.id,
       label: u.label + cfg.label,
       params: u.params,

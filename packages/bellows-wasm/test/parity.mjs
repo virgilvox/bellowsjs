@@ -29,6 +29,7 @@
 
 import { renderOffline } from 'bellowsjs';
 import { renderWorkletInProcess } from '../../bellows/src/kernel/offline-context.ts';
+import { readFileSync } from 'node:fs';
 import { bellowsWasm, engineIds, effectIds } from '../dist/index.js';
 
 const REPORT = process.argv.includes('--report');
@@ -86,6 +87,7 @@ const ENGINES = {
     change: ['cutoff', 3000],
     gate: 5e-4,
   },
+  granular: { params: { grainSize: 60, density: 23, spray: 0.2, pitchJitter: 2, spread: 0.8, reverse: 0.25 }, change: ['position', 0.6], gate: 7e-5 },
 };
 
 /* Per effect, the same, on a VA chord from the TypeScript. */
@@ -226,8 +228,15 @@ for (const [name, row] of Object.entries(EFFECTS)) {
   );
 }
 
+/* A unit that only plays a registered bank (the sampler) has no plugin def to render here;
+ * test/banks.mjs covers it, and the bank-backed granular, through the bank exports. */
+const bankOnly = new Set(
+  JSON.parse(readFileSync(new URL('../src/manifest.gen.json', import.meta.url), 'utf8'))
+    .filter((u) => u.bankOnly)
+    .map((u) => u.id),
+);
 const covered = new Set(rows.map((r) => r.name.split('/')[0]));
-const missing = DIAG ? [] : [...engineIds, ...effectIds].filter((u) => !covered.has(u));
+const missing = DIAG ? [] : [...engineIds, ...effectIds].filter((u) => !covered.has(u) && !bankOnly.has(u));
 
 const e2 = (x) => x.toExponential(1);
 process.stdout.write(`bellows-wasm against the TypeScript: rel RMS of the difference, ${SECONDS} s a row\n\n`);

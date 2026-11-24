@@ -683,6 +683,14 @@ async function generateParamsHeader(check = false) {
     engines: new Map(lib.listEngines().map((d) => [d.id, d])),
     effects: new Map(lib.listEffects().map((d) => [d.id, d])),
   };
+  /*
+   * The sampler is not a builtin: the kernel builds one def per registered
+   * bank ('sampler:<id>'), so listEngines() never has it. Its ParamSpecs are
+   * the same for every bank, and an empty bank gives them under the plain id.
+   */
+  if (!defs.engines.has('sampler')) {
+    defs.engines.set('sampler', lib.makeSamplerEngine(new lib.SamplerBank()));
+  }
 
   const head = [
     '/* Generated from the ParamSpec arrays in packages/bellows. Do not edit.',

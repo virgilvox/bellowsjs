@@ -8,7 +8,8 @@
  * hook is globalThis.bellowsKernel in the worklet, or { registerEngine, registerEffect } from
  * bellowsjs on the calling thread. Each unit in the manifest becomes a def whose id is prefix +
  * the TypeScript id and whose params are the TypeScript ParamSpecs, so a channel or an fx chain
- * takes it exactly as it takes the TypeScript one.
+ * takes it exactly as it takes the TypeScript one. The exception is a unit marked bankOnly (the
+ * sampler), which plays only a registered bank and so has no def of its own.
  */
 
 function decodeBase64(s) {
@@ -171,6 +172,9 @@ function install(hook, module, manifest, cfg) {
   }
 
   manifest.forEach((u, unit) => {
+    /* A unit that only plays a registered bank (the sampler) has no def of its own: its voices are
+     * made per bank by bw_voice_new_bank, for 'sampler:<id>' channels. */
+    if (u.bankOnly) return;
     const index = new Map(u.params.map((p, i) => [p.name, i]));
     const id = cfg.prefix + u.id;
     const label = u.label + cfg.label;
