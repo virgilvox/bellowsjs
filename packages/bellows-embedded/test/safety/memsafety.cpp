@@ -43,9 +43,10 @@
  * WHAT IS DRIVEN, so the opening line can be checked rather than believed:
  * DelayLineExt, Pluck, Tube, Waveguide, StereoDelay, Chorus, Flanger, Compressor,
  * Limiter (plain and oversampled), Gate, Plate, Saturator (4x and fused 1x),
- * Eq6 and Eq3. The three at the end were added because the list used to stop
- * at Gate while claiming to cover the buffer owners, and Plate is the
- * closest analogue to the Pluck fault: its store_ is carved from
+ * Eq6 and Eq3, then Sampler and Granular, which read caller-owned audio
+ * at computed positions. Plate, Saturator and Eq were added because the
+ * list used to stop at Gate while claiming to cover the buffer owners, and
+ * Plate is the closest analogue to the Pluck fault: its store_ is carved from
  * TotalSamples(kSampleRate) while every index inside comes from the runtime
  * rate. Wavetable is the one entry that owns no buffer at all: it is here
  * because it indexes a 64 KB constexpr table from two floats (the position
@@ -74,7 +75,9 @@
 #include "bellows/dsp/lfo.h"
 #include "bellows/dsp/oversample.h"
 #include "bellows/engines/drums.h"
+#include "bellows/engines/granular.h"
 #include "bellows/engines/pluck.h"
+#include "bellows/engines/sampler.h"
 #include "bellows/engines/tube.h"
 #include "bellows/engines/wavetable.h"
 #include "bellows/engines/waveguide.h"
@@ -1286,6 +1289,72 @@ void RunRate(float rate) {
     printf("  ok %-14s rate=%-8.0f positions=%d\n", "Wavetable", rate,
            static_cast<int>(sizeof(kPositions) / sizeof(kPositions[0])));
     delete v;
+  }
+  {
+    /*
+     * Sampler and Granular read audio the caller owns at positions worked
+     * out from the note, the zone's rate and the params: computed indices
+     * into storage the class did not size, the same fault by another route.
+     * Every buffer is its own heap block at its exact length, so a read one
+     * past the end is reported. The lengths include the degenerate ones
+     * (zero to three frames), the loops end on the last frame, and the
+     * crossfade asks for 100 ms, more than any loop here can give.
+     * The NaN frequency in kFreqs is what found the undefined conversion
+     * from a NaN playback rate to the fixed point position.
+     */
+    static const uint32_t kLens[] = {0, 1, 2, 3, 64, 4096};
+    constexpr int kNumLens = sizeof(kLens) / sizeof(kLens[0]);
+    float* bufs[2 * kNumLens];
+    bellows::SampleZone zones[3 * kNumLens];
+    int nz = 0;
+    for (int li = 0; li < kNumLens; ++li) {
+      const uint32_t n = kLens[li];
+      for (int c = 0; c < 2; ++c) {
+        bufs[2 * li + c] = n ? static_cast<float*>(malloc(n * sizeof(float))) : nullptr;
+        for (uint32_t i = 0; i < n; ++i) bufs[2 * li + c][i] = sinf(0.05f * (c + 1) * i);
+      }
+      for (int mode = 0; mode < 3; ++mode) {
+        bellows::SampleZone& z = zones[nz++];
+        z.data = bufs[2 * li];
+        z.data_r = mode == 2 ? bufs[2 * li + 1] : nullptr;
+        z.frames = n;
+        z.sample_rate = mode == 1 ? 96000.0f : 22050.0f;
+        z.loop_mode = static_cast<bellows::LoopMode>(mode);
+        z.has_loop_start = z.has_loop_end = n > 2;
+        z.loop_start = static_cast<float>(n / 3);
+        z.loop_end = static_cast<float>(n);
+        z.has_env = mode == 1;
+        z.env.hold = 0.01f;
+        z.has_round_robin = (nz % 2) == 0;
+        z.seq_position = static_cast<float>(nz % 3);
+      }
+    }
+    bellows::SamplerBank bank;
+    bank.Init(zones, nz);
+    auto* s = new bellows::Sampler();
+    bellows::Sampler::Params sp;
+    sp.loop_xfade = 100.0f;
+    s->Init(rate, &bank, sp);
+    DriveVoice(s, "Sampler", rate);
+    delete s;
+
+    bellows::Granular::Params gp;
+    gp.grain_size = 10.0f;
+    gp.density = 400.0f;
+    gp.spray = 1.0f;
+    gp.pitch = 4.0f;
+    gp.pitch_jitter = 12.0f;
+    gp.reverse = 0.5f;
+    for (int li = 0; li < kNumLens; ++li) {
+      for (float pos : {0.0f, 1.0f}) {
+        gp.position = pos;
+        auto* g = new bellows::Granular();
+        g->Init(rate, &rng, bufs[2 * li], kLens[li], 44100.0f, gp);
+        DriveVoice(g, "Granular", rate);
+        delete g;
+      }
+    }
+    for (float* b : bufs) free(b);
   }
 }
 

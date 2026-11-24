@@ -382,6 +382,26 @@ inline constexpr float kEngineFormantDefaults[kEngineFormantParamCount] = {
   0.0f, 0.1f, 5.0f, 0.25f, 0.0f, 1.0f
 };
 
+/* granular: Granular
+ * bellows/engines/granular.h class Granular, 10 params.
+ *   name         min   max  default  c++ field     unit
+ *   grainSize    10    500  80       grain_size    ms
+ *   density      0.5   400  20       density       Hz
+ *   position     0     1    0.25     position
+ *   spray        0     1    0.05     spray
+ *   pitch        0.25  4    1        pitch
+ *   pitchJitter  0     12   0        pitch_jitter  st
+ *   spread       0     1    0.5      spread
+ *   reverse      0     1    0        reverse
+ *   baseNote     24    96   69       base_note
+ *   level        0     1    0.9      level
+ */
+inline constexpr int kEngineGranularParamCount = 10;
+inline constexpr float kEngineGranularDefaults[kEngineGranularParamCount] = {
+  80.0f, 20.0f, 0.25f, 0.05f, 1.0f, 0.0f, 0.5f, 0.0f,
+  69.0f, 0.9f
+};
+
 /* harmonic: Harmonic plus Noise
  * bellows/engines/harmonic.h class Harmonic, 9 params.
  *   name          min    max  default  c++ field      unit
@@ -399,6 +419,23 @@ inline constexpr int kEngineHarmonicParamCount = 9;
 inline constexpr float kEngineHarmonicDefaults[kEngineHarmonicParamCount] = {
   0.5f, 0.5f, 1.0f, 0.1f, 2.0f, 0.0f, 0.01f, 0.3f,
   0.8f
+};
+
+/* sampler: Sampler
+ * bellows/engines/sampler.h class Sampler, 8 params.
+ *   name       min  max  default  c++ field   unit
+ *   attack     0    10   0.002    attack      s
+ *   decay      0    10   0.1      decay       s
+ *   sustain    0    1    1        sustain
+ *   release    0    10   0.25     release     s
+ *   loopXfade  0    100  8        loop_xfade  ms
+ *   veltrack   0    100  100      veltrack    %
+ *   gain       -60  24   0        gain        dB
+ *   pan        -1   1    0        pan
+ */
+inline constexpr int kEngineSamplerParamCount = 8;
+inline constexpr float kEngineSamplerDefaults[kEngineSamplerParamCount] = {
+  0.002f, 0.1f, 1.0f, 0.25f, 8.0f, 100.0f, 0.0f, 0.0f
 };
 
 /* delay: Stereo Delay
@@ -603,7 +640,7 @@ inline constexpr float kEffectSaturatorDefaults[kEffectSaturatorParamCount] = {
 };
 
 /* Not ported to C++ yet, listed so the gap stays visible:
- *   engines: clap, tom, noise, granular
+ *   engines: clap, tom, noise
  *   effects: tapeDelay, multitap, fdn, transient, phaser, freqshift, pitchshift, freeze, blur, robot, whisper, denoise
  */
 
