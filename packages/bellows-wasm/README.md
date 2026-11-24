@@ -88,6 +88,11 @@ TypeScript; registering an id again makes a new bank and leaves the old one to t
 already playing it. The string and the tube take `setParam('freq')`, the TypeScript's legato
 retune, outside their specs; `tools/gen-units.mjs` maps such names to a call (`Glide`).
 
+A channel seed is hashed for the random streams the way the TypeScript hashes it only when every
+character is one byte (up to U+00FF) and the seed is at most 450 characters; any other seed plays
+its engine in JavaScript in kernel mode, so its streams stay the TypeScript's. To instantiate the
+module yourself, pass `wasmImports()`: the kernel's six callbacks, unused without a kernel.
+
 ## Tests
 
 ```

@@ -78,17 +78,7 @@ alto.sing('twinkle twinkle', [
 
 ## WebAssembly
 
-The \`bellows-wasm\` package carries every engine and effect above, and the kernel that plays them, compiled to WebAssembly from bellows-embedded, the C++ library that runs on microcontrollers. Each unit takes the same params as its TypeScript twin and is tested against it through the kernel.
-
-\`\`\`js
-// npm install bellows-wasm
-import { bellowsWasm } from 'bellows-wasm';
-const b = await Bellows.boot({ plugins: [bellowsWasm({ kernel: true })] });
-const lead = b.voice('va', { cutoff: 1200 });   // the same score, rendered in WebAssembly
-lead.fx('plate');
-\`\`\`
-
-With \`{ kernel: true }\` the whole render runs in the module, one call per block, and a score needs no changes. Anything the module does not carry, such as the singing voice or a def of your own, still plays, in JavaScript, inside the same render. The kernel is chosen at boot, so the plugin goes to \`Bellows.boot\`, and \`b.render()\` uses it too. Without the option, \`bellowsWasm()\` adds each unit as \`wasm-va\`, \`wasm-plate\` and so on beside the TypeScript ones. The plugin is about 900 KB because it carries the module inline. On the [instrument page](/#play), the engine panel can load either: switch between \`va\` and \`wasm-va\`, or run the whole kernel in WebAssembly.
+Every engine here also runs in WebAssembly, from the \`bellows-wasm\` package: beside the TypeScript ones as \`wasm-va\` and so on, or with the whole kernel in WebAssembly and no change to a score. [WebAssembly](/docs/webassembly) covers both.
 
 ## Parameters
 

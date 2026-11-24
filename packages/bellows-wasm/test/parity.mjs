@@ -114,6 +114,8 @@ const EFFECTS = {
   saturator: { params: { drive: 5, curve: 1, tone: 0.3, output: -3 }, change: ['curve', 2], gate: 1e-6 },
   transient: { params: { attack: 0.6, sustain: -0.4 }, change: ['sustain', 0.5], gate: 7e-5 },
   phaser: { params: { rate: 0.8, freqlo: 200, freqhi: 4000, feedback: 0.5, stages: 8, spread: 0.4, mix: 0.6 }, change: ['stages', 5], gate: 3e-4 },
+  /* the same spread written again: the TypeScript realigns both Lfos on every spread write */
+  'phaser/resync': { engine: 'phaser', params: { rate: 0.8, spread: 0.4, mix: 0.6 }, change: ['spread', 0.4], gate: 3e-4 },
   freqshift: { params: { shift: 150, mix: 0.7 }, change: ['shift', -250], gate: 3.5e-5 },
   /* The capacity options (maxSeconds, maxSize) sit below a param they clamp, so the aux path is
    * in the row. The live changes leave the delay times alone: a time change glides in the float
@@ -226,7 +228,7 @@ for (const [name, row] of Object.entries(ENGINES)) {
 }
 for (const [name, row] of Object.entries(EFFECTS)) {
   if (!pick(name)) continue;
-  measure('effect', name, row, (w) => fxScore((w ? 'wasm-' : '') + name, P(row)), () =>
+  measure('effect', name, row, (w) => fxScore((w ? 'wasm-' : '') + (row.engine ?? name), P(row)), () =>
     at(CHANGE_AT, { type: 'fxParam', channelId: 1, fxIndex: 0, name: row.change[0], value: row.change[1] }),
   );
 }

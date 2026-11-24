@@ -13,10 +13,13 @@ export interface OfflineRenderOptions {
   seconds: number;
   sampleRate?: number;
   kernel?: KernelOptions;
-  /** Called once per block with the engine, before the block renders. Lets a scheduler feed events just in time. */
   /** A kernel registered by name (registerKernel, or a plugin's register()), in place of KernelEngine. */
   kernelName?: string;
-  onBlock?: (engine: KernelLike, blockStartSec: number) => void;
+  /**
+   * Called once per block with the engine, before the block renders. Lets a scheduler feed events
+   * just in time. Declared as a method so a callback typed against KernelEngine still fits.
+   */
+  onBlock?(engine: KernelLike, blockStartSec: number): void;
 }
 
 export interface RenderedAudio {

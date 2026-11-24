@@ -55,7 +55,7 @@ class BellowsKernelProcessor extends AudioWorkletProcessor {
       engine = createKernel(o?.kernel, sampleRate, { resolveBankEngine: bankEngineResolver });
     } catch (err) {
       engine = createKernel(undefined, sampleRate, { resolveBankEngine: bankEngineResolver });
-      this.port.postMessage({ type: 'error', message: String(err) + '; rendering with the TypeScript kernel' });
+      this.port.postMessage({ type: 'error', message: String(err) + '; rendering with the TypeScript kernel', kernelFallback: true });
     }
     this.engine = engine;
     this.port.onmessage = (e: MessageEvent) => this.apply(e.data as KernelMessage);

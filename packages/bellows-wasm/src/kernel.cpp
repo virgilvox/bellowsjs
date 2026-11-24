@@ -187,6 +187,7 @@ struct Channel {
   BankRef* bank = nullptr;
   Vec<Slot> slots;
   Vec<double> rec;
+  Vec<uint8_t> has; /* rec[i] is an entry of the params record (its value may be NaN, as in JS) */
   Vec<FxSlot> fx;
   Ramp gain, pan;
   Vec<Send> sends;
@@ -236,6 +237,7 @@ void FreeChannel(Channel* c) {
   for (int i = 0; i < c->slots.n; ++i) delete c->slots[i].voice;
   c->slots.Release();
   c->rec.Release();
+  c->has.Release();
   FreeChain(c->fx);
   c->fx.Release();
   c->sends.Release();
@@ -254,20 +256,23 @@ void FreeBus(Bus* b) {
 }
 
 bool RecGet(const Channel* c, int name, double* out) {
-  if (name < 0 || name >= c->rec.n) return false;
-  const double v = c->rec[name];
-  if (v != v) return false;
-  *out = v;
+  if (name < 0 || name >= c->rec.n || !c->has[name]) return false;
+  *out = c->rec[name];
   return true;
 }
 
-void RecSet(Channel* c, int name, double v) {
-  if (name < 0) return;
+bool RecSet(Channel* c, int name, double v) {
+  if (name < 0) return true;
   if (name >= c->rec.n) {
-    if (!c->rec.Reserve(name + 1)) return;
-    while (c->rec.n <= name) c->rec.data[c->rec.n++] = __builtin_nan("");
+    if (!c->rec.Reserve(name + 1) || !c->has.Reserve(name + 1)) return false;
+    while (c->rec.n <= name) {
+      c->rec.data[c->rec.n++] = 0;
+      c->has.data[c->has.n++] = 0;
+    }
   }
   c->rec[name] = v;
+  c->has[name] = 1;
+  return true;
 }
 
 /* ---------------- the voice pool (core/voicepool.ts) ---------------- */
@@ -657,6 +662,8 @@ void VoiceLabel(char* out, int cap, const char* seed, int i) {
 
 using bwasm::Kernel;
 
+BW_EXPORT(bw_k_free) void bw_k_free(Kernel* k);
+
 BW_EXPORT(bw_k_new) Kernel* bw_k_new(double rate, int n) {
   Kernel* k = new Kernel;
   k->rate = rate;
@@ -667,7 +674,10 @@ BW_EXPORT(bw_k_new) Kernel* bw_k_new(double rate, int n) {
   k->out_l = bwasm::Buffer(n);
   k->out_r = bwasm::Buffer(n);
   for (int i = 0; i < bwasm::kRampSlots; ++i) k->ramps[i] = {false, 0, 0, 0, 0, 0, 0};
-  if (!k->mix_l || !k->mix_r || !k->out_l || !k->out_r) return nullptr;
+  if (!k->mix_l || !k->mix_r || !k->out_l || !k->out_r) {
+    bw_k_free(k);
+    return nullptr;
+  }
   return k;
 }
 
@@ -737,7 +747,7 @@ int bw_k_channel(Kernel* k, int id, int unit, int foreign, const char* seed, con
   c->sl = Buffer(k->n);
   c->sr = Buffer(k->n);
   bool ok = c->sl && c->sr;
-  for (int i = 0; ok && i < rec_n; ++i) RecSet(c, rec_ids[i], rec_vals[i]);
+  for (int i = 0; ok && i < rec_n; ++i) ok = RecSet(c, rec_ids[i], rec_vals[i]);
   if (ok && foreign < 0) {
     char label[600];
     ok = c->slots.Reserve(poly > 0 ? poly : 1);
@@ -760,8 +770,9 @@ int bw_k_channel(Kernel* k, int id, int unit, int foreign, const char* seed, con
   if (at >= 0) {
     FreeChannel(k->channels[at]);
     k->channels[at] = c;
-  } else {
-    k->channels.Push(c);
+  } else if (!k->channels.Push(c)) {
+    FreeChannel(c);
+    return 0;
   }
   return 1;
 }
@@ -860,7 +871,11 @@ BW_EXPORT(bw_k_chain_push) int bw_k_chain_push(Kernel* k, int kind, int id, bwas
     delete fx;
     return 0;
   }
-  return chain->Push({fx, foreign}) ? 1 : 0;
+  if (!chain->Push({fx, foreign})) {
+    delete fx;
+    return 0;
+  }
+  return 1;
 }
 
 /* One kernel event. For Param and ParamRamp, a is the name id. */

@@ -20,6 +20,7 @@ import renderingAndExport from './pages/rendering-and-export';
 import analysis from './pages/analysis';
 import midi from './pages/midi';
 import customDsp from './pages/custom-dsp';
+import webassembly from './pages/webassembly';
 
 export type { DocPage } from './types';
 
@@ -36,7 +37,7 @@ export const DOC_GROUPS: DocGroup[] = [
   { label: 'Pitch', pages: [theory, tuning] },
   { label: 'Mix and sample', pages: [effects, soundfontsAndSamples] },
   { label: 'Output', pages: [renderingAndExport, analysis] },
-  { label: 'Extend', pages: [midi, customDsp] },
+  { label: 'Extend', pages: [midi, customDsp, webassembly] },
 ];
 
 /** All pages in reading order. */

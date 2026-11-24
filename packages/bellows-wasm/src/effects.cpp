@@ -63,6 +63,20 @@ Fx* NewSeeded(float sr, const float* vals) {
   return w;
 }
 
+/* The phaser realigns its Lfos on every spread write in the JS, even an unchanged one. */
+struct PhaserFx final : Fx {
+  static constexpr int kSpread = 5;
+  bellows::Phaser f;
+  bellows::Phaser::Params p;
+  void Run(float* l, float* r, int n) override { f.Process(l, r, 0, n); }
+  void Set(int i, float x) override {
+    ParamsPhaser::Set(p, i, x);
+    f.SetParams(p);
+    if (i == kSpread) f.Resync();
+  }
+  void Reset() override { f.Reset(); }
+};
+
 /* The limiter carries the true-peak detector and switches it at run time, as the JS does with
  * its truePeak param: one delay line, one deque, one release envelope either way. */
 struct LimiterFx final : Fx {
@@ -175,7 +189,8 @@ Fx* NewFx(int unit, float sr, const float* vals, float aux) {
       return w;
     }
     case kUnitPhaser: {
-      auto* w = MakeFx<Phaser, ParamsPhaser>(vals);
+      auto* w = new PhaserFx;
+      for (int i = 0; i < ParamsPhaser::kCount; ++i) ParamsPhaser::Set(w->p, i, vals[i]);
       w->f.Init(sr, w->p);
       return w;
     }

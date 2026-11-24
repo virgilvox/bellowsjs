@@ -88,6 +88,18 @@ function install(hook, module, manifest, cfg) {
   }
   function putLabel(s) {
     const b = new Uint8Array(ex.memory.buffer, labelPtr, LABEL_BYTES);
+    /* The module hashes bytes and the TypeScript hashes UTF-16 code units: written one byte per
+     * unit, a label of units 1 to 255 hashes the same. Past that it cannot, and is sent as UTF-8. */
+    let latin1 = s.length < LABEL_BYTES - 32;
+    for (let i = 0; latin1 && i < s.length; i++) {
+      const u = s.charCodeAt(i);
+      if (u === 0 || u > 255) latin1 = false;
+    }
+    if (latin1) {
+      for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
+      b[s.length] = 0;
+      return;
+    }
     let n = 0;
     for (const ch of s) {
       let c = ch.codePointAt(0);

@@ -187,6 +187,8 @@ export class Bellows {
     kernel.onReply((reply) => {
       if (reply.type === 'meter') this.lastMeter = reply;
       else if (reply.type === 'error') {
+        // the live processor runs KernelEngine after all, so renders must not ask for the other
+        if (reply.kernelFallback) this.kernelName = undefined;
         this.kernelErrors.push(reply.message);
         if (this.kernelErrors.length > 20) this.kernelErrors.shift();
         if (this.onError) this.onError(reply.message);

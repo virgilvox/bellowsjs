@@ -62,4 +62,7 @@ export interface MeterFrame {
   frame: number;
 }
 
-export type KernelReply = MeterFrame | { type: 'error'; message: string };
+export type KernelReply =
+  | MeterFrame
+  /** kernelFallback: the processor could not build the kernel it was asked for and runs KernelEngine */
+  | { type: 'error'; message: string; kernelFallback?: boolean };

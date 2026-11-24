@@ -294,6 +294,28 @@ function exactRows() {
     timed: [[0.2, { type: 'fxParam', channelId: 0, fxIndex: 0, name: 'steps', value: 3 }]],
   };
 
+  /* a param the record holds as NaN is still an entry: a ramp on it claims a slot (audit) */
+  rows.nanparam = {
+    seconds: 0.6,
+    score: [
+      { type: 'createChannel', id: 0, engineId: va, params: { cutoff: NaN }, seed: 'n0' },
+      { type: 'events', events: [N(0, 0, 1, 220), RMP(0.05, 0, P.cutoff, 3000, 0.3), O(0.5, 0, 1)] },
+    ],
+  };
+
+  /* ids are whatever numbers the TypeScript Map keys on, fractions included (audit) */
+  rows.ids = {
+    seconds: 0.6,
+    score: [
+      { type: 'createChannel', id: 1, engineId: va, params: {}, seed: 'i1' },
+      { type: 'createChannel', id: 1.5, engineId: pluck, params: {}, seed: 'i15' },
+      { type: 'removeChannel', id: 2.5 },
+      { type: 'channelGain', id: 1.5, gain: 0.4 },
+      { type: 'events', events: [N(0, 1, 1, 220), N(0.1, 1.5, 2, 330), O(0.4, 1, 1)] },
+    ],
+    timed: [[0.2, { type: 'removeChannel', id: 1.5 }]],
+  };
+
   /* more than 256 events, so the drained queue is compacted mid-render */
   const many = [];
   for (let i = 0; i < 600; i++) {
@@ -455,6 +477,20 @@ function nativeRows() {
           O(0.7, 0, 10),
         ],
       },
+    ],
+  };
+
+  /* seeds the module cannot hash as the TypeScript does play their engine in JavaScript, and a
+   * Latin-1 one it can, natively (audit: these used to give other random streams) */
+  rows.seeds = {
+    seconds: 0.5,
+    gate: 1.3e-4,
+    why: 'the noise synth and the snare as in test/parity.mjs; the odd seeds play in JavaScript',
+    score: [
+      { type: 'createChannel', id: 0, engineId: 'noise', params: {}, seed: 'caf\u00e9 \u266b' },
+      { type: 'createChannel', id: 1, engineId: 'noise', params: {}, seed: 'x'.repeat(700) },
+      { type: 'createChannel', id: 2, engineId: 'snare', params: {}, seed: 'na\u00efve \u00e5' },
+      { type: 'events', events: [N(0, 0, 1, 220), N(0, 1, 2, 220), N(0.05, 2, 3, 200), O(0.3, 0, 1), O(0.3, 1, 2)] },
     ],
   };
 

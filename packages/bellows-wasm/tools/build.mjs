@@ -63,6 +63,12 @@ const compile = () => compiled ?? (compiled = new WebAssembly.Module(decodeBase6
 export const engineIds = MANIFEST.filter((u) => u.kind === 'engine' && !u.bankOnly).map((u) => u.id);
 export const effectIds = MANIFEST.filter((u) => u.kind === 'effect').map((u) => u.id);
 
+/** Imports for instantiating the module yourself: the kernel's callbacks into JavaScript, unused
+ * unless a kernel runs in that instance. */
+export function wasmImports() {
+  return noKernelImports();
+}
+
 /** The module's bytes. */
 export function wasmBytes() {
   return decodeBase64(WASM);
@@ -158,6 +164,8 @@ export const engineIds: readonly string[];
 export const effectIds: readonly string[];
 /** The module's bytes. */
 export function wasmBytes(): Uint8Array;
+/** Imports to instantiate wasmBytes() with: new WebAssembly.Instance(module, wasmImports()). */
+export function wasmImports(): WebAssembly.Imports;
 /** The name the module's kernel registers under. */
 export const KERNEL_NAME: 'bellows-wasm';
 `,

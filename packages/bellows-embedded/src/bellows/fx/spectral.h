@@ -568,7 +568,7 @@ class BlurExt {
   }
 
   void SetParams(const Params& p) {
-    const bool reseed = floorf(p.seed) != floorf(p_.seed) || isnan(p.seed) != isnan(p_.seed);
+    const bool reseed = isnan(p.seed) != isnan(p_.seed) || (!isnan(p.seed) && floorf(p.seed) != floorf(p_.seed));
     p_ = p;
     p_.amount = Clamp(p_.amount, 0.0f, 1.0f);
     p_.mix = Clamp(p_.mix, 0.0f, 1.0f);
@@ -727,7 +727,7 @@ class WhisperExt {
   }
 
   void SetParams(const Params& p) {
-    const bool reseed = floorf(p.seed) != floorf(p_.seed) || isnan(p.seed) != isnan(p_.seed);
+    const bool reseed = isnan(p.seed) != isnan(p_.seed) || (!isnan(p.seed) && floorf(p.seed) != floorf(p_.seed));
     p_ = p;
     p_.mix = Clamp(p_.mix, 0.0f, 1.0f);
     if (reseed) Reseed();

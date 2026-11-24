@@ -260,6 +260,9 @@ class TapeDelayExt {
             float max_sec = 0.0f) {
     namespace dd = delay_detail;
     sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
+    /* No storage, or too little to hold a head: stay silent rather than write through it. */
+    ready_ = buf_l != nullptr && buf_r != nullptr && cap > 12u;
+    if (!ready_) return;
     /* The inverse of TapeDelaySamples. */
     const float ring_sec = static_cast<float>(cap > 12u ? cap - 12u : 0u) / sr_ -
                            (dd::kWowDepthSec + dd::kFlutterDepthSec);
@@ -294,6 +297,7 @@ class TapeDelayExt {
   }
 
   void Process(float* l, float* r, int from, int to) {
+    if (!ready_) return;
     const float fb = p_.feedback;
     const float drive = drive_;
     const float mix = p_.mix;
@@ -326,6 +330,7 @@ class TapeDelayExt {
   }
 
  private:
+  bool ready_ = false;
   float sr_ = 48000.0f, max_sec_ = 1.0f;
   float wow_depth_ = 0.0f, flutter_depth_ = 0.0f, drive_ = 1.0f, hiss_level_ = 0.0f;
   Params p_;

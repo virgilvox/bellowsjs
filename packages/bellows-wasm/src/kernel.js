@@ -37,6 +37,8 @@ class WasmKernel {
     });
     this.names = [];
     this.nameIds = new Map();
+    /* channel and bus ids, any number the TypeScript Map would key on, to the int32 the module keys on */
+    this.ids = new Map();
     this.held = [];
     this.freeHandles = [];
     this.channels = new Map();
@@ -101,8 +103,9 @@ class WasmKernel {
   scratch(bytes) {
     if (bytes > this.scratchBytes) {
       if (this.scratchPtr) this.ex.bw_free(this.scratchPtr);
-      this.scratchBytes = Math.max(bytes, 2 * this.scratchBytes, 4096);
-      this.scratchPtr = this.ex.bw_alloc(this.scratchBytes);
+      const want = Math.max(bytes, 2 * this.scratchBytes, 4096);
+      this.scratchPtr = this.ex.bw_alloc(want);
+      this.scratchBytes = this.scratchPtr ? want : 0;
       if (!this.scratchPtr) throw new Error('bellows-wasm: out of memory');
     }
     return this.scratchPtr;
@@ -119,6 +122,16 @@ class WasmKernel {
       this.held[h] = undefined;
       this.freeHandles.push(h);
     }
+  }
+
+  /** The module's int for a channel or bus id: the TypeScript keys a Map by the number itself. */
+  idOf(x) {
+    let i = this.ids.get(x);
+    if (i === undefined) {
+      i = this.ids.size;
+      this.ids.set(x, i);
+    }
+    return i;
   }
 
   nameId(name) {
@@ -186,12 +199,12 @@ class WasmKernel {
         const c = this.channels.get(msg.id);
         if (c) this.dropChannel(c);
         this.channels.delete(msg.id);
-        ex.bw_k_channel_remove(k, msg.id);
+        ex.bw_k_channel_remove(k, this.idOf(msg.id));
         break;
       }
       case 'channelFx': {
         const c = this.channels.get(msg.id);
-        if (c) c.chain = this.installChain(KIND_CHANNEL, msg.id, this.buildChain(msg.chain), c.chain);
+        if (c) c.chain = this.installChain(KIND_CHANNEL, this.idOf(msg.id), this.buildChain(msg.chain), c.chain);
         break;
       }
       case 'fxParam': {
@@ -200,23 +213,24 @@ class WasmKernel {
         break;
       }
       case 'channelParam':
-        if (this.channels.has(msg.id)) ex.bw_k_channel_param(k, msg.id, this.nameId(msg.name), msg.value);
+        if (this.channels.has(msg.id)) ex.bw_k_channel_param(k, this.idOf(msg.id), this.nameId(msg.name), msg.value);
         break;
       case 'channelGain':
-        ex.bw_k_channel_gain(k, msg.id, msg.gain);
+        ex.bw_k_channel_gain(k, this.idOf(msg.id), msg.gain);
         break;
       case 'channelPan':
-        ex.bw_k_channel_pan(k, msg.id, tsClamp(msg.pan, -1, 1));
+        ex.bw_k_channel_pan(k, this.idOf(msg.id), tsClamp(msg.pan, -1, 1));
         break;
       case 'createBus': {
         const slots = this.buildChain(msg.chain);
-        if (!ex.bw_k_bus(k, msg.id, msg.returnLevel)) {
+        if (!ex.bw_k_bus(k, this.idOf(msg.id), msg.returnLevel)) {
           this.freeSlots(slots);
           throw new Error('bellows-wasm: out of memory');
         }
         const old = this.buses.get(msg.id);
         if (old) this.releaseSlots(old.chain);
-        this.buses.set(msg.id, { chain: this.installChain(KIND_BUS, msg.id, slots, []) });
+        this.views.clear();
+        this.buses.set(msg.id, { chain: this.installChain(KIND_BUS, this.idOf(msg.id), slots, []) });
         break;
       }
       case 'busFxParam': {
@@ -225,7 +239,7 @@ class WasmKernel {
         break;
       }
       case 'send':
-        ex.bw_k_send(k, msg.channelId, msg.busId, msg.level);
+        ex.bw_k_send(k, this.idOf(msg.channelId), this.idOf(msg.busId), msg.level);
         break;
       case 'masterFx':
         this.master = this.installChain(KIND_MASTER, 0, this.buildChain(msg.chain), this.master);
@@ -240,17 +254,21 @@ class WasmKernel {
         for (const e of msg.events) {
           let a = e.a;
           if (e.kind === 2 || e.kind === 3) a = this.nameId(this.env.paramName(e.a) ?? '');
-          ex.bw_k_event(k, e.time, e.kind, e.target, a, e.b, e.c);
+          ex.bw_k_event(k, e.time, e.kind, this.idOf(e.target), a, e.b, e.c);
         }
         break;
       case 'internParam':
         this.env.internParamAt(msg.index, msg.name);
         break;
       case 'registerBank':
-        this.setBank('sampler:' + msg.bankId, 'sampler', this.samplerBank(msg.zones));
+        this.setBank('sampler:' + msg.bankId, 'sampler', this.samplerBank(msg.zones), () =>
+          this.opts.resolveBankEngine?.('sampler', msg.bankId, msg.zones),
+        );
         break;
       case 'registerGrain':
-        this.setBank('granular:' + msg.bankId, 'granular', this.grainBank(msg.data, msg.sampleRate));
+        this.setBank('granular:' + msg.bankId, 'granular', this.grainBank(msg.data, msg.sampleRate), () =>
+          this.opts.resolveBankEngine?.('grain', msg.bankId, { data: msg.data, sampleRate: msg.sampleRate }),
+        );
         break;
       case 'defOp': {
         // Tier 3 user DSP, evaluated as the TypeScript kernel evaluates it (kernel/engine.ts).
@@ -283,10 +301,27 @@ class WasmKernel {
     if (!bank) throw new Error('bellows-wasm: out of memory for a sample bank');
     const NF = ex.bw_bank_zone_fields();
     const opt = (x) => (typeof x === 'number' ? x : NaN);
+    try {
+      this.fillZones(bank, zones, NF, opt);
+    } catch (err) {
+      ex.bw_bank_free(bank);
+      throw err;
+    }
+    return bank;
+  }
+
+  fillZones(bank, zones, NF, opt) {
+    const ex = this.ex;
     zones.forEach((z, i) => {
       const frames = z.dataR ? Math.min(z.data.length, z.dataR.length) : z.data.length;
       const l = this.copyIn(z.data, frames);
-      const r = z.dataR ? this.copyIn(z.dataR, frames) : 0;
+      let r = 0;
+      try {
+        if (z.dataR) r = this.copyIn(z.dataR, frames);
+      } catch (err) {
+        ex.bw_free(l);
+        throw err;
+      }
       const env = z.env;
       const fieldsPtr = this.scratch(4 * NF);
       new Float32Array(ex.memory.buffer, fieldsPtr, NF).set([
@@ -300,7 +335,6 @@ class WasmKernel {
         if (r) ex.bw_free(r);
       }
     });
-    return bank;
   }
 
   grainBank(data, sampleRate) {
@@ -314,11 +348,21 @@ class WasmKernel {
   }
 
   /** An id registered again keeps its old bank alive for the channels already made on it. */
-  setBank(id, unitId, bank) {
+  setBank(id, unitId, bank, tsDef) {
     const old = this.banks.get(id);
     if (old && old.ref) this.ex.bw_k_bank_drop(this.k, old.ref);
     const ref = this.ex.bw_k_bank_add(this.k, bank);
-    this.banks.set(id, { native: this.units.get('engine:' + unitId), ref });
+    /* the TypeScript def too, made lazily over the message's own arrays, for a seed the module
+     * cannot hash as the TypeScript does (seedFits) */
+    let def;
+    this.banks.set(id, {
+      native: this.units.get('engine:' + unitId),
+      ref,
+      get def() {
+        if (def === undefined) def = tsDef() ?? null;
+        return def;
+      },
+    });
   }
 
   /* ---------------- channels ---------------- */
@@ -334,9 +378,25 @@ class WasmKernel {
     return { def };
   }
 
+  /*
+   * A seed the module hashes as the TypeScript does: its xmur3 reads UTF-16 code units and the
+   * module reads bytes, which agree when every unit is one byte (1 to 255, written as Latin-1),
+   * and the labels the voices fork from it fit the module's 511 byte label buffers. Any other seed
+   * plays its engine in JavaScript, so its random streams stay the TypeScript's.
+   */
+  static seedFits(seed) {
+    if (typeof seed !== 'string' || seed.length > 450) return false;
+    for (let i = 0; i < seed.length; i++) {
+      const u = seed.charCodeAt(i);
+      if (u === 0 || u > 255) return false;
+    }
+    return true;
+  }
+
   createChannel(msg) {
     const ex = this.ex;
-    const r = this.resolveEngine(msg.engineId);
+    let r = this.resolveEngine(msg.engineId);
+    if (r.native && !WasmKernel.seedFits(msg.seed) && r.def) r = { def: r.def };
     const params = msg.params ?? {};
     const rec = [];
     for (const name in params) {
@@ -357,16 +417,17 @@ class WasmKernel {
       /* the string's second polarization exists when the record names polDetune, as in the TypeScript */
       variant = u.id === 'string' && 'polDetune' in params ? 1 : 0;
       nvals = u.params.length;
-      seedBytes = 3 * msg.seed.length + 1;
-    } else {
-      pool = new this.env.VoicePool(r.def, this.sampleRate, params, this.env.rng(msg.seed), msg.polyphony);
-      handle = this.hold(pool);
+      seedBytes = msg.seed.length + 1;
     }
     /* layout: rec values (f64), rec ids (i32), vals (f32), seed (utf8) */
     const offIds = 8 * rec.length;
     const offVals = offIds + 4 * rec.length;
     const offSeed = offVals + 4 * nvals;
     const base = this.scratch(offSeed + seedBytes + 8);
+    if (!r.native) {
+      pool = new this.env.VoicePool(r.def, this.sampleRate, params, this.env.rng(msg.seed), msg.polyphony);
+      handle = this.hold(pool);
+    }
     const mem = ex.memory.buffer;
     const recVals = new Float64Array(mem, base, rec.length);
     const recIds = new Int32Array(mem, base + offIds, rec.length);
@@ -380,9 +441,11 @@ class WasmKernel {
         const x = params[p.name];
         vals[i] = typeof x === 'number' ? x : p.default;
       });
-      writeUtf8(new Uint8Array(mem, base + offSeed, seedBytes), msg.seed);
+      const b = new Uint8Array(mem, base + offSeed, seedBytes);
+      for (let i = 0; i < msg.seed.length; i++) b[i] = msg.seed.charCodeAt(i);
+      b[msg.seed.length] = 0;
     }
-    const ok = ex.bw_k_channel(this.k, msg.id, unit, handle, base + offSeed, base + offVals, variant, poly, base + offIds, base, rec.length, r.ref ?? 0);
+    const ok = ex.bw_k_channel(this.k, this.idOf(msg.id), unit, handle, base + offSeed, base + offVals, variant, poly, base + offIds, base, rec.length, r.ref ?? 0);
     if (!ok) {
       this.release(handle);
       throw new Error(`bellows-wasm: could not create a ${msg.engineId} channel`);
@@ -393,6 +456,7 @@ class WasmKernel {
   }
 
   dropChannel(c) {
+    this.views.clear();
     this.release(c.handle);
     this.releaseSlots(c.chain);
   }
@@ -439,12 +503,19 @@ class WasmKernel {
     const ex = this.ex;
     ex.bw_k_chain_clear(this.k, kind, id);
     this.releaseSlots(old);
-    for (const s of slots) {
-      if (s.fx) ex.bw_k_chain_push(this.k, kind, id, s.fx, -1);
-      else {
-        s.handle = this.hold(s.effect);
-        ex.bw_k_chain_push(this.k, kind, id, 0, s.handle);
+    const placed = [];
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i];
+      if (!s.fx) s.handle = this.hold(s.effect);
+      /* the module owns (and on failure frees) a native effect once pushed */
+      if (!ex.bw_k_chain_push(this.k, kind, id, s.fx, s.fx ? -1 : s.handle)) {
+        this.release(s.handle);
+        this.freeSlots(slots.slice(i + 1));
+        this.releaseSlots(placed);
+        ex.bw_k_chain_clear(this.k, kind, id);
+        throw new Error('bellows-wasm: out of memory building an effect chain');
       }
+      placed.push(s);
     }
     return slots;
   }
@@ -468,25 +539,6 @@ class WasmKernel {
       slot.effect.setParam(name, value);
     }
   }
-}
-
-function writeUtf8(b, s) {
-  let n = 0;
-  for (const ch of s) {
-    let c = ch.codePointAt(0);
-    const need = c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
-    if (n + need >= b.length) break;
-    if (need === 1) b[n++] = c;
-    else {
-      const lead = [0, 0, 0xc0, 0xe0, 0xf0][need];
-      for (let k = need - 1; k >= 0; k--) {
-        b[n + k] = k === 0 ? lead | c : 0x80 | (c & 63);
-        c >>= 6;
-      }
-      n += need;
-    }
-  }
-  b[n] = 0;
 }
 
 function createKernel(module, manifest, sampleRate, opts, env) {

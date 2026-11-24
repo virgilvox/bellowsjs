@@ -183,6 +183,26 @@ The DSP core has zero browser dependencies, which is why the library carries mor
 
 AudioWorklet is required (Chrome 66+, Firefox 76+, Safari 14.1+). Web MIDI is Chromium and Firefox only. WebCodecs Opus export is feature-detected with WAV as the universal fallback. See `docs/ENGINEERING.md` in the repository for the full capability matrix.
 
+## In WebAssembly
+
+Every engine and effect, and the kernel that plays them, also runs in WebAssembly, compiled from
+the C++ port below: **[bellows-wasm](https://www.npmjs.com/package/bellows-wasm)**, a plugin like
+the voice. With `bellowsWasm({ kernel: true })` the whole render (events, voice pools, ramps,
+chains, buses, the master) runs in the module, one call per block, and a score needs no changes;
+units the module does not carry, such as the singing voice or a def of your own, still play in
+JavaScript inside the same render. Without the option its units sit beside the TypeScript ones
+as `wasm-va`, `wasm-plate` and so on.
+
+```js
+import { bellowsWasm } from 'bellows-wasm';   // npm install bellows-wasm
+const b = await Bellows.boot({ plugins: [bellowsWasm({ kernel: true })] });
+```
+
+Each unit is tested against its TypeScript twin through the kernel at three sample rates, and the
+WebAssembly kernel gives the TypeScript kernel's samples bit for bit when only the kernel differs.
+On one Apple machine the WebAssembly kernel ran a full mix about 1.8 times faster. The
+[WebAssembly page](https://bellows.live/docs/webassembly) of the docs has the rest.
+
 ## The same engine on microcontrollers
 
 This DSP core is also a header-only C++17 library for 32-bit microcontrollers:

@@ -24,7 +24,9 @@ for a page that loads no such plugin: KernelEngine renders exactly as in 0.5.0.
 ### Changed
 
 - `renderOffline`'s `onBlock` receives a `KernelLike`, the surface KernelEngine and any other kernel
-  share.
+  share. It is declared as a method, so a callback typed against `KernelEngine` still fits.
+- An error reply carries `kernelFallback: true` when the processor could not build the kernel it
+  was asked for and runs KernelEngine; the facade then renders with KernelEngine too.
 - `b.use(plugin)` throws for a plugin that brings a kernel, since the kernel is chosen when the
   processor is built: pass it to `Bellows.boot({ plugins })`.
 

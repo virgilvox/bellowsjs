@@ -315,10 +315,15 @@ class Phaser {
       pairs_ = pairs;
       ClearAllpass();
     }
-    if (p_.spread != old_spread) {
-      lfo_l_.Reset(0.0f);
-      lfo_r_.Reset(p_.spread);
-    }
+    if (p_.spread != old_spread) Resync();
+  }
+
+  /* What the JS does on every spread write, changed or not: both Lfos back to their start, the
+   * right one spread cycles ahead. A host that sets params one at a time calls this on a spread
+   * write; SetParams alone, given a whole struct, only does it when spread changed. */
+  void Resync() {
+    lfo_l_.Reset(0.0f);
+    lfo_r_.Reset(p_.spread);
   }
 
   void Process(float* l, float* r, int from, int to) {

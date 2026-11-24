@@ -34,11 +34,14 @@ constexpr int kIoFrames = 128;
 inline void Put(float& f, float v) { f = v; }
 inline void Put(bool& f, float v) { f = v >= 0.5f; }
 inline int RoundClamp(float v, int lo, int hi) {
-  /* Math.round, then clamp: halves round up */
+  /* Math.round, then clamp: halves round up. Clamped in float first, so a NaN or a value past
+   * int range never reaches the conversion (NaN lands on lo). */
+  if (!(v >= static_cast<float>(lo))) return lo;
+  if (v >= static_cast<float>(hi)) return hi;
   const float r = v + 0.5f;
   int i = static_cast<int>(r);
   if (static_cast<float>(i) > r) --i;
-  return i < lo ? lo : (i > hi ? hi : i);
+  return i > hi ? hi : i;
 }
 inline void Put(bellows::LfoShape& f, float v) { f = static_cast<bellows::LfoShape>(RoundClamp(v, 0, 4)); }
 inline void Put(bellows::SatCurve& f, float v) { f = static_cast<bellows::SatCurve>(RoundClamp(v, 0, 3)); }
