@@ -20,7 +20,8 @@
  *
  * Which labels the engines use is a property of the TypeScript, not of
  * this library. As of the port: snare forks 'snare/noise', clap forks
- * 'clap/noise', tom forks 'tom/noise', va forks 'va', formant forks
+ * 'clap/noise', tom forks 'tom/noise', the noise synth forks 'noise',
+ * va forks 'va', formant forks
  * 'vibrato' for its LFO only, and pluck, modal and tube take the parent
  * stream directly. The C++ voices take one Rng and use it the way the JS
  * uses its own, so passing the correctly labelled stream is what makes

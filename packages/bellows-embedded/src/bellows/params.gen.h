@@ -280,6 +280,55 @@ inline constexpr float kEngineHatDefaults[kEngineHatParamCount] = {
   0.08f, 1.0f
 };
 
+/* clap: Clap
+ * bellows/engines/drums.h class Clap, 3 params.
+ *   name    min    max   default  c++ field  unit
+ *   decay   0.05   2     0.25     decay      s
+ *   spread  0.005  0.05  0.012    spread     s
+ *   tone    400    4000  1200     tone       Hz
+ */
+inline constexpr int kEngineClapParamCount = 3;
+inline constexpr float kEngineClapDefaults[kEngineClapParamCount] = {
+  0.25f, 0.012f, 1200.0f
+};
+
+/* tom: Tom
+ * bellows/engines/drums.h class Tom, 3 params.
+ *   name   min   max  default  c++ field  unit
+ *   decay  0.05  2    0.35     decay      s
+ *   sweep  0.01  0.5  0.08     sweep      s
+ *   noise  0     1    0.15     noise
+ */
+inline constexpr int kEngineTomParamCount = 3;
+inline constexpr float kEngineTomDefaults[kEngineTomParamCount] = {
+  0.35f, 0.08f, 0.15f
+};
+
+/* noise: Noise Synth
+ * bellows/engines/noisesynth.h class NoiseSynth, 15 params.
+ *   name        min  max    default  c++ field    unit
+ *   color       0    4      0        color
+ *   filterMode  0    2      0        filter_mode
+ *   cutoff      20   20000  2000     cutoff       Hz
+ *   resonance   0    1      0.1      resonance
+ *   envAmount   -6   6      0        env_amount   oct
+ *   keyTrack    0    1      0        key_track
+ *   attack      0    10     0.002    attack       s
+ *   decay       0    10     0.15     decay        s
+ *   sustain     0    1      0.3      sustain
+ *   release     0    10     0.1      release      s
+ *   fAttack     0    10     0.001    f_attack     s
+ *   fDecay      0    10     0.12     f_decay      s
+ *   fSustain    0    1      0        f_sustain
+ *   fRelease    0    10     0.1      f_release    s
+ *   pan         -1   1      0        pan
+ */
+inline constexpr int kEngineNoiseParamCount = 15;
+inline constexpr float kEngineNoiseDefaults[kEngineNoiseParamCount] = {
+  0.0f, 0.0f, 2000.0f, 0.1f, 0.0f, 0.0f, 0.002f, 0.15f,
+  0.3f, 0.1f, 0.001f, 0.12f, 0.0f, 0.1f, 0.0f
+};
+
 /* pluck: Pluck
  * bellows/engines/pluck.h class Pluck, 5 params.
  *   name        min   max   default  c++ field    unit
@@ -483,6 +532,17 @@ inline constexpr float kEffectGateDefaults[kEffectGateParamCount] = {
   -40.0f, 0.001f, 0.05f, 0.1f, -60.0f
 };
 
+/* transient: Transient Shaper
+ * bellows/fx/dynamics.h class Transient, 2 params.
+ *   name     min  max  default  c++ field  unit
+ *   attack   -1   1    0        attack
+ *   sustain  -1   1    0        sustain
+ */
+inline constexpr int kEffectTransientParamCount = 2;
+inline constexpr float kEffectTransientDefaults[kEffectTransientParamCount] = {
+  0.0f, 0.0f
+};
+
 /* chorus: Chorus
  * bellows/fx/modfx.h class Chorus, 4 params.
  *   name      min   max  default  c++ field  unit
@@ -509,6 +569,22 @@ inline constexpr float kEffectChorusDefaults[kEffectChorusParamCount] = {
 inline constexpr int kEffectFlangerParamCount = 6;
 inline constexpr float kEffectFlangerDefaults[kEffectFlangerParamCount] = {
   0.25f, 0.7f, 0.25f, 0.4f, 0.5f, 0.0f
+};
+
+/* phaser: Phaser
+ * bellows/fx/modfx.h class Phaser, 7 params.
+ *   name      min   max    default  c++ field  unit
+ *   rate      0.01  10     0.3      rate       Hz
+ *   freqlo    40    2000   300      freqlo     Hz
+ *   freqhi    200   12000  3000     freqhi     Hz
+ *   feedback  0     0.9    0.3      feedback
+ *   stages    4     8      6        stages
+ *   spread    0     1      0.25     spread
+ *   mix       0     1      0.5      mix
+ */
+inline constexpr int kEffectPhaserParamCount = 7;
+inline constexpr float kEffectPhaserDefaults[kEffectPhaserParamCount] = {
+  0.3f, 300.0f, 3000.0f, 0.3f, 6.0f, 0.25f, 0.5f
 };
 
 /* tremolo: Tremolo
@@ -545,6 +621,17 @@ inline constexpr float kEffectAutopanDefaults[kEffectAutopanParamCount] = {
 inline constexpr int kEffectRingmodParamCount = 2;
 inline constexpr float kEffectRingmodDefaults[kEffectRingmodParamCount] = {
   440.0f, 1.0f
+};
+
+/* freqshift: Frequency Shifter
+ * bellows/fx/freqshift.h class FreqShift, 2 params.
+ *   name   min    max   default  c++ field  unit
+ *   shift  -2000  2000  0        shift      Hz
+ *   mix    0      1     1        mix
+ */
+inline constexpr int kEffectFreqshiftParamCount = 2;
+inline constexpr float kEffectFreqshiftDefaults[kEffectFreqshiftParamCount] = {
+  0.0f, 1.0f
 };
 
 /* eq: Parametric EQ
@@ -603,8 +690,8 @@ inline constexpr float kEffectSaturatorDefaults[kEffectSaturatorParamCount] = {
 };
 
 /* Not ported to C++ yet, listed so the gap stays visible:
- *   engines: clap, tom, noise, granular
- *   effects: tapeDelay, multitap, fdn, transient, phaser, freqshift, pitchshift, freeze, blur, robot, whisper, denoise
+ *   engines: granular
+ *   effects: tapeDelay, multitap, fdn, pitchshift, freeze, blur, robot, whisper, denoise
  */
 
 }  // namespace params

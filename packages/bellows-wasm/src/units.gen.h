@@ -22,21 +22,27 @@ enum Unit : int {
   kUnitWestcoast = 11,
   kUnitFormant = 12,
   kUnitHarmonic = 13,
-  kUnitDelay = 14,
-  kUnitPlate = 15,
-  kUnitCompressor = 16,
-  kUnitLimiter = 17,
-  kUnitGate = 18,
-  kUnitChorus = 19,
-  kUnitFlanger = 20,
-  kUnitTremolo = 21,
-  kUnitAutopan = 22,
-  kUnitRingmod = 23,
-  kUnitEq = 24,
-  kUnitSaturator = 25,
-  kUnitCount = 26,
+  kUnitClap = 14,
+  kUnitTom = 15,
+  kUnitNoise = 16,
+  kUnitDelay = 17,
+  kUnitPlate = 18,
+  kUnitCompressor = 19,
+  kUnitLimiter = 20,
+  kUnitGate = 21,
+  kUnitChorus = 22,
+  kUnitFlanger = 23,
+  kUnitTremolo = 24,
+  kUnitAutopan = 25,
+  kUnitRingmod = 26,
+  kUnitEq = 27,
+  kUnitSaturator = 28,
+  kUnitTransient = 29,
+  kUnitPhaser = 30,
+  kUnitFreqshift = 31,
+  kUnitCount = 32,
 };
-inline constexpr int kFirstEffect = 14;
+inline constexpr int kFirstEffect = 17;
 
 /* va: Virtual Analog, 19 params */
 struct ParamsVa {
@@ -420,6 +426,60 @@ struct ParamsHarmonic {
   }
 };
 
+/* clap: Clap, 3 params */
+struct ParamsClap {
+  static constexpr int kCount = 3;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.decay, v); break;  // decay
+      case 1: Put(p.spread, v); break;  // spread
+      case 2: Put(p.tone, v); break;  // tone
+      default: break;
+    }
+  }
+};
+
+/* tom: Tom, 3 params */
+struct ParamsTom {
+  static constexpr int kCount = 3;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.decay, v); break;  // decay
+      case 1: Put(p.sweep, v); break;  // sweep
+      case 2: Put(p.noise, v); break;  // noise
+      default: break;
+    }
+  }
+};
+
+/* noise: Noise Synth, 15 params */
+struct ParamsNoise {
+  static constexpr int kCount = 15;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.color, v); break;  // color
+      case 1: Put(p.filter_mode, v); break;  // filterMode
+      case 2: Put(p.cutoff, v); break;  // cutoff
+      case 3: Put(p.resonance, v); break;  // resonance
+      case 4: Put(p.env_amount, v); break;  // envAmount
+      case 5: Put(p.key_track, v); break;  // keyTrack
+      case 6: Put(p.attack, v); break;  // attack
+      case 7: Put(p.decay, v); break;  // decay
+      case 8: Put(p.sustain, v); break;  // sustain
+      case 9: Put(p.release, v); break;  // release
+      case 10: Put(p.f_attack, v); break;  // fAttack
+      case 11: Put(p.f_decay, v); break;  // fDecay
+      case 12: Put(p.f_sustain, v); break;  // fSustain
+      case 13: Put(p.f_release, v); break;  // fRelease
+      case 14: Put(p.pan, v); break;  // pan
+      default: break;
+    }
+  }
+};
+
 /* delay: Stereo Delay, 6 params */
 struct ParamsDelay {
   static constexpr int kCount = 6;
@@ -623,6 +683,50 @@ struct ParamsSaturator {
       case 2: Put(p.tone, v); break;  // tone
       case 3: Put(p.output_db, v); break;  // output
       case 4: Put(p.mix, v); break;  // mix
+      default: break;
+    }
+  }
+};
+
+/* transient: Transient Shaper, 2 params */
+struct ParamsTransient {
+  static constexpr int kCount = 2;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.attack, v); break;  // attack
+      case 1: Put(p.sustain, v); break;  // sustain
+      default: break;
+    }
+  }
+};
+
+/* phaser: Phaser, 7 params */
+struct ParamsPhaser {
+  static constexpr int kCount = 7;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.rate, v); break;  // rate
+      case 1: Put(p.freqlo, v); break;  // freqlo
+      case 2: Put(p.freqhi, v); break;  // freqhi
+      case 3: Put(p.feedback, v); break;  // feedback
+      case 4: Put(p.stages, v); break;  // stages
+      case 5: Put(p.spread, v); break;  // spread
+      case 6: Put(p.mix, v); break;  // mix
+      default: break;
+    }
+  }
+};
+
+/* freqshift: Frequency Shifter, 2 params */
+struct ParamsFreqshift {
+  static constexpr int kCount = 2;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.shift, v); break;  // shift
+      case 1: Put(p.mix, v); break;  // mix
       default: break;
     }
   }

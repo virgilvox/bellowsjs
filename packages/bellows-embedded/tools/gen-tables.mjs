@@ -446,6 +446,7 @@ const CLASS_ALIASES = {
   StereoDelayExt: 'delay',
   Eq6: 'eq',
   Waveguide: 'string',
+  NoiseSynth: 'noise',
 };
 
 /* Classes that intentionally have no TypeScript counterpart, so the

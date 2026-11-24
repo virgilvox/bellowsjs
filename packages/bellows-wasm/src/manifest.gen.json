@@ -1594,6 +1594,181 @@
   ]
  },
  {
+  "id": "clap",
+  "kind": "engine",
+  "label": "Clap",
+  "polyphony": 4,
+  "params": [
+   {
+    "name": "decay",
+    "min": 0.05,
+    "max": 2,
+    "default": 0.25,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "spread",
+    "min": 0.005,
+    "max": 0.05,
+    "default": 0.012,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "tone",
+    "min": 400,
+    "max": 4000,
+    "default": 1200,
+    "curve": "exp",
+    "unit": "Hz"
+   }
+  ]
+ },
+ {
+  "id": "tom",
+  "kind": "engine",
+  "label": "Tom",
+  "polyphony": 4,
+  "params": [
+   {
+    "name": "decay",
+    "min": 0.05,
+    "max": 2,
+    "default": 0.35,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "sweep",
+    "min": 0.01,
+    "max": 0.5,
+    "default": 0.08,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "noise",
+    "min": 0,
+    "max": 1,
+    "default": 0.15
+   }
+  ]
+ },
+ {
+  "id": "noise",
+  "kind": "engine",
+  "label": "Noise Synth",
+  "polyphony": 8,
+  "params": [
+   {
+    "name": "color",
+    "min": 0,
+    "max": 4,
+    "default": 0
+   },
+   {
+    "name": "filterMode",
+    "min": 0,
+    "max": 2,
+    "default": 0
+   },
+   {
+    "name": "cutoff",
+    "min": 20,
+    "max": 20000,
+    "default": 2000,
+    "curve": "exp",
+    "unit": "Hz"
+   },
+   {
+    "name": "resonance",
+    "min": 0,
+    "max": 1,
+    "default": 0.1
+   },
+   {
+    "name": "envAmount",
+    "min": -6,
+    "max": 6,
+    "default": 0,
+    "unit": "oct"
+   },
+   {
+    "name": "keyTrack",
+    "min": 0,
+    "max": 1,
+    "default": 0
+   },
+   {
+    "name": "attack",
+    "min": 0,
+    "max": 10,
+    "default": 0.002,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "decay",
+    "min": 0,
+    "max": 10,
+    "default": 0.15,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "sustain",
+    "min": 0,
+    "max": 1,
+    "default": 0.3
+   },
+   {
+    "name": "release",
+    "min": 0,
+    "max": 10,
+    "default": 0.1,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "fAttack",
+    "min": 0,
+    "max": 10,
+    "default": 0.001,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "fDecay",
+    "min": 0,
+    "max": 10,
+    "default": 0.12,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "fSustain",
+    "min": 0,
+    "max": 1,
+    "default": 0
+   },
+   {
+    "name": "fRelease",
+    "min": 0,
+    "max": 10,
+    "default": 0.1,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "pan",
+    "min": -1,
+    "max": 1,
+    "default": 0
+   }
+  ]
+ },
+ {
   "id": "delay",
   "kind": "effect",
   "label": "Stereo Delay",
@@ -2181,6 +2356,101 @@
     "max": 24,
     "default": 0,
     "unit": "dB"
+   },
+   {
+    "name": "mix",
+    "min": 0,
+    "max": 1,
+    "default": 1
+   }
+  ]
+ },
+ {
+  "id": "transient",
+  "kind": "effect",
+  "label": "Transient Shaper",
+  "params": [
+   {
+    "name": "attack",
+    "min": -1,
+    "max": 1,
+    "default": 0
+   },
+   {
+    "name": "sustain",
+    "min": -1,
+    "max": 1,
+    "default": 0
+   }
+  ]
+ },
+ {
+  "id": "phaser",
+  "kind": "effect",
+  "label": "Phaser",
+  "params": [
+   {
+    "name": "rate",
+    "min": 0.01,
+    "max": 10,
+    "default": 0.3,
+    "curve": "exp",
+    "unit": "Hz"
+   },
+   {
+    "name": "freqlo",
+    "min": 40,
+    "max": 2000,
+    "default": 300,
+    "curve": "exp",
+    "unit": "Hz"
+   },
+   {
+    "name": "freqhi",
+    "min": 200,
+    "max": 12000,
+    "default": 3000,
+    "curve": "exp",
+    "unit": "Hz"
+   },
+   {
+    "name": "feedback",
+    "min": 0,
+    "max": 0.9,
+    "default": 0.3
+   },
+   {
+    "name": "stages",
+    "min": 4,
+    "max": 8,
+    "default": 6
+   },
+   {
+    "name": "spread",
+    "min": 0,
+    "max": 1,
+    "default": 0.25
+   },
+   {
+    "name": "mix",
+    "min": 0,
+    "max": 1,
+    "default": 0.5
+   }
+  ]
+ },
+ {
+  "id": "freqshift",
+  "kind": "effect",
+  "label": "Frequency Shifter",
+  "params": [
+   {
+    "name": "shift",
+    "min": -2000,
+    "max": 2000,
+    "default": 0,
+    "curve": "lin",
+    "unit": "Hz"
    },
    {
     "name": "mix",

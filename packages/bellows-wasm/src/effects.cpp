@@ -5,6 +5,7 @@
 #include "bellows/fx/delay.h"
 #include "bellows/fx/dynamics.h"
 #include "bellows/fx/eq.h"
+#include "bellows/fx/freqshift.h"
 #include "bellows/fx/modfx.h"
 #include "bellows/fx/plate.h"
 #include "bellows/fx/saturator.h"
@@ -107,6 +108,21 @@ Fx* NewFx(int unit, float sr, const float* vals, float aux) {
     }
     case kUnitSaturator: {
       auto* w = MakeFx<Saturator<4, kIoFrames>, ParamsSaturator>(vals);
+      w->f.Init(sr, w->p);
+      return w;
+    }
+    case kUnitTransient: {
+      auto* w = MakeFx<Transient, ParamsTransient>(vals);
+      w->f.Init(sr, w->p);
+      return w;
+    }
+    case kUnitPhaser: {
+      auto* w = MakeFx<Phaser, ParamsPhaser>(vals);
+      w->f.Init(sr, w->p);
+      return w;
+    }
+    case kUnitFreqshift: {
+      auto* w = MakeFx<FreqShift, ParamsFreqshift>(vals);
       w->f.Init(sr, w->p);
       return w;
     }

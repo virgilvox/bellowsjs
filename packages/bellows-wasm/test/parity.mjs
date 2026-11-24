@@ -74,6 +74,18 @@ const ENGINES = {
   westcoast: { params: { foldAmount: 0.6, foldStages: 3 }, change: ['foldAmount', 0.2], gate: 3e-2, why: 'three iterated folds amplify rounding, as the embedded row says' },
   formant: { params: { vowel: 2, breath: 0.2 }, change: ['vowel', 3.5], gate: 1.2e-4 },
   harmonic: { params: { brightness: 0.7, evenOdd: 0.3, noiseMix: 0.2 }, change: ['brightness', 0.3], gate: 5e-4 },
+  clap: { params: { decay: 0.4, spread: 0.02, tone: 1800 }, change: ['tone', 900], gate: 1.2e-4 },
+  tom: {
+    params: { decay: 0.5, sweep: 0.15, noise: 0.4 },
+    change: ['decay', 0.2],
+    gate: 2e-3,
+    why: 'the pitch sweep decays by a float coefficient near 1 whose rate is about 3e-5 off, and the phase integrates it: 2.4e-5 with that envelope in double',
+  },
+  noise: {
+    params: { color: 1, filterMode: 1, cutoff: 1500, resonance: 0.4, envAmount: 2, keyTrack: 0.5, decay: 0.3, sustain: 0.5, fDecay: 0.2, pan: 0.3 },
+    change: ['cutoff', 3000],
+    gate: 5e-4,
+  },
 };
 
 /* Per effect, the same, on a VA chord from the TypeScript. */
@@ -95,6 +107,9 @@ const EFFECTS = {
   ringmod: { params: { freq: 300, mix: 0.7 }, change: ['freq', 600], gate: 8e-5 },
   eq: { params: { b1gain: 6, b3gain: -5, b4q: 2 }, change: ['b2gain', 4], gate: 1.5e-5 },
   saturator: { params: { drive: 5, curve: 1, tone: 0.3, output: -3 }, change: ['curve', 2], gate: 1e-6 },
+  transient: { params: { attack: 0.6, sustain: -0.4 }, change: ['sustain', 0.5], gate: 7e-5 },
+  phaser: { params: { rate: 0.8, freqlo: 200, freqhi: 4000, feedback: 0.5, stages: 8, spread: 0.4, mix: 0.6 }, change: ['stages', 5], gate: 3e-4 },
+  freqshift: { params: { shift: 150, mix: 0.7 }, change: ['shift', -250], gate: 3.5e-5 },
 };
 
 function notes() {
