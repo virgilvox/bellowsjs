@@ -124,6 +124,12 @@ const EFFECTS = {
     gate: 2.5e-7,
   },
   fdn: { params: { size: 0.9, decay: 3, damp: 4000, chorus: 0.6, predelay: 0.02, mix: 0.5, maxSize: 0.7 }, change: ['size', 0.5], gate: 1.5e-5 },
+  pitchshift: { params: { semitones: 5, mix: 0.8 }, change: ['semitones', -7], gate: 4e-5 },
+  freeze: { params: { mix: 0.8 }, change: ['freeze', 1], gate: 1.3e-5 },
+  blur: { params: { amount: 0.3, seed: 7 }, change: ['amount', 0.8], gate: 1.8e-6 },
+  robot: { params: { mix: 0.7 }, change: ['mix', 0.4], gate: 3e-7 },
+  whisper: { params: { mix: 0.8, seed: 5 }, change: ['seed', 9], gate: 6.5e-7 },
+  denoise: { params: { amount: 2, mix: 0.9 }, change: ['amount', 3], gate: 1.6e-6 },
 };
 
 function notes() {

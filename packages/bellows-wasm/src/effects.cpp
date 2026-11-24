@@ -1,6 +1,6 @@
 /*
- * NewFx: one case per effect unit. The delays and the reverbs run on storage the module allocates
- * for them, exactly what the rate and their longest setting need.
+ * NewFx: one case per effect unit. The delays, the reverbs and the spectral effects run on storage
+ * the module allocates for them, exactly what the rate and their longest setting need.
  */
 #include <math.h>
 
@@ -12,9 +12,56 @@
 #include "bellows/fx/plate.h"
 #include "bellows/fx/reverb.h"
 #include "bellows/fx/saturator.h"
+#include "bellows/fx/spectral.h"
 #include "unit.h"
 
 namespace bwasm {
+
+/* A spectral effect on Samples() floats of its own. Its FFT size and hop are fixed by the unit,
+ * as in the JS, so nothing about the storage depends on the rate. */
+template <class F, class S>
+Fx* NewSpectral(float sr, const float* vals) {
+  auto* w = new FxStore<F, S>;
+  w->Fill(vals);
+  w->store = static_cast<float*>(calloc(F::Samples(), sizeof(float)));
+  if (!w->store || !w->f.Init(sr, w->store, F::Samples(), w->p)) {
+    delete w;
+    return nullptr;
+  }
+  return w;
+}
+
+/* Blur and whisper restart their phase stream on every write of the seed param, as the JS
+ * setParam('seed') does even when the value is the one it already had (a seed slider moving
+ * inside one integer restarts it each time). SetParams sees only a change of value, so the write
+ * itself calls Reseed. kSeed is the seed's index in the spec list. */
+template <class F, class S, int kSeed>
+struct SeededFx final : Fx {
+  F f;
+  typename F::Params p;
+  float* store = nullptr;
+  ~SeededFx() override { free(store); }
+  void Run(float* l, float* r, int n) override { f.Process(l, r, 0, n); }
+  void Set(int i, float x) override {
+    S::Set(p, i, x);
+    f.SetParams(p);
+    if (i == kSeed) f.Reseed();
+  }
+  void Reset() override { f.Reset(); }
+};
+
+template <class F, class S, int kSeed>
+Fx* NewSeeded(float sr, const float* vals) {
+  static_assert(kSeed < S::kCount, "the seed index is inside the spec list");
+  auto* w = new SeededFx<F, S, kSeed>;
+  for (int i = 0; i < S::kCount; ++i) S::Set(w->p, i, vals[i]);
+  w->store = static_cast<float*>(calloc(F::Samples(), sizeof(float)));
+  if (!w->store || !w->f.Init(sr, w->store, F::Samples(), w->p)) {
+    delete w;
+    return nullptr;
+  }
+  return w;
+}
 
 /* The limiter carries the true-peak detector and switches it at run time, as the JS does with
  * its truePeak param: one delay line, one deque, one release envelope either way. */
@@ -178,6 +225,20 @@ Fx* NewFx(int unit, float sr, const float* vals, float aux) {
       }
       return w;
     }
+    case kUnitPitchshift:
+      return NewSpectral<PitchShiftExt, ParamsPitchshift>(sr, vals);
+    case kUnitFreeze:
+      return NewSpectral<FreezeExt, ParamsFreeze>(sr, vals);
+    case kUnitBlur:
+      /* amount, mix, seed */
+      return NewSeeded<BlurExt, ParamsBlur, 2>(sr, vals);
+    case kUnitRobot:
+      return NewSpectral<RobotExt, ParamsRobot>(sr, vals);
+    case kUnitWhisper:
+      /* mix, seed */
+      return NewSeeded<WhisperExt, ParamsWhisper, 1>(sr, vals);
+    case kUnitDenoise:
+      return NewSpectral<DenoiseExt, ParamsDenoise>(sr, vals);
     default:
       return nullptr;
   }

@@ -43,7 +43,13 @@ enum Unit : int {
   kUnitTapeDelay = 32,
   kUnitMultitap = 33,
   kUnitFdn = 34,
-  kUnitCount = 35,
+  kUnitPitchshift = 35,
+  kUnitFreeze = 36,
+  kUnitBlur = 37,
+  kUnitRobot = 38,
+  kUnitWhisper = 39,
+  kUnitDenoise = 40,
+  kUnitCount = 41,
 };
 inline constexpr int kFirstEffect = 17;
 
@@ -787,6 +793,84 @@ struct ParamsFdn {
       case 3: Put(p.chorus, v); break;  // chorus
       case 4: Put(p.predelay, v); break;  // predelay
       case 5: Put(p.mix, v); break;  // mix
+      default: break;
+    }
+  }
+};
+
+/* pitchshift: Pitch Shift, 2 params */
+struct ParamsPitchshift {
+  static constexpr int kCount = 2;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.semitones, v); break;  // semitones
+      case 1: Put(p.mix, v); break;  // mix
+      default: break;
+    }
+  }
+};
+
+/* freeze: Spectral Freeze, 2 params */
+struct ParamsFreeze {
+  static constexpr int kCount = 2;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.freeze, v); break;  // freeze
+      case 1: Put(p.mix, v); break;  // mix
+      default: break;
+    }
+  }
+};
+
+/* blur: Spectral Blur, 3 params */
+struct ParamsBlur {
+  static constexpr int kCount = 3;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.amount, v); break;  // amount
+      case 1: Put(p.mix, v); break;  // mix
+      case 2: Put(p.seed, v); break;  // seed
+      default: break;
+    }
+  }
+};
+
+/* robot: Robotize, 1 params */
+struct ParamsRobot {
+  static constexpr int kCount = 1;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.mix, v); break;  // mix
+      default: break;
+    }
+  }
+};
+
+/* whisper: Whisper, 2 params */
+struct ParamsWhisper {
+  static constexpr int kCount = 2;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.mix, v); break;  // mix
+      case 1: Put(p.seed, v); break;  // seed
+      default: break;
+    }
+  }
+};
+
+/* denoise: Spectral Denoise, 2 params */
+struct ParamsDenoise {
+  static constexpr int kCount = 2;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.amount, v); break;  // amount
+      case 1: Put(p.mix, v); break;  // mix
       default: break;
     }
   }
