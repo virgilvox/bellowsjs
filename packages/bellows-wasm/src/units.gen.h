@@ -34,7 +34,10 @@ enum Unit : int {
   kUnitRingmod = 23,
   kUnitEq = 24,
   kUnitSaturator = 25,
-  kUnitCount = 26,
+  kUnitTapeDelay = 26,
+  kUnitMultitap = 27,
+  kUnitFdn = 28,
+  kUnitCount = 29,
 };
 inline constexpr int kFirstEffect = 14;
 
@@ -623,6 +626,63 @@ struct ParamsSaturator {
       case 2: Put(p.tone, v); break;  // tone
       case 3: Put(p.output_db, v); break;  // output
       case 4: Put(p.mix, v); break;  // mix
+      default: break;
+    }
+  }
+};
+
+/* tapeDelay: Tape Delay, 8 params */
+struct ParamsTapeDelay {
+  static constexpr int kCount = 8;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.time, v); break;  // time
+      case 1: Put(p.feedback, v); break;  // feedback
+      case 2: Put(p.wow, v); break;  // wow
+      case 3: Put(p.flutter, v); break;  // flutter
+      case 4: Put(p.saturation, v); break;  // saturation
+      case 5: Put(p.tone, v); break;  // tone
+      case 6: Put(p.hiss, v); break;  // hiss
+      case 7: Put(p.mix, v); break;  // mix
+      default: break;
+    }
+  }
+};
+
+/* multitap: Multitap Delay, 10 params */
+struct ParamsMultitap {
+  static constexpr int kCount = 10;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.time[0], v); break;  // time1
+      case 1: Put(p.time[1], v); break;  // time2
+      case 2: Put(p.time[2], v); break;  // time3
+      case 3: Put(p.time[3], v); break;  // time4
+      case 4: Put(p.level[0], v); break;  // level1
+      case 5: Put(p.level[1], v); break;  // level2
+      case 6: Put(p.level[2], v); break;  // level3
+      case 7: Put(p.level[3], v); break;  // level4
+      case 8: Put(p.diffusion, v); break;  // diffusion
+      case 9: Put(p.mix, v); break;  // mix
+      default: break;
+    }
+  }
+};
+
+/* fdn: FDN Reverb, 6 params */
+struct ParamsFdn {
+  static constexpr int kCount = 6;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.size, v); break;  // size
+      case 1: Put(p.decay, v); break;  // decay
+      case 2: Put(p.damp, v); break;  // damp
+      case 3: Put(p.chorus, v); break;  // chorus
+      case 4: Put(p.predelay, v); break;  // predelay
+      case 5: Put(p.mix, v); break;  // mix
       default: break;
     }
   }

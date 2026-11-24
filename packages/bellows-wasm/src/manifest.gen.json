@@ -2189,5 +2189,188 @@
     "default": 1
    }
   ]
+ },
+ {
+  "id": "tapeDelay",
+  "kind": "effect",
+  "label": "Tape Delay",
+  "params": [
+   {
+    "name": "time",
+    "min": 0.005,
+    "max": 2,
+    "default": 0.35,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "feedback",
+    "min": 0,
+    "max": 1.1,
+    "default": 0.45
+   },
+   {
+    "name": "wow",
+    "min": 0,
+    "max": 1,
+    "default": 0.3
+   },
+   {
+    "name": "flutter",
+    "min": 0,
+    "max": 1,
+    "default": 0.15
+   },
+   {
+    "name": "saturation",
+    "min": 0,
+    "max": 1,
+    "default": 0.4
+   },
+   {
+    "name": "tone",
+    "min": 500,
+    "max": 15000,
+    "default": 4500,
+    "curve": "exp",
+    "unit": "Hz"
+   },
+   {
+    "name": "hiss",
+    "min": 0,
+    "max": 1,
+    "default": 0
+   },
+   {
+    "name": "mix",
+    "min": 0,
+    "max": 1,
+    "default": 0.35
+   }
+  ]
+ },
+ {
+  "id": "multitap",
+  "kind": "effect",
+  "label": "Multitap Delay",
+  "params": [
+   {
+    "name": "time1",
+    "min": 0.001,
+    "max": 2,
+    "default": 0.125,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "time2",
+    "min": 0.001,
+    "max": 2,
+    "default": 0.25,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "time3",
+    "min": 0.001,
+    "max": 2,
+    "default": 0.375,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "time4",
+    "min": 0.001,
+    "max": 2,
+    "default": 0.5,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "level1",
+    "min": 0,
+    "max": 1,
+    "default": 1
+   },
+   {
+    "name": "level2",
+    "min": 0,
+    "max": 1,
+    "default": 0.8
+   },
+   {
+    "name": "level3",
+    "min": 0,
+    "max": 1,
+    "default": 0.6
+   },
+   {
+    "name": "level4",
+    "min": 0,
+    "max": 1,
+    "default": 0.45
+   },
+   {
+    "name": "diffusion",
+    "min": 0,
+    "max": 1,
+    "default": 0.4
+   },
+   {
+    "name": "mix",
+    "min": 0,
+    "max": 1,
+    "default": 0.5
+   }
+  ]
+ },
+ {
+  "id": "fdn",
+  "kind": "effect",
+  "label": "FDN Reverb",
+  "params": [
+   {
+    "name": "size",
+    "min": 0.25,
+    "max": 3,
+    "default": 1
+   },
+   {
+    "name": "decay",
+    "min": 0.1,
+    "max": 20,
+    "default": 2,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "damp",
+    "min": 500,
+    "max": 20000,
+    "default": 6000,
+    "curve": "exp",
+    "unit": "Hz"
+   },
+   {
+    "name": "chorus",
+    "min": 0,
+    "max": 1,
+    "default": 0.3
+   },
+   {
+    "name": "predelay",
+    "min": 0,
+    "max": 0.25,
+    "default": 0.01,
+    "curve": "lin",
+    "unit": "s"
+   },
+   {
+    "name": "mix",
+    "min": 0,
+    "max": 1,
+    "default": 0.35
+   }
+  ]
  }
 ]

@@ -126,7 +126,7 @@ struct FxOf final : Fx {
   void Reset() override { f.Reset(); }
 };
 
-/* The delay and the plate run on storage the module allocates for them. */
+/* The delays and the reverbs run on storage the module allocates for them. */
 template <class F, class S>
 struct FxStore final : Fx {
   F f;
@@ -151,8 +151,9 @@ FxOf<F, S>* MakeFx(const float* vals) {
   return w;
 }
 
-/* Creates an effect unit, or returns null. aux: the delay's longest time in seconds (its
- * maxSeconds option), unused by the rest. */
+/* Creates an effect unit, or returns null. aux: the unit's create-time capacity option, the
+ * longest time in seconds for the delays (their maxSeconds) and the largest size for the fdn (its
+ * maxSize), 0 when not given; unused by the rest. */
 Fx* NewFx(int unit, float sr, const float* vals, float aux);
 
 }  // namespace bwasm

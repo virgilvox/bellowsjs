@@ -32,6 +32,15 @@ function decodeBase64(s) {
   return out;
 }
 
+/* The create-time capacity option each effect's TypeScript constructor reads from its params
+ * record, passed to bw_fx_new as aux (0 when the record has none). */
+const AUX_OPTION = {
+  delay: 'maxSeconds',
+  tapeDelay: 'maxSeconds',
+  multitap: 'maxSeconds',
+  fdn: 'maxSize',
+};
+
 function install(hook, module, manifest, cfg) {
   const ex = new WebAssembly.Instance(module, {}).exports;
   ex.bw_init();
@@ -176,7 +185,8 @@ function install(hook, module, manifest, cfg) {
         params: u.params,
         create(sampleRate, params) {
           putVals(u, params);
-          const aux = u.id === 'delay' && params && typeof params.maxSeconds === 'number' ? params.maxSeconds : 0;
+          const opt = AUX_OPTION[u.id];
+          const aux = opt && params && typeof params[opt] === 'number' ? params[opt] : 0;
           const h = ex.bw_fx_new(unit, sampleRate, valsPtr, aux);
           if (!h) throw new Error(`bellows-wasm: could not create ${id} at ${sampleRate} Hz`);
           const fx = new WasmEffect(h, index);
