@@ -8,6 +8,7 @@
 #include "bellows/engines/formant.h"
 #include "bellows/engines/harmonic.h"
 #include "bellows/engines/modal.h"
+#include "bellows/engines/noisesynth.h"
 #include "bellows/engines/pluck.h"
 #include "bellows/engines/tube.h"
 #include "bellows/engines/va.h"
@@ -106,6 +107,24 @@ Voice* NewVoice(int unit, float sr, const char* label, const float* vals, int va
     case kUnitHarmonic: {
       auto* w = Make<Harmonic, ParamsHarmonic>(vals);
       w->rng.Init(label);
+      w->v.Init(sr, &w->rng, w->p);
+      return w;
+    }
+    case kUnitClap: {
+      auto* w = Make<Clap, ParamsClap>(vals);
+      w->rng.Init(Join(label, "::clap/noise"));
+      w->v.Init(sr, &w->rng, w->p);
+      return w;
+    }
+    case kUnitTom: {
+      auto* w = Make<Tom, ParamsTom>(vals);
+      w->rng.Init(Join(label, "::tom/noise"));
+      w->v.Init(sr, &w->rng, w->p);
+      return w;
+    }
+    case kUnitNoise: {
+      auto* w = Make<NoiseSynth, ParamsNoise>(vals);
+      w->rng.Init(Join(label, "::noise"));
       w->v.Init(sr, &w->rng, w->p);
       return w;
     }

@@ -1,18 +1,15 @@
-/* Transcription of src/fx/modfx.ts: Chorus, Flanger, Tremolo, AutoPan,
- * RingMod.
+/* Transcription of src/fx/modfx.ts: Chorus, Flanger, Phaser, Tremolo,
+ * AutoPan, RingMod.
  *
  * All are stereo in-place effects. Sweep positions come from Lfo
  * instances offset in phase for stereo width; the delay based ones read a
  * DelayLine with cubic interpolation.
  *
- * Five independent classes, no base class, no virtuals, no registry. The
+ * Six independent classes, no base class, no virtuals, no registry. The
  * two that need delay memory take their sample rate as a template
  * parameter so the line is sized at compile time and the caller pays for
- * the one they use: Tremolo, AutoPan and RingMod carry no buffers at all
- * and cost a few dozen bytes each.
- *
- * The phaser and the frequency shifter from the same TypeScript file are
- * not ported here.
+ * the one they use: Phaser, Tremolo, AutoPan and RingMod carry no buffers
+ * at all. The frequency shifter is in fx/freqshift.h.
  */
 #pragma once
 #include <stdint.h>
@@ -246,6 +243,142 @@ class Flanger {
   Lfo lfo_;
   float ms_to_samples_ = 48.0f, min_s_ = 24.0f, max_s_ = 480.0f;
   float center_s_ = 24.0f, amp_s_ = 0.0f;
+  float fb_l_ = 0.0f, fb_r_ = 0.0f;
+};
+
+/* ------------------------------------------------------------------ */
+/* Phaser                                                              */
+/* ------------------------------------------------------------------ */
+
+inline constexpr int kPhaserMaxPairs = 8;
+
+/*
+ * Cascade of first-order allpass pairs. The stages param counts pairs
+ * (4..8, rounded); each pair contributes one notch when wet and dry are
+ * mixed. All sections share one coefficient derived from an Lfo-swept
+ * center frequency moving exponentially between freqlo and freqhi. The
+ * right channel Lfo runs spread cycles ahead of the left.
+ *
+ * The JS resets the two Lfos whenever spread is set and clears the allpass
+ * state whenever the rounded stages count changes. SetParams takes the
+ * whole struct, so it does the first when spread differs from the value
+ * it had and the second when the count differs, which is what a control
+ * moving produces either way (see Tremolo's phase for the same choice).
+ */
+class Phaser {
+ public:
+  struct Params {
+    float rate = 0.3f;
+    float freqlo = 300.0f;
+    float freqhi = 3000.0f;
+    float feedback = 0.3f;
+    float stages = 6.0f;
+    float spread = 0.25f;
+    float mix = 0.5f;
+  };
+
+  void Init(float sample_rate) {
+    Params d;
+    Init(sample_rate, d);
+  }
+
+  void Init(float sample_rate, const Params& p) {
+    sr_ = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
+    max_f_ = 0.49f * sr_;
+    lfo_l_.Init(sr_);
+    lfo_r_.Init(sr_);
+    pairs_ = 6;
+    SetParams(p);
+    /* Unconditional, so a re-initialised object starts from silence and a
+     * known phase however SetParams decided about its guards. */
+    Reset();
+  }
+
+  void SetParams(const Params& p) {
+    const float old_spread = p_.spread;
+    p_ = p;
+    p_.feedback = Clamp(p_.feedback, 0.0f, 0.9f);
+    p_.spread = Clamp(p_.spread, 0.0f, 1.0f);
+    p_.mix = Clamp(p_.mix, 0.0f, 1.0f);
+    const float hz = Clamp(p_.rate, 0.0f, 20.0f);
+    lfo_l_.SetFreq(hz);
+    lfo_r_.SetFreq(hz);
+    freq_lo_ = Clamp(p_.freqlo, 10.0f, max_f_);
+    const float hi_set = Clamp(p_.freqhi, 10.0f, max_f_);
+    const float hi = hi_set > freq_lo_ * 1.01f ? hi_set : freq_lo_ * 1.01f;
+    log_ratio_ = fm::Log(hi / freq_lo_);
+    /* Math.round, then clamp to 4..8. Clamping first gives the same count
+     * and keeps a NaN out of the cast. */
+    const int pairs =
+        static_cast<int>(Clamp(p_.stages, 4.0f, static_cast<float>(kPhaserMaxPairs)) + 0.5f);
+    if (pairs != pairs_) {
+      pairs_ = pairs;
+      ClearAllpass();
+    }
+    if (p_.spread != old_spread) {
+      lfo_l_.Reset(0.0f);
+      lfo_r_.Reset(p_.spread);
+    }
+  }
+
+  void Process(float* l, float* r, int from, int to) {
+    const float mix = p_.mix;
+    const float dry = 1.0f - mix;
+    for (int i = from; i < to; ++i) {
+      const float xl = l[i];
+      const float xr = r[i];
+      const float yl = Tick(xl, lfo_l_.Process(), x1_l_, y1_l_, fb_l_);
+      const float yr = Tick(xr, lfo_r_.Process(), x1_r_, y1_r_, fb_r_);
+      fb_l_ = yl;
+      fb_r_ = yr;
+      l[i] = dry * xl + mix * yl;
+      r[i] = dry * xr + mix * yr;
+    }
+  }
+
+  void Reset() {
+    ClearAllpass();
+    fb_l_ = 0.0f;
+    fb_r_ = 0.0f;
+    lfo_l_.Reset(0.0f);
+    lfo_r_.Reset(p_.spread);
+  }
+
+ private:
+  /* One sample through one channel's allpass chain. */
+  inline float Tick(float x, float lfo, float* x1, float* y1, float fb_prev) {
+    const float u = 0.5f * (lfo + 1.0f);
+    float f = freq_lo_ * fm::Exp(log_ratio_ * u);
+    if (f > max_f_) f = max_f_;
+    const float t = fm::Tan((kPi * f) / sr_);
+    const float a = (t - 1.0f) / (t + 1.0f);
+    float v = x + p_.feedback * fb_prev;
+    const int n = pairs_ * 2;
+    for (int s = 0; s < n; ++s) {
+      const float y = a * v + x1[s] - a * y1[s];
+      x1[s] = v;
+      y1[s] = y;
+      v = y;
+    }
+    return v;
+  }
+
+  void ClearAllpass() {
+    for (int s = 0; s < kPhaserMaxPairs * 2; ++s) {
+      x1_l_[s] = 0.0f;
+      y1_l_[s] = 0.0f;
+      x1_r_[s] = 0.0f;
+      y1_r_[s] = 0.0f;
+    }
+  }
+
+  Params p_;
+  Lfo lfo_l_, lfo_r_;
+  float sr_ = 48000.0f, max_f_ = 23520.0f;
+  float freq_lo_ = 300.0f, log_ratio_ = 2.30258509f;
+  int pairs_ = 6;
+  float x1_l_[kPhaserMaxPairs * 2] = {}, y1_l_[kPhaserMaxPairs * 2] = {};
+  float x1_r_[kPhaserMaxPairs * 2] = {}, y1_r_[kPhaserMaxPairs * 2] = {};
   float fb_l_ = 0.0f, fb_r_ = 0.0f;
 };
 

@@ -21,6 +21,8 @@
 
 #include "bellows/core/prng.h"
 #include "bellows/dsp/lfo.h"
+#include "bellows/dsp/noise.h"
+#include "bellows/engines/noisesynth.h"
 #include "bellows/fx/saturator.h"
 
 namespace bwasm {
@@ -40,6 +42,8 @@ inline int RoundClamp(float v, int lo, int hi) {
 }
 inline void Put(bellows::LfoShape& f, float v) { f = static_cast<bellows::LfoShape>(RoundClamp(v, 0, 4)); }
 inline void Put(bellows::SatCurve& f, float v) { f = static_cast<bellows::SatCurve>(RoundClamp(v, 0, 3)); }
+inline void Put(bellows::NoiseColor& f, float v) { f = static_cast<bellows::NoiseColor>(RoundClamp(v, 0, 4)); }
+inline void Put(bellows::NoiseFilterMode& f, float v) { f = static_cast<bellows::NoiseFilterMode>(RoundClamp(v, 0, 2)); }
 
 }  // namespace bwasm
 

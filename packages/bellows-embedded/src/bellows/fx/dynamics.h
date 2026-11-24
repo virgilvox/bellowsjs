@@ -1,6 +1,7 @@
-/* Transcription of src/fx/dynamics.ts: Compressor, Limiter, Gate.
+/* Transcription of src/fx/dynamics.ts: Compressor, Limiter, Gate,
+ * Transient.
  *
- * All three are stereo in-place effects driven by one mono sidechain,
+ * All four are stereo in-place effects driven by one mono sidechain,
  * max(|l|, |r|), so the stereo image does not wander when one channel
  * dips. Level detection runs in the dB domain: rectified sample to dB
  * with a -96 dB floor, then asymmetric one-pole smoothing.
@@ -8,8 +9,6 @@
  * Each class stands alone with no shared base and no virtuals, so a
  * sketch that only gates never links the limiter's sliding-window code
  * or its lookahead buffers.
- *
- * The transient shaper from the same TypeScript file is not ported here.
  */
 #pragma once
 #include <stdint.h>
@@ -447,9 +446,9 @@ class Limiter {
 namespace detail {
 
 /* The EnvelopeFollower from src/dsp/envelopes.ts. It lives here rather
- * than in dsp/envelopes.h because the gate is the only thing in the
- * embedded port that wants one, and a header should not hand every
- * includer code it does not use. */
+ * than in dsp/envelopes.h because the gate and the transient shaper are
+ * the only things in the embedded port that want one, and a header should
+ * not hand every includer code it does not use. */
 class EnvFollow {
  public:
   void Init(float sample_rate, float attack_sec, float release_sec) {
@@ -558,6 +557,72 @@ class Gate {
   float a_coef_ = 1.0f, r_coef_ = 1.0f, floor_lin_ = 0.001f, g_ = 0.0f;
   int32_t hold_samples_ = 0, hold_left_ = 0;
   bool open_ = false;
+};
+
+/* ------------------------------------------------------------------ */
+/* Transient shaper                                                    */
+/* ------------------------------------------------------------------ */
+
+/* The shaper never boosts or cuts by more than this. */
+inline constexpr float kTransientMaxDb = 24.0f;
+
+/*
+ * A fast and a slow envelope follower track the same sidechain. Their dB
+ * difference is positive during onsets (the fast one gets there first) and
+ * negative through tails (the fast one falls away first). The positive
+ * part scaled by attack and the negative part scaled by sustain drive the
+ * gain, so at 0/0 the unit passes audio through untouched.
+ *
+ * Like the gate, no delay lines and the same size at every sample rate.
+ */
+class Transient {
+ public:
+  struct Params {
+    float attack = 0.0f;
+    float sustain = 0.0f;
+  };
+
+  void Init(float sample_rate) {
+    Params d;
+    Init(sample_rate, d);
+  }
+
+  void Init(float sample_rate, const Params& p) {
+    const float sr = SafeRate(sample_rate, static_cast<float>(BELLOWS_SAMPLE_RATE));
+    fast_.Init(sr, 0.0005f, 0.02f);
+    slow_.Init(sr, 0.02f, 0.1f);
+    SetParams(p);
+  }
+
+  void SetParams(const Params& p) {
+    p_ = p;
+    p_.attack = Clamp(p_.attack, -1.0f, 1.0f);
+    p_.sustain = Clamp(p_.sustain, -1.0f, 1.0f);
+  }
+
+  void Process(float* l, float* r, int from, int to) {
+    const float atk = p_.attack;
+    const float sus = p_.sustain;
+    for (int i = from; i < to; ++i) {
+      const float al = l[i] < 0.0f ? -l[i] : l[i];
+      const float ar = r[i] < 0.0f ? -r[i] : r[i];
+      const float s = al > ar ? al : ar;
+      const float d = LevelDb(fast_.Process(s)) - LevelDb(slow_.Process(s));
+      const float g_db = Clamp(d > 0.0f ? atk * d : -sus * d, -kTransientMaxDb, kTransientMaxDb);
+      const float g = fm::DbToGain(g_db);
+      l[i] *= g;
+      r[i] *= g;
+    }
+  }
+
+  void Reset() {
+    fast_.Reset();
+    slow_.Reset();
+  }
+
+ private:
+  Params p_;
+  detail::EnvFollow fast_, slow_;
 };
 
 }  // namespace bellows
