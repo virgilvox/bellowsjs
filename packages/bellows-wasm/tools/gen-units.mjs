@@ -60,6 +60,17 @@ const RENAME = {
   saturator: { output: 'output_db' },
 };
 
+/*
+ * Names a TypeScript voice takes in setParam although its spec does not list them, each a call on
+ * the C++ voice. The string and the tube glide a sounding note to setParam('freq', hz), true
+ * legato (engines/waveguide.ts), which the C++ spells Glide(hz). They take the indices after the
+ * spec's, and the manifest lists them as `calls`, so a name maps to an index the same way.
+ */
+const CALLS = {
+  string: { freq: 'Glide' },
+  tube: { freq: 'Glide' },
+};
+
 /* Params the ABI handles itself rather than as a field write, and why. */
 const HANDLED = {
   limiter: { truePeak: 'a run time switch on the true-peak build, SetTruePeak in the ABI' },
@@ -126,6 +137,15 @@ export async function generate() {
     h.push('      default: break;');
     h.push('    }');
     h.push('  }');
+    const calls = Object.entries(CALLS[u.id] ?? {});
+    h.push(`  static constexpr int kCalls = ${calls.length};`);
+    h.push('  template <class V>');
+    h.push('  static void Call(V& v, int j, float x) {');
+    h.push('    switch (j) {');
+    calls.forEach(([name, method], j) => h.push(`      case ${j}: v.${method}(x); break;  // ${name}, index ${params.length + j}`));
+    h.push('      default: (void)v; (void)x; break;');
+    h.push('    }');
+    h.push('  }');
     h.push('};');
     h.push('');
   }
@@ -139,6 +159,7 @@ export async function generate() {
     ...(u.def.polyphony ? { polyphony: u.def.polyphony } : {}),
     ...(BANK_ENGINES[u.id] && u.kind === 'engine' ? { bank: BANK_ENGINES[u.id].bank } : {}),
     ...(BANK_ENGINES[u.id]?.bankOnly && u.kind === 'engine' ? { bankOnly: true } : {}),
+    ...(CALLS[u.id] ? { calls: Object.keys(CALLS[u.id]) } : {}),
     params: u.def.params,
   }));
   return { header: h.join('\n'), manifest: JSON.stringify(manifest, null, 1) + '\n' };

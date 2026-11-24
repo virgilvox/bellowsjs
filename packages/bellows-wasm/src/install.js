@@ -175,7 +175,7 @@ function install(hook, module, manifest, cfg) {
     /* A unit that only plays a registered bank (the sampler) has no def of its own: its voices are
      * made per bank by bw_voice_new_bank, for 'sampler:<id>' channels. */
     if (u.bankOnly) return;
-    const index = new Map(u.params.map((p, i) => [p.name, i]));
+    const index = new Map([...u.params.map((p) => p.name), ...(u.calls ?? [])].map((n, i) => [n, i]));
     const id = cfg.prefix + u.id;
     const label = u.label + cfg.label;
     if (u.kind === 'engine') {

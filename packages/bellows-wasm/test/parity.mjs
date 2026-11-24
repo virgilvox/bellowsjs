@@ -65,6 +65,9 @@ const ENGINES = {
     why: 'bow friction is a nonlinear feedback loop: 1e-3 before the pressure change, rounding grows after it',
   },
   'string/plucked': { engine: 'string', params: { damp: 0.5, dispersion: 0.2 }, change: ['damp', 0.3], gate: 4e-4 },
+  /* true legato: setParam('freq') glides every sounding voice, a name outside the spec (CALLS in tools/gen-units.mjs) */
+  'string/legato': { engine: 'string', params: { bow: 0.8, glide: 0.1 }, change: ['freq', 330], gate: 3.5e-3, why: 'the bowed loop as in the string row, gliding' },
+  'tube/legato': { engine: 'tube', params: { breath: 0.7, glide: 0.1 }, change: ['freq', 392], gate: 1e-3 },
   tube: { params: { breath: 0.7, noise: 0.2 }, change: ['breath', 0.9], gate: 1e-3 },
   modal: {
     params: { material: 2, brightness: 0.7 },

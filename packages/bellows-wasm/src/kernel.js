@@ -32,7 +32,8 @@ class WasmKernel {
     this.manifest = manifest;
     this.units = new Map();
     manifest.forEach((u, unit) => {
-      this.units.set(u.kind + ':' + u.id, { unit, u, index: new Map(u.params.map((p, i) => [p.name, i])) });
+      const names = [...u.params.map((p) => p.name), ...(u.calls ?? [])];
+      this.units.set(u.kind + ':' + u.id, { unit, u, index: new Map(names.map((n, i) => [n, i])) });
     });
     this.names = [];
     this.nameIds = new Map();

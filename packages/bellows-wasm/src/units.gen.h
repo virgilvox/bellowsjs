@@ -83,6 +83,13 @@ struct ParamsVa {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* fm: FM, 30 params */
@@ -122,6 +129,13 @@ struct ParamsFm {
       case 28: Put(p.level[5], v); break;  // level6
       case 29: Put(p.fixed_hz[5], v); break;  // fixed6
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -238,6 +252,13 @@ struct ParamsAdditive {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* wavetable: Wavetable, 12 params */
@@ -261,6 +282,13 @@ struct ParamsWavetable {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* kick: Kick, 4 params */
@@ -274,6 +302,13 @@ struct ParamsKick {
       case 2: Put(p.decay, v); break;  // decay
       case 3: Put(p.drive, v); break;  // drive
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -290,6 +325,13 @@ struct ParamsSnare {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* hat: Hat, 2 params */
@@ -301,6 +343,13 @@ struct ParamsHat {
       case 0: Put(p.decay, v); break;  // decay
       case 1: Put(p.tone, v); break;  // tone
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -317,6 +366,13 @@ struct ParamsPluck {
       case 3: Put(p.decay, v); break;  // decay
       case 4: Put(p.level, v); break;  // level
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -349,6 +405,14 @@ struct ParamsString {
       default: break;
     }
   }
+  static constexpr int kCalls = 1;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      case 0: v.Glide(x); break;  // freq, index 19
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* tube: Waveguide Tube, 5 params */
@@ -365,6 +429,14 @@ struct ParamsTube {
       default: break;
     }
   }
+  static constexpr int kCalls = 1;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      case 0: v.Glide(x); break;  // freq, index 5
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* modal: Modal, 5 params */
@@ -379,6 +451,13 @@ struct ParamsModal {
       case 3: Put(p.strike_hardness, v); break;  // strikeHardness
       case 4: Put(p.level, v); break;  // level
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -398,6 +477,13 @@ struct ParamsWestcoast {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* formant: Formant, 6 params */
@@ -413,6 +499,13 @@ struct ParamsFormant {
       case 4: Put(p.shape, v); break;  // shape
       case 5: Put(p.level, v); break;  // level
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -435,6 +528,13 @@ struct ParamsHarmonic {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* clap: Clap, 3 params */
@@ -449,6 +549,13 @@ struct ParamsClap {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* tom: Tom, 3 params */
@@ -461,6 +568,13 @@ struct ParamsTom {
       case 1: Put(p.sweep, v); break;  // sweep
       case 2: Put(p.noise, v); break;  // noise
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -489,6 +603,13 @@ struct ParamsNoise {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* sampler: Sampler, 8 params */
@@ -506,6 +627,13 @@ struct ParamsSampler {
       case 6: Put(p.gain, v); break;  // gain
       case 7: Put(p.pan, v); break;  // pan
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -529,6 +657,13 @@ struct ParamsGranular {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* delay: Stereo Delay, 6 params */
@@ -546,6 +681,13 @@ struct ParamsDelay {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* plate: Plate Reverb, 6 params */
@@ -561,6 +703,13 @@ struct ParamsPlate {
       case 4: Put(p.mod_depth, v); break;  // modDepth
       case 5: Put(p.mix, v); break;  // mix
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -582,6 +731,13 @@ struct ParamsCompressor {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* limiter: Limiter, 3 params */
@@ -594,6 +750,13 @@ struct ParamsLimiter {
       case 1: Put(p.release, v); break;  // release
       case 2: break;  // truePeak: a run time switch on the true-peak build, SetTruePeak in the ABI
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -612,6 +775,13 @@ struct ParamsGate {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* chorus: Chorus, 4 params */
@@ -625,6 +795,13 @@ struct ParamsChorus {
       case 2: Put(p.mix, v); break;  // mix
       case 3: Put(p.feedback, v); break;  // feedback
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -644,6 +821,13 @@ struct ParamsFlanger {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* tremolo: Tremolo, 4 params */
@@ -657,6 +841,13 @@ struct ParamsTremolo {
       case 2: Put(p.shape, v); break;  // shape
       case 3: Put(p.phase, v); break;  // phase
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -673,6 +864,13 @@ struct ParamsAutopan {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* ringmod: Ring Mod, 2 params */
@@ -684,6 +882,13 @@ struct ParamsRingmod {
       case 0: Put(p.freq, v); break;  // freq
       case 1: Put(p.mix, v); break;  // mix
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -721,6 +926,13 @@ struct ParamsEq {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* saturator: Saturator, 5 params */
@@ -737,6 +949,13 @@ struct ParamsSaturator {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* transient: Transient Shaper, 2 params */
@@ -748,6 +967,13 @@ struct ParamsTransient {
       case 0: Put(p.attack, v); break;  // attack
       case 1: Put(p.sustain, v); break;  // sustain
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -768,6 +994,13 @@ struct ParamsPhaser {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* freqshift: Frequency Shifter, 2 params */
@@ -779,6 +1012,13 @@ struct ParamsFreqshift {
       case 0: Put(p.shift, v); break;  // shift
       case 1: Put(p.mix, v); break;  // mix
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -798,6 +1038,13 @@ struct ParamsTapeDelay {
       case 6: Put(p.hiss, v); break;  // hiss
       case 7: Put(p.mix, v); break;  // mix
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -821,6 +1068,13 @@ struct ParamsMultitap {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* fdn: FDN Reverb, 6 params */
@@ -838,6 +1092,13 @@ struct ParamsFdn {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* pitchshift: Pitch Shift, 2 params */
@@ -851,6 +1112,13 @@ struct ParamsPitchshift {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* freeze: Spectral Freeze, 2 params */
@@ -862,6 +1130,13 @@ struct ParamsFreeze {
       case 0: Put(p.freeze, v); break;  // freeze
       case 1: Put(p.mix, v); break;  // mix
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -878,6 +1153,13 @@ struct ParamsBlur {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* robot: Robotize, 1 params */
@@ -888,6 +1170,13 @@ struct ParamsRobot {
     switch (i) {
       case 0: Put(p.mix, v); break;  // mix
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };
@@ -903,6 +1192,13 @@ struct ParamsWhisper {
       default: break;
     }
   }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
+    }
+  }
 };
 
 /* denoise: Spectral Denoise, 2 params */
@@ -914,6 +1210,13 @@ struct ParamsDenoise {
       case 0: Put(p.amount, v); break;  // amount
       case 1: Put(p.mix, v); break;  // mix
       default: break;
+    }
+  }
+  static constexpr int kCalls = 0;
+  template <class V>
+  static void Call(V& v, int j, float x) {
+    switch (j) {
+      default: (void)v; (void)x; break;
     }
   }
 };

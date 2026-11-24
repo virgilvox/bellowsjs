@@ -77,6 +77,11 @@ struct VoiceOf final : Voice {
   void Run(float* l, float* r, int n) override { v.Process(l, r, 0, n); }
   bool Active() const override { return v.Active(); }
   void Set(int i, float x) override {
+    /* past the spec: a name the voice takes outside it (CALLS in tools/gen-units.mjs) */
+    if (i >= S::kCount) {
+      S::Call(v, i - S::kCount, x);
+      return;
+    }
     S::Set(p, i, x);
     v.SetParams(p);
   }

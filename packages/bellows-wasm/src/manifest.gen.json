@@ -1231,6 +1231,9 @@
   "kind": "engine",
   "label": "Waveguide String",
   "polyphony": 12,
+  "calls": [
+   "freq"
+  ],
   "params": [
    {
     "name": "damp",
@@ -1358,6 +1361,9 @@
   "kind": "engine",
   "label": "Waveguide Tube",
   "polyphony": 8,
+  "calls": [
+   "freq"
+  ],
   "params": [
    {
     "name": "breath",
