@@ -33,7 +33,7 @@ const tables = join(PKG, 'build', 'include', 'bellows', 'dsp', 'wavetable_tables
 mkdirSync(dirname(tables), { recursive: true });
 writeFileSync(tables, await generateWavetableHeader(false, 2048));
 
-buildWasm(['abi.cpp', 'voices.cpp', 'effects.cpp'].map((f) => join(PKG, 'src', f)), wasm, {
+buildWasm(['abi.cpp', 'voices.cpp', 'effects.cpp', 'banks.cpp'].map((f) => join(PKG, 'src', f)), wasm, {
   include: [join(PKG, 'build', 'include'), join(EMB, 'src'), join(PKG, 'src')],
   runtime: join(PKG, 'src', 'rt.c'),
 });

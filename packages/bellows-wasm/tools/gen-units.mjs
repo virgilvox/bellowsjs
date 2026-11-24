@@ -29,8 +29,21 @@ const REPO = dirname(dirname(PKG));
 const TS_DIST = join(REPO, 'packages', 'bellows', 'dist', 'bellows.js');
 
 /* The ported units, in the order the Unit enum numbers them. */
-export const ENGINES = ['va', 'fm', 'additive', 'wavetable', 'kick', 'snare', 'hat', 'pluck', 'string', 'tube', 'modal', 'westcoast', 'formant', 'harmonic'];
+export const ENGINES = ['va', 'fm', 'additive', 'wavetable', 'kick', 'snare', 'hat', 'pluck', 'string', 'tube', 'modal', 'westcoast', 'formant', 'harmonic', 'sampler', 'granular'];
 export const EFFECTS = ['delay', 'plate', 'compressor', 'limiter', 'gate', 'chorus', 'flanger', 'tremolo', 'autopan', 'ringmod', 'eq', 'saturator'];
+
+/*
+ * Engines that play a registered bank ('sampler:<id>' from registerBank, 'granular:<id>' from
+ * registerGrain), and the manifest field that says so. Their voices come from NewBankVoice
+ * (src/banks.cpp). bankOnly: the unit has no plain form, so install.js registers no def for it and
+ * the parity harness leaves it to test/banks.mjs. 'granular' also has a plain form over its test
+ * tone, registered as any engine is. A unit the TypeScript does not register as a builtin names
+ * how to build its def here.
+ */
+export const BANK_ENGINES = {
+  sampler: { bank: 'sampler', bankOnly: true, def: (lib) => lib.makeSamplerEngine(new lib.SamplerBank()) },
+  granular: { bank: 'grain' },
+};
 
 /* Indexed TypeScript params (ratio1..ratio6) that fold into a C++ array, per unit. */
 const ARRAYS = {
@@ -75,7 +88,7 @@ export async function generate() {
   const effects = new Map(lib.listEffects().map((d) => [d.id, d]));
 
   const units = [
-    ...ENGINES.map((id) => ({ kind: 'engine', def: engines.get(id), id })),
+    ...ENGINES.map((id) => ({ kind: 'engine', def: engines.get(id) ?? BANK_ENGINES[id]?.def?.(lib), id })),
     ...EFFECTS.map((id) => ({ kind: 'effect', def: effects.get(id), id })),
   ];
   for (const u of units) if (!u.def) throw new Error(`${u.kind} ${u.id} is not registered by the TypeScript library`);
@@ -123,6 +136,8 @@ export async function generate() {
     kind: u.kind,
     label: u.def.label,
     ...(u.def.polyphony ? { polyphony: u.def.polyphony } : {}),
+    ...(BANK_ENGINES[u.id] && u.kind === 'engine' ? { bank: BANK_ENGINES[u.id].bank } : {}),
+    ...(BANK_ENGINES[u.id]?.bankOnly && u.kind === 'engine' ? { bankOnly: true } : {}),
     params: u.def.params,
   }));
   return { header: h.join('\n'), manifest: JSON.stringify(manifest, null, 1) + '\n' };

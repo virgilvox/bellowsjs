@@ -22,21 +22,23 @@ enum Unit : int {
   kUnitWestcoast = 11,
   kUnitFormant = 12,
   kUnitHarmonic = 13,
-  kUnitDelay = 14,
-  kUnitPlate = 15,
-  kUnitCompressor = 16,
-  kUnitLimiter = 17,
-  kUnitGate = 18,
-  kUnitChorus = 19,
-  kUnitFlanger = 20,
-  kUnitTremolo = 21,
-  kUnitAutopan = 22,
-  kUnitRingmod = 23,
-  kUnitEq = 24,
-  kUnitSaturator = 25,
-  kUnitCount = 26,
+  kUnitSampler = 14,
+  kUnitGranular = 15,
+  kUnitDelay = 16,
+  kUnitPlate = 17,
+  kUnitCompressor = 18,
+  kUnitLimiter = 19,
+  kUnitGate = 20,
+  kUnitChorus = 21,
+  kUnitFlanger = 22,
+  kUnitTremolo = 23,
+  kUnitAutopan = 24,
+  kUnitRingmod = 25,
+  kUnitEq = 26,
+  kUnitSaturator = 27,
+  kUnitCount = 28,
 };
-inline constexpr int kFirstEffect = 14;
+inline constexpr int kFirstEffect = 16;
 
 /* va: Virtual Analog, 19 params */
 struct ParamsVa {
@@ -415,6 +417,46 @@ struct ParamsHarmonic {
       case 6: Put(p.attack, v); break;  // attack
       case 7: Put(p.release, v); break;  // release
       case 8: Put(p.level, v); break;  // level
+      default: break;
+    }
+  }
+};
+
+/* sampler: Sampler, 8 params */
+struct ParamsSampler {
+  static constexpr int kCount = 8;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.attack, v); break;  // attack
+      case 1: Put(p.decay, v); break;  // decay
+      case 2: Put(p.sustain, v); break;  // sustain
+      case 3: Put(p.release, v); break;  // release
+      case 4: Put(p.loop_xfade, v); break;  // loopXfade
+      case 5: Put(p.veltrack, v); break;  // veltrack
+      case 6: Put(p.gain, v); break;  // gain
+      case 7: Put(p.pan, v); break;  // pan
+      default: break;
+    }
+  }
+};
+
+/* granular: Granular, 10 params */
+struct ParamsGranular {
+  static constexpr int kCount = 10;
+  template <class P>
+  static void Set(P& p, int i, float v) {
+    switch (i) {
+      case 0: Put(p.grain_size, v); break;  // grainSize
+      case 1: Put(p.density, v); break;  // density
+      case 2: Put(p.position, v); break;  // position
+      case 3: Put(p.spray, v); break;  // spray
+      case 4: Put(p.pitch, v); break;  // pitch
+      case 5: Put(p.pitch_jitter, v); break;  // pitchJitter
+      case 6: Put(p.spread, v); break;  // spread
+      case 7: Put(p.reverse, v); break;  // reverse
+      case 8: Put(p.base_note, v); break;  // baseNote
+      case 9: Put(p.level, v); break;  // level
       default: break;
     }
   }

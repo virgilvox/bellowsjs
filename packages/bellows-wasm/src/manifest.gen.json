@@ -1594,6 +1594,149 @@
   ]
  },
  {
+  "id": "sampler",
+  "kind": "engine",
+  "label": "Sampler",
+  "polyphony": 16,
+  "bank": "sampler",
+  "bankOnly": true,
+  "params": [
+   {
+    "name": "attack",
+    "min": 0,
+    "max": 10,
+    "default": 0.002,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "decay",
+    "min": 0,
+    "max": 10,
+    "default": 0.1,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "sustain",
+    "min": 0,
+    "max": 1,
+    "default": 1
+   },
+   {
+    "name": "release",
+    "min": 0,
+    "max": 10,
+    "default": 0.25,
+    "curve": "exp",
+    "unit": "s"
+   },
+   {
+    "name": "loopXfade",
+    "min": 0,
+    "max": 100,
+    "default": 8,
+    "unit": "ms"
+   },
+   {
+    "name": "veltrack",
+    "min": 0,
+    "max": 100,
+    "default": 100,
+    "unit": "%"
+   },
+   {
+    "name": "gain",
+    "min": -60,
+    "max": 24,
+    "default": 0,
+    "curve": "db",
+    "unit": "dB"
+   },
+   {
+    "name": "pan",
+    "min": -1,
+    "max": 1,
+    "default": 0
+   }
+  ]
+ },
+ {
+  "id": "granular",
+  "kind": "engine",
+  "label": "Granular",
+  "polyphony": 8,
+  "bank": "grain",
+  "params": [
+   {
+    "name": "grainSize",
+    "min": 10,
+    "max": 500,
+    "default": 80,
+    "curve": "exp",
+    "unit": "ms"
+   },
+   {
+    "name": "density",
+    "min": 0.5,
+    "max": 400,
+    "default": 20,
+    "curve": "exp",
+    "unit": "Hz"
+   },
+   {
+    "name": "position",
+    "min": 0,
+    "max": 1,
+    "default": 0.25
+   },
+   {
+    "name": "spray",
+    "min": 0,
+    "max": 1,
+    "default": 0.05
+   },
+   {
+    "name": "pitch",
+    "min": 0.25,
+    "max": 4,
+    "default": 1,
+    "curve": "exp"
+   },
+   {
+    "name": "pitchJitter",
+    "min": 0,
+    "max": 12,
+    "default": 0,
+    "unit": "st"
+   },
+   {
+    "name": "spread",
+    "min": 0,
+    "max": 1,
+    "default": 0.5
+   },
+   {
+    "name": "reverse",
+    "min": 0,
+    "max": 1,
+    "default": 0
+   },
+   {
+    "name": "baseNote",
+    "min": 24,
+    "max": 96,
+    "default": 69
+   },
+   {
+    "name": "level",
+    "min": 0,
+    "max": 1,
+    "default": 0.9
+   }
+  ]
+ },
+ {
   "id": "delay",
   "kind": "effect",
   "label": "Stereo Delay",

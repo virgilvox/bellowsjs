@@ -155,4 +155,65 @@ FxOf<F, S>* MakeFx(const float* vals) {
  * maxSeconds option), unused by the rest. */
 Fx* NewFx(int unit, float sr, const float* vals, float aux);
 
+/* ---------------- banks (banks.cpp) ---------------- */
+
+/* Recorded audio the two bank engines play: a sampler bank (the zones of one registerBank) or a
+ * grain bank (the buffer of one registerGrain). A bank owns its audio and frees it in FreeBank.
+ *
+ * Lifetime: every voice made on a bank reads it until the voice is freed, so a bank is freed
+ * only after the last of them. Registering a bank id again makes a new bank; channels created
+ * before keep the old one, as the TypeScript's do, so the old one lives until they are gone.
+ *
+ * Shared state: a sampler bank carries the round robin counter. The TypeScript keeps it per
+ * registered bank, and every voice of every channel playing that bank advances it on each note
+ * on, so voices of two channels on one bank share one cycle. */
+struct Bank;
+
+/* SetSamplerZone's fields, in this order. Absent optionals are NaN. loopMode is 0 none, 1 loop,
+ * 2 loopRelease. The zone has an envelope when kZoneEnvAttack is a number. */
+enum ZoneField : int {
+  kZoneSampleRate = 0,
+  kZoneRootKey = 1,
+  kZoneFineTune = 2,    /* cents; NaN reads as 0 */
+  kZoneKeyLo = 3,
+  kZoneKeyHi = 4,
+  kZoneVelLo = 5,
+  kZoneVelHi = 6,
+  kZoneLoopStart = 7,   /* NaN reads as 0 */
+  kZoneLoopEnd = 8,     /* NaN reads as the zone's length */
+  kZoneLoopMode = 9,
+  kZoneGainDb = 10,     /* NaN reads as 0 */
+  kZonePan = 11,        /* NaN reads as 0 */
+  kZoneEnvAttack = 12,  /* env.attack .. env.release, seconds and sustain 0..1 */
+  kZoneEnvHold = 13,
+  kZoneEnvDecay = 14,
+  kZoneEnvSustain = 15,
+  kZoneEnvRelease = 16,
+  kZoneRoundRobinGroup = 17, /* NaN: not in a group */
+  kZoneSeqPosition = 18,     /* NaN reads as 1 */
+  kZoneFieldCount = 19,
+};
+
+/* A sampler bank with zoneCount empty zones. An empty zone matches nothing until it is set. */
+Bank* NewSamplerBank(int zone_count);
+
+/* Sets zone `index`: fields as above (field_count at least kZoneFieldCount), data_l the mono or
+ * left channel and data_r the right one or null, both `frames` long and separate malloc blocks.
+ * On success the bank owns both and frees any data the zone held before. Returns false, and
+ * takes nothing, for a bad bank, index or field count, or null data_l with frames > 0. */
+bool SetSamplerZone(Bank* bank, int index, const float* fields, int field_count, float* data_l, float* data_r,
+                    uint32_t frames);
+
+/* A grain bank over `frames` mono frames recorded at sample_rate; takes ownership of data. */
+Bank* NewGrainBank(float* data, uint32_t frames, float sample_rate);
+
+void FreeBank(Bank* bank);
+
+/* A voice of a bank engine: kUnitSampler on a sampler bank, kUnitGranular on a grain bank, or
+ * kUnitGranular with a null bank for the plain 'granular' engine and its test tone. Null for any
+ * other pairing. vals is every param of the unit's spec in spec order, label the voice's stream
+ * (the granular draws from it; the sampler takes none). The bank is not const: a sampler voice
+ * advances its round robin counter. */
+Voice* NewBankVoice(int unit, float sr, const char* label, const float* vals, Bank* bank);
+
 }  // namespace bwasm
