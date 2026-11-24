@@ -441,9 +441,13 @@ async function generateWavetableHeader(check, length) {
  * whose registered id is 'string'. The class is not called String because
  * that name is taken on an Arduino target, so the alias is the only place
  * the two names meet.
+ *
+ * TapeDelayExt is here only for the case: the id is 'tapeDelay', and the
+ * default rule lowercases the whole class name.
  */
 const CLASS_ALIASES = {
   StereoDelayExt: 'delay',
+  TapeDelayExt: 'tapeDelay',
   Eq6: 'eq',
   Waveguide: 'string',
 };
