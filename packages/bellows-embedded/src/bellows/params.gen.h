@@ -602,9 +602,75 @@ inline constexpr float kEffectSaturatorDefaults[kEffectSaturatorParamCount] = {
   2.0f, 0.0f, 0.0f, 0.0f, 1.0f
 };
 
+/* pitchshift: Pitch Shift
+ * bellows/fx/spectral.h class PitchShiftExt, 2 params.
+ *   name       min  max  default  c++ field  unit
+ *   semitones  -24  24   0        semitones  st
+ *   mix        0    1    1        mix
+ */
+inline constexpr int kEffectPitchshiftParamCount = 2;
+inline constexpr float kEffectPitchshiftDefaults[kEffectPitchshiftParamCount] = {
+  0.0f, 1.0f
+};
+
+/* freeze: Spectral Freeze
+ * bellows/fx/spectral.h class FreezeExt, 2 params.
+ *   name    min  max  default  c++ field  unit
+ *   freeze  0    1    0        freeze
+ *   mix     0    1    1        mix
+ */
+inline constexpr int kEffectFreezeParamCount = 2;
+inline constexpr float kEffectFreezeDefaults[kEffectFreezeParamCount] = {
+  0.0f, 1.0f
+};
+
+/* blur: Spectral Blur
+ * bellows/fx/spectral.h class BlurExt, 3 params.
+ *   name    min  max         default  c++ field  unit
+ *   amount  0    1           0.5      amount
+ *   mix     0    1           1        mix
+ *   seed    0    1000000000  1        seed
+ */
+inline constexpr int kEffectBlurParamCount = 3;
+inline constexpr float kEffectBlurDefaults[kEffectBlurParamCount] = {
+  0.5f, 1.0f, 1.0f
+};
+
+/* robot: Robotize
+ * bellows/fx/spectral.h class RobotExt, 1 params.
+ *   name  min  max  default  c++ field  unit
+ *   mix   0    1    1        mix
+ */
+inline constexpr int kEffectRobotParamCount = 1;
+inline constexpr float kEffectRobotDefaults[kEffectRobotParamCount] = {
+  1.0f
+};
+
+/* whisper: Whisper
+ * bellows/fx/spectral.h class WhisperExt, 2 params.
+ *   name  min  max         default  c++ field  unit
+ *   mix   0    1           1        mix
+ *   seed  0    1000000000  1        seed
+ */
+inline constexpr int kEffectWhisperParamCount = 2;
+inline constexpr float kEffectWhisperDefaults[kEffectWhisperParamCount] = {
+  1.0f, 1.0f
+};
+
+/* denoise: Spectral Denoise
+ * bellows/fx/spectral.h class DenoiseExt, 2 params.
+ *   name    min  max  default  c++ field  unit
+ *   amount  0    4    1        amount
+ *   mix     0    1    1        mix
+ */
+inline constexpr int kEffectDenoiseParamCount = 2;
+inline constexpr float kEffectDenoiseDefaults[kEffectDenoiseParamCount] = {
+  1.0f, 1.0f
+};
+
 /* Not ported to C++ yet, listed so the gap stays visible:
  *   engines: clap, tom, noise, granular
- *   effects: tapeDelay, multitap, fdn, transient, phaser, freqshift, pitchshift, freeze, blur, robot, whisper, denoise
+ *   effects: tapeDelay, multitap, fdn, transient, phaser, freqshift
  */
 
 }  // namespace params

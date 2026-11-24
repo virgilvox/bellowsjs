@@ -2189,5 +2189,132 @@
     "default": 1
    }
   ]
+ },
+ {
+  "id": "pitchshift",
+  "kind": "effect",
+  "label": "Pitch Shift",
+  "params": [
+   {
+    "name": "semitones",
+    "min": -24,
+    "max": 24,
+    "default": 0,
+    "curve": "lin",
+    "unit": "st"
+   },
+   {
+    "name": "mix",
+    "min": 0,
+    "max": 1,
+    "default": 1,
+    "curve": "lin"
+   }
+  ]
+ },
+ {
+  "id": "freeze",
+  "kind": "effect",
+  "label": "Spectral Freeze",
+  "params": [
+   {
+    "name": "freeze",
+    "min": 0,
+    "max": 1,
+    "default": 0,
+    "curve": "lin"
+   },
+   {
+    "name": "mix",
+    "min": 0,
+    "max": 1,
+    "default": 1,
+    "curve": "lin"
+   }
+  ]
+ },
+ {
+  "id": "blur",
+  "kind": "effect",
+  "label": "Spectral Blur",
+  "params": [
+   {
+    "name": "amount",
+    "min": 0,
+    "max": 1,
+    "default": 0.5,
+    "curve": "lin"
+   },
+   {
+    "name": "mix",
+    "min": 0,
+    "max": 1,
+    "default": 1,
+    "curve": "lin"
+   },
+   {
+    "name": "seed",
+    "min": 0,
+    "max": 1000000000,
+    "default": 1,
+    "curve": "lin"
+   }
+  ]
+ },
+ {
+  "id": "robot",
+  "kind": "effect",
+  "label": "Robotize",
+  "params": [
+   {
+    "name": "mix",
+    "min": 0,
+    "max": 1,
+    "default": 1,
+    "curve": "lin"
+   }
+  ]
+ },
+ {
+  "id": "whisper",
+  "kind": "effect",
+  "label": "Whisper",
+  "params": [
+   {
+    "name": "mix",
+    "min": 0,
+    "max": 1,
+    "default": 1,
+    "curve": "lin"
+   },
+   {
+    "name": "seed",
+    "min": 0,
+    "max": 1000000000,
+    "default": 1,
+    "curve": "lin"
+   }
+  ]
+ },
+ {
+  "id": "denoise",
+  "kind": "effect",
+  "label": "Spectral Denoise",
+  "params": [
+   {
+    "name": "amount",
+    "min": 0,
+    "max": 4,
+    "default": 1,
+    "curve": "lin"
+   },
+   {
+    "name": "mix",
+    "min": 0,
+    "max": 1,
+    "default": 1,
+    "curve": "lin"
+   }
+  ]
  }
 ]
