@@ -37,6 +37,10 @@ allocator with per-size free lists, and libm comes from compiler-builtins at lin
 ## How it fits
 
 ```
+src/unit.h           the Voice and Fx interfaces, the adapters over bellows-embedded classes, and
+                     the param value conversions
+src/voices.cpp       NewVoice: one case per engine
+src/effects.cpp      NewFx: one case per effect
 src/abi.cpp          C ABI: create a voice or effect by unit number with every param in spec
                      order, note on and off, set param i, render into one shared buffer
 src/units.gen.h      generated: TypeScript param index i to C++ Params field, per unit

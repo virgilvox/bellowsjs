@@ -2,7 +2,7 @@
 /*
  * Build the plugin.
  *
- *   build/bellows.wasm  src/abi.cpp and the bellows-embedded headers, compiled by
+ *   build/bellows.wasm  src/abi.cpp, voices.cpp and effects.cpp and the bellows-embedded headers, compiled by
  *                       bellows-embedded/tools/wasm/host.mjs (clang, rust-lld, musl libm)
  *   build/include/      the wavetable morph table at 2048 points, the length the TypeScript
  *                       engine builds. The embedded header ships 512 to fit a small part's
@@ -33,7 +33,7 @@ const tables = join(PKG, 'build', 'include', 'bellows', 'dsp', 'wavetable_tables
 mkdirSync(dirname(tables), { recursive: true });
 writeFileSync(tables, await generateWavetableHeader(false, 2048));
 
-buildWasm([join(PKG, 'src', 'abi.cpp')], wasm, {
+buildWasm(['abi.cpp', 'voices.cpp', 'effects.cpp'].map((f) => join(PKG, 'src', f)), wasm, {
   include: [join(PKG, 'build', 'include'), join(EMB, 'src'), join(PKG, 'src')],
   runtime: join(PKG, 'src', 'rt.c'),
 });
