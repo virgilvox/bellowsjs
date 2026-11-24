@@ -14,8 +14,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderOffline } from 'bellowsjs';
-import { bellowsWasm } from '../dist/index.js';
-import { ROWS, SR, SECONDS, hash } from '../test/browser/rows.mjs';
+import { KERNEL_NAME, bellowsWasm } from '../dist/index.js';
+import { KERNEL_ROWS, ROWS, SR, SECONDS, hash } from '../test/browser/rows.mjs';
 
 const PKG = dirname(dirname(fileURLToPath(import.meta.url)));
 const REPO = join(PKG, '..', '..');
@@ -101,5 +101,16 @@ for (const r of res.rows) {
   if (!ok) bad++;
   process.stdout.write(`  ${r.name.padEnd(12)} rel ${r.rel.toExponential(1).padStart(8)}   ${same ? 'same samples as Node' : `DIFFERENT from Node (${r.wasmHash} against ${node})`}${ok ? '' : '  FAIL'}\n`);
 }
-process.stdout.write(`\n${bad ? 'FAILED' : 'ok'}: ${res.rows.length - bad} of ${res.rows.length} rows\n`);
+bellowsWasm({ kernel: true }).register();
+process.stdout.write('\nthe module kernel, chosen by the processor\n\n');
+for (const r of res.kernelRows) {
+  const score = KERNEL_ROWS.find(([n]) => n === r.name)[1];
+  const node = hash(renderOffline(score, { seconds: SECONDS, sampleRate: SR, kernelName: KERNEL_NAME }));
+  const same = node === r.wasmHash;
+  const ok = same && r.rel <= GATE;
+  if (!ok) bad++;
+  process.stdout.write(`  ${r.name.padEnd(12)} rel ${r.rel.toExponential(1).padStart(8)}   ${same ? 'same samples as Node' : `DIFFERENT from Node (${r.wasmHash} against ${node})`}${ok ? '' : '  FAIL'}\n`);
+}
+const total = res.rows.length + res.kernelRows.length;
+process.stdout.write(`\n${bad ? 'FAILED' : 'ok'}: ${total - bad} of ${total} rows\n`);
 if (bad) process.exit(1);
